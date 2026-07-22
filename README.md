@@ -32,18 +32,18 @@ Problem, root cause, fix, and where the fix lives:
 
 | PP | Problem (SN5) | Owning fix |
 |---|---|---|
-| PP-01 | Duratec mold sealing | CS-004 (XCR is the standard; the Duratec story is kept as the why) |
-| PP-02 | Customs delay blocked infusions | CS-011 min-stock math and CS-012 order calendar |
-| PP-03 | Clamshell mold CAD error, lost a machine week | CS-003 §7.2 design review, enforced as a work-order blocker step |
-| PP-04 | Dashboard remade 3+ times | CS-002 frozen spec and work-order cross-team sign-off |
-| PP-05 | Catch-can grounding drift (6 months) | CS-010 decision point, criterion-before-work as a blocker |
-| PP-06 | Machine-slot scramble / Jacobs crackdown | CS-005 ShopSabre reservation discipline and work-order time estimates |
-| PP-07 | UT stack undefined 3 weeks pre-layup | CS-002 "stack frozen before mold machining" blocker |
-| PP-08 | Purchasing bottlenecked on the lead | CS-012 documented flow, distributed purchasers |
-| PP-09 | Tribal knowledge, zero versioned docs | CS-000 versioned docs, and the work-order system itself |
-| PP-10 | Storage conflicts, lost molds | CS-011 storage map, CS-001 labels, live mold location on the work order |
+| PP-01 | Duratec mold sealing | The mold-sealing standard, which makes XCR the default and keeps the Duratec story as the why |
+| PP-02 | Customs delay blocked infusions | Minimum-stock math in the inventory standard, plus the ordering calendar |
+| PP-03 | Clamshell mold CAD error, lost a machine week | A mold design review, enforced as a blocker step on the work order |
+| PP-04 | Dashboard remade 3+ times | A frozen layup spec, plus cross-team sign-off on the work order |
+| PP-05 | Catch-can grounding drift (6 months) | A named decision point, with the acceptance criterion set before the work starts as a blocker |
+| PP-06 | Machine-slot scramble / Jacobs crackdown | ShopSabre reservation discipline, plus time estimates on the work order |
+| PP-07 | UT stack undefined 3 weeks pre-layup | The "stack frozen before mold machining" blocker |
+| PP-08 | Purchasing bottlenecked on the lead | A documented purchasing flow with more than one purchaser |
+| PP-09 | Tribal knowledge, zero versioned docs | Versioned documentation, and the work-order system itself |
+| PP-10 | Storage conflicts, lost molds | The storage map, part and mold labeling, and a live mold location on the work order |
 
-`python3 tools/check_traceability.py` verifies every link above still resolves. Run it whenever you restructure things.
+Each row maps to a numbered standard in `02 CS Standards/`; `CS-INDEX` is the lookup. `python3 tools/check_traceability.py` audits that mapping at the source, in `01 Pain Points and Improvements/src/pain-points.md`, along with the standards and their datasheet citations. Run it whenever you restructure things.
 
 ## Ground rules baked in everywhere
 
