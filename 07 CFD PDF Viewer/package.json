@@ -9,12 +9,15 @@
     "start": "electron .",
     "serve": "python3 -m http.server 8123 --directory app",
     "test": "node test/test_indexer.mjs",
+    "smoke": "node tools/smoke-electron.mjs",
+    "variant": "node tools/make-test-variant.mjs",
     "vendor": "node tools/vendor-pdfjs.mjs",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win"
   },
   "devDependencies": {
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "pdfjs-dist": "^6.1.200"
   },
   "build": {
@@ -22,7 +25,8 @@
     "productName": "FEB CFD Viewer",
     "files": [
       "app/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "DP_22.pdf"
     ],
     "directories": {
       "output": "dist"

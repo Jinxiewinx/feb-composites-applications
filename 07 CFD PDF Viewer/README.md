@@ -63,9 +63,19 @@ npm run build:mac      # .dmg and .zip in dist/
 npm run build:win      # .exe installer and portable build in dist/
 ```
 
+The macOS build is verified: it produces a 115 MB .dmg and .zip, and the packaged
+app boots and indexes a report. It is not code-signed, so the first launch needs
+right-click then Open, or Gatekeeper will refuse it.
+
 The Windows target is configured but has not been built or tested. Cross-building
 Windows from macOS needs Wine, so it stays unverified until someone runs it on a
 Windows machine or through CI.
+
+`npm run smoke` drives a running desktop build over the DevTools protocol and
+checks that a report actually loads and indexes in the window. Start the app with
+`npx electron . --remote-debugging-port=9333` first. That test exists because
+launching Electron and seeing a window is not proof the app works: the risky part
+is pdf.js starting a module worker, which depends on the page origin.
 
 ## How the matching works
 

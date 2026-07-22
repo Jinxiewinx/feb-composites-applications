@@ -44,22 +44,27 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const ROOT_DIR = normalize(join(APP_DIR, ".."));
+
   protocol.handle("app", async (request) => {
-    const url = new URL(request.url);
-    // Serve app/ for the UI, and the folder above it so the bundled sample
-    // report is reachable at ../DP_22.pdf exactly as in the browser build.
-    let rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
-    let base = APP_DIR;
-    if (rel.startsWith("../") || url.hostname === "root") { base = join(APP_DIR, ".."); rel = rel.replace(/^\.\.\//, ""); }
-    const file = normalize(join(base, rel));
-    // Refuse to serve anything outside the app folder.
-    if (!file.startsWith(normalize(join(APP_DIR, "..")))) return new Response("denied", { status: 403 });
-    try {
-      const body = await readFile(file);
-      return new Response(body, { headers: { "content-type": MIME[extname(file).toLowerCase()] || "application/octet-stream" } });
-    } catch {
-      return new Response("not found: " + rel, { status: 404 });
+    const rel = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "");
+
+    /* Try app/ first, then the folder above it. The fallback exists because the
+       renderer asks for "../DP_22.pdf" to reach the bundled sample, and the URL
+       parser collapses the ".." away before the handler ever sees it, leaving a
+       path that only resolves one level up. Serving both keeps the browser and
+       desktop builds on identical relative paths. */
+    for (const base of [APP_DIR, ROOT_DIR]) {
+      const file = normalize(join(base, rel));
+      if (!file.startsWith(ROOT_DIR)) continue;      // no escaping the app folder
+      try {
+        const body = await readFile(file);
+        return new Response(body, {
+          headers: { "content-type": MIME[extname(file).toLowerCase()] || "application/octet-stream" },
+        });
+      } catch { /* try the next base */ }
     }
+    return new Response("not found: " + rel, { status: 404 });
   });
 
   buildMenu();

@@ -84,9 +84,9 @@ Page numbering is hand-written (`Page ___ of ___`). Chrome doesn't support
 
 ### CFD PDF viewer (07)
 
-In progress as of 2026-07-21. Phases 1 to 5 are done and pushed: indexing, page
-view with synced scrolling, panel compare, overlay, summary. Phase 6, the
-Electron shell and packaging, is the remainder.
+Done as of 2026-07-21, all six phases. Indexing, page view with synced scrolling,
+panel compare, overlay, summary, and the Electron shell with a verified macOS
+build.
 
 The model that everything rests on: pages are stacked into one continuous strip
 of PDF points, and a panel is a window into that strip. Panels sit on a uniform
@@ -106,8 +106,20 @@ checked by scripted scrolling.
 Note this app uses ES modules, unlike the composites app's classic scripts.
 pdf.js ships as a module and pulls a module worker with it, so that was forced.
 It also means the folder has to be served over HTTP rather than opened from
-file://, which is why the Electron shell will serve it rather than load a file
-URL.
+file://. The Electron shell handles that by serving the app over a custom app://
+protocol, which is why the desktop and browser builds run identical code with
+nothing conditional between them. Don't "simplify" it to loadFile; the module
+worker will stop loading.
+
+The macOS build is verified end to end: electron-builder produces a 115 MB .dmg
+and .zip, and `npm run smoke` drives the packaged app over the DevTools protocol
+and confirms it indexes a report in the window. It is unsigned, so first launch
+needs right-click then Open. The Windows target is configured but unbuilt, since
+cross-building from macOS needs Wine.
+
+DP_22.pdf is bundled into the packaged app on purpose, so the demo button works
+on first launch. Without it the packaged app 404s on the sample, which is how
+that was caught.
 
 ## Open questions for Simon
 
