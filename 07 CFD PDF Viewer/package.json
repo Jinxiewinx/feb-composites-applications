@@ -1,0 +1,27 @@
+{
+  "name": "feb-cfd-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Side-by-side comparison viewer for ANSYS Fluent CFD reports (FEB aero)",
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "serve": "python3 -m http.server 8123 --directory app",
+    "test": "node test/test_indexer.mjs",
+    "vendor": "node tools/vendor-pdfjs.mjs",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "^6.1.200"
+  },
+  "build": {
+    "appId": "berkeley.formulaelectric.cfdviewer",
+    "productName": "FEB CFD Viewer",
+    "files": ["app/**/*", "electron/**/*"],
+    "directories": { "output": "dist" },
+    "mac": { "category": "public.app-category.developer-tools", "target": ["dmg", "zip"] },
+    "win": { "target": ["nsis", "portable"] }
+  }
+}

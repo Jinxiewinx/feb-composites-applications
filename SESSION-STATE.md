@@ -82,6 +82,33 @@ steps from `STD_STEPS`, so a blank is a real procedure rather than empty ruling.
 Page numbering is hand-written (`Page ___ of ___`). Chrome doesn't support
 `@page` margin-box counters, so there's no honest way to print it.
 
+### CFD PDF viewer (07)
+
+In progress as of 2026-07-21. Phases 1 to 5 are done and pushed: indexing, page
+view with synced scrolling, panel compare, overlay, summary. Phase 6, the
+Electron shell and packaging, is the remainder.
+
+The model that everything rests on: pages are stacked into one continuous strip
+of PDF points, and a panel is a window into that strip. Panels sit on a uniform
+502.5 pt pitch and flow across page breaks, so nothing may assume a panel lives
+on one page. Panels match across reports by name, with position as the fallback.
+
+Panel titles are found by font height (26.8125 pt in this exporter, matched with
+a tolerance band) plus a left-margin test. That yields 59 named panels: 36
+contours, 6 vectors, 17 plots. `test/test_indexer.mjs` pins all of it against the
+real DP_22.pdf, so a change to the Fluent export breaks the test first.
+
+Verified in the browser, not just asserted: two identical reports diff to exactly
+0 pixels of 2,809,400, and the Ghostscript-perturbed variant from
+`tools/make-test-variant.mjs` diffs to 5.62%. Sync, unlock and re-sync were
+checked by scripted scrolling.
+
+Note this app uses ES modules, unlike the composites app's classic scripts.
+pdf.js ships as a module and pulls a module worker with it, so that was forced.
+It also means the folder has to be served over HTTP rather than opened from
+file://, which is why the Electron shell will serve it rather than load a file
+URL.
+
 ## Open questions for Simon
 
 Nothing blocking.

@@ -13,3 +13,8 @@ node_modules/
 .firebase/
 __pycache__/
 *.pyc
+
+# CFD viewer: packaged builds, and the perturbed sample that
+# tools/make-test-variant.mjs regenerates on demand.
+07 CFD PDF Viewer/dist/
+07 CFD PDF Viewer/DP_22_variant.pdf

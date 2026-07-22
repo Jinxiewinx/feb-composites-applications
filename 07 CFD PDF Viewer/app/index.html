@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FEB CFD Viewer</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">FEB <span>CFD</span></div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="spacer"></div>
+
+  <div class="ctl" id="synccontrols">
+    <button id="synctoggle" class="tgl on" title="Lock scrolling together (S)">
+      <span class="ico">⇅</span><span class="lbl">Synced</span>
+    </button>
+    <button id="resync" title="Snap every report back to the leader (R)">Re-sync</button>
+  </div>
+
+  <div class="ctl zoom">
+    <button id="zoomout" title="Zoom out">−</button>
+    <span id="zoomlabel">100%</span>
+    <button id="zoomin" title="Zoom in">+</button>
+    <button id="zoomfit" title="Fit width">Fit</button>
+  </div>
+
+  <button class="primary" id="openbtn">Open reports</button>
+</header>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="side-sec">
+      <div class="side-h">Reports</div>
+      <div id="doclist" class="doclist"></div>
+      <button class="ghost wide" id="addbtn">+ Add report</button>
+    </div>
+
+    <div class="side-sec grow">
+      <div class="side-h">
+        Find
+        <span class="hint" id="searchcount"></span>
+      </div>
+      <input id="search" class="search" placeholder="plot name or text…  (/)" autocomplete="off">
+      <div id="results" class="results"></div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="empty" class="empty">
+      <div class="empty-card">
+        <h1>Compare CFD reports</h1>
+        <p>
+          Open two or more Fluent report PDFs. They scroll together, and every
+          named plot is matched across reports so you can put the same contour
+          side by side, or lay one over the other to see what moved.
+        </p>
+        <div class="empty-actions">
+          <button class="primary" id="openbtn2">Open reports</button>
+          <button class="ghost" id="samplebtn">Load DP_22 twice (demo)</button>
+        </div>
+        <p class="fineprint">Drag PDFs anywhere onto this window.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="drop" class="drop"><div class="drop-inner">Drop CFD reports to open</div></div>
+<div id="toasts"></div>
+<input type="file" id="filepick" accept="application/pdf,.pdf" multiple hidden>
+
+<script type="module" src="core.js"></script>
+</body>
+</html>

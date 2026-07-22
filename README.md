@@ -14,6 +14,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `03 Work Orders/` | The composites app, live at feb-composites.web.app, plus the retro SN5 archive that seeds it (26 work orders, 33 parts, a timeline) | `app/README.md` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use, chosen from purchase history rather than the stale inventory sheet | `INDEX.md` |
 | `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, infusion and wet-layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE, process blockers | print it |
+| `07 CFD PDF Viewer/` | Desktop app for comparing Fluent CFD reports: load two or more, scroll them together, put the same plot side by side, and overlay them to see what moved | `README.md` |
 | `tools/` | Scripts that build and check the rest: the markdown-to-docx builder, the retro work-order generator, the link auditor, and the app's test suites | |
 
 ## The app
