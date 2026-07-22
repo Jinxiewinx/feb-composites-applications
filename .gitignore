@@ -1,27 +1,15 @@
-# This repo tracks the composites web applications only.
+# This repo is the whole SN6 Resources handoff: pain points, standards, the
+# composites app, datasheets, printables, and the tooling that builds them.
 #
-# The git root is SN6 Resources/ rather than "03 Work Orders/" because the
-# scripts in tools/ resolve their paths as  <tools>/../03 Work Orders/... , so
-# they only run correctly from here. Keeping the root one level up means the
-# tests and generators work unmodified instead of living as patched copies.
+# The git root is SN6 Resources/ because the scripts in tools/ resolve their
+# paths as  <tools>/../03 Work Orders/... , so they only run correctly from here.
+# Note that firebase deploy still runs from inside "03 Work Orders/".
 #
-# The document side of SN6 Resources (pain points, standards, datasheets,
-# printables, agent definition) stays local. Note that the datasheets and
-# standards the app itself serves are already tracked, under
-# "03 Work Orders/app/docs/".
+# Track everything except build artifacts and OS junk:
 
-# Ignore everything at the repo root...
-/*
-
-# ...then re-include the application and its tooling.
-!/.gitignore
-!/README.md
-!/SESSION-STATE.md
-!/03 Work Orders/
-!/tools/
-
-# Never track these, at any depth:
 .DS_Store
 .venv/
 node_modules/
 .firebase/
+__pycache__/
+*.pyc
