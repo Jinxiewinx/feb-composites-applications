@@ -121,6 +121,33 @@ DP_22.pdf is bundled into the packaged app on purpose, so the demo button works
 on first launch. Without it the packaged app 404s on the sample, which is how
 that was caught.
 
+Bug-fix round after Simon's first real use, 2026-07-21:
+
+Panel height is measured from where the next panel or section heading begins, not
+from the median pitch. A page break inside a panel pushes the plot down, and 28
+of 58 panels then need more room than the pitch; assuming it cropped them. Capped
+at 1.6x pitch so a panel at a section boundary (one raw extent is 1053 pt of
+mostly whitespace) does not become a huge empty pane.
+
+Panels and Overlay crop to content through one shared box computed across every
+report being compared (`jointCrop` in render.js). Cropping each report to its own
+content would offset them and the difference view would report that offset as
+change everywhere. The guard test is that two identical reports still diff to
+exactly 0; verified across five panels.
+
+`.panelcell canvas` must not have a max-width. The canvas carries inline width
+and height, so a max-width clamped the width while the height stood and every
+plot stretched vertically on zoom.
+
+Zoom is per column and mirrors across columns only when tracking is on, matching
+the scroll lock. Pinch arrives as a wheel event with ctrlKey; the per-event delta
+is clamped because a mouse wheel sends 120 where a trackpad sends single digits,
+and unclamped that was a 3.3x jump per notch.
+
+The window is frameless, so the toolbar is the drag region (`-webkit-app-region`)
+and every control in it opts out, with an 84 px left inset on macOS for the
+traffic lights. Verified by computed style in both the dev and packaged builds.
+
 ## Open questions for Simon
 
 Nothing blocking.

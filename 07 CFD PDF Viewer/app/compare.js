@@ -17,7 +17,7 @@
    correctness check on the whole alignment and rendering path. */
 
 import { S, el, esc, panelRows, currentRow, selectPanel } from "./core.js";
-import { renderPanel } from "./render.js";
+import { renderPanel, panelRange, jointCrop } from "./render.js";
 
 const MODES = [
   ["diff", "Difference"],
@@ -103,7 +103,18 @@ export function renderOverlay(main) {
     }
 
     const width = Math.min(1100, Math.max(360, stage.clientWidth - 40));
-    const [ca, cb] = await Promise.all([renderPanel(A, pa, width), renderPanel(B, pb, width)]);
+
+    /* Both panels are rendered over the same strip range and then cropped with
+       one shared box. Independent ranges or independent crops would offset the
+       two images by a few points, and the difference view would report that
+       offset as change across the entire panel. */
+    const ra = panelRange(pa), rb = panelRange(pb);
+    const rangeHeight = Math.max(ra.height, rb.height);
+    const [ra0, rb0] = await Promise.all([
+      renderPanel(A, pa, width, { range: { absY: ra.absY, height: rangeHeight } }),
+      renderPanel(B, pb, width, { range: { absY: rb.absY, height: rangeHeight } }),
+    ]);
+    const [ca, cb] = jointCrop([ra0, rb0], rangeHeight).canvases;
 
     const hold = el("div", "ovhold");
     const out = document.createElement("canvas");

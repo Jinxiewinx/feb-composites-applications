@@ -31,6 +31,9 @@ highlighted. Often this answers the question before you look at a plot at all.
 Search covers plot names and the full document text. Typing `vc3` finds
 `velo-car-3`, and picking a result moves every report to it at once.
 
+Zoom with pinch on the trackpad, Cmd-scroll, or the toolbar buttons. When
+tracking is on every column zooms together; unlock it and each zooms on its own.
+
 Keys: `/` search, `j` and `k` next and previous plot, `s` toggle sync, `r`
 re-sync, `1` to `4` switch view.
 
@@ -88,9 +91,15 @@ In the sample every one lands at 26.8125 pt, so a tolerance band around that
 picks out all 59 named panels (36 contours, 6 vectors, 17 convergence plots)
 without parsing layout.
 
-Panels sit on a uniform 502.5 pt pitch and flow continuously down the document,
-so a panel can start near the bottom of one page and finish on the next. Nothing
-in the app may assume a panel lives on one page.
+Panels sit on a roughly uniform 502.5 pt pitch and flow continuously down the
+document, so a panel can start near the bottom of one page and finish on the
+next. Nothing in the app may assume a panel lives on one page.
+
+That pitch is a typical spacing, not a rule. Where a page break falls inside a
+panel it pushes the plot down, and 28 of the 58 panels in the sample then occupy
+more of the strip than the pitch suggests, by up to 152 pt. Panel height is
+therefore measured from where the next panel or section heading actually begins.
+Assuming the pitch cropped the bottom off half the contours.
 
 So pages are stacked into a single continuous strip of PDF points, and a panel is
 a window into that strip. Rendering one is a crop that may composite two page

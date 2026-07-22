@@ -10,7 +10,7 @@
 import * as pdfjs from "./vendor/pdf.mjs";
 import { indexDocument } from "./indexer.js";
 import { clearCache } from "./render.js";
-import { renderPages, resyncColumns, setSync } from "./pages.js";
+import { renderPages, resyncColumns, resyncAndLock, setSync, zoomBy, zoomFit, setZoomListener, currentZoom } from "./pages.js";
 import { renderPanelView } from "./panels.js";
 import { renderOverlay } from "./compare.js";
 import { renderSummary } from "./summary.js";
@@ -177,7 +177,8 @@ export function renderChrome() {
   $("#synctoggle").querySelector(".lbl").textContent = S.sync ? "Synced" : "Free";
   $("#resync").disabled = S.docs.length < 2;
   $(".ctl.zoom").style.display = (S.tab === "pages" || S.tab === "panels") ? "" : "none";
-  $("#zoomlabel").textContent = S.fit ? "Fit" : Math.round(S.zoom * 100) + "%";
+  const z = S.tab === "pages" && S.docs.length ? currentZoom() : S.zoom;
+  $("#zoomlabel").textContent = S.fit ? "Fit" : Math.round(z * 100) + "%";
   renderSearch();
 }
 
@@ -210,6 +211,9 @@ function pick() {
 if (window.cfdNative?.isElectron) {
   window.cfdNative.onMenuOpen(() => pick());
   window.cfdNative.onTab(tab => { S.tab = tab; render(); renderChrome(); });
+  // The window is frameless, so on macOS the toolbar has to leave room for the
+  // traffic lights or they land on top of the brand.
+  if (window.cfdNative.platform === "darwin") document.body.classList.add("electron-mac");
 }
 $("#openbtn").onclick = pick;
 $("#openbtn2").onclick = pick;
@@ -222,10 +226,22 @@ $("#filepick").onchange = e => {
 };
 
 $("#synctoggle").onclick = () => { S.sync = !S.sync; setSync(S.sync); renderChrome(); };
-$("#resync").onclick = () => { resyncColumns(); toast("Columns re-synced"); };
-$("#zoomin").onclick = () => { S.fit = false; S.zoom = Math.min(4, S.zoom * 1.25); render(); renderChrome(); };
-$("#zoomout").onclick = () => { S.fit = false; S.zoom = Math.max(0.15, S.zoom / 1.25); render(); renderChrome(); };
-$("#zoomfit").onclick = () => { S.fit = true; S.zoom = 1; render(); renderChrome(); };
+$("#resync").onclick = () => { resyncAndLock(); renderChrome(); toast("Tracking together again"); };
+
+/* In page view the zoom controls rescale the columns in place, which keeps the
+   scroll position. Elsewhere they still go through a re-render, since those
+   views have nothing to preserve. */
+const zoomStep = (factor) => {
+  if (S.tab === "pages") { zoomBy(factor); renderChrome(); }
+  else { S.fit = false; S.zoom = Math.max(0.15, Math.min(6, S.zoom * factor)); render(); renderChrome(); }
+};
+$("#zoomin").onclick = () => zoomStep(1.25);
+$("#zoomout").onclick = () => zoomStep(1 / 1.25);
+$("#zoomfit").onclick = () => {
+  if (S.tab === "pages") { zoomFit(); renderChrome(); }
+  else { S.fit = true; S.zoom = 1; render(); renderChrome(); }
+};
+setZoomListener(() => renderChrome());
 
 // Drag and drop anywhere. Electron gets native dialogs too, but this is the path
 // that works identically in both modes.

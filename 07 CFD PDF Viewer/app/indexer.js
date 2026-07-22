@@ -120,17 +120,38 @@ export async function indexDocument(doc, opts = {}) {
   }
 
   const stripHeight = absY;
-  const out = panels.map((p, i) => ({
-    id: `${sectionOf[p.absY] || "?"}/${p.name}`,
-    name: p.name,
-    section: sectionOf[p.absY] || null,
-    page: p.page,
-    pageY: p.pageY,
-    absY: p.absY,
-    // The last panel runs to the end of its content rather than off the strip.
-    height: Math.min(pitch, stripHeight - p.absY),
-    order: i,
-  }));
+
+  /* A panel runs until the next panel, or the next section heading, whichever
+     comes first. Do NOT just use the pitch: when Chromium inserts a page break
+     it pushes the plot down, so those panels genuinely occupy more of the strip
+     than the typical spacing suggests. 28 of the 58 panels in the sample are
+     like that, by up to 152 pt, and assuming the pitch cropped every one of
+     them.
+
+     The cap matters at a section boundary, where the "next thing" is a heading
+     pages away and the gap is nearly all trailing whitespace (one measures
+     1053 pt). The largest genuine extent seen is 654 pt, so 1.6x the pitch
+     leaves clear headroom while keeping those panes from becoming mostly
+     empty. */
+  const MAX_EXTENT = pitch * 1.6;
+  const stops = [...panels.map(p => p.absY), ...merged.filter(h => h.kind === "section").map(h => h.absY)]
+    .sort((a, b) => a - b);
+
+  const out = panels.map((p, i) => {
+    const next = stops.find(y => y > p.absY + 1);
+    const extent = (next == null ? stripHeight : next) - p.absY;
+    return {
+      id: `${sectionOf[p.absY] || "?"}/${p.name}`,
+      name: p.name,
+      section: sectionOf[p.absY] || null,
+      page: p.page,
+      pageY: p.pageY,
+      absY: p.absY,
+      height: Math.max(pitch * 0.6, Math.min(extent, MAX_EXTENT, stripHeight - p.absY)),
+      extent,                      // what the layout actually allots, before the cap
+      order: i,
+    };
+  });
 
   return {
     numPages: doc.numPages,

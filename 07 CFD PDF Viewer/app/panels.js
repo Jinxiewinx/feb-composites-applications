@@ -11,7 +11,7 @@
    itself worth seeing. */
 
 import { S, el, esc, panelRows, currentRow, selectPanel } from "./core.js";
-import { renderPanel } from "./render.js";
+import { renderPanel, panelRange, jointCrop } from "./render.js";
 
 export function renderPanelView(main) {
   const rows = panelRows();
@@ -77,28 +77,63 @@ export function renderPanelView(main) {
     bodies.push({ doc, body, panel: row.cells[d] });
   }
 
-  for (const { doc, body, panel } of bodies) {
+  for (const { body, panel } of bodies) {
     if (!panel) {
       body.appendChild(el("div", "absent", `<b>${esc(row.name)}</b> is not in this report.<br>
         Either the run did not produce it, or it was renamed.`));
-      continue;
     }
+  }
+
+  /* Render every cell, then crop them all to one shared content box. The two
+     steps cannot be merged: the crop has to see every report before it can pick
+     a box that suits all of them, and cropping each one to its own content
+     would leave the panes misaligned. */
+  (async () => {
+    const live = bodies.filter(b => b.panel);
+    if (!live.length) return;
+
     /* Fit the whole panel in view rather than filling the width and letting it
-       run off the bottom. Comparing two plots means seeing both of them at
-       once; scrolling to the part you care about in each column separately is
-       the problem this app is supposed to remove. Zoom overrides it. */
-    const pageW = doc.index.pages[0].width;
-    const availW = Math.max(160, body.clientWidth - 26);
-    const availH = Math.max(160, body.clientHeight - 26);
-    const fitW = Math.min(availW, availH * pageW / panel.height);
+       run off the bottom. Comparing two plots means seeing both at once. Zoom
+       overrides it. Every cell uses the same range so they stay comparable, and
+       the tallest panel drives the fit. */
+    const doc0 = live[0].doc;
+    const pageW = doc0.index.pages[0].width;
+    const ranges = live.map(({ panel }) => panelRange(panel));
+    const rangeHeight = Math.max(...ranges.map(r => r.height));
+    const body0 = live[0].body;
+    const availW = Math.max(160, body0.clientWidth - 26);
+    const availH = Math.max(160, body0.clientHeight - 26);
+    const fitW = Math.min(availW, availH * pageW / rangeHeight);
     const width = S.fit ? fitW : availW * S.zoom;
 
-    renderPanel(doc, panel, width).then(canvas => {
+    let canvases;
+    try {
+      canvases = await Promise.all(live.map(({ doc, panel }, i) =>
+        renderPanel(doc, panel, width, { range: { absY: ranges[i].absY, height: rangeHeight } })));
+    } catch (e) {
+      live.forEach(({ body }) => { body.innerHTML = `<div class="absent">Could not render: ${esc(e.message)}</div>`; });
+      return;
+    }
+
+    const cropped = jointCrop(canvases, rangeHeight).canvases;
+
+    // Re-fit to the height freed up by the crop, so the plot fills the pane.
+    const first = cropped[0];
+    if (first && S.fit) {
+      const aspect = first.height / first.width;
+      const better = Math.min(availW, availH / aspect);
+      if (better > width * 1.02) {
+        cropped.forEach(c => {
+          c.style.width = better + "px";
+          c.style.height = (better * aspect) + "px";
+        });
+      }
+    }
+
+    live.forEach(({ body }, i) => {
       if (!body.isConnected) return;
       body.innerHTML = "";
-      body.appendChild(canvas);
-    }).catch(e => {
-      body.innerHTML = `<div class="absent">Could not render: ${esc(e.message)}</div>`;
+      body.appendChild(cropped[i]);
     });
-  }
+  })();
 }

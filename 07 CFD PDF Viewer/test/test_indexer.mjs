@@ -94,6 +94,35 @@ console.log("geometry:");
 t("pitch is measured from the document, near 502.5pt", () => {
   assert(Math.abs(ix.pitch - 502.5) < 5, "measured pitch " + ix.pitch);
 });
+t("panel height follows the real layout, not the median pitch", () => {
+  /* A page break pushes the plot down, so those panels occupy more of the strip
+     than the pitch suggests. Assuming the pitch cropped 28 of 58 panels, by up
+     to 152pt, which cut the bottom off half the contours on screen. */
+  const byName = n => ix.panels.find(p => p.name === n);
+  const wide = ix.panels.filter(p => p.height > ix.pitch + 2);
+  assert(wide.length >= 20, "expected many panels taller than the pitch, got " + wide.length);
+  assert(Math.abs(byName("velo-wing-1").height - 654.1) < 2,
+    "velo-wing-1 straddles a break and needs its full extent, got " + byName("velo-wing-1").height.toFixed(1));
+  assert(Math.abs(byName("total-cd-rplot").height - 583.6) < 2,
+    "total-cd-rplot needs 583.6, got " + byName("total-cd-rplot").height.toFixed(1));
+});
+t("no panel is shorter than the content the layout gives it", () => {
+  for (const p of ix.panels) {
+    const capped = p.extent > ix.pitch * 1.6;
+    if (!capped) {
+      assert(p.height >= Math.min(p.extent, ix.pitch) - 1,
+        `${p.name} is cropped: height ${p.height.toFixed(1)} vs extent ${p.extent.toFixed(1)}`);
+    }
+  }
+});
+t("a panel at a section boundary is capped, not left mostly blank", () => {
+  // ut-cl-rplot is the last plot before Contours, so its raw extent is over
+  // 1000pt of which nearly all is trailing whitespace.
+  const p = ix.panels.find(x => x.name === "ut-cl-rplot");
+  assert(p.extent > 900, "expected a large raw extent, got " + p.extent.toFixed(1));
+  assert(p.height <= ix.pitch * 1.6 + 1, "should be capped, got " + p.height.toFixed(1));
+  assert(p.height >= ix.pitch, "but not below the normal panel height");
+});
 t("panels that straddle a page break are handled", () => {
   const straddlers = ix.panels.filter(p => {
     const page = ix.pages[p.page - 1];
