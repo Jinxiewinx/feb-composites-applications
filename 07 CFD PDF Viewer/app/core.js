@@ -196,7 +196,21 @@ export function render() {
 
 /* ---------- wiring ---------- */
 
-function pick() { $("#filepick").click(); }
+/* In Electron, go through the native dialog so it feels like a real app. In a
+   browser, fall back to the hidden file input. Both end up in addDocs(). */
+function pick() {
+  if (window.cfdNative?.isElectron) {
+    window.cfdNative.openDialog().then(files => {
+      if (files?.length) addDocs(files.map(f => ({ name: f.name, data: new Uint8Array(f.bytes) })));
+    });
+  } else {
+    $("#filepick").click();
+  }
+}
+if (window.cfdNative?.isElectron) {
+  window.cfdNative.onMenuOpen(() => pick());
+  window.cfdNative.onTab(tab => { S.tab = tab; render(); renderChrome(); });
+}
 $("#openbtn").onclick = pick;
 $("#openbtn2").onclick = pick;
 $("#addbtn").onclick = pick;

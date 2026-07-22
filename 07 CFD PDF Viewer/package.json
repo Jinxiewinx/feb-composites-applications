@@ -14,14 +14,31 @@
     "build:win": "electron-builder --win"
   },
   "devDependencies": {
+    "electron": "^43.2.0",
     "pdfjs-dist": "^6.1.200"
   },
   "build": {
     "appId": "berkeley.formulaelectric.cfdviewer",
     "productName": "FEB CFD Viewer",
-    "files": ["app/**/*", "electron/**/*"],
-    "directories": { "output": "dist" },
-    "mac": { "category": "public.app-category.developer-tools", "target": ["dmg", "zip"] },
-    "win": { "target": ["nsis", "portable"] }
+    "files": [
+      "app/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
   }
 }
