@@ -4,6 +4,27 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 — Simon
 
+## About this repository
+
+This repo holds the **applications** side of SN6 Resources: the composites app
+(`03 Work Orders/`) and the scripts and test suites that build and check it
+(`tools/`). It is live at **https://feb-composites.web.app**.
+
+The document side of the program — pain points, CS standards, datasheets,
+printables, the reviewer-agent definition — lives in the team Drive, not here.
+Those folders appear in the table below because it describes the whole program;
+on GitHub you will only find the two above. The datasheets and standards the app
+itself serves are the exception: they are tracked, under
+`03 Work Orders/app/docs/`.
+
+Working notes: `SESSION-STATE.md` is a rolling handoff file, so an interrupted
+session can be resumed without re-deriving decisions. Start there if you are
+picking work back up.
+
+The git root is `SN6 Resources/` rather than the app folder because the `tools/`
+scripts resolve their paths relative to it — see the comments in `.gitignore`.
+Note that `firebase deploy` still runs from inside `03 Work Orders/`.
+
 ## What's here
 
 | Folder | Contents | Start with |

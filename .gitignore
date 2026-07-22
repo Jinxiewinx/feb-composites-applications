@@ -16,6 +16,7 @@
 # ...then re-include the application and its tooling.
 !/.gitignore
 !/README.md
+!/SESSION-STATE.md
 !/03 Work Orders/
 !/tools/
 
