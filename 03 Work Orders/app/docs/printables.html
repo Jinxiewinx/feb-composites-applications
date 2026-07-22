@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FEB Composites — Shop Reference Sheets</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.35 Arial, Helvetica, sans-serif; color: #000; background: #ddd; }
+  .screen-note { max-width: 8.5in; margin: 12px auto; padding: 8px 14px; background: #fff; border: 1px solid #999; font-size: 12px; }
+  .sheet { width: 8.5in; min-height: 10.5in; margin: 12px auto; padding: 0.5in 0.55in; background: #fff; page-break-after: always; break-after: page; }
+  .sheet:last-of-type { page-break-after: auto; }
+  .hdr { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 10px; }
+  .hdr h1 { margin: 0; font-size: 17px; }
+  .hdr .ref { font-size: 11px; text-align: right; }
+  h2 { font-size: 13.5px; margin: 14px 0 4px; border-bottom: 1px solid #000; padding-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  th { border: 1px solid #000; padding: 4px 7px; text-align: left; font-size: 12px; background: #eee; }
+  td { border: 1px solid #000; padding: 4px 7px; font-size: 12.5px; vertical-align: top; }
+  .note { margin: 6px 0; font-size: 12.5px; }
+  .note b { text-transform: uppercase; }
+  .cols { display: flex; gap: 24px; } .cols > div { flex: 1; }
+  ol.proc { margin: 4px 0 8px; padding-left: 22px; }
+  ol.proc li { margin: 3px 0; }
+  ul.plain { margin: 4px 0 8px; padding-left: 18px; }
+  ul.plain li { margin: 2px 0; }
+  /* flowchart: plain boxes */
+  .flow { margin: 8px 0; }
+  .fb { border: 1.5px solid #000; padding: 5px 10px; margin: 0 auto; width: 6.1in; font-size: 12.5px; }
+  .fb b { font-size: 12.5px; }
+  .fa { width: 0; height: 14px; border-left: 1.5px solid #000; margin: 0 auto; position: relative; }
+  .fa::after { content: ""; position: absolute; bottom: -1px; left: -4.5px; border: 4.5px solid transparent; border-top: 6px solid #000; }
+  .fb.decision { border-width: 2.5px; }
+  .fb .branch { font-size: 11.5px; margin-top: 2px; }
+  .foot { border-top: 1px solid #000; margin-top: 14px; padding-top: 3px; font-size: 10.5px; }
+  .sheet { display: flex; flex-direction: column; } .foot { margin-top: auto; }
+  @media print {
+    body { background: #fff; }
+    .screen-note { display: none; }
+    .sheet { margin: 0; width: auto; min-height: auto; padding: 0.1in; }
+    @page { size: letter; margin: 0.5in; }
+    th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-note">
+  FEB Composites shop reference sheets. Print (one sheet per page, US Letter) and post in the shop. Values trace to the TDS/SDS in <i>SN6 Resources/04 Datasheets</i> and the CS standards; reprint affected sheets when a standard is revised.
+</div>
+
+<!-- ═══ 1. RESIN SYSTEMS ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Resin Systems — Mix Ratios &amp; Cure Data</h1><div class="ref">FEB Composites · CS-008 Rev A · 2026-07</div></div>
+
+  <table>
+    <tr><th>System</th><th>Ratio by weight</th><th>Ratio by volume</th><th>Pot life</th><th>Demould / solid</th><th>Full properties</th><th>Application</th></tr>
+    <tr><td>IN2 + AT30 SLOW</td><td><b>100 : 30</b></td><td>— (weigh)</td><td>120–150 min @ 25 °C</td><td>18–24 h</td><td>≥14 d @ 25 °C</td><td>Infusion default (CS-006)</td></tr>
+    <tr><td>IN2 + AT30 FAST</td><td><b>100 : 30</b></td><td>— (weigh)</td><td>10–14 min @ 25 °C</td><td>6–8 h</td><td>≥14 d</td><td>Small infusions</td></tr>
+    <tr><td>West 105 + 206 (slow)</td><td>5.36 : 1</td><td><b>5 : 1</b> pumps</td><td>20–25 min @ 72 °F (100 g)</td><td>10–15 h thin film</td><td>days</td><td>Wet layup default (CS-007)</td></tr>
+    <tr><td>West 105 + 205 (fast)</td><td>5.19 : 1</td><td><b>5 : 1</b> pumps</td><td>9–12 min @ 72 °F</td><td>6–8 h</td><td>days</td><td>Small wet layups, tabs</td></tr>
+    <tr><td>West 105 + 209 (x-slow)</td><td>3.68 : 1</td><td><b>3 : 1</b> pumps</td><td>40–50 min @ 72 °F</td><td>20–24 h thin film</td><td>4–9 d max strength</td><td>Hot ambient / large layups; min 70 °F</td></tr>
+    <tr><td>XCR coating</td><td><b>100 : 41</b></td><td>2 : 1</td><td>8 min @ 20 °C / 4 min @ 30 °C (150 g)</td><td>8.5 h initial @ 20 °C</td><td>≥14 d @ 20 °C</td><td>Mold sealing (CS-004)</td></tr>
+    <tr><td>3M DP420</td><td colspan="2">2 : 1 (cartridge)</td><td>20 min work life</td><td>2 h handling</td><td>24 h @ 72 °F</td><td>Structural bonding (CS-009)</td></tr>
+  </table>
+
+  <div class="note"><b>Caution:</b> 105 + 209 uses 3:1 pumps, not the 5:1 pumps used with 205/206. Verify pump head before dispensing. Full pump strokes only.</div>
+  <div class="note"><b>Note:</b> Do not adjust ratio to change cure speed — blend hardener speeds at the correct total ratio (per TDS). Off-ratio mixes cure soft.</div>
+
+  <div class="cols">
+    <div>
+      <h2>Mixing</h2>
+      <ul class="plain">
+        <li>Mix ≥ 2 min; scrape cup walls and base</li>
+        <li>Double-pot for part surfaces: transfer to second cup, remix with fresh stick</li>
+        <li>Record batch masses on the WO</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Exotherm</h2>
+      <ul class="plain">
+        <li>Pot life shortens with batch mass; decant promptly</li>
+        <li>Hot or smoking cup: move outside onto concrete; leave until cured</li>
+        <li>Dispose only when cured and cool</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Forged CF mix (CS-008 §7, item 4)</h2>
+  <div class="note">Carbon mass ≈ mold cavity volume × 1.4 g/cc. Resin mass ≈ fiber × 1.25. Under-resined charges cure brittle.</div>
+  <div class="foot">Sources: EC-TDS-IN2, EC-TDS-XCR, West 105/205/206/209 TDS, 3M DP420 TDS — SN6 Resources/04 Datasheets. CS-008 is Outlined status; verify against TDS before release.</div>
+</section>
+
+<!-- ═══ 2. RESIN INFUSION ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Resin Infusion — Process Flow</h1><div class="ref">FEB Composites · CS-006 Rev A · 2026-07</div></div>
+
+  <div class="flow">
+    <div class="fb"><b>Prerequisites</b> — stack frozen on WO (CS-002 §7.2); mold sealed + released (CS-004); all consumables cut; resin on hand ≈ (dry fiber mass × 0.65) × 1.25 — laminate demand plus mesh/line losses</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Dry stack</b> — plies per WO table, marked off as laid; Airtac sparingly (heavy spray inhibits infusion); peel ply over laminate + flange edges</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Flow mesh</b> — full part coverage, terminate 30–50 mm before outlet side; inlet-to-outlet distance ≤ 0.5 m, else plan additional feed lines on the WO</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Bag</b> — tacky tape perimeter; pleat each corner and every 300–400 mm on curvature; outlet line → resin trap → pump (trap is mandatory); inlet line clamped</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Pull vacuum</b> — target ≥ 27 inHg</div>
+    <div class="fa"></div>
+    <div class="fb decision"><b>Drop test (blocker)</b> — isolate pump; loss ≤ 1 inHg over 10 min; record start/end on WO
+      <div class="branch">FAIL → leak-check (tape seams, pleat folds, connector bases, spiral ends) → re-test. Do not mix resin until pass.</div></div>
+    <div class="fa"></div>
+    <div class="fb"><b>Mix</b> — IN2 : AT30 = 100 : 30 by weight (CS-008 table); SLOW hardener unless WO states otherwise</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Infuse</b> — inlet line submerged in resin cup; open clamp slowly; monitor flow front for race-tracking; typical 20–30 min small part</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Clamp inlet</b> — at resin reaching outlet spiral + full wet-out; pump remains on through gel; record times, masses, gauge readings on WO</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Cure / demould</b> — SLOW: 18–24 h @ 25 °C; FAST: 6–8 h. Label per CS-001; weigh; record in WO quality checks; trim per CS-009</div>
+  </div>
+
+  <h2>Troubleshooting (CS-006 §7.7)</h2>
+  <table>
+    <tr><th>Symptom</th><th>Action</th></tr>
+    <tr><td>Gauge won't reach 25 inHg</td><td>Perimeter seam / connector base / pleat fold — press, re-seat, soapy water on suspects</td></tr>
+    <tr><td>Holds, then creeps down</td><td>Micro-leak (spiral end, bag puncture) — patch with tacky-tape square, re-test</td></tr>
+    <tr><td>Race-tracking along an edge</td><td>Briefly clamp inlet; mesh break slows exit; note dam location for next mold</td></tr>
+    <tr><td>Dry patch, laminate still wet</td><td>Emergency second feed. If cured: record as defect, assess vs quality checks</td></tr>
+    <tr><td>Foam/bubbles at inlet</td><td>Re-submerge line; bubbles trap in mesh — note location</td></tr>
+    <tr><td>Trap filling</td><td>Clamp inlet sooner next time; empty trap before it reaches the pump port</td></tr>
+  </table>
+  <div class="foot">CS-006 Rev A · IN2 data: EC-TDS-IN2-Infusion-Resin.pdf</div>
+</section>
+
+<!-- ═══ 3. WET LAYUP ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Wet Layup — Process Flow</h1><div class="ref">FEB Composites · CS-007 Rev A · 2026-07</div></div>
+
+  <div class="flow">
+    <div class="fb"><b>Prerequisites</b> — stack frozen on WO (CS-002 §7.2); mold sealed + released (CS-004); cloth cut and weighed</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Resin quantity</b> — mix ≈ fiber mass × 0.9; squeegee and breather remove the excess (cured part ≈ 60:40 fiber:resin by weight); record mixed vs final mass on WO</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Mix</b> — 105 + 206: 5:1 pumps, full strokes; pot life 20–25 min per 100 g @ 72 °F (alternatives: CS-008 table)</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Wet out ply-by-ply</b> — per WO ply table; squeegee each ply to uniform sheen, no pooling; mark plies off on WO</div>
+    <div class="fa"></div>
+    <div class="fb"><b>Consumables</b> — peel ply over laminate → breather (kept clear of part edges) → VB160 bag, pleats at corners; outlet → resin trap → pump</div>
+    <div class="fa"></div>
+    <div class="fb decision"><b>Vacuum (blocker)</b> — ≥ 25 inHg; drop test: isolate pump, loss ≤ 2 inHg over 10 min; record on WO
+      <div class="branch">FAIL → press seams, re-seat pleats, check connector bases → re-test</div></div>
+    <div class="fa"></div>
+    <div class="fb"><b>Cure</b> — bagged overnight minimum; 206 thin-film solid 10–15 h @ 72 °F. Label (CS-001), weigh, record; trim per CS-009</div>
+  </div>
+
+  <h2>Foam-wrapped elements</h2>
+  <div class="note">Same flow over shaped foam core. Light foams can crush at full vacuum — reduce as required and record the working level on the WO for that part class.</div>
+  <div class="foot">CS-007 Rev A (Outlined status — complete before release) · West 105/206 data: WEST_SYSTEM_105 TDS</div>
+</section>
+
+<!-- ═══ 4. VACUUM REFERENCE ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Vacuum Bagging — Reference Values</h1><div class="ref">FEB Composites · CS-006 / CS-007 Rev A · 2026-07</div></div>
+
+  <table>
+    <tr><th>Parameter</th><th>Infusion (CS-006)</th><th>Wet layup (CS-007)</th></tr>
+    <tr><td>Vacuum, pre-resin (blocker)</td><td><b>≥ 27 inHg</b></td><td><b>≥ 25 inHg</b></td></tr>
+    <tr><td>During cure</td><td>Pump on through gel; no separate inHg spec</td><td>Cure bagged, overnight min</td></tr>
+    <tr><td>Drop test (pump isolated, 10 min)</td><td><b>≤ 1 inHg loss</b></td><td><b>≤ 2 inHg loss</b></td></tr>
+    <tr><td>On failure</td><td colspan="2">Leak-check and re-test. No resin mixed until pass. Record start/end readings on the WO.</td></tr>
+  </table>
+
+  <div class="note"><b>Note:</b> Gauges read inHg. Full vacuum ≈ 29.9 inHg at sea level (≈ 14.7 psi absolute). References to "pull 30" mean ~30 inHg, i.e. maximum pump vacuum — not 30 psi.</div>
+
+  <h2>Leak-check sequence</h2>
+  <ol class="proc">
+    <li>Press all tacky-tape seams</li>
+    <li>Re-seat pleat folds</li>
+    <li>Press connector bases through the bag</li>
+    <li>Inspect spiral-wrap cut ends (tape sharp ends — puncture risk)</li>
+    <li>Listen; then soapy water on remaining suspects</li>
+  </ol>
+
+  <h2>Line setup</h2>
+  <ul class="plain">
+    <li>Outlet: bag → resin trap → pump. Trap is mandatory in both processes.</li>
+    <li>Inlet (infusion): clamped until drop test passes; line end fully submerged in resin cup.</li>
+    <li>Empty the trap before resin approaches the pump port.</li>
+  </ul>
+  <div class="foot">CS-006 §7.4 / CS-007 §7, item 8</div>
+</section>
+
+<!-- ═══ 5. MOLD PREP ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Mold Sealing &amp; Release — XCR System</h1><div class="ref">FEB Composites · CS-004 Rev A · 2026-07</div></div>
+
+  <h2>1 — Clean (after machining)</h2>
+  <ul class="plain">
+    <li>Compressed air: all pockets and scribe lines</li>
+    <li>IPA + microfiber until cloth comes away clean; gloves from this point</li>
+  </ul>
+  <div class="note"><b>Caution:</b> No acetone on tooling board. No paper towels or fibrous cloth (embedded fibers mar the surface). Photograph the cleaned mold — reference for scribe-line visibility after sealing.</div>
+
+  <h2>2 — Seal (XCR)</h2>
+  <table>
+    <tr><td style="width:2.1in">Mix ratio</td><td><b>100 : 41 by weight</b> (2 : 1 by volume)</td></tr>
+    <tr><td>Batch size</td><td>≤ 150 g per mix</td></tr>
+    <tr><td>Pot life</td><td>8 min @ 20 °C · 4 min @ 30 °C (150 g)</td></tr>
+    <tr><td>Overcoat window</td><td>At firm-but-tacky: ≤ ~2 h 50 @ 20 °C · ≤ ~1 h 30 @ 30 °C (chemical bond, no prep)</td></tr>
+    <tr><td>Window missed (tack-free)</td><td>Cure ≥ 9 h @ 20 °C, key with 120 grit, clean, recoat</td></tr>
+    <tr><td>Handleable</td><td>8 h 30 @ 20 °C · no water exposure for 24 h</td></tr>
+    <tr><td>Ambient</td><td>15–30 °C; hold ≥ 20 °C through cure</td></tr>
+  </table>
+  <ul class="plain">
+    <li>Thin coats worked out of corners and fillets; scribe lines must stay visible — re-open flooded lines before gel</li>
+    <li>30 lb board typically needs 2 coats; 60 lb often 1</li>
+    <li>Runs/nibs only: local denib ≥ 800 grit, IPA wipe</li>
+  </ul>
+
+  <h2>3 — Release (Rexco)</h2>
+  <table>
+    <tr><th>Mold state</th><th>Formula Five wax</th><th>Partall #10 PVA</th></tr>
+    <tr><td>New mold</td><td>4 coats min; haze then buff each</td><td>2 thin coats; each dries to full gloss</td></tr>
+    <tr><td>Re-used mold</td><td>Clean 'N Glaze, then 1–2 coats</td><td>2 thin coats</td></tr>
+  </table>
+  <ul class="plain">
+    <li>First article on a new mold or new product batch: release a test resin dab from the flange before laying up</li>
+    <li>Record products, coat counts, batch masses on the WO</li>
+  </ul>
+  <div class="foot">Sources: EC-TDS-XCR, Rexco PARTALL/Formula Five guides — 04 Datasheets. Duratec retired 2026; docs specifying it are historical.</div>
+</section>
+
+<!-- ═══ 6. CNC CHECKLIST ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>ShopSabre — Machining Checklist (Tooling Board)</h1><div class="ref">FEB Composites · CS-005 Rev B · 2026-07</div></div>
+
+  <h2>Machine</h2>
+  <table>
+    <tr><td style="width:2.1in">Bed / cut area</td><td>5×10 ft class (≈ 65.5″ × 122″)</td></tr>
+    <tr><td>Max cut depth</td><td>≈ 6″ (Z travel 14″) — stacks taller than 6″ split in CAD per CS-003 §7.1.6; confirm usable depth vs tool length</td></tr>
+    <tr><td>Hold-down</td><td>Zoned vacuum table through the spoilboard — no tape or nails for sheet stock</td></tr>
+    <tr><td>Tooling</td><td>Automatic tool changer; tool lengths measured automatically (offsets in the controller tool table)</td></tr>
+  </table>
+
+  <h2>Before booking / before arriving</h2>
+  <ol class="proc">
+    <li>Reservation on the RFS/RSO site under the operator's own name (own-reservation rule)</li>
+    <li>Operator certified: RFS training doc + HOT sign-off</li>
+    <li>CAM generated by the operator; reviewed by Larry</li>
+    <li>Mold design review initialed on the WO (CS-003 §7.2) — required before stock is glued or a slot booked</li>
+    <li>Machining time estimate on the WO; slot booked when CAM starts, not when it finishes</li>
+    <li>Stock glued, fully cured (Ure-Bond 90: 4 h clamp min), labeled: part / WO / up-direction — confirm label matches the job</li>
+  </ol>
+
+  <h2>At the machine</h2>
+  <ol class="proc">
+    <li>Workholding: open vacuum zones under the part only. Tall stack on a small footprint → firm hand-push test; if it moves, add mechanical fixing through waste margin and keep toolpaths clear of it</li>
+    <li>Zero Z once per job, from the top of the stock at its highest point — not the bed</li>
+    <li>Tool changes: ATC handles them — no manual re-zero. Verify CAM tool numbers match the physical rack; re-run the tool-measure cycle for any manually swapped bit</li>
+    <li>Deep cuts: split toolpaths into depth stages</li>
+    <li>Verify X/Y zero against stock corner and CAM origin</li>
+    <li>Dust extraction on; dust mask minimum; max 2 people at the machine during setup</li>
+    <li>Attend the first 5 minutes; unexpected behavior → stop first, diagnose second</li>
+  </ol>
+
+  <h2>Before leaving</h2>
+  <ol class="proc">
+    <li>Inspect scribes/surfaces before releasing vacuum (rework is easiest while still located)</li>
+    <li>Record actual machine time on the WO</li>
+    <li>Clean bed and room; report tired tooling to Larry</li>
+    <li>Mold to cleaning + sealing per CS-004; update WO mold location</li>
+  </ol>
+  <div class="foot">CS-005 Rev B · Machine specs: shopsabre.com (5×10 / IS-A 510 class) — confirm model/options on the machine placard · Shopbot (Jacobs) fallback: SN5 Shopbot Procedure Checklist</div>
+</section>
+
+<!-- ═══ 7. PPE ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>PPE &amp; Chemical Handling</h1><div class="ref">FEB Composites · SDS: 04 Datasheets · 2026-07</div></div>
+
+  <table>
+    <tr><th>Operation</th><th>Required protection</th></tr>
+    <tr><td>Resin / hardener handling (all systems)</td><td>Nitrile gloves (change when contaminated); safety glasses when mixing or pouring</td></tr>
+    <tr><td>Extended or enclosed epoxy work (mold sealing, large layups)</td><td>Respirator with A-type (organic vapor, EN 14387 A1) cartridges + ventilation. Particulate filters do not stop vapors.</td></tr>
+    <tr><td>Cutting / sanding cured laminate</td><td>P100/particulate respirator, dust extraction on, long sleeves, gloves. Second trained person present (team rule).</td></tr>
+    <tr><td>Machining tooling board</td><td>Dust mask minimum, extraction on. Clean shared rooms by vacuum, not compressed air.</td></tr>
+    <tr><td>Aerosols / solvents (Airtac, acetone, clear coat)</td><td>Ventilation; no ignition sources; return to flammables cabinet</td></tr>
+    <tr><td>Dry carbon cloth</td><td>Gloves — cut edges splinter</td></tr>
+  </table>
+
+  <div class="note"><b>Sensitization:</b> all team epoxies are skin and respiratory sensitizers (see SDS). Repeated exposure can cause permanent allergy. Glove discipline is not optional.</div>
+
+  <div class="cols">
+    <div>
+      <h2>Skin contact</h2>
+      <ul class="plain">
+        <li>Wash immediately with soap and water — never solvent</li>
+        <li>Contaminated work clothing stays at the shop (SDS P272)</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Exotherm</h2>
+      <ul class="plain">
+        <li>Hot/smoking cup: outside, onto concrete, leave until cured</li>
+        <li>No uncured resin in the trash</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Chemical storage</h2>
+  <ul class="plain">
+    <li>Resins/hardeners: chemical boxes / barrel, hardeners on a separate shelf from resins</li>
+    <li>Flammables (Airtac, acetone, clear coat): flammables cabinet</li>
+    <li>No chemicals in food refrigerators</li>
+  </ul>
+  <div class="foot">SDS set: SN6 Resources/04 Datasheets (XCR, IN2, West, Airtac 2, Ure-Bond 90, Rexco)</div>
+</section>
+
+<!-- ═══ 8. PROCESS BLOCKERS ═══ -->
+<section class="sheet">
+  <div class="hdr"><h1>Process Blockers — Hold Points</h1><div class="ref">FEB Composites · CS-002 / 003 / 006 / 010 Rev A · 2026-07</div></div>
+
+  <table>
+    <tr><th>Blocker</th><th>When</th><th>Requirement</th><th>Sign-off</th></tr>
+    <tr>
+      <td><b>1 · Stack freeze</b><br>CS-002 §7.2</td>
+      <td>Before mold machining starts (flat panels: before cloth is cut)</td>
+      <td>Ply table, cured thickness, mass target on the WO. Cross-team parts: requesting subteam's requirements (thickness, DXF rev) included.</td>
+      <td>ME/RE + Composites Lead; requesting subteam lead for cross-team parts. Post-freeze change = WO revision.</td>
+    </tr>
+    <tr>
+      <td><b>2 · Mold design review</b><br>CS-003 §7.2</td>
+      <td>Before stock is glued or a machine slot booked</td>
+      <td>9-item checklist walked against CAD by a reviewer who is not the mold designer (surface match to current part rev, flanges ≥ 75 mm, scribes, draft, min section 15 mm, max-Z, stock plan, time estimate, stack frozen).</td>
+      <td>Reviewer initials the WO step.</td>
+    </tr>
+    <tr>
+      <td><b>3 · Drop test</b><br>CS-006 §7.4 / CS-007</td>
+      <td>Before resin is mixed</td>
+      <td>Pump isolated 10 min: ≤ 1 inHg loss (infusion) / ≤ 2 inHg (wet layup). Start/end readings recorded.</td>
+      <td>Operator records values on the WO.</td>
+    </tr>
+    <tr>
+      <td><b>4 · Acceptance criterion</b><br>CS-010 §7.1 / CS-013</td>
+      <td>Before work starts on any job with a measurable outcome (grounding, fit, mass)</td>
+      <td>Target value, measurement method, and probe/check points written on the WO. Grounding jobs additionally answer the conductive-path decision (CF mesh vs bonded copper path) per CS-010 §7.1.</td>
+      <td>WO creator; verified at closeout in quality checks.</td>
+    </tr>
+  </table>
+
+  <div class="note"><b>Rule:</b> blocker steps hold up all downstream work-order steps until signed (enforced in the WO app; shaded rows on printed WOs).</div>
+
+  <h2>Grounding quick reference (CS-010)</h2>
+  <table>
+    <tr><td style="width:2.1in">Acceptance</td><td><b>Every probe point ≤ target</b> (default &lt; 5 Ω, or the rules value on the WO) — not a single good point</td></tr>
+    <tr><td>Probe pattern (default)</td><td>100 mm grid over conductive zones + every edge midpoint, measured to the grounding point</td></tr>
+    <tr><td>Measurement</td><td>Zero/record lead resistance first; grounding hardware fastened as it will fly (torqued, washers)</td></tr>
+    <tr><td>Mesh in stack</td><td>Copper mesh continuous to grounding point; 25 mm min overlap between sheets; bare terminable tail at the fastener</td></tr>
+    <tr><td>Path selection</td><td>Large open laminates: mesh-in-stack. Thin-walled / tapered / wrapped-metal substrates: bonded copper path (epoxy + strip/braid) — do not CF-wrap</td></tr>
+    <tr><td>On failure</td><td>Bridge with bonded copper strip or add ground tab; re-measure full pattern. Do not sand thin laminate chasing contact.</td></tr>
+  </table>
+
+  <h2>Where things are</h2>
+  <ul class="plain">
+    <li>Work orders: Drive → SN6 Resources → 03 Work Orders → work-orders.html (or printed blanks, shop binder)</li>
+    <li>Standards index: Drive → SN6 Resources → 02 CS Standards → CS-INDEX</li>
+    <li>Datasheets (TDS/SDS): Drive → SN6 Resources → 04 Datasheets → INDEX.md</li>
+  </ul>
+  <div class="foot">CS-013 Rev A governs work orders and buy-off authority</div>
+</section>
+
+</body>
+</html>

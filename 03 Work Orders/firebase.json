@@ -1,0 +1,26 @@
+{
+  "hosting": {
+    "public": "app",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"],
+    "headers": [
+      {
+        "//": "Always revalidate app code so a deploy shows up immediately instead of hiding behind a stale browser cache (the 1-hour default bit us during setup). Data is live regardless; this only affects the HTML/JS/JSON shell.",
+        "source": "**/*.@(html|js|json)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "storage": { "port": 9199 },
+    "hosting": { "port": 5050 },
+    "ui": { "enabled": true }
+  }
+}

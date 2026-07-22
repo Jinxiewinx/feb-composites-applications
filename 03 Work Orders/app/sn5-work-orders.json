@@ -1,0 +1,4762 @@
+[
+ {
+  "id": "WO-SN5-001",
+  "partName": "DASHBOARD",
+  "subteam": "BERGO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-01-25",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.125\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 .125 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 .125 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-01-28",
+    "note": "remake discussed (#composites)"
+   },
+   {
+    "date": "2026-03-25",
+    "note": "~57 g remake discussed (#composites)"
+   },
+   {
+    "date": "2026-04-07",
+    "note": "Theo: \"another dash sorry 💔 same thickness (1/8\\\")\" — DXF/thickness churn (PP-04)"
+   },
+   {
+    "date": "2026-05-05",
+    "note": "re-waterjet coordination thread"
+   }
+  ],
+  "notes": "Remade 3+ times: no frozen thickness/DXF spec shared between Bergo and composites (PP-04 case study)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-002",
+  "partName": "UT INLET",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Nico",
+  "manufacturingEngineer": "Chuning",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-29",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-UT-INLET"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core (type per part notes)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"6X 195 + CORE\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 6X 195 + CORE",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-04-19",
+    "note": "machined and sealed inlet (#composites)"
+   },
+   {
+    "date": "2026-04-25",
+    "note": "inlet layup (#composites)"
+   }
+  ],
+  "notes": "Part of undertray crunch (PP-07)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-003",
+  "partName": "UT SIDE LEFT",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-29",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-UT-SIDE-LEFT"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core (type per part notes)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"6X 195 + CORE\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 6X 195 + CORE",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-05-01",
+    "note": "side pod left sealed; right layup air leak noted same day (PP-06/minors)"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-004",
+  "partName": "UNDERTRAY STRAKES",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-04-05",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 + CORE (6)\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 + CORE (6)",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-05-17",
+    "note": "strakes bonded, air dams on (#composites)"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-005",
+  "partName": "UT SIDE RIGHT",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-04-05",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-UT-SIDE-RIGHT"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core (type per part notes)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"6X 195 + CORE\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 6X 195 + CORE",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-05-01",
+    "note": "\"resin reached everywhere but air started leaking in toward the end, hopefully it will turn out okay\" — the no-drop-test failure mode CS-006 §7.4 now gates"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-006",
+  "partName": "UT DIFFUSER",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-04-05",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-UT-DIFFUSER"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core (type per part notes)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"6X 195 + CORE\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 6X 195 + CORE",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   },
+   {
+    "criterion": "grounding resistance",
+    "target": "<5 Ω every probe point",
+    "actual": "<1 Ω continuous everywhere (2026-06-21)",
+    "pass": true
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-04-14",
+    "note": "UT stack still undefined 3 weeks before layup (PP-07)"
+   },
+   {
+    "date": "2026-05-09",
+    "note": "diffuser released; parts dremeled (#composites)"
+   },
+   {
+    "date": "2026-05-10",
+    "note": "diffuser cut, rest coated (#composites)"
+   },
+   {
+    "date": "2026-06-21",
+    "note": "grounding validated <1 Ω continuous everywhere (comp recap) — CS-010 reference success"
+   }
+  ],
+  "notes": "The CS-010 reference part: criterion + copper mesh method defined up front, validated at comp",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-007",
+  "partName": "SEAT",
+  "subteam": "BERGO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldWetLay",
+  "moldEngineer": "Nico",
+  "manufacturingEngineer": "Chuning",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-15",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-SEAT"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "core (type per part notes)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"6X 195 + CORE\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 6X 195 + CORE",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-007",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue + machine mold (CS-003/005)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Wet layup + bag (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2026-03-26",
+    "note": "seat molds complete"
+   },
+   {
+    "date": "2026-04-18",
+    "note": "seat coated, sanding next (#composites)"
+   },
+   {
+    "date": "2026-03-05",
+    "note": "Justin asks: \"What layup stack was used for seat last year?\" — unanswerable from records (PP-09)"
+   }
+  ],
+  "notes": "PP-09 case study: prior-year stack was unrecorded",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-008",
+  "partName": "RW ENDPLATES",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-08",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.25\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 2X 88 .25 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 2X 88 .25 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "2272 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 2272,
+  "timeline": [
+   {
+    "date": "2026-04-08",
+    "note": "wing assembly + endplate layups (#composites)"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-009",
+  "partName": "FW MIDPLATES",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Nico",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-15",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.25\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 2X88 .25 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 2X88 .25 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-010",
+  "partName": "FW E1 TOP",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "not recorded (retro)",
+  "manufacturingEngineer": "not recorded (retro)",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-22",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-FW-E1-TOP"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195 88\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195 88",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "4485 (as recorded in tracker)",
+    "actual": "1394 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": 4485,
+  "weightActualG": 1394,
+  "timeline": [],
+  "notes": "tracker target column read 4485 (units as recorded)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-011",
+  "partName": "FW E1 BOT",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-22",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-FW-E1-BOT"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195 88\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195 88",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "4036 (as recorded in tracker)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": 4036,
+  "weightActualG": null,
+  "timeline": [],
+  "notes": "weight cell read 0 — actual mass not recorded (retro)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-012",
+  "partName": "RW E1 TOP",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-01",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-RW-E1-TOP"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195 88\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195 88",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "1250 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 1250,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-013",
+  "partName": "RW E1 BOT",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-01",
+  "mold": {
+   "layers": "not recorded (retro)",
+   "density": "not recorded (retro)",
+   "sealingType": "not recorded (retro)",
+   "location": "not recorded (retro)",
+   "moldId": "MOLD-RW-E1-BOT"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195 88\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195 88",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "5114 (as recorded in tracker)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": 5114,
+  "weightActualG": null,
+  "timeline": [],
+  "notes": "weight cell read 0 — actual mass not recorded (retro)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-014",
+  "partName": "FW ENDPLATES",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-15",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.25\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 .25 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 .25 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-015",
+  "partName": "BW LEFT SIDE PANEL",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Nico",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-01",
+  "mold": {
+   "layers": "2 x 3\"",
+   "density": "30",
+   "sealingType": "Resin",
+   "location": "RFS",
+   "moldId": "MOLD-BW-LEFT-SIDE-PANEL"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "782 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 782,
+  "timeline": [
+   {
+    "date": "2026-01-26",
+    "note": "mold sealed (mold tracker)"
+   }
+  ],
+  "notes": "timeline note: \"may redo pending weight of right side panel\"",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-016",
+  "partName": "NOSECONE",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Chuning",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-08",
+  "mold": {
+   "layers": "10 x 2\"",
+   "density": "30",
+   "sealingType": "not recorded (retro)",
+   "location": "RFS",
+   "moldId": "MOLD-NOSECONE"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"3X 195\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 3X 195",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "735 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 735,
+  "timeline": [
+   {
+    "date": "2026-02-22",
+    "note": "\"shiny but will probably redo this piece\" (#composites)"
+   },
+   {
+    "date": "2026-02-28",
+    "note": "section 5 needs remachining (#composites)"
+   },
+   {
+    "date": "2026-03-27",
+    "note": "layup via new \"pre-preg\" method (Alvin) — praised turnaround"
+   }
+  ],
+  "notes": "10-section 2\" mold stack; remachining churn (PP-03-adjacent)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-017",
+  "partName": "RW E2",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "FoamWrapped",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-08",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "foam core (shaped)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 + FOAM\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 + FOAM",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-007",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Shape foam core (CS-003 foam rules)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Wet layup over core + bag (CS-007 §7.6)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Cure (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "521 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 521,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-018",
+  "partName": "RW E4",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "FoamWrapped",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-15",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "foam core (shaped)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 + FOAM\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 + FOAM",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-007",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Shape foam core (CS-003 foam rules)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Wet layup over core + bag (CS-007 §7.6)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Cure (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "481 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 481,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-019",
+  "partName": "RW E5",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "FoamWrapped",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-15",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "foam core (shaped)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 + FOAM\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 + FOAM",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-007",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Shape foam core (CS-003 foam rules)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Wet layup over core + bag (CS-007 §7.6)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Cure (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "148 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 148,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-020",
+  "partName": "FLOOR CLOSEOUT",
+  "subteam": "BERGO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Nico",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-03-15",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.25\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 .25 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 .25 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-021",
+  "partName": "RW E3",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "FoamWrapped",
+  "moldEngineer": "Nick",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-01",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "foam core (shaped)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 + FOAM\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 + FOAM",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-007",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Shape foam core (CS-003 foam rules)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Wet layup over core + bag (CS-007 §7.6)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Cure (CS-007)",
+    "csRef": "CS-007",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "3169 (as recorded in tracker)",
+    "actual": "298 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": 3169,
+  "weightActualG": 298,
+  "timeline": [
+   {
+    "date": "2025-11-15",
+    "note": "RE3 CNC-foam wing layups (fall R&D)"
+   },
+   {
+    "date": "2026-02-01",
+    "note": "RE3 \"did not fit on 2 inch stock\" — stock planning miss"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-022",
+  "partName": "CLAMSHELL",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Chuning",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-08",
+  "mold": {
+   "layers": "1 x 3\"",
+   "density": "30",
+   "sealingType": "not recorded (retro)",
+   "location": "RFS",
+   "moldId": "MOLD-CLAMSHELL"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "0/90",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "±45",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "0/90",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"3X 195 (0 45 0)\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 3X 195 (0 45 0)",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "2370 (as recorded in tracker)",
+    "actual": "416 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": 2370,
+  "weightActualG": 416,
+  "timeline": [
+   {
+    "date": "2026-01-24",
+    "note": "clamshell mold CAD assigned (weekly assignments)"
+   },
+   {
+    "date": "2026-02-17",
+    "note": "clamshell mold machined"
+   },
+   {
+    "date": "2026-02-23",
+    "note": "CAD error found (raised middle section): fix-or-reglue, Tue–Thu machining slots cancelled — PP-03 case study"
+   },
+   {
+    "date": "2026-03-04",
+    "note": "\"She going\" — layup proceeding (#composites)"
+   }
+  ],
+  "notes": "PP-03 case study: no design review between mold CAD and machining. Weight note: tracker cell read '416 (bw 2370)' — 416 g is this part; the 2370 figure appears to reference the bodywork assembly context, NOT a target for this part (an >80% 'miss' would be a misreading, not a failure)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-023",
+  "partName": "BW RIGHT SIDE PANEL",
+  "subteam": "AERO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Nico",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-02-01",
+  "mold": {
+   "layers": "2 x 3\"",
+   "density": "30",
+   "sealingType": "Resin",
+   "location": "RFS",
+   "moldId": "MOLD-BW-RIGHT-SIDE-PANEL"
+  },
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"2X 195\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 2X 195",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "437 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 437,
+  "timeline": [
+   {
+    "date": "2026-01-26",
+    "note": "mold sealed (mold tracker)"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-024",
+  "partName": "STEERING WHEEL",
+  "subteam": "BERGO",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "GlassInfusion",
+  "moldEngineer": "N/A (flat)",
+  "manufacturingEngineer": "Justin",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-01-25",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "Nomex honeycomb 0.25\"",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "88 spread-tow",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   },
+   {
+    "material": "195 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "tracker shorthand: \"195 88 .25 NOMEX\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 195 88 .25 NOMEX",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-004",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Prepare flat plate/glass (CS-004 release rules)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Cut to DXF (CS-009 §7.6, confirm rev)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "60 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 60,
+  "timeline": [
+   {
+    "date": "2025-10-08",
+    "note": "Bergo meeting: highest-risk component; ACB sponsor route; hydraulic press + dogbone tests planned"
+   },
+   {
+    "date": "2025-10-20",
+    "note": "3-pt bend test held ~390 lb (fall R&D)"
+   }
+  ],
+  "notes": "",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-025",
+  "partName": "STEERING COVER",
+  "subteam": "AUTO-MECH",
+  "revision": "A",
+  "status": "Complete",
+  "processType": "MoldInfusion",
+  "moldEngineer": "Justin",
+  "manufacturingEngineer": "Nick",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-04-05",
+  "mold": {
+   "layers": "4",
+   "density": "60",
+   "sealingType": "S120",
+   "location": "RFS",
+   "moldId": "MOLD-STEERING-COVER"
+  },
+  "layupStack": [
+   {
+    "material": "670 twill",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": "1–2 plies per tracker"
+   }
+  ],
+  "stackNote": "tracker shorthand: \"1/2X 670\" — ply order/orientations not recorded (retro)",
+  "bom": [
+   {
+    "item": "per tracker shorthand: 1/2X 670",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Sigmatex / Easy Composites / ACP (see Budget sheet)",
+    "estCost": "not recorded (retro)"
+   }
+  ],
+  "standardsRefs": [
+   "CS-002",
+   "CS-003",
+   "CS-004",
+   "CS-005",
+   "CS-006",
+   "CS-009"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Stack frozen (CS-002 §7.2)",
+    "csRef": "CS-002",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "Mold design review (CS-003 §7.2)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Glue mold stock (CS-003 §7.3)",
+    "csRef": "CS-003",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Machine mold (CS-005)",
+    "csRef": "CS-005",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Seal + release mold (CS-004)",
+    "csRef": "CS-004",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 6,
+    "title": "Dry stack + bag (CS-006 §7.2–7.3)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 7,
+    "title": "Drop test (CS-006 §7.4)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 8,
+    "title": "Infuse (CS-006 §7.5)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 9,
+    "title": "Cure + demould (CS-006 §7.6)",
+    "csRef": "CS-006",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   },
+   {
+    "seq": 10,
+    "title": "Trim + finish (CS-009)",
+    "csRef": "CS-009",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "mass",
+    "target": "not recorded (retro)",
+    "actual": "231 g",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": 231,
+  "timeline": [
+   {
+    "date": "2025-11-20",
+    "note": "steering shroud mold machined (Jim Phieffer CAD)"
+   }
+  ],
+  "notes": "mold: 4-layer 60 lb board, S120 sealed (pre-XCR)",
+  "retro": true
+ },
+ {
+  "id": "WO-SN5-026",
+  "partName": "CATCH CAN (grounding retrofit)",
+  "subteam": "POWERTRAIN",
+  "revision": "B",
+  "status": "Complete",
+  "processType": "Other",
+  "moldEngineer": "N/A",
+  "manufacturingEngineer": "cross-team (powertrain + composites)",
+  "createdDate": "2026-07-12 (retro-filled)",
+  "dueDate": "2026-05-31",
+  "mold": null,
+  "layupStack": [
+   {
+    "material": "aluminum can substrate",
+    "orientation": "n/a",
+    "coverage": "full",
+    "notes": "assumed 3004 aluminum"
+   },
+   {
+    "material": "copper mesh (inner)",
+    "orientation": "n/a",
+    "coverage": "full",
+    "notes": "rev B intent — inner/outer mesh in contact"
+   },
+   {
+    "material": "670 twill + copper mesh interlayers",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": "Slack SOP: \"copper mesh, 670, copper mesh, 88\""
+   },
+   {
+    "material": "88 spread-tow (outer)",
+    "orientation": "not recorded (retro)",
+    "coverage": "full",
+    "notes": ""
+   }
+  ],
+  "stackNote": "rev A = CF wrap without defined criterion; rev B = copper-mesh sandwich; final resolution abandoned CF wrapping for epoxy + copper paths",
+  "bom": [
+   {
+    "item": "copper mesh",
+    "qty": "not recorded (retro)",
+    "unit": "",
+    "source": "Amazon ($27.55, Budget sheet)",
+    "estCost": "27.55"
+   }
+  ],
+  "standardsRefs": [
+   "CS-010"
+  ],
+  "steps": [
+   {
+    "seq": 1,
+    "title": "Define acceptance criterion (CS-010 §7.1) — NOT DONE IN SN5",
+    "csRef": "CS-010",
+    "status": "skipped (retro)",
+    "buyoff": {
+     "name": "",
+     "date": ""
+    },
+    "notes": "criterion/method first written down 2026-05-25, six months after work began — the PP-05 root cause",
+    "photoRefs": []
+   },
+   {
+    "seq": 2,
+    "title": "CF wrap layup attempts",
+    "csRef": "CS-010",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "multiple layups Nov 2025–May 2026",
+    "photoRefs": []
+   },
+   {
+    "seq": 3,
+    "title": "Resistance measurement",
+    "csRef": "CS-010",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "~40 Ω outer CF to can end surface (2026-05-25) vs <5 Ω needed",
+    "photoRefs": []
+   },
+   {
+    "seq": 4,
+    "title": "Rework by sanding — FAILED",
+    "csRef": "CS-009",
+    "status": "failed (retro)",
+    "buyoff": {
+     "name": "",
+     "date": ""
+    },
+    "notes": "cans punctured at the taper during sanding (2026-05-27) — CS-009 §7.2 / CS-010 §7.4 now prohibit this",
+    "photoRefs": []
+   },
+   {
+    "seq": 5,
+    "title": "Design pivot: epoxy + copper conductive paths",
+    "csRef": "CS-010",
+    "status": "done (retro)",
+    "buyoff": {
+     "name": "not recorded (retro)",
+     "date": "not recorded (retro)"
+    },
+    "notes": "the CS-010 §7.1 decision-point lesson: CF wrap was the wrong path for this geometry",
+    "photoRefs": []
+   }
+  ],
+  "qualityChecks": [
+   {
+    "criterion": "resistance to ground",
+    "target": "<5 Ω (rules) — written 2026-05-25 only",
+    "actual": "~40 Ω via CF wrap; pass after pivot not recorded (retro)",
+    "pass": null
+   }
+  ],
+  "weightTargetG": null,
+  "weightActualG": null,
+  "timeline": [
+   {
+    "date": "2025-11",
+    "note": "powertrain opens catch-can grounding conversation"
+   },
+   {
+    "date": "2026-05-24",
+    "note": "copper mesh in layup? (question — records unclear)"
+   },
+   {
+    "date": "2026-05-25",
+    "note": "40 Ω measured; criterion/method questions first written"
+   },
+   {
+    "date": "2026-05-27",
+    "note": "cans punctured during sanding; CF path abandoned"
+   }
+  ],
+  "notes": "PP-05 case study. Kept as WO-SN5-026 even though it never appeared in the Master Tracker — small cross-team jobs bypassing tracking was itself the failure.",
+  "retro": true
+ }
+]

@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// File storage for avatars and project files.
+//
+// Storage rules can't read Firestore and can't split get/list (that's a
+// Firestore feature), so we can't do the full roster check here. What we DO
+// enforce: only a signed-in user can touch storage at all; a user can only
+// write their OWN avatar (avatars/{their-uid}); project files must be images or
+// common doc types under a size cap; and no path outside these two trees is
+// writable. Reads require sign-in — needed because the client calls
+// getDownloadURL() to display images.
+//
+// RESIDUAL (documented, low severity): a signed-in account that a lead hasn't
+// added to the roster can still read a storage object IF it already knows the
+// exact path. Two things make that impractical: listing is denied (no rule
+// matches a listable prefix, so the bucket can't be walked), and paths are hard
+// to guess (avatars use the random Auth uid; project files are prefixed with a
+// millisecond timestamp). Fully gating reads to roster members needs Firebase
+// Auth CUSTOM CLAIMS set by a Cloud Function on roster changes (then check
+// `request.auth.token.roster` here) — a worthwhile follow-on now that we're on
+// Blaze, but not built yet.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function sizeOk() { return request.resource.size < 10 * 1024 * 1024; }
+
+    // avatars/{uid} — owner writes only; anyone signed in can read (getDownloadURL).
+    match /avatars/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid
+        && sizeOk() && request.resource.contentType.matches('image/.*');
+    }
+
+    // projects/{projId}/{file} — any signed-in user may add a file; the file's
+    // record lands in a roster-gated Firestore doc, so non-roster users can't
+    // surface it. Images + common doc types only.
+    match /projects/{projId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && sizeOk()
+        && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
+    }
+
+    // documents/{file} — the Documents-tab library; any signed-in member uploads
+    // (its record lands in the roster-gated `documents` Firestore collection).
+    match /documents/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && sizeOk()
+        && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
+    }
+
+    // Everything else: denied (no rule = deny).
+  }
+}

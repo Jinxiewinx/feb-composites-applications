@@ -1,0 +1,69 @@
+rules_version = '2';
+
+// Access model: email allowlist ("roster"). Anyone can create a Firebase Auth
+// account, but nothing here is readable or writable until the lead has added
+// their email to /roster. These rules are the actual enforcement — the app's
+// hidden buttons are just UX.
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function onRoster() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(db)/documents/roster/$(request.auth.token.email));
+    }
+
+    function isLead() {
+      return onRoster()
+        && get(/databases/$(db)/documents/roster/$(request.auth.token.email)).data.role == "lead";
+    }
+
+    // Every data collection follows the same rule: any roster member can read
+    // and write records, only a lead can delete. workOrders (WO-SN5/6-###),
+    // parts (P-SN6-###), projects (PROJ-SN6-###), budget (BUY-SN6-###), and
+    // schedule (one doc per week). Doc id = record id / week key.
+    match /workOrders/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /parts/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /projects/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /schedule/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /budget/{id}     { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    // Documents: any member can upload/edit; only a lead prunes the library.
+    match /documents/{id}  { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+
+    // Notifications: any member can create one (for a teammate); you can only
+    // read/update/delete notifications addressed to YOU (a lead can prune any).
+    // The app subscribes with where('to','==', myEmail), which matches the read rule.
+    match /notifications/{id} {
+      // `from` must be the creator's own email — can't forge who a ping is from.
+      allow create: if onRoster() && request.resource.data.from == request.auth.token.email;
+      allow read, update, delete: if onRoster()
+        && (resource.data.to == request.auth.token.email || isLead());
+    }
+
+    // Doc id = member email (lowercase). role: "lead" | "member".
+    // Bootstrap: the FIRST lead entry must be created from the Firebase
+    // console (or emulator UI) — with an empty roster, nobody passes isLead().
+    // A member may edit ONLY their own doc, and only avatar/name (never role) —
+    // so people set their own photo without being able to promote themselves.
+    match /roster/{email} {
+      allow read: if onRoster();
+      allow create, delete: if isLead();
+      allow update: if isLead() || (
+        onRoster()
+        && request.auth.token.email == email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'name'])
+      );
+    }
+
+    // meta/<collection> = { next: int } — one shared id counter per collection.
+    // Increment-only, so a buggy or stray write can't rewind it and cause
+    // duplicate ids.
+    match /meta/{id} {
+      allow read: if onRoster();
+      allow create: if onRoster() && request.resource.data.next is int;
+      allow update: if onRoster()
+        && request.resource.data.next == resource.data.next + 1;
+    }
+  }
+}
