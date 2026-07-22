@@ -89,7 +89,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|BLANK_ROWS|BLANK_FORM_ROWS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -431,23 +431,62 @@ console.log("printed traveler:");
 await t("sheet renders every section for a real WO", () => {
   const wo = woSeed.find(w => (w.steps || []).length >= 8);
   const h = woSheetHtml(wo);
-  ["Part &amp; assignment", "Layup stack", "Steps &amp; buy-offs", "Bill of materials",
+  ["Part and assignment", "Layup stack", "Steps and buy-offs", "Bill of materials",
    "Quality checks", "Event log", "Release sign-off"].forEach(s =>
     assert(h.includes(s), "missing section: " + s));
   assert(h.includes(wo.id), "WO id must appear on the sheet");
 });
 await t("every list leaves blank rows to write in", () => {
   const wo = woSeed.find(w => (w.steps || []).length >= 8);
-  const h = woSheetHtml(wo);
+  const L = LAYOUTS[4];
+  const h = woSheetHtml(wo, { layout: L });
   const blanks = (h.match(/<tr class="blank">/g) || []).length;
-  const want = BLANK_ROWS.steps + BLANK_ROWS.stack + BLANK_ROWS.bom + BLANK_ROWS.quality + BLANK_ROWS.events;
+  const want = L.rows.steps + L.rows.stack + L.rows.bom + L.rows.quality + L.rows.events;
   assert(blanks === want, `expected ${want} blank rows, got ${blanks}`);
+});
+await t("layout ladder tightens monotonically, so the fit loop converges", () => {
+  const total = L => L.rows.steps + L.rows.stack + L.rows.bom + L.rows.quality + L.rows.events;
+  for (let i = 1; i < LAYOUTS.length; i++) {
+    assert(total(LAYOUTS[i]) <= total(LAYOUTS[i - 1]),
+      `layout ${i} is not tighter than ${i - 1}: ${total(LAYOUTS[i])} vs ${total(LAYOUTS[i - 1])}`);
+  }
+  assert(total(LAYOUTS[0]) > total(LAYOUTS[LAYOUTS.length - 1]), "ladder must actually span a range");
+  assert(LAYOUTS[LAYOUTS.length - 1].compact, "the floor layout should be the compact one");
+  assert(MAX_PAGES === 2, "the sheet is specified as a two-page document");
+});
+await t("tightest layout emits far less filler than the most generous", () => {
+  const wo = woSeed.find(w => (w.steps || []).length >= 8);
+  const big = (woSheetHtml(wo, { layout: LAYOUTS[0] }).match(/<tr class="blank">/g) || []).length;
+  const small = (woSheetHtml(wo, { layout: LAYOUTS[LAYOUTS.length - 1] }).match(/<tr class="blank">/g) || []).length;
+  assert(big >= small * 5, `expected a wide range, got ${big} vs ${small}`);
 });
 await t("blocker steps are flagged without relying on colour", () => {
   const wo = woSeed.find(w => (w.steps || []).some(isBlocker));
   const h = woSheetHtml(wo);
   assert(h.includes('<tr class="blk">'), "blocker row needs the blk class");
-  assert(h.includes("Blocker — no sign-off, no moving on"), "blocker must be spelled out in text");
+  assert(h.includes("Blocker: no sign-off, no moving on"), "blocker must be spelled out in text");
+});
+await t("standard references are kept off the sheet", () => {
+  woSeed.forEach(wo => {
+    const h = woSheetHtml(wo);
+    assert(!/CS-\d/.test(h), `${wo.id} still prints a standard reference`);
+  });
+});
+await t("stripCS cleans legacy titles without eating the step name", () => {
+  assert(stripCS("Stack frozen (CS-002 §7.2)") === "Stack frozen");
+  assert(stripCS("Drop test ≤1 inHg/10 min (CS-006 §7.4)") === "Drop test ≤1 inHg/10 min");
+  assert(stripCS("Cut to DXF — confirm rev (CS-009)") === "Cut to DXF — confirm rev");
+  assert(stripCS("Machine mold") === "Machine mold", "a clean title must pass through untouched");
+});
+await t("new work orders carry no standard references at all", () => {
+  Object.values(STD_STEPS).forEach(list => list.forEach(s =>
+    assert(!/CS-\d/.test(s[0]), "standard reference left in step title: " + s[0])));
+});
+await t("blocker detection survives the retitle", () => {
+  const words = ["Stack frozen", "Mold design review", "Drop test, 1 inHg or less over 10 min",
+                 "Define acceptance criterion: target and method, set before work starts"];
+  words.forEach(w => assert(isBlocker({ title: w }), "should still be a blocker: " + w));
+  assert(!isBlocker({ title: "Trim and finish" }), "ordinary steps must not become blockers");
 });
 await t('retro "not recorded" prints as an empty box, not as data', () => {
   const h = woSheetHtml({ processType: "MoldInfusion", partName: "X", moldEngineer: "not recorded (retro)",
@@ -459,8 +498,7 @@ await t("blank form builds from STD_STEPS with no record behind it", () => {
   STD_STEPS.MoldWetLay.forEach(s => assert(h.includes(esc(s[0])), "missing standard step: " + s[0]));
   assert(h.includes("Blank form"), "blank form should be stamped as one");
   assert(h.includes("MOLD WET LAY"), "process should be humanized for a person at a bench");
-  const blanks = (h.match(/<tr class="blank">/g) || []).length;
-  assert(blanks > BLANK_ROWS.stack + BLANK_ROWS.bom, "blank forms need more ruling than a filled one");
+  assert((h.match(/<tr class="blank">/g) || []).length > 0, "a blank form is mostly ruling");
 });
 await t("Print button opens the traveler, not window.print()", () => {
   onFbData("workOrders", woSeed.slice());

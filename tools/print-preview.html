@@ -52,10 +52,14 @@
   <label><input type="checkbox" id="pages" onchange="document.body.classList.toggle('pages',this.checked)"> page breaks</label>
   <span id="stat"></span>
   <span class="sp"></span>
+  <button onclick="auditAll()">Audit all</button>
   <button onclick="window.print()">Print</button>
 </div>
 
 <div id="out"></div>
+<!-- fitSheetHtml measures candidate layouts in here before choosing one. -->
+<div id="printroot"></div>
+<pre id="audit" style="color:#fff;font:12px/1.5 monospace;padding:12px 16px;margin:0;white-space:pre-wrap"></pre>
 
 <script src="../03%20Work%20Orders/app/core.js"></script>
 <script src="../03%20Work%20Orders/app/workorders.js"></script>
@@ -65,10 +69,37 @@ let WOS = [];
 function draw() {
   const blank = document.getElementById("blank").checked;
   const wo = WOS[document.getElementById("pick").value] || WOS[0];
-  document.getElementById("out").innerHTML = blank
-    ? woSheetHtml({ processType: wo.processType, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] }, { blank: true })
-    : woSheetHtml(wo);
+  const rec = blank
+    ? { processType: wo.processType, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] }
+    : wo;
+  document.getElementById("out").innerHTML = fitSheetHtml(rec, { blank });
   report();
+}
+
+/* Runs every seed work order plus a blank of each process through the real fit
+   loop and reports the resulting page count. This is the check that the two-page
+   cap holds for the whole archive, not just the one on screen. */
+function auditAll() {
+  const host = document.getElementById("printroot");
+  const rows = [];
+  let worst = 0;
+  const measure = (rec, opts, label) => {
+    const html = fitSheetHtml(rec, opts);
+    host.className = "measuring";
+    host.innerHTML = html;
+    const pages = measurePages(host);
+    host.innerHTML = ""; host.className = "";
+    worst = Math.max(worst, pages);
+    const layout = /class="wsheet compact"/.test(html) ? "compact" : "";
+    const blanks = (html.match(/<tr class="blank">/g) || []).length;
+    rows.push(`${pages > 2 ? "OVER" : "  ok"}  ${label.padEnd(30)} ${pages.toFixed(2)} pages  ${String(blanks).padStart(2)} blank rows ${layout}`);
+  };
+  WOS.forEach(w => measure(w, {}, `${w.id} ${(w.steps || []).length} steps`));
+  ["MoldInfusion", "GlassInfusion", "MoldWetLay", "FoamWrapped", "Other"].forEach(p =>
+    measure({ processType: p, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] },
+      { blank: true }, `blank ${p}`));
+  rows.push("", worst > 2 ? `FAIL worst case ${worst.toFixed(2)} pages` : `PASS all fit, worst ${worst.toFixed(2)} pages`);
+  document.getElementById("audit").textContent = rows.join("\n");
 }
 /* Sanity readout. Horizontal overflow is the failure that silently ruins a print
    (columns walk off the right edge), so it's checked explicitly rather than

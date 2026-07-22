@@ -34,8 +34,14 @@ Printing a work order produces a hand-fillable shop traveler: ruled boxes for
 every field, an initial-and-date cell on each step, and blank rows so plies,
 steps and BOM lines can be added at the bench. Print blank traveler gives empty
 forms with the standard step list already on them. Both are built for a
-black-and-white laser. See `app/print.js` and `print.css`, and
-`tools/print-preview.html` to review the design without burning paper.
+black-and-white laser.
+
+The sheet is capped at two pages. `print.js` renders it, measures the result, and
+walks down a ladder of progressively tighter layouts until it fits, so the
+writing space flexes with how full the work order is instead of the page count
+flexing. `tools/print-preview.html` has an Audit all button that runs every seed
+work order and every blank form through that loop and reports the page counts,
+which is how the cap gets verified after a layout change.
 
 Load SN5 archive seeds the retro SN5 data: 26 work orders, 33 parts from the
 Master Tracker, and last season's production timeline. Everything is marked

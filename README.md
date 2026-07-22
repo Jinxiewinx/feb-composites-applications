@@ -22,6 +22,8 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 Work orders print as a hand-fillable shop traveler rather than a screenshot of the screen: ruled boxes for every field, an initial-and-date cell on every step, blockers called out in heavy rule and hatching, and blank rows at the end of each list so plies, steps and BOM lines can be added at the bench. Print on a work order opens a preview of the exact sheet. Print blank traveler gives you empty forms with the standard step list already on them, a stack to take to RFS. It's all designed for a black-and-white laser, so nothing depends on colour.
 
+Every sheet is two pages, always. The writing space does the adjusting: the app renders the sheet, measures it, and picks the most generous layout that still fits, so a sparse work order comes out with plenty of room to write and a dense one comes out tighter. Nothing spills onto a third page that then gets separated from the first two. Step titles no longer carry CS standard numbers either, since they made the sheet dense and the standards are in the Documents tab.
+
 Setup, deploy and architecture are in `03 Work Orders/app/README.md`. The `work-orders.html` file in the same folder is the original single-file version, kept as an offline viewer.
 
 ## How the pieces connect

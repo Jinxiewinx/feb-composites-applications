@@ -9,30 +9,50 @@ const WO_STATUSES = ["Draft", "Released", "InWork", "Complete", "OnHold"];
 const PROCESSES = ["MoldInfusion", "GlassInfusion", "MoldWetLay", "FoamWrapped", "Other"];
 const BLOCKER_WORDS = ["frozen", "design review", "drop test", "acceptance criterion"];
 
+/* Step titles are what someone reads at the bench with gloves on, so they stay
+   short and plain. Standard numbers used to be baked into every title; they made
+   the printed sheet dense and hard to scan, and the standards themselves live in
+   the Documents tab. Note that BLOCKER_WORDS matches on these titles, so keep the
+   words "frozen", "design review", "drop test" and "acceptance criterion". */
 const STD_STEPS = {
   MoldInfusion: [
-    ["Stack frozen (CS-002 §7.2)", "CS-002"], ["Mold design review (CS-003 §7.2)", "CS-003"],
-    ["Glue mold stock (CS-003 §7.3)", "CS-003"], ["Machine mold (CS-005)", "CS-005"],
-    ["Seal + release mold (CS-004)", "CS-004"], ["Dry stack + bag (CS-006 §7.2–7.3)", "CS-006"],
-    ["Drop test ≤1 inHg/10 min (CS-006 §7.4)", "CS-006"], ["Infuse (CS-006 §7.5)", "CS-006"],
-    ["Cure + demould (CS-006 §7.6)", "CS-006"], ["Trim + finish (CS-009)", "CS-009"]],
+    ["Stack frozen"], ["Mold design review"],
+    ["Glue mold stock"], ["Machine mold"],
+    ["Seal and release mold"], ["Dry stack and bag"],
+    ["Drop test, 1 inHg or less over 10 min"], ["Infuse"],
+    ["Cure and demould"], ["Trim and finish"]],
   GlassInfusion: [
-    ["Stack frozen (CS-002 §7.2)", "CS-002"], ["Prepare plate + release (CS-004)", "CS-004"],
-    ["Dry stack + bag (CS-006 §7.2–7.3)", "CS-006"], ["Drop test ≤1 inHg/10 min (CS-006 §7.4)", "CS-006"],
-    ["Infuse (CS-006 §7.5)", "CS-006"], ["Cure + demould (CS-006 §7.6)", "CS-006"],
-    ["Cut to DXF — confirm rev (CS-009)", "CS-009"], ["Finish (CS-009)", "CS-009"]],
+    ["Stack frozen"], ["Prepare plate and release"],
+    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min"],
+    ["Infuse"], ["Cure and demould"],
+    ["Cut to DXF, confirm revision"], ["Finish"]],
   MoldWetLay: [
-    ["Stack frozen (CS-002 §7.2)", "CS-002"], ["Mold design review (CS-003 §7.2)", "CS-003"],
-    ["Glue + machine mold (CS-003/005)", "CS-003"], ["Seal + release mold (CS-004)", "CS-004"],
-    ["Wet layup + bag (CS-007)", "CS-007"], ["Cure + demould (CS-007)", "CS-007"],
-    ["Trim + finish (CS-009)", "CS-009"]],
+    ["Stack frozen"], ["Mold design review"],
+    ["Glue and machine mold"], ["Seal and release mold"],
+    ["Wet layup and bag"], ["Cure and demould"],
+    ["Trim and finish"]],
   FoamWrapped: [
-    ["Stack frozen (CS-002 §7.2)", "CS-002"], ["Shape foam core (CS-003)", "CS-003"],
-    ["Wet layup over core (CS-007 §7.6)", "CS-007"], ["Cure (CS-007)", "CS-007"],
-    ["Trim + finish (CS-009)", "CS-009"]],
-  Other: [["Define acceptance criterion (CS-010 §7.1 pattern: target + method BEFORE work)", "CS-010"],
-          ["Execute", "CS-013"], ["Verify against criterion", "CS-013"]],
+    ["Stack frozen"], ["Shape foam core"],
+    ["Wet layup over core"], ["Cure"],
+    ["Trim and finish"]],
+  Other: [["Define acceptance criterion: target and method, set before work starts"],
+          ["Execute"], ["Verify against criterion"]],
 };
+
+/* Retro work orders and anything already saved carry standard numbers, both in
+   step titles ("Stack frozen (CS-002 §7.2)") and loose in notes and event-log
+   text. Strip them at render time so legacy records read like new ones without
+   rewriting stored data. Applied to every free-text field that reaches paper. */
+function stripCS(s) {
+  return String(s || "")
+    // whole parenthesised or bracketed reference, including any section number
+    .replace(/\s*[([]\s*CS-\d+[^)\]]*[)\]]/g, "")
+    // bare reference mid-sentence, with an optional § clause after it
+    .replace(/\s*\bCS-\d+(?:\s*§\s*[\d.–—-]+)?/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim();
+}
 
 function woById(id) { return DB.workOrders.find(w => w.id === id); }
 function saveWO(w, field) { w = w || woById(view.id); if (w) save("workOrders", w, field); }
@@ -44,9 +64,9 @@ async function newWO() {
     id, partName: "", subteam: "AERO", revision: "A", status: "Draft",
     processType: "MoldInfusion", moldEngineer: "", manufacturingEngineer: "",
     createdDate: today(), dueDate: "", partId: "",
-    mold: { moldId: "", layers: "", density: "", sealingType: "XCR (CS-004)", location: "" },
+    mold: { moldId: "", layers: "", density: "", sealingType: "XCR", location: "" },
     layupStack: [], stackNote: "", bom: [], standardsRefs: [],
-    steps: STD_STEPS.MoldInfusion.map((s, i) => ({ seq: i + 1, title: s[0], csRef: s[1], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] })),
+    steps: STD_STEPS.MoldInfusion.map((s, i) => ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] })),
     qualityChecks: [{ criterion: "mass", target: "", actual: "", pass: null }],
     weightTargetG: null, weightActualG: null, timeline: [], notes: "", retro: false,
     createdBy: myEmail(),
@@ -60,9 +80,9 @@ function resetSteps(wo) {
   if (!isLead()) { toast("Resetting steps wipes recorded buy-offs, so it's lead-only. Ask the lead.", "error"); return; }
   const signed = (wo.steps || []).filter(isSigned).length;
   confirmModal("Replace steps with the standard list for " + wo.processType + "?" +
-    (signed ? " This ERASES " + signed + " recorded buy-off(s) from the team database — there is no undo." : ""), () => {
+    (signed ? " This erases " + signed + " recorded buy-off(s) from the team database. There is no undo." : ""), () => {
     wo.steps = (STD_STEPS[wo.processType] || STD_STEPS.Other).map((s, i) =>
-      ({ seq: i + 1, title: s[0], csRef: s[1], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] }));
+      ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] }));
     saveWO(wo, "steps"); render();
   });
 }
@@ -151,7 +171,7 @@ function renderWODetail() {
   const moldRows = wo.mold ? `
     <h3>Mold</h3><div class="grid">
       ${mf(wo, "Mold ID", "moldId")}${mf(wo, "Layers", "layers")}${mf(wo, "Density (lb/ft³)", "density")}
-      ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (live — update on every move)", "location")}
+      ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
     </div>` : "";
   return `
   <div class="toolbar no-print">
@@ -162,7 +182,7 @@ function renderWODetail() {
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
   </div>
   <div class="card">
-    <h2>${esc(wo.id)} — ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
+    <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
     <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span>${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
     <h3>Overview</h3>
     <div class="grid">
@@ -172,7 +192,7 @@ function renderWODetail() {
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
     ${moldRows}
-    <h3>Layup stack (CS-002)${linkedPart ? ` <span class="muted" style="text-transform:none">— synced with part ${esc(linkedPart.id)}</span>` : ""} ${wo.stackNote ? `<span class="muted" style="text-transform:none">— ${esc(wo.stackNote)}</span>` : ""}</h3>
+    <h3>Layup stack${linkedPart ? ` <span class="muted" style="text-transform:none">· synced with part ${esc(linkedPart.id)}</span>` : ""} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
     ${stackViz(wo.layupStack)}
     ${E ? stackEditor("workOrders", wo.id) : ""}
     <h3>BOM</h3>
@@ -182,7 +202,7 @@ function renderWODetail() {
         : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
-    <h3>Steps & buy-offs (blockers shaded — no sign-off, no moving on)</h3>
+    <h3>Steps and buy-offs (blockers shaded: no sign-off, no moving on)</h3>
     ${(wo.steps || []).map((s, i) => {
       const blocker = isBlocker(s);
       const state = stepState(s);
@@ -190,7 +210,7 @@ function renderWODetail() {
       return `<div class="step ${blocker ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""}">
         <div class="num">${s.seq}</div>
         <div class="body">
-          <div>${esc(s.title)} <span class="muted">[${esc(s.csRef || "")}]</span> ${blocker ? "<b>· BLOCKER</b>" : ""}</div>
+          <div>${esc(stripCS(s.title))} ${blocker ? "<b>· BLOCKER</b>" : ""}</div>
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
           ${E ? `<div class="meta no-print"><input style="width:90%" placeholder="notes / photo filenames" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)"></div>` : ""}
           ${(s.photoRefs || []).length ? `<div class="meta">photos: ${s.photoRefs.map(p => esc(p.filename || p)).join(", ")}</div>` : ""}
@@ -201,7 +221,7 @@ function renderWODetail() {
             : state === "done"
               ? (isSigned(s)
                 ? `<span class="ok">✔ ${esc(s.buyoff.name)} ${esc(s.buyoff.date || "")}</span>`
-                : `<span class="muted">done — buy-off not recorded (retro)</span>`)
+                : `<span class="muted">done, buy-off not recorded (retro)</span>`)
               : (wo.retro ? `<span class="muted">${esc(s.status || "open")}</span>`
                 : `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
@@ -245,7 +265,7 @@ function buyoff(i) {
   // CS-013: a design review signed by whoever made the thing isn't a review.
   if (w.steps[i].title.toLowerCase().includes("design review") && myEmail() &&
       myEmail() === w.createdBy &&
-      !confirm("You created this WO — a design review should be bought off by someone else (CS-013). Sign it anyway?")) return;
+      !confirm("You created this work order. A design review should be signed off by someone else. Sign it anyway?")) return;
   const bo = {
     name: signerName(), email: fb.user.email, uid: fb.user.uid,
     date: today(), time: new Date().toISOString(),

@@ -80,7 +80,7 @@
   break-after: avoid;
 }
 .ws-h .hint { font-weight: 400; letter-spacing: .02em; text-transform: none; font-size: 7.5pt; }
-.ws-h .hint::before { content: "— "; }
+.ws-h .hint::before { content: "· "; }
 
 /* ---------- labelled field boxes ---------- */
 /* Label sits ABOVE the writing area so the full cell width stays writable and a
@@ -187,9 +187,14 @@ tr.blk td.seq {
     to bottom, transparent 0 0.29in, #9a9a9a 0.29in calc(0.29in + 0.4pt));
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.ws-lines.h4 { height: 1.16in; }
-.ws-lines.h3 { height: 0.87in; }
-.ws-lines.h6 { height: 1.74in; }
+/* min-height, not height: a work order with long notes grows its own box rather
+   than printing the text over the bottom rule. The fit loop measures the result,
+   so growth here just costs writing space elsewhere. */
+.ws-lines.h2 { min-height: 0.58in; }
+.ws-lines.h3 { min-height: 0.87in; }
+.ws-lines.h4 { min-height: 1.16in; }
+.ws-lines.h6 { min-height: 1.74in; }
+.ws-lines.h8 { min-height: 2.32in; }
 .ws-lines .prefill { padding: 1pt 5pt; font-size: 9pt; line-height: 0.29in; }
 
 /* ---------- sign-off ---------- */
@@ -227,6 +232,29 @@ tr.blk td.seq {
   font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* ---------- compact mode (fit-loop floor) ---------- */
+/* Last resort before a third page. Rows stay tall enough to write in; the sheet
+   loses breathing room, not legibility. */
+.wsheet.compact { font-size: 8.8pt; }
+.wsheet.compact .ws-t.steps td { height: 0.31in; }
+.wsheet.compact .ws-t.rows td,
+.wsheet.compact .ws-t tr.blank td { height: 0.27in; }
+.wsheet.compact .ws-f { min-height: 0.32in; }
+.wsheet.compact .ws-h { margin-top: 7pt; }
+.wsheet.compact .ws-t td { padding: 2pt 5pt; }
+
+/* ---------- off-screen measuring ---------- */
+/* The fit loop renders candidate layouts here to measure them. It has to be laid
+   out for scrollHeight to mean anything, so it is positioned away rather than
+   hidden, and the on-screen page furniture is neutralised so the measurement is
+   of the paper, not of the preview. */
+#printroot.measuring {
+  position: absolute; left: -10000px; top: 0;
+  width: 8.5in; display: block !important;
+  background: #fff; padding: 0;
+}
+#printroot.measuring .ws-page { min-height: 0; margin: 0; box-shadow: none; }
 
 /* ---------- screen-only preview furniture ---------- */
 /* Wraps the sheet on screen so it reads as paper. All of this disappears in

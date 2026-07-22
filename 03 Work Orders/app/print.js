@@ -9,18 +9,39 @@
    Two ideas drive the layout:
    1. Every field is a BOX, whether or not the app has data for it. A work order
       printed from a half-filled record and a blank form off the shelf are the
-      same document — one just arrives with more of it already inked.
+      same document, one just arrives with more of it already inked.
    2. Every list ends in blank ruled rows. Layups grow steps, plies and BOM lines
       at the bench that nobody predicted at the desk, and if there's no room to
-      write them they end up on the back of someone's hand. */
+      write them they end up on the back of someone's hand.
 
-/* Trailing blank rows per section. These are the "leave extra space" budget —
-   deliberately generous. Shrink them and the sheet stops being fillable. */
-const BLANK_ROWS = { steps: 4, stack: 3, bom: 3, quality: 2, events: 4 };
-/* A blank form has no data to anchor it, so it needs enough ruling to hold a
-   whole real layup — SN5 stacks ran 6–8 plies. Three rows would send people to
-   the margins on the first part they built. */
-const BLANK_FORM_ROWS = { steps: 4, stack: 8, bom: 6, quality: 4, events: 6 };
+   The sheet is capped at TWO PAGES. Writing space is not fixed: the fit loop
+   below renders the sheet, measures it, and walks down a ladder of progressively
+   tighter layouts until it fits. A short work order gets a lot of room to write,
+   a long one gets less, and neither spills onto a third page that walks away
+   from the first two. */
+
+const MAX_PAGES = 2;
+const PX_PER_IN = 96;        // CSS definition, so it holds for print layout too
+const PAGE_IN = 10.1;        // Letter (11in) less the 0.45in @page margins
+/* Real pagination breaks earlier than a naive height/page division, because
+   break-inside:avoid pushes whole rows and sections onto the next sheet. This
+   discount buys room for that so the measured fit isn't optimistic. */
+const FIT_SAFETY = 0.93;
+
+/* Layout ladder, most generous first. The fit loop takes the first one that
+   comes in at or under MAX_PAGES, so a sparse work order keeps the big writing
+   areas and only a dense one gets squeezed. The last entry is the floor. */
+const LAYOUTS = [
+  { rows: { steps: 10, stack: 10, bom: 8, quality: 5, events: 10 }, notes: "h8" },
+  { rows: { steps: 8, stack: 8, bom: 6, quality: 4, events: 8 }, notes: "h6" },
+  { rows: { steps: 6, stack: 6, bom: 5, quality: 3, events: 6 }, notes: "h6" },
+  { rows: { steps: 5, stack: 4, bom: 4, quality: 3, events: 5 }, notes: "h4" },
+  { rows: { steps: 4, stack: 3, bom: 3, quality: 2, events: 4 }, notes: "h4" },
+  { rows: { steps: 3, stack: 3, bom: 2, quality: 2, events: 3 }, notes: "h3" },
+  { rows: { steps: 2, stack: 2, bom: 2, quality: 1, events: 2 }, notes: "h3" },
+  { rows: { steps: 2, stack: 1, bom: 1, quality: 1, events: 1 }, notes: "h2" },
+  { rows: { steps: 1, stack: 1, bom: 1, quality: 1, events: 1 }, notes: "h2", compact: true },
+];
 
 /* Retro records carry the literal string "not recorded (retro)" in most fields.
    Printing that into a box is noise and, worse, it looks like data. Treat it as
@@ -50,19 +71,21 @@ function blankRows(n, cells) {
    printed blank is a real procedure rather than empty ruling. */
 function blankSteps(process) {
   return (STD_STEPS[process] || STD_STEPS.Other).map((s, i) =>
-    ({ seq: i + 1, title: s[0], csRef: s[1], status: "open", buyoff: { name: "", date: "" }, notes: "" }));
+    ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "" }));
 }
 
 function woSheetHtml(wo, opts) {
   opts = opts || {};
   const blank = !!opts.blank;
+  const L = opts.layout || LAYOUTS[4];
+  const R = L.rows;
   const steps = wo.steps && wo.steps.length ? wo.steps : blankSteps(wo.processType);
   const mold = wo.mold || {};
   const stack = wo.layupStack || [];
   const bom = wo.bom || [];
   const qc = wo.qualityChecks || [];
   const ev = wo.timeline || [];
-  const R = blank ? BLANK_FORM_ROWS : BLANK_ROWS;
+  const strip = typeof stripCS === "function" ? stripCS : (t => t);
 
   const stampTxt = blank ? "Blank form" : (wo.retro ? "Retro record" : (wo.status === "Draft" ? "Draft" : ""));
 
@@ -72,12 +95,12 @@ function woSheetHtml(wo, opts) {
     const signed = !blank && typeof isSigned === "function" && isSigned(s);
     const nm = signed ? pv(s.buyoff && s.buyoff.name) : "";
     const dt = signed ? pv(s.buyoff && s.buyoff.date) : "";
-    const note = blank ? "" : pv(s.notes);
+    const note = blank ? "" : strip(pv(s.notes));
     return `<tr class="${isBlk ? "blk" : ""}">
       <td class="num seq">${esc(s.seq || "")}</td>
       <td>
-        <div class="stitle"><span class="ws-cb"></span>${esc(s.title)}${s.csRef ? ` <span class="cs">[${esc(s.csRef)}]</span>` : ""}</div>
-        ${isBlk ? `<div class="blkflag">Blocker — no sign-off, no moving on</div>` : ""}
+        <div class="stitle"><span class="ws-cb"></span>${esc(strip(s.title))}</div>
+        ${isBlk ? `<div class="blkflag">Blocker: no sign-off, no moving on</div>` : ""}
         ${note ? `<div class="cs">${esc(note)}</div>` : ""}
       </td>
       <td class="initial">${nm ? `<span class="signed"><span class="nm">${esc(nm)}</span></span>` : ""}</td>
@@ -92,21 +115,21 @@ function woSheetHtml(wo, opts) {
       <td class="mat">${esc(pv(p.material))}</td>
       <td>${esc(pv(p.orientation))}</td>
       <td>${esc(pv(p.coverage))}</td>
-      <td>${esc(pv(p.notes))}</td>
+      <td>${esc(strip(pv(p.notes)))}</td>
     </tr>`).join("");
 
   const bomRows = (blank ? [] : bom).map(b => `<tr>
-      <td>${esc(pv(b.item))}</td><td class="num">${esc(pv(b.qty))}</td><td>${esc(pv(b.unit))}</td>
-      <td>${esc(pv(b.source))}</td><td>${esc(pv(b.estCost))}</td></tr>`).join("");
+      <td>${esc(strip(pv(b.item)))}</td><td class="num">${esc(pv(b.qty))}</td><td>${esc(pv(b.unit))}</td>
+      <td>${esc(strip(pv(b.source)))}</td><td>${esc(pv(b.estCost))}</td></tr>`).join("");
 
   const qcRows = (blank ? [] : qc).map(q => `<tr>
-      <td>${esc(pv(q.criterion))}</td><td>${esc(pv(q.target))}</td><td>${esc(pv(q.actual))}</td>
+      <td>${esc(strip(pv(q.criterion)))}</td><td>${esc(strip(pv(q.target)))}</td><td>${esc(strip(pv(q.actual)))}</td>
       <td class="num">${q.pass === true ? "PASS" : q.pass === false ? "FAIL" : ""}</td></tr>`).join("");
 
   const evRows = (blank ? [] : ev).map(t => `<tr>
-      <td class="datec ${pv(t.date) ? "" : "empty"}">${esc(pv(t.date))}</td><td>${esc(pv(t.note))}</td></tr>`).join("");
+      <td class="datec ${pv(t.date) ? "" : "empty"}">${esc(pv(t.date))}</td><td>${esc(strip(pv(t.note)))}</td></tr>`).join("");
 
-  return `<div class="wsheet"><div class="ws-page">
+  return `<div class="wsheet ${L.compact ? "compact" : ""}"><div class="ws-page">
   <div class="ws-head">
     <div class="brand">FEB COMPOSITES <span class="sub">SN6</span></div>
     ${stampTxt ? `<div class="ws-stamp">${esc(stampTxt)}</div>` : ""}
@@ -118,11 +141,11 @@ function woSheetHtml(wo, opts) {
   </div>
   <div class="ws-rule"></div>
   <div class="ws-sheetkind">
-    <span>Manufacturing traveler — fill in at the bench, transcribe into the app after</span>
+    <span>Manufacturing traveler. Fill it in at the bench, then transcribe it into the app.</span>
     <span>Printed ${esc(today())}</span>
   </div>
 
-  <div class="ws-h">Part &amp; assignment</div>
+  <div class="ws-h">Part and assignment</div>
   <div class="ws-grid">
     ${pfield("Part name", blank ? "" : wo.partName, "span2")}
     ${pfield("Subteam", blank ? "" : wo.subteam)}
@@ -137,20 +160,20 @@ function woSheetHtml(wo, opts) {
     ${pfield("Mold location", blank ? "" : mold.location)}
   </div>
 
-  <div class="ws-h">Mold <span class="hint">CS-003 / CS-004</span></div>
+  <div class="ws-h">Mold</div>
   <div class="ws-grid c3">
     ${pfield("Tooling board layers", blank ? "" : mold.layers)}
     ${pfield("Density (lb/ft³)", blank ? "" : mold.density)}
-    ${pfield("Sealing system", blank ? "" : mold.sealingType)}
+    ${pfield("Sealing system", blank ? "" : strip(pv(mold.sealingType)))}
   </div>
 
-  <div class="ws-h">Layup stack <span class="hint">CS-002${!blank && pv(wo.stackNote) ? " · " + esc(pv(wo.stackNote)) : ""}</span></div>
+  <div class="ws-h">Layup stack${!blank && pv(wo.stackNote) ? ` <span class="hint">${esc(strip(pv(wo.stackNote)))}</span>` : ""}</div>
   <table class="ws-t stack rows">
     <thead><tr><th class="sw"></th><th class="num">Ply</th><th>Material</th><th>Orientation</th><th>Coverage</th><th>Notes</th></tr></thead>
     <tbody>${stackRows}${blankRows(R.stack, '<td class="sw"></td><td class="num"></td><td></td><td></td><td></td><td></td>')}</tbody>
   </table>
 
-  <div class="ws-h">Steps &amp; buy-offs <span class="hint">initial and date each step as it is completed</span></div>
+  <div class="ws-h">Steps and buy-offs <span class="hint">initial and date each step as it is completed</span></div>
   <table class="ws-t steps">
     <thead><tr><th class="num">#</th><th>Operation</th><th class="initial">Initial</th><th class="datec">Date</th></tr></thead>
     <tbody>${stepRows}${blankRows(R.steps, '<td class="num seq"></td><td></td><td class="initial"></td><td class="datec empty"></td>')}</tbody>
@@ -162,7 +185,7 @@ function woSheetHtml(wo, opts) {
     <tbody>${bomRows}${blankRows(R.bom, "<td></td><td></td><td></td><td></td><td></td>")}</tbody>
   </table>
 
-  <div class="ws-h">Quality checks <span class="hint">target is set before work starts — CS-010</span></div>
+  <div class="ws-h">Quality checks <span class="hint">set the target before the work starts</span></div>
   <table class="ws-t rows">
     <thead><tr><th>Criterion</th><th>Target</th><th>Actual</th><th class="num">Pass</th></tr></thead>
     <tbody>${qcRows}${blankRows(R.quality, "<td></td><td></td><td></td><td></td>")}</tbody>
@@ -175,7 +198,7 @@ function woSheetHtml(wo, opts) {
   </table>
 
   <div class="ws-h">Notes</div>
-  <div class="ws-lines h6">${!blank && pv(wo.notes) ? `<div class="prefill">${esc(pv(wo.notes))}</div>` : ""}</div>
+  <div class="ws-lines ${L.notes}">${!blank && pv(wo.notes) ? `<div class="prefill">${esc(strip(pv(wo.notes)))}</div>` : ""}</div>
 
   <div class="ws-sign">
     <div class="ws-h">Release sign-off</div>
@@ -187,7 +210,7 @@ function woSheetHtml(wo, opts) {
         <div class="ws-caps"><div class="c1 cap">Signature</div><div class="c2 cap">Date</div></div>
       </div>
       <div class="ws-sigbox">
-        <div class="role">Composites lead / requesting subteam lead</div>
+        <div class="role">Composites lead or requesting subteam lead</div>
         <div class="who">&nbsp;</div>
         <div class="ws-sigrow"><div class="sigline"></div><div class="dateline"></div></div>
         <div class="ws-caps"><div class="c1 cap">Signature</div><div class="c2 cap">Date</div></div>
@@ -203,11 +226,38 @@ function woSheetHtml(wo, opts) {
 </div></div>`;
 }
 
-/* ---------- mounting + preview ---------- */
+/* ---------- two-page auto-fit ---------- */
 
 function printRoot() { return document.getElementById("printroot"); }
 
-/* Render a sheet and hand off to the browser's print dialog. */
+/* Height of the rendered sheet in pages. Measured off the live DOM rather than
+   estimated from row counts, because ply notes and long part names wrap. */
+function measurePages(host) {
+  const page = host.querySelector(".ws-page");
+  if (!page) return 1;
+  const content = page.scrollHeight - 2 * 0.45 * PX_PER_IN;
+  return content / (PAGE_IN * PX_PER_IN * FIT_SAFETY);
+}
+
+/* Render at the most generous layout that still fits MAX_PAGES. Falls back to
+   the tightest layout if even that overflows, which needs a work order with far
+   more steps and plies than anything SN5 produced. */
+function fitSheetHtml(wo, opts) {
+  const host = printRoot();
+  if (!host || !host.getBoundingClientRect) return woSheetHtml(wo, { ...opts, layout: LAYOUTS[4] });
+  const prevHtml = host.innerHTML, prevClass = host.className;
+  host.className = "measuring";
+  let chosen = LAYOUTS[LAYOUTS.length - 1];
+  for (const layout of LAYOUTS) {
+    host.innerHTML = woSheetHtml(wo, { ...opts, layout });
+    if (measurePages(host) <= MAX_PAGES) { chosen = layout; break; }
+  }
+  host.innerHTML = prevHtml; host.className = prevClass;
+  return woSheetHtml(wo, { ...opts, layout: chosen });
+}
+
+/* ---------- mounting + preview ---------- */
+
 function mountSheet(html, previewMode) {
   const root = printRoot();
   if (!root) return null;
@@ -217,7 +267,7 @@ function mountSheet(html, previewMode) {
   root.innerHTML = (previewMode ? `
     <div class="pv-bar no-print">
       <span class="t">Print preview</span>
-      <span>US Letter · this is exactly what prints</span>
+      <span>US Letter · two pages · this is exactly what prints</span>
       <span class="sp"></span>
       <label><input type="checkbox" onchange="toggleGrayProof(this.checked)"> B&amp;W proof</label>
       <button onclick="closePrintPreview()">Close</button>
@@ -236,6 +286,34 @@ function closePrintPreview() {
   document.body.classList.remove("previewing", "sheet");
 }
 
+function woForPrint(id) {
+  const wo = typeof woById === "function" ? woById(id) : recById("workOrders", id);
+  if (!wo) { if (typeof toast === "function") toast("Work order " + id + " not found.", "error"); return null; }
+  return wo;
+}
+
+/* Preview first rather than printing straight away: paper is the expensive step,
+   and a bad pagination is only obvious once you can see the page. */
+function openPrintPreview(id) {
+  const wo = woForPrint(id); if (!wo) return;
+  mountSheet(fitSheetHtml(wo, {}), true);
+  document.body.classList.add("previewing");
+  window.scrollTo(0, 0);
+}
+function printWO(id) {
+  const wo = woForPrint(id); if (!wo) return;
+  mountSheet(fitSheetHtml(wo, {}), false);
+  window.print();
+}
+/* A stack of blanks to take to the shop. */
+function printBlankWO(process) {
+  const p = process || "MoldInfusion";
+  const empty = { processType: p, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] };
+  mountSheet(fitSheetHtml(empty, { blank: true }), true);
+  document.body.classList.add("previewing");
+  window.scrollTo(0, 0);
+}
+
 /* ⌘P on a work order should produce the traveler, not a blank page or a
    screenshot of the app. If nothing is mounted and the user is looking at a WO,
    mount it for them; anything else prints the screen view as it always did. */
@@ -243,7 +321,7 @@ function autoMountForPrint() {
   if (document.body.classList.contains("sheet")) return;
   if (typeof view === "undefined" || view.tab !== "workorders" || view.mode !== "detail" || !view.id) return;
   const wo = typeof woById === "function" ? woById(view.id) : null;
-  if (wo) mountSheet(woSheetHtml(wo), false);
+  if (wo) mountSheet(fitSheetHtml(wo, {}), false);
 }
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("beforeprint", autoMountForPrint);
@@ -256,31 +334,4 @@ if (typeof window !== "undefined" && window.addEventListener) {
       document.body.classList.remove("sheet");
     }
   });
-}
-
-function woForPrint(id) {
-  const wo = typeof woById === "function" ? woById(id) : recById("workOrders", id);
-  if (!wo) { if (typeof toast === "function") toast("Work order " + id + " not found.", "error"); return null; }
-  return wo;
-}
-
-/* Preview first rather than printing straight away: paper is the expensive step,
-   and a bad pagination is only obvious once you can see the page. */
-function openPrintPreview(id) {
-  const wo = woForPrint(id); if (!wo) return;
-  mountSheet(woSheetHtml(wo), true);
-  document.body.classList.add("previewing");
-  window.scrollTo(0, 0);
-}
-function printWO(id) {
-  const wo = woForPrint(id); if (!wo) return;
-  mountSheet(woSheetHtml(wo), false);
-  window.print();
-}
-/* A stack of blanks to take to the shop. */
-function printBlankWO(process) {
-  const p = process || "MoldInfusion";
-  mountSheet(woSheetHtml({ processType: p, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] }, { blank: true }), true);
-  document.body.classList.add("previewing");
-  window.scrollTo(0, 0);
 }

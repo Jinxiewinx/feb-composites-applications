@@ -55,9 +55,25 @@ Shop-traveler styling, black-and-white laser first. Every distinction has to
 survive grayscale, so blockers use hatching plus heavy rules plus the literal
 word BLOCKER, never colour alone. Berkeley blue and gold are enhancement only.
 
-Blank trailing rows are a feature, not slack. See `BLANK_ROWS` and
-`BLANK_FORM_ROWS` in `print.js`. Shrinking them to save paper defeats the point,
-since Simon asked for room to add lines by hand.
+The sheet is capped at two pages, and the writing space is what flexes. `LAYOUTS`
+in `print.js` is a ladder of row counts and note-block heights, most generous
+first; `fitSheetHtml` renders each candidate into `#printroot.measuring`,
+measures it, and takes the first that fits `MAX_PAGES`. Don't replace this with
+fixed row counts: the whole point is that a sparse work order gets room to write
+and a dense one still lands on two pages. `FIT_SAFETY` (0.93) discounts the
+measured capacity because `break-inside: avoid` breaks earlier than a naive
+height division.
+
+Verified across the whole archive: `tools/print-preview.html` has an Audit all
+button that runs all 26 seed work orders plus a blank of each process through the
+real fit loop. As of 2026-07-21 all 31 fit, worst case 2.00 pages, one work order
+(WO-SN5-006) reaching the compact floor. Re-run it after any layout change.
+
+Standard references are off the printed sheet and out of new work orders.
+`STD_STEPS` titles no longer carry them, and `stripCS()` in `workorders.js`
+removes them at render time from legacy and retro records, covering titles, notes
+and event-log text. Stored data is untouched, so the archive keeps its original
+wording.
 
 Retro records store the literal string `"not recorded (retro)"`. `pv()` maps that
 to empty so it never reaches paper looking like data. Blank forms build their
