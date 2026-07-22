@@ -1,0 +1,247 @@
+/* print.css — the printed work-order traveler.
+
+   These styles are deliberately NOT wrapped in @media print. The sheet renders
+   identically on screen and on paper, which is what makes the on-screen preview
+   trustworthy and lets the design be reviewed from a screenshot. @media print in
+   index.html only decides which of #app / #printroot is visible.
+
+   Design constraints (set with Simon, 2026-07-21):
+   - Shop-traveler look: ruled boxes, initial+date per step, everything griddable.
+   - B&W laser first. Every distinction must survive grayscale, so meaning is
+     carried by rule weight, hatching and layout — never by hue alone. Berkeley
+     blue/gold appear only as enhancement on a colour printer.
+   - Boxes are sized to be WRITTEN IN. Minimum cell heights below are floors for
+     a ballpoint pen in a cold shop, not typographic preferences. Don't shrink
+     them to save paper.
+   - Every list section ends in blank ruled rows so work nobody anticipated at
+     the desk can be added at the bench.
+
+   Units are pt/in throughout: this is a paper document, not a screen. */
+
+.wsheet {
+  --ink: #000;
+  --hair: 0.75pt solid #000;   /* ordinary cell rule            */
+  --heavy: 1.75pt solid #000;  /* section + blocker emphasis    */
+  --gold: #FDB515;
+  --shade: #e9e9e9;            /* table headers; ~8% grey prints clean */
+  font: 9.5pt/1.28 Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background: #fff;
+}
+.wsheet * { box-sizing: border-box; }
+
+/* Page shell. On screen this draws a Letter page; in print @page owns the
+   margins, so the padding and page furniture collapse (see index.html). */
+.ws-page {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 0.45in;
+  margin: 0 auto 18px;
+  background: #fff;
+  position: relative;
+}
+
+/* ---------- masthead ---------- */
+/* Solid black bar rather than a gold one: a laser renders it crisply, and the
+   gold underrule below carries the team colour when colour is available. */
+.ws-head { display: flex; align-items: stretch; border: var(--heavy); }
+.ws-head .brand {
+  background: #000; color: #fff;
+  padding: 5pt 9pt; font-weight: 700; font-size: 11pt;
+  letter-spacing: .06em; white-space: nowrap;
+  display: flex; align-items: center; gap: 6pt;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ws-head .brand .sub { font-weight: 400; font-size: 7.5pt; letter-spacing: .14em; opacity: .85; }
+.ws-head .idblock { margin-left: auto; display: flex; }
+.ws-head .idcell {
+  border-left: var(--hair); padding: 3pt 8pt; min-width: 0.85in;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.ws-head .idcell .lab { font-size: 6pt; letter-spacing: .1em; text-transform: uppercase; }
+.ws-head .idcell .val { font-size: 12pt; font-weight: 700; line-height: 1.1; }
+.ws-head .idcell.wide .val { font-size: 9pt; font-weight: 700; }
+.ws-rule {
+  height: 3.5pt; background: var(--gold);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ws-sheetkind {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 7pt; letter-spacing: .09em; text-transform: uppercase;
+  padding: 2.5pt 1pt 0;
+}
+
+/* ---------- section headings ---------- */
+.ws-h {
+  margin: 11pt 0 0; padding: 2pt 0 1.5pt;
+  border-bottom: var(--heavy);
+  font-size: 8.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  display: flex; align-items: baseline; gap: 7pt;
+  break-after: avoid;
+}
+.ws-h .hint { font-weight: 400; letter-spacing: .02em; text-transform: none; font-size: 7.5pt; }
+.ws-h .hint::before { content: "— "; }
+
+/* ---------- labelled field boxes ---------- */
+/* Label sits ABOVE the writing area so the full cell width stays writable and a
+   printed value can be struck through and rewritten beside it. */
+.ws-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-top: var(--hair); border-left: var(--hair);
+}
+.ws-grid.c3 { grid-template-columns: repeat(3, 1fr); }
+.ws-f {
+  border-right: var(--hair); border-bottom: var(--hair);
+  padding: 2pt 5pt 0; min-height: 0.38in;
+  display: flex; flex-direction: column;
+}
+.ws-f.span2 { grid-column: span 2; }
+.ws-f .lab { font-size: 6pt; letter-spacing: .09em; text-transform: uppercase; }
+.ws-f .val {
+  font-size: 10pt; line-height: 1.15; flex: 1;
+  display: flex; align-items: center; min-height: 0.2in;
+  word-break: break-word;
+}
+/* A date the app doesn't know: pre-print the separators so it's obvious how to
+   write it and the format stays consistent across the team. */
+.ws-f .val.date::before { content: "     /        /"; letter-spacing: .06em; color: #777; }
+.ws-f .val.filled.date::before { content: none; }
+
+/* ---------- tables ---------- */
+.ws-t { width: 100%; border-collapse: collapse; margin-top: 0; }
+.ws-t th {
+  border: var(--hair); background: var(--shade);
+  padding: 2.5pt 5pt; text-align: left;
+  font-size: 6.5pt; letter-spacing: .08em; text-transform: uppercase;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ws-t td { border: var(--hair); padding: 3pt 5pt; vertical-align: top; font-size: 9pt; }
+.ws-t tr { break-inside: avoid; }
+.ws-t thead { display: table-header-group; }   /* repeat header across pages */
+.ws-t td.num, .ws-t th.num { text-align: center; width: 0.3in; }
+.ws-t .initial { width: 0.72in; }
+.ws-t .datec { width: 0.95in; }
+
+/* Row heights are the whole point — these are hand-fill targets. */
+.ws-t.rows td { height: 0.34in; }
+.ws-t.steps td { height: 0.40in; }
+.ws-t tr.blank td { height: 0.34in; }
+
+/* Faint separators pre-printed inside empty date cells. */
+.ws-t td.datec.empty::before { content: "    /       /"; color: #888; font-size: 8.5pt; }
+
+/* ---------- steps & blockers ---------- */
+.ws-t.steps td.seq { font-weight: 700; font-size: 10pt; }
+.ws-t.steps .cs { font-size: 7pt; letter-spacing: .04em; white-space: nowrap; }
+.ws-t.steps .stitle { font-size: 9pt; }
+
+/* Blocker rows must read as "stop" with zero colour. Heavy rules top and bottom
+   plus a hatched gutter down the sequence cell; the word BLOCKER is spelled out
+   because a symbol alone doesn't survive a photocopy. */
+tr.blk td { border-top: var(--heavy); border-bottom: var(--heavy); }
+tr.blk td.seq {
+  padding-left: 11pt;
+  background:
+    repeating-linear-gradient(45deg, #000 0 1.3pt, #fff 1.3pt 4pt) left / 7pt 100% no-repeat,
+    #fff;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.blkflag { font-size: 6.5pt; font-weight: 700; letter-spacing: .1em; white-space: nowrap; }
+.blkflag::before {
+  content: ""; display: inline-block; vertical-align: -0.5pt;
+  width: 6pt; height: 6pt; margin-right: 3pt; background: #000;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+/* Recorded buy-off: printed small so a correction can be written beside it. */
+.ws-t .signed { font-size: 8pt; }
+.ws-t .signed .nm { font-weight: 700; }
+
+/* Empty checkbox for "done" — always drawn, even on signed rows, so a reprint
+   mid-job can be re-ticked. */
+.ws-cb {
+  display: inline-block; width: 9pt; height: 9pt;
+  border: 1pt solid #000; vertical-align: -1pt; margin-right: 4pt;
+}
+
+/* ---------- ply stack ---------- */
+/* The screen's coloured plybar carries its meaning purely in hue, so print uses
+   a table instead. The tint is kept as a colour-printer bonus only. */
+.ws-t.stack td.mat { font-weight: 600; }
+.ws-t.stack tr.cf td.sw { background: #3b4653; }
+.ws-t.stack tr.spread td.sw { background: #6b7684; }
+.ws-t.stack tr.core td.sw { background: var(--gold); }
+.ws-t.stack tr.mesh td.sw { background: #c98f4a; }
+.ws-t.stack tr.other td.sw { background: #dfe4ea; }
+.ws-t.stack td.sw {
+  width: 0.16in; padding: 0;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+/* ---------- ruled free-text ---------- */
+/* Real writing lines, not blank white space: people write straighter and the
+   transcription back into the app is legible. */
+.ws-lines {
+  border: var(--hair); border-top: none;
+  background-image: repeating-linear-gradient(
+    to bottom, transparent 0 0.29in, #9a9a9a 0.29in calc(0.29in + 0.4pt));
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ws-lines.h4 { height: 1.16in; }
+.ws-lines.h3 { height: 0.87in; }
+.ws-lines.h6 { height: 1.74in; }
+.ws-lines .prefill { padding: 1pt 5pt; font-size: 9pt; line-height: 0.29in; }
+
+/* ---------- sign-off ---------- */
+.ws-sign { margin-top: 12pt; break-inside: avoid; }
+.ws-signgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: var(--hair); border-left: var(--hair); }
+.ws-sigbox { border-right: var(--hair); border-bottom: var(--hair); padding: 3pt 6pt 5pt; }
+.ws-sigbox .role { font-size: 6.5pt; letter-spacing: .09em; text-transform: uppercase; font-weight: 700; }
+.ws-sigbox .who { font-size: 7pt; margin-bottom: 12pt; }
+.ws-sigrow { display: flex; gap: 10pt; align-items: flex-end; }
+.ws-sigrow .sigline { flex: 1; border-bottom: var(--hair); height: 0.30in; }
+.ws-sigrow .dateline { width: 1.05in; border-bottom: var(--hair); height: 0.30in; }
+.ws-sigrow .cap { font-size: 6pt; letter-spacing: .08em; text-transform: uppercase; }
+.ws-caps { display: flex; gap: 10pt; margin-top: 1.5pt; }
+.ws-caps .c1 { flex: 1; } .ws-caps .c2 { width: 1.05in; }
+
+/* ---------- footer ---------- */
+/* position:fixed inside paged media repeats this on every sheet, so a page that
+   gets separated from its staple can still be traced back. Page numbering is
+   hand-written: Chrome doesn't support @page margin-box counters. */
+.ws-foot {
+  border-top: var(--hair); margin-top: 10pt; padding-top: 2.5pt;
+  display: flex; gap: 10pt; align-items: baseline;
+  font-size: 6.5pt; letter-spacing: .05em; text-transform: uppercase;
+}
+.ws-foot .sp { margin-left: auto; }
+.ws-foot .pg { border-bottom: var(--hair); display: inline-block; width: 0.34in; }
+
+/* ---------- retro / draft / blank stamp ---------- */
+/* Sits in the masthead's empty middle rather than floating over it — an absolute
+   stamp collided with the process cell, and a rotated stamp over live data is
+   exactly the kind of thing that gets misread on a photocopy. */
+.ws-stamp {
+  align-self: center; margin-left: 12pt;
+  border: 1.75pt solid #000; padding: 2pt 8pt;
+  font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---------- screen-only preview furniture ---------- */
+/* Wraps the sheet on screen so it reads as paper. All of this disappears in
+   print via index.html's @media print block. */
+#printroot.preview { background: #6b7079; padding: 22px 0 40px; }
+#printroot.preview .ws-page { box-shadow: 0 3px 14px rgba(0,0,0,.4); }
+#printroot .pv-bar {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; gap: 8px; align-items: center;
+  padding: 9px 14px; background: #22262c; color: #fff; font: 13px/1 Arial, sans-serif;
+}
+#printroot .pv-bar .t { font-weight: 700; }
+#printroot .pv-bar .sp { margin-left: auto; }
+#printroot .pv-bar button { font: inherit; padding: 6px 11px; border-radius: 4px; border: 1px solid #4a515b; background: #333941; color: #fff; cursor: pointer; }
+#printroot .pv-bar button.primary { background: #FDB515; border-color: #FDB515; color: #1c2733; font-weight: 700; }
+#printroot .pv-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+/* Grayscale proof: verifies the B&W-laser constraint without a printer. */
+#printroot.gray .ws-page { filter: grayscale(1) contrast(1.04); }

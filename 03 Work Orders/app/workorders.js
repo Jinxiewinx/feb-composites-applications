@@ -104,7 +104,11 @@ function renderWOList() {
     .sort((a, b) => a.id.localeCompare(b.id));
   const subs = [...new Set(D.map(w => w.subteam))].sort();
   return `
-  <div class="toolbar no-print"><button class="primary" onclick="newWO()">+ New Work Order</button></div>
+  <div class="toolbar no-print">
+    <button class="primary" onclick="newWO()">+ New Work Order</button>
+    <button onclick="printBlankWO(document.getElementById('blankproc').value)">Print blank traveler</button>
+    <select id="blankproc" title="process for the blank form">${PROCESSES.map(p => `<option>${p}</option>`).join("")}</select>
+  </div>
   <div class="filters no-print">
     <select onchange="view.fStatus=this.value;render()">
       <option value="">All statuses</option>
@@ -153,7 +157,7 @@ function renderWODetail() {
   <div class="toolbar no-print">
     <button onclick="view={...view,mode:'list'};render()">← All work orders</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
-    <button onclick="window.print()">Print</button>
+    <button onclick="openPrintPreview('${wo.id}')">Print</button>
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
   </div>
@@ -219,11 +223,6 @@ function renderWODetail() {
     ${E ? `<button onclick="woById('${wo.id}').timeline.push({date:'',note:''});saveWO(woById('${wo.id}'),'timeline');render()">+ event</button>` : ""}
     <h3>Notes</h3>
     ${E ? `<textarea onchange="updWO('notes',this.value)">${esc(wo.notes)}</textarea>` : `<div>${esc(wo.notes) || '<span class="muted">—</span>'}</div>`}
-    <div class="sig">
-      <h3>Release sign-off (print copy)</h3>
-      <div><span class="line"></span><span class="line"></span></div>
-      <div class="muted">Manufacturing Engineer · date &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Composites Lead / requesting subteam lead · date</div>
-    </div>
   </div>`;
 }
 

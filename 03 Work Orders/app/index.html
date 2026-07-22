@@ -249,19 +249,40 @@
   .sig { margin-top: 26px; display: none; }
   .sig .line { display: inline-block; width: 260px; border-bottom: 1px solid #000; margin: 0 30px 4px 0; }
 
+  /* The print sheet lives in #printroot and is hidden on screen unless a
+     preview is open. See print.js / print.css. */
+  #printroot:empty { display: none; }
+  body.previewing #app { display: none; }
+
   @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background: #fff; }
+
+    /* A work order prints as the purpose-built traveler in #printroot, never as
+       a restyled screen view — body.sheet says a sheet is mounted. Every other
+       tab still prints the old way, so the status board keeps working. */
+    body.sheet #app, body.sheet #modal, body.sheet #toasts { display: none !important; }
+    body:not(.sheet) #printroot { display: none !important; }
+    #printroot, body.sheet #printroot { display: block !important; background: #fff !important; padding: 0 !important; }
+    #printroot .no-print { display: none !important; }
+    #printroot .ws-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none !important; }
+    #printroot.gray .ws-page { filter: none; }   /* proof toggle is a screen aid only */
+    /* Repeats the identifying footer on every physical page. */
+    #printroot .ws-foot { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; }
+
+    /* Fallback path: other tabs, unchanged. */
     nav.sidebar, header.topbar, .filters, .toolbar, button, .no-print, .rte-toolbar { display: none !important; }
-    #app { display: block; } .content { display: block; }
-    body { background: #fff; font-size: 11.5px; }
+    body:not(.sheet) #app { display: block; } .content { display: block; }
     main { max-width: none; padding: 0; }
     .card { border: 1px solid #000; border-radius: 0; box-shadow: none; break-inside: auto; margin-bottom: 8px; padding: 10px 14px; }
     .card h2, .card h3 { break-after: avoid; }
-    .grid, .stackviz, .sig { break-inside: avoid; }
+    .grid, .stackviz { break-inside: avoid; }
     table.sub thead { display: table-header-group; } table.sub tr { break-inside: avoid; }
     .step { break-inside: avoid; } .step .buyoff button { display: none; }
-    .sig { display: block; } a { color: #000; text-decoration: none; }
+    a { color: #000; text-decoration: none; }
   }
 </style>
+<link rel="stylesheet" href="print.css">
 </head>
 <body>
 <div id="app">
@@ -271,6 +292,7 @@
     <main id="main"><div class="card">Connecting…</div></main>
   </div>
 </div>
+<div id="printroot"></div>
 <div id="modal"></div>
 <div id="toasts"></div>
 <input type="file" id="importfile" accept=".json" style="display:none" onchange="importJSON(this)">
@@ -289,6 +311,7 @@
 <script src="calendar.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>
+<script src="print.js"></script>
 <script type="module" src="fb.js"></script>
 <script>render();</script>
 </body>

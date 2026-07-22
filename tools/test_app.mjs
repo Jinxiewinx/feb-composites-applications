@@ -82,11 +82,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "documents.js", "calendar.js", "people.js", "reports.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender) = /gm, "$1 = ");
+// Same for the const tables the tests assert against — `const` stays lexical
+// inside the eval, so it would otherwise be invisible here.
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|BLANK_ROWS|BLANK_FORM_ROWS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -422,6 +425,49 @@ await t("sn5-schedule.json: weeks with station fields", () => {
   assert(s.length > 5, "expected multiple weeks");
   assert(s.every(w => "mold1" in w && "waterjet" in w && "notes" in w && w.retro === true), "station fields + retro");
   assert(s.some(w => Object.values(w).some(v => String(v).startsWith("P-SN5-"))), "some cells link to parts");
+});
+
+console.log("printed traveler:");
+await t("sheet renders every section for a real WO", () => {
+  const wo = woSeed.find(w => (w.steps || []).length >= 8);
+  const h = woSheetHtml(wo);
+  ["Part &amp; assignment", "Layup stack", "Steps &amp; buy-offs", "Bill of materials",
+   "Quality checks", "Event log", "Release sign-off"].forEach(s =>
+    assert(h.includes(s), "missing section: " + s));
+  assert(h.includes(wo.id), "WO id must appear on the sheet");
+});
+await t("every list leaves blank rows to write in", () => {
+  const wo = woSeed.find(w => (w.steps || []).length >= 8);
+  const h = woSheetHtml(wo);
+  const blanks = (h.match(/<tr class="blank">/g) || []).length;
+  const want = BLANK_ROWS.steps + BLANK_ROWS.stack + BLANK_ROWS.bom + BLANK_ROWS.quality + BLANK_ROWS.events;
+  assert(blanks === want, `expected ${want} blank rows, got ${blanks}`);
+});
+await t("blocker steps are flagged without relying on colour", () => {
+  const wo = woSeed.find(w => (w.steps || []).some(isBlocker));
+  const h = woSheetHtml(wo);
+  assert(h.includes('<tr class="blk">'), "blocker row needs the blk class");
+  assert(h.includes("Blocker — no sign-off, no moving on"), "blocker must be spelled out in text");
+});
+await t('retro "not recorded" prints as an empty box, not as data', () => {
+  const h = woSheetHtml({ processType: "MoldInfusion", partName: "X", moldEngineer: "not recorded (retro)",
+    steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] });
+  assert(!h.includes("not recorded"), "placeholder text must never reach paper");
+});
+await t("blank form builds from STD_STEPS with no record behind it", () => {
+  const h = woSheetHtml({ processType: "MoldWetLay", steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] }, { blank: true });
+  STD_STEPS.MoldWetLay.forEach(s => assert(h.includes(esc(s[0])), "missing standard step: " + s[0]));
+  assert(h.includes("Blank form"), "blank form should be stamped as one");
+  assert(h.includes("MOLD WET LAY"), "process should be humanized for a person at a bench");
+  const blanks = (h.match(/<tr class="blank">/g) || []).length;
+  assert(blanks > BLANK_ROWS.stack + BLANK_ROWS.bom, "blank forms need more ruling than a filled one");
+});
+await t("Print button opens the traveler, not window.print()", () => {
+  onFbData("workOrders", woSeed.slice());
+  const r = DB.workOrders.find(w => w.retro);
+  view = { ...view, tab: "workorders", mode: "detail", id: r.id, edit: false }; render();
+  assert(main.innerHTML.includes("openPrintPreview"), "detail toolbar should preview the sheet");
+  assert(!main.innerHTML.includes('onclick="window.print()"'), "raw window.print() should be gone");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

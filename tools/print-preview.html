@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WO traveler — print preview harness</title>
+<!--
+  Visual-review harness for the printed work-order traveler.
+
+  print.css is deliberately not scoped to @media print, so what renders here is
+  byte-for-byte what comes out of the printer. That is the whole point: the sheet
+  design can be reviewed and iterated from a screenshot instead of by guessing
+  and burning paper.
+
+  Needs a real HTTP origin (fetch of the seed JSON is blocked on file://):
+
+      cd "SN6 Resources" && python3 -m http.server 877
+      open http://localhost:877/tools/print-preview.html
+-->
+<link rel="stylesheet" href="../03%20Work%20Orders/app/print.css">
+<style>
+  body { margin: 0; background: #6b7079; font: 13px/1.4 Arial, sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center;
+         flex-wrap: wrap; padding: 10px 14px; background: #22262c; color: #fff; }
+  .bar select, .bar button { font: inherit; padding: 5px 9px; border-radius: 4px;
+         border: 1px solid #4a515b; background: #333941; color: #fff; }
+  .bar label { display: flex; align-items: center; gap: 5px; }
+  .bar .sp { margin-left: auto; }
+  #out { padding: 20px 0 60px; }
+  #out .ws-page { box-shadow: 0 3px 16px rgba(0,0,0,.45); }
+  body.gray #out .ws-page { filter: grayscale(1) contrast(1.04); }
+  /* Rules showing the printable area, so overflow past the margin is obvious. */
+  body.guides #out .ws-page::after {
+    content: ""; position: absolute; inset: 0.45in; border: 1px dashed #ff2d55; pointer-events: none;
+  }
+  /* Approximate page boundaries: Letter (11in) less 0.45in margins = 10.1in of
+     printable height per sheet. Indicative only — break-inside:avoid will push
+     real breaks earlier — but it catches "this ran to four pages" immediately. */
+  body.pages #out .ws-page {
+    background-image: repeating-linear-gradient(to bottom,
+      transparent 0 10.1in, #d81b60 10.1in calc(10.1in + 1.5px));
+    background-position: 0 0.45in;
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <label>Work order <select id="pick" onchange="draw()"></select></label>
+  <label><input type="checkbox" id="blank" onchange="draw()"> blank form</label>
+  <label><input type="checkbox" id="gray" onchange="document.body.classList.toggle('gray',this.checked)"> B&amp;W proof</label>
+  <label><input type="checkbox" id="guides" onchange="document.body.classList.toggle('guides',this.checked)"> margin guides</label>
+  <label><input type="checkbox" id="pages" onchange="document.body.classList.toggle('pages',this.checked)"> page breaks</label>
+  <span id="stat"></span>
+  <span class="sp"></span>
+  <button onclick="window.print()">Print</button>
+</div>
+
+<div id="out"></div>
+
+<script src="../03%20Work%20Orders/app/core.js"></script>
+<script src="../03%20Work%20Orders/app/workorders.js"></script>
+<script src="../03%20Work%20Orders/app/print.js"></script>
+<script>
+let WOS = [];
+function draw() {
+  const blank = document.getElementById("blank").checked;
+  const wo = WOS[document.getElementById("pick").value] || WOS[0];
+  document.getElementById("out").innerHTML = blank
+    ? woSheetHtml({ processType: wo.processType, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] }, { blank: true })
+    : woSheetHtml(wo);
+  report();
+}
+/* Sanity readout. Horizontal overflow is the failure that silently ruins a print
+   (columns walk off the right edge), so it's checked explicitly rather than
+   eyeballed. */
+function report() {
+  const page = document.querySelector("#out .ws-page");
+  if (!page) return;
+  const dpi = 96, printable = 10.1 * dpi;
+  const inner = page.scrollHeight - 2 * 0.45 * dpi;
+  let over = 0;
+  page.querySelectorAll("*").forEach(el => {
+    const w = el.getBoundingClientRect().right - page.getBoundingClientRect().left;
+    if (w > (8.5 - 0.45) * dpi + 1) over++;
+  });
+  document.getElementById("stat").textContent =
+    `≈${Math.max(1, Math.ceil(inner / printable))} page(s) · ${over ? over + " OVERFLOWING els" : "no h-overflow"}`;
+  document.getElementById("stat").style.color = over ? "#ff8a95" : "#9fe6a0";
+}
+fetch("../03%20Work%20Orders/data/sn5-work-orders.json")
+  .then(r => r.json())
+  .then(d => {
+    WOS = d;
+    // Longest first: if pagination and spacing hold for the worst case they hold
+    // for everything else.
+    const order = d.map((w, i) => [i, (w.steps || []).length]).sort((a, b) => b[1] - a[1]);
+    document.getElementById("pick").innerHTML =
+      order.map(([i, n]) => `<option value="${i}">${d[i].id} — ${d[i].partName || "(unnamed)"} (${n} steps)</option>`).join("");
+    draw();
+  })
+  .catch(e => { document.getElementById("out").innerHTML = "<p style='color:#fff;padding:20px'>Could not load seed data: " + e + "<br>Serve over HTTP (see comment at top of this file).</p>"; });
+</script>
+</body>
+</html>

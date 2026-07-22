@@ -21,6 +21,27 @@ Working notes: `SESSION-STATE.md` is a rolling handoff file, so an interrupted
 session can be resumed without re-deriving decisions. Start there if you are
 picking work back up.
 
+### Printing a work order
+
+Work orders print as a **hand-fillable shop traveler**, not as a screenshot of
+the app: ruled boxes for every field, an initial-and-date cell on each step,
+blockers called out in heavy rule and hatching, and blank rows at the end of
+every list so steps, plies and BOM lines can be added at the bench. The app
+fills in what it knows and leaves the rest writable.
+
+- **Print** on any work order opens a preview of the exact sheet, with a B&W
+  proof toggle. ⌘P on a work order gives the same document.
+- **Print blank traveler** on the work-order list produces empty forms for a
+  chosen process, with the standard step list already printed — a stack to take
+  to RFS.
+- Built by `03 Work Orders/app/print.js` + `print.css`. The sheet styles are
+  deliberately not scoped to `@media print`, so `tools/print-preview.html`
+  renders exactly what comes out of the printer. Serve it over HTTP:
+  `python3 -m http.server 8777` from this folder, then open
+  `http://localhost:8777/tools/print-preview.html`.
+- Designed for a **black-and-white laser**. Colour is enhancement only; nothing
+  depends on it.
+
 The git root is `SN6 Resources/` rather than the app folder because the `tools/`
 scripts resolve their paths relative to it — see the comments in `.gitignore`.
 Note that `firebase deploy` still runs from inside `03 Work Orders/`.
