@@ -54,11 +54,25 @@ function renderCalendar() {
         if (!d) return `<td class="empty"></td>`;
         const iso = `${ym}-${String(d).padStart(2, "0")}`;
         const items = byDay[iso] || [];
-        return `<td class="${iso === td ? "istoday" : ""}">
+        return `<td class="${iso === td ? "istoday" : ""}" onclick="calDay('${iso}')">
           <div class="daynum">${d}</div>
           ${items.map(it => `<div class="calitem ${kindClass[it.kind] || ""}" title="${esc(it.kind)}: ${esc(it.label)}" onclick="${it.tab === "timeline" ? "setTab('timeline')" : `openRecord('${it.tab}','${esc(it.id)}')`}">${esc(it.label)}</div>`).join("")}
         </td>`;
       }).join("")}</tr>`).join("")}
     </tbody>
   </table>`;
+}
+
+// On phones the calendar shows events as dots and the day cell is tappable; this
+// lists that day's items so each is reachable. On desktop the per-item links do
+// the navigating, so a cell tap is a no-op (items handle their own clicks).
+function calDay(iso) {
+  if (window.innerWidth > 640) return;
+  const items = calItems().filter(it => it.date === iso)
+    .sort((a, b) => a.kind.localeCompare(b.kind));
+  openModal(`
+    <h2 style="font-size:16px">${esc(iso)}</h2>
+    ${items.length ? items.map(it => `<div class="gsr" onclick="closeModal();${it.tab === "timeline" ? "setTab('timeline')" : `openRecord('${it.tab}','${esc(it.id)}')`}">
+      <span><span class="kind">${esc(it.kind)}</span>${esc(it.label)}</span></div>`).join("")
+      : `<p class="muted" style="padding:6px 2px">Nothing due this day.</p>`}`);
 }

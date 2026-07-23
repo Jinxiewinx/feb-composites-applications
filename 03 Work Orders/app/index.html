@@ -50,67 +50,8 @@
   .menu-actions button { width: 100%; text-align: left; padding: 11px 12px; }
   #drawer-backdrop { display: none; }
   main { max-width: 1180px; width: 100%; margin: 0 auto; padding: 18px 20px 60px; }
-
-  /* ---- responsive: tablet (≤900) collapses the sidebar into a slide-in
-     drawer; phone (≤640) also folds the secondary topbar actions into a
-     "⋯" sheet. Desktop is the default above, untouched. ---- */
-  @media (max-width: 900px) {
-    .hamburger { display: inline-flex; align-items: center; }
-    nav.sidebar {
-      position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
-      width: 264px; max-width: 84vw; z-index: 40;
-      transform: translateX(-100%); transition: transform .22s ease;
-      box-shadow: 2px 0 18px rgba(9,30,66,.32); overflow-y: auto;
-      padding-top: env(safe-area-inset-top);
-    }
-    body.drawer-open nav.sidebar { transform: translateX(0); }
-    #drawer-backdrop {
-      display: block; position: fixed; inset: 0; z-index: 35;
-      background: rgba(9,30,66,.5); opacity: 0; pointer-events: none;
-      transition: opacity .22s;
-    }
-    body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
-    header.topbar { padding: 10px 14px; }
-    main { padding: 16px 14px 72px; }
-  }
-  @media (max-width: 640px) {
-    .tb-desktop { display: none; }
-    .tb-morebtn { display: inline-flex; }
-    header.topbar h1 { font-size: 16px; }
-
-    /* Wide list tables collapse into stacked cards: header row hidden, each row
-       a card, each cell a `Label  value` line via the data-label set in core.js.
-       The table's own border/shadow is dropped so the cards own the chrome. */
-    table.list { display: block; border: none; box-shadow: none; background: none; border-radius: 0; overflow: visible; }
-    table.list tbody { display: block; }
-    table.list tr:first-child { display: none; }            /* the <th> header row */
-    table.list tr {
-      display: block; background: var(--card); border: 1px solid var(--line);
-      border-radius: 8px; box-shadow: var(--shadow); padding: 10px 13px; margin-bottom: 10px;
-    }
-    table.list tr:hover td { background: none; }
-    table.list td {
-      display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
-      padding: 4px 0; border: none; text-align: right;
-    }
-    table.list td::before {
-      content: attr(data-label); flex: none; text-align: left;
-      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      color: var(--muted); white-space: nowrap;
-    }
-    /* First cell is the card title (id / name), not a label:value row. */
-    table.list td:first-child {
-      display: block; text-align: left; font-size: 15px;
-      padding: 0 0 7px; margin-bottom: 5px; border-bottom: 1px solid var(--line);
-    }
-    table.list td:first-child::before { display: none; }
-    /* Empty trailing action cells shouldn't leave a dangling label. */
-    table.list td:empty { display: none; }
-
-    /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
-       rather than blowing out their card. */
-    table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  }
+  /* All responsive rules live in one block at the end of this stylesheet, so
+     they reliably override the base rules above regardless of specificity. */
 
   /* ---- avatars ---- */
   .avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; color: #fff; font-weight: 600; vertical-align: middle; flex: none; }
@@ -315,6 +256,106 @@
      preview is open. See print.js / print.css. */
   #printroot:empty { display: none; }
   body.previewing #app { display: none; }
+
+  /* ============================================================
+     RESPONSIVE. Placed at the end on purpose: at equal specificity the later
+     rule wins, so keeping every screen-width override here means it reliably
+     beats the base rules above. Tablet (≤900) folds the sidebar into a slide-in
+     drawer; phone (≤640) also stacks tables, board and calendar and slims the
+     topbar. Desktop is the untouched default above these queries.
+     ============================================================ */
+  @media (max-width: 900px) {
+    .hamburger { display: inline-flex; align-items: center; }
+    nav.sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
+      width: 264px; max-width: 84vw; z-index: 40;
+      transform: translateX(-100%); transition: transform .22s ease;
+      box-shadow: 2px 0 18px rgba(9,30,66,.32); overflow-y: auto;
+      padding-top: env(safe-area-inset-top);
+    }
+    body.drawer-open nav.sidebar { transform: translateX(0); }
+    #drawer-backdrop {
+      display: block; position: fixed; inset: 0; z-index: 35;
+      background: rgba(9,30,66,.5); opacity: 0; pointer-events: none;
+      transition: opacity .22s;
+    }
+    body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
+    header.topbar { padding: 10px 14px; }
+    main { padding: 16px 14px 72px; }
+  }
+  @media (max-width: 640px) {
+    .tb-desktop { display: none; }
+    .tb-morebtn { display: inline-flex; }
+    header.topbar h1 { font-size: 16px; }
+
+    /* Wide list tables collapse into stacked cards: header row hidden, each row
+       a card, each cell a `Label  value` line via the data-label set in core.js.
+       The table's own border/shadow is dropped so the cards own the chrome. */
+    table.list { display: block; border: none; box-shadow: none; background: none; border-radius: 0; overflow: visible; }
+    table.list tbody { display: block; }
+    table.list tr:first-child { display: none; }            /* the <th> header row */
+    table.list tr {
+      display: block; background: var(--card); border: 1px solid var(--line);
+      border-radius: 8px; box-shadow: var(--shadow); padding: 10px 13px; margin-bottom: 10px;
+    }
+    table.list tr:hover td { background: none; }
+    table.list td {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
+      padding: 4px 0; border: none; border-top: none; text-align: right;
+    }
+    table.list td::before {
+      content: attr(data-label); flex: none; text-align: left;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--muted); white-space: nowrap;
+    }
+    /* First cell is the card title (id / name), not a label:value row. */
+    table.list td:first-child {
+      display: block; text-align: left; font-size: 15px;
+      padding: 0 0 7px; margin-bottom: 5px; border-bottom: 1px solid var(--line);
+    }
+    table.list td:first-child::before { display: none; }
+    /* Empty trailing action cells shouldn't leave a dangling label. */
+    table.list td:empty { display: none; }
+
+    /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
+       rather than blowing out their card. */
+    table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* Projects board: one status section per row (Backlog / Active / Blocked /
+       Done), each full width. Desktop drag isn't used here; a card tap opens it. */
+    .board { grid-template-columns: 1fr; }
+
+    /* Calendar: keep the month grid but shrink cells; events become colored dots
+       and tapping a day opens that day's list (calDay → openDayModal). */
+    table.cal th { padding: 5px 2px; font-size: 10px; }
+    table.cal td { height: auto; min-height: 46px; padding: 3px 2px; vertical-align: top; cursor: pointer; }
+    table.cal .daynum { font-size: 10px; }
+    .calitem {
+      font-size: 0; line-height: 0; display: inline-block; width: 8px; height: 8px;
+      padding: 0; margin: 1px; border-radius: 50%; pointer-events: none; vertical-align: middle;
+    }
+    .calitem.st-mid { background: #f5a623; border-color: #f5a623; }  /* Part */
+    .calitem.InWork { background: #4a90d9; border-color: #4a90d9; }  /* Project */
+    .calitem.Draft  { background: #8993a4; border-color: #8993a4; }  /* Work order */
+    .calitem.retro  { background: #8b7fd6; border-color: #8b7fd6; }  /* Milestone */
+
+    /* Modals: single-column two-up rows, tighter padding on a small screen. */
+    #modal .backdrop { padding: 16px 10px; }
+    #modal .modal { padding: 18px 16px; }
+    #modal .modal .row2 { grid-template-columns: 1fr; }
+
+    /* 16px form controls so iOS doesn't zoom the page on focus. Dense grids
+       (timeline, detail sub-tables) already scroll horizontally, so this is safe. */
+    input, select, textarea { font-size: 16px; }
+  }
+
+  /* Touch devices get larger tap targets regardless of width. */
+  @media (pointer: coarse) {
+    button, .icon-btn, .hamburger { min-height: 40px; }
+    .sb-item { padding: 11px 12px; }
+    .filters select, .filters input, .toolbar select { min-height: 40px; }
+    .picker .opt { padding: 9px 10px; }
+  }
 
   @media print {
     @page { size: letter; margin: 0.45in; }

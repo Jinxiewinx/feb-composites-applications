@@ -58,7 +58,11 @@ button, and the account and lead actions (Backup, Restore, Roster, Sign out) mov
 into a ⋯ menu next to search and the bell. The wide list tables (work orders,
 parts, budget, projects) turn into one card per row with labeled fields, so
 nothing runs off the edge; narrow detail tables scroll sideways instead. The
-desktop layout is unchanged above roughly a tablet width.
+projects board stacks its four status columns into full-width sections, and the
+calendar shows each deadline as a colored dot, tapping a day lists what's due.
+Form controls render at 16px so iOS doesn't zoom on focus, and buttons grow to a
+comfortable tap size on touch screens. The desktop layout is unchanged above
+roughly a tablet width.
 
 The old single-file `../work-orders.html` stays as the offline backup and archive
 viewer, since it still opens any exported JSON anywhere, forever. Don't delete

@@ -50,14 +50,33 @@ tab renderers. Verified: all 10 tabs no h-overflow at mobile width; work orders
 and parts stack cleanly (stage badges, status pills as values); desktop
 unchanged (td stays table-cell, ::before content none).
 
-Remaining: chunk 3 board (single-column stacked on phones) / calendar (compact,
-tap-day) / modal `.row2` single-column / 16px inputs / coarse-pointer touch
-targets; chunk 4 visual sweep + doc updates.
+Chunk 3 (done, pushed): board / calendar / modal / touch. Projects board stacks
+to one status section per row (≤640 `.board { grid-template-columns: 1fr }`).
+Calendar events become 8px colored dots (pointer-events:none) and each day cell
+gets `onclick="calDay(iso)"`; calDay opens a modal listing that day's items
+(no-op above 640 so desktop keeps its per-item links). Modal `.row2` collapses to
+one column, inputs go 16px (iOS zoom), and `@media (pointer:coarse)` bumps tap
+targets. Verified at 500px: board single-column, calendar dots + day modal, no
+overflow on any of the 10 tabs, WO detail clean, new-project modal single-column;
+at 1300px board is 4-col, calendar shows full labels, hamburger hidden.
 
-Testing note: the Chrome window on this Mac floors around 606px wide, so true
-375px phone width can't be hit by resize alone — 606 still exercises the ≤640
-mobile path. For genuinely narrow checks (calendar 7-col grid, board) use CDP
-device emulation or CSS zoom in chunk 3.
+IMPORTANT CSS architecture decision: ALL responsive rules live in one block at the
+END of index.html's <style> (right before @media print). Reason: at equal
+specificity the later rule wins, and several base rules (`.board`, `table.cal`,
+`#modal .row2`) are defined *after* where the media block first sat, so the early
+placement lost on source order (board stayed 2-col at ≤640). Moving every
+screen-width override to the end makes them deterministically beat the bases. Do
+not scatter responsive rules back up next to the components — keep them in the
+end block.
+
+Local testing gotcha: `python3 -m http.server` sends no cache headers, so the
+browser served a stale calendar.js (calDay undefined) after edits. Use the
+no-cache server at `scratchpad/nocache_server.py` on port 8126 (adds
+`Cache-Control: no-store`) for browser testing. Same cache class as the prod
+firebase.json no-cache headers.
+
+Remaining: chunk 4 — full visual sweep at desktop/tablet/phone, README +
+SESSION-STATE final, push. (README already updated incrementally per chunk.)
 
 ## Where things stand
 
