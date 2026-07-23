@@ -364,7 +364,7 @@ await t("@mention adds watcher + notifies", () => {
 await t("topbar bell shows unread count", () => {
   DB.notifications = [{ id: "N1", to: "simon@berkeley.edu", text: "x", read: false }, { id: "N2", to: "simon@berkeley.edu", text: "y", read: true }];
   render();
-  assert(topbar.innerHTML.includes("🔔") && topbar.innerHTML.includes('class="badge">1'), "one unread badge");
+  assert(topbar.innerHTML.includes('aria-label="Notifications"') && topbar.innerHTML.includes('class="badge">1'), "one unread badge");
 });
 await t("openNotifs + gotoNotif marks read + navigates", () => {
   DB.notifications = [{ id: "N1", to: "simon@berkeley.edu", type: "assigned", text: "assigned you", read: false, link: { tab: "projects", id: "PROJ-1" } }];

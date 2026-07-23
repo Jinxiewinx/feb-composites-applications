@@ -10,8 +10,49 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-07-22
-Status: responsive UI/UX for the composites app COMPLETE and pushed (chunks 1–4).
-Clean stopping point. Plan file: `~/.claude/plans/dapper-strolling-pine.md`.
+Status: motorsport UI revamp + dark mode + PWA logo IN FLIGHT. Foundation
+(tokens, self-hosted fonts, dark theme, SVG icon system, FEB mark, motifs) done
+and verified light+dark; component polish, PWA icons/manifest, and the
+sweep+deploy remain. Plan: `~/.claude/plans/dapper-strolling-pine.md`.
+(Prior responsive UI work, chunks 1–4, is complete and deployed — see below.)
+
+## UI revamp (in flight) — decisions
+
+Direction: **motorsport energy** + **full dark mode** (auto-follow system +
+toggle), Simon's picks. FEB logo is the two-parallelogram blue+gold "speed slash"
+mark from ev.studentorg.berkeley.edu; reproduced as SVG (`febMark()` in core.js)
+rather than the raster, so it's crisp everywhere. Brand: Berkeley navy #003262
+base, electric blue #2f6be4 accent, gold #FDB515 energy.
+
+Token architecture (index.html `<style>`): OLD var names (--blue --canvas --card
+--line --ink --muted --bad --ok --amber --accent --accent-soft --radius --shadow)
+kept as ALIASES so every existing component themes for free; NEW names
+(--surface-2 --hover --fill, status -bg/-border, --brand-ink, --shadow-md, motion,
+fonts) drive the revamp. Dark theme = `:root[data-theme="dark"]` re-points the
+shared tokens. `--brand-ink` exists because navy text (#003262) is invisible on
+dark — it's navy in light, bright blue in dark; all `color: var(--blue)` text uses
+were swapped to it. No-FOUC inline `<head>` script sets data-theme before paint
+(localStorage `feb-theme`, else system). `applyTheme`/`toggleTheme` in core.js.
+
+PRINT SAFETY (critical): `@media print` resets all themeable tokens to light
+(black-on-white) at the top of the block, because print.css reads var(--ink) and
+the fallback path reads var(--surface) — without the reset, printing in dark mode
+gave white-on-white. Verify the traveler after any token change.
+
+Fonts self-hosted in `app/fonts/` (Inter + Saira, variable woff2, one file each,
+~84KB total) — offline-safe, no CDN. Inter = body/UI, Saira = display (h1, card
+h2, .bignum) for the technical/motorsport feel.
+
+Icon system: `icon(name,size)` in core.js returns inline Lucide-style SVG; ICONS
+dict. Replaced ALL 10 nav glyphs, topbar emoji (search/bell/menu/more), theme
+sun/moon, picker caret, and the ⋯-menu action icons. Motifs: gold skewed "slash"
+on the active nav item (`.sb-item.active::before`), subtle carbon-weave
+(repeating-linear-gradient at --carbon ~4%) on the navy sidebar.
+
+Test fix: `tools/test_app.mjs` bell assertion checked for the 🔔 emoji; now checks
+`aria-label="Notifications"` + the badge. 73 pass.
+
+## Where things stand
 
 ## Composites app responsive work (in flight)
 

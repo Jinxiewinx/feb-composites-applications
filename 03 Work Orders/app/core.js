@@ -72,6 +72,63 @@ function localId(coll) {
 }
 function recById(coll, id) { return (DB[coll] || []).find(o => o.id === id); }
 
+/* ---------- SVG icon system ----------
+   Lucide-style stroke icons as inline SVG, so nothing depends on an icon font
+   or emoji. icon(name, size) returns a self-contained <svg>. Unknown names fall
+   back to a dot so a typo is visible, not blank. */
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  workorders: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M9 12h6M9 16h6"/>',
+  parts: '<path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  projects: '<rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/>',
+  timeline: '<path d="M3 5h11M3 12h18M3 19h8"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  budget: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  documents: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/>',
+  reports: '<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  more: '<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  print: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  paperclip: '<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  warning: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/>',
+  roster: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+  archive: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
+  _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
+};
+function icon(name, size) {
+  size = size || 18;
+  const p = ICONS[name] || ICONS._fallback;
+  return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+}
+// The FEB "speed slash" mark (two offset parallelograms), reproduced as SVG so
+// it stays crisp anywhere. Blue upper, gold lower. Used in the sidebar brand,
+// the drawer, and (rasterised) the PWA icons.
+function febMark(size) {
+  size = size || 26;
+  return `<svg class="feb-mark" width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+    <path d="M40 18 H86 L60 52 H14 Z" fill="#2f6be4"/>
+    <path d="M40 50 H86 L60 84 H14 Z" fill="#fdb515"/>
+  </svg>`;
+}
+
 /* ---------- small helpers ---------- */
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -435,7 +492,7 @@ function pickerBody(id) {
     return `<span class="tok">${it.avatarEmail ? avatar(it.avatarEmail, 18) : ""}${esc(it.label)}<button onclick="event.stopPropagation();pickerToggle('${id}','${esc(v)}')">×</button></span>`;
   }).join("") || `<span class="muted" style="padding:2px 4px">click to add…</span>`;
   // Collapsed by default: the chosen area is a button that opens the list.
-  return `<div class="chosen" onclick="pickerOpen('${id}')">${tok}<span class="pk-caret">${p.open ? "▴" : "▾"}</span></div>
+  return `<div class="chosen" onclick="pickerOpen('${id}')">${tok}<span class="pk-caret ${p.open ? "open" : ""}">${icon("chevronDown", 15)}</span></div>
     ${p.open ? `<input class="psearch" placeholder="search…" value="${esc(p.q)}" oninput="pickerSearch('${id}',this.value)" onkeydown="if(event.key==='Escape')pickerClose('${id}')">
     <div class="opts" id="pk-opts-${id}">${pickerOpts(id, opts)}</div>` : ""}`;
 }
@@ -467,16 +524,16 @@ function pickerField(id) { return `<div class="picker" id="pk-${id}">${pickerBod
 // Order = sidebar order. render() is resolved at click time, after every tab
 // script has loaded. Add a tab by adding a row here + its renderX().
 const TABS = [
-  { id: "dashboard", label: "Dashboard", ic: "▚", coll: null, render: () => renderDashboard() },
-  { id: "workorders", label: "Work Orders", ic: "▤", coll: "workOrders", render: () => renderWorkOrders() },
-  { id: "parts", label: "Parts", ic: "◧", coll: "parts", render: () => renderParts() },
-  { id: "projects", label: "Projects", ic: "▦", coll: "projects", render: () => renderProjects() },
-  { id: "timeline", label: "Timeline", ic: "▧", coll: "schedule", render: () => renderTimeline() },
-  { id: "calendar", label: "Calendar", ic: "◷", coll: null, render: () => renderCalendar() },
-  { id: "budget", label: "Budget", ic: "$", coll: "budget", render: () => renderBudget() },
-  { id: "people", label: "People", ic: "◑", coll: null, render: () => renderPeople() },
-  { id: "documents", label: "Documents", ic: "▣", coll: null, render: () => renderDocuments() },
-  { id: "reports", label: "Reports", ic: "▥", coll: null, render: () => renderReports() },
+  { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, render: () => renderDashboard() },
+  { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
+  { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
+  { id: "projects", label: "Projects", ic: "projects", coll: "projects", render: () => renderProjects() },
+  { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
+  { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
+  { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
+  { id: "people", label: "People", ic: "people", coll: null, render: () => renderPeople() },
+  { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
+  { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
@@ -491,10 +548,10 @@ function renderSidebar() {
   const st = window.fb ? fb.state : "loading";
   if (st !== "ready") { el.innerHTML = ""; return; }
   el.innerHTML = `
-    <div class="sb-brand" onclick="setTab('dashboard')" style="cursor:pointer" title="Home">FEB <span>Composites</span></div>
+    <div class="sb-brand" onclick="setTab('dashboard')" title="Home">${febMark(26)}<span class="sb-brand-txt">FEB <span>Composites</span></span></div>
     <div class="sb-nav">
       ${TABS.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" onclick="setTab('${t.id}')">
-        <span class="ic">${t.ic}</span>${t.label}${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
+        <span class="ic">${icon(t.ic, 19)}</span>${t.label}${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
       </button>`).join("")}
     </div>`;
 }
@@ -505,11 +562,12 @@ function renderTopbar() {
   if (st !== "ready") { el.innerHTML = ""; return; }
   const unread = (DB.notifications || []).filter(n => !n.read).length;
   el.innerHTML = `
-    <button class="hamburger no-print" title="Menu" aria-label="Menu" onclick="toggleDrawer()">☰</button>
+    <button class="hamburger no-print" title="Menu" aria-label="Menu" onclick="toggleDrawer()">${icon("menu", 22)}</button>
     <h1>${esc(view.mode === "roster" ? "Roster" : tabLabel())}</h1>
     <div class="actions">
-      <button class="icon-btn" title="Search (⌘K)" onclick="openSearch()">🔍</button>
-      <button class="icon-btn bell" title="Notifications" onclick="openNotifs()">🔔${unread ? `<span class="badge">${unread}</span>` : ""}</button>
+      <button class="icon-btn" title="Search (⌘K)" aria-label="Search" onclick="openSearch()">${icon("search", 19)}</button>
+      <button class="icon-btn bell" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>
+      ${themeToggleBtn()}
       <span class="tb-desktop">
         <button onclick="exportAll()">Backup</button>
         ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
@@ -519,7 +577,7 @@ function renderTopbar() {
         <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
         <button onclick="fb.signOut()">Sign out</button>
       </span>
-      <button class="icon-btn tb-morebtn" title="More" aria-label="More" onclick="openMoreMenu()">⋯</button>
+      <button class="icon-btn tb-morebtn" title="More" aria-label="More" onclick="openMoreMenu()">${icon("more", 20)}</button>
     </div>`;
 }
 // Small-screen overflow for the account/admin actions that don't fit the topbar.
@@ -533,18 +591,38 @@ function openMoreMenu() {
         <div class="muted tny">${esc(myEmail())}${lead ? " · lead" : ""}</div></div>
     </div>
     <div class="menu-actions">
-      <button onclick="closeModal();setMyAvatar()">Change photo</button>
-      <button onclick="closeModal();exportAll()">Backup database</button>
-      ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">Restore from backup</button>
-      <button onclick="closeModal();loadArchive()">Load SN5 archive</button>
-      <button onclick="closeModal();openRoster()">Roster</button>` : ""}
-      <button class="danger" onclick="closeModal();fb.signOut()">Sign out</button>
+      <button onclick="toggleTheme();closeModal()">${icon(currentTheme() === "dark" ? "sun" : "moon", 18)}${currentTheme() === "dark" ? "Light theme" : "Dark theme"}</button>
+      <button onclick="closeModal();setMyAvatar()">${icon("edit", 18)}Change photo</button>
+      <button onclick="closeModal();exportAll()">${icon("download", 18)}Backup database</button>
+      ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>
+      <button onclick="closeModal();loadArchive()">${icon("archive", 18)}Load SN5 archive</button>
+      <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
+      <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>
     </div>`);
 }
 /* ---------- mobile drawer ---------- */
 // Guard document.body: the DOM-stub test harness has no body element.
 function toggleDrawer() { if (document.body) document.body.classList.toggle("drawer-open"); }
 function closeDrawer() { if (document.body) document.body.classList.remove("drawer-open"); }
+
+/* ---------- theme (light / dark) ----------
+   The no-FOUC <head> script set data-theme before paint; this just flips and
+   persists it. Guards the DOM-stub test harness. */
+function currentTheme() {
+  const el = document.documentElement;
+  return (el && el.getAttribute && el.getAttribute("data-theme") === "dark") ? "dark" : "light";
+}
+function applyTheme(t) {
+  const el = document.documentElement;
+  if (el && el.setAttribute) el.setAttribute("data-theme", t);
+  try { localStorage.setItem("feb-theme", t); } catch (e) {}
+}
+function toggleTheme() { applyTheme(currentTheme() === "dark" ? "light" : "dark"); renderTopbar(); }
+function themeToggleBtn() {
+  const dark = currentTheme() === "dark";
+  const label = dark ? "Switch to light theme" : "Switch to dark theme";
+  return `<button class="icon-btn" title="${label}" aria-label="${label}" onclick="toggleTheme()">${icon(dark ? "sun" : "moon", 18)}</button>`;
+}
 
 /* ---------- global search (⌘K command palette) ---------- */
 function searchAll(q) {

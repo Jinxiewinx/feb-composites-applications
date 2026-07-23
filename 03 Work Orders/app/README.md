@@ -53,6 +53,12 @@ Press ⌘K (Ctrl-K) anywhere for global search. The bell collects @mentions, typ
 as `@name` in a project comment, along with project assignments, and shows an
 unread count. That's in-app only; email would be a later Cloud Function.
 
+It has a light and a dark theme. It follows your system setting on first load and
+you can flip it with the sun/moon button in the header (the ⋯ menu on a phone);
+the choice is remembered. The look is FEB's own: the blue-and-gold speed-slash
+mark, a navy sidebar, crisp line icons throughout, and the Saira display face on
+headings. Printing always comes out black-on-white regardless of theme.
+
 It works on phones and tablets. The blue sidebar folds into a slide-in drawer
 behind the ☰ button, and on a phone the account and lead actions (Backup,
 Restore, Roster, Sign out) move into a ⋯ menu next to search and the bell. The
