@@ -351,7 +351,7 @@ async function recheckRoster() {
 function renderLogin() {
   const up = view.authMode === "up";
   return `<div class="card login">
-    <h2>FEB <span style="color:var(--gold)">Composites</span></h2>
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:6px">${febMark(34)}<h2 style="margin:0">FEB <span style="color:var(--gold)">Composites</span></h2></div>
     <p class="muted">Team database. ${up ? "Create your account with your Berkeley email. The lead has to add you to the roster before you can see anything." : "Sign in with your team account."}</p>
     ${up ? `<div class="f"><label>Name (goes on your buy-offs)</label><input id="li-name" autocomplete="name"></div>` : ""}
     <div class="f"><label>Email</label><input id="li-email" type="email" autocomplete="username"></div>

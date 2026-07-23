@@ -10,11 +10,21 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-07-22
-Status: motorsport UI revamp + dark mode + PWA logo IN FLIGHT. Foundation
-(tokens, self-hosted fonts, dark theme, SVG icon system, FEB mark, motifs) done
-and verified light+dark; component polish, PWA icons/manifest, and the
-sweep+deploy remain. Plan: `~/.claude/plans/dapper-strolling-pine.md`.
-(Prior responsive UI work, chunks 1–4, is complete and deployed — see below.)
+Status: motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed
+(4 commits). Clean stopping point. Plan: `~/.claude/plans/dapper-strolling-pine.md`.
+(Prior responsive UI work also complete — see below.)
+
+Revamp verified: light+dark across all 10 tabs + WO detail + login + mobile drawer;
+WCAG AA contrast on all token pairs in both themes (faint nudged to clear 4.5:1 —
+5.16 light / 5.57 dark); zero horizontal overflow both themes; PWA manifest +
+icons resolve; 73 logic tests pass. PWA icons live at icon-192/512/maskable +
+apple-touch, from the FEB mark rasterised by ImageMagick (pre-baked coords, no
+gradients/transforms, so magick renders exactly). Fonts/icons get a 1-year
+immutable cache header; manifest stays no-cache.
+NOTE not machine-verified: the print traveler in dark mode — the @media print
+token reset (forces --ink #000 / --surface #fff for both :root and
+[data-theme=dark]) is deterministic CSS and print.css was untouched, but nobody
+ran a real print. Spot-check on a printer if in doubt.
 
 ## UI revamp (in flight) — decisions
 
