@@ -61,9 +61,9 @@ function renderDocuments() {
       <h3>${esc(cat)} <span class="muted">(${list.length})</span></h3>
       <div class="doclist">
         ${list.map(d => `<div class="docrow" onclick="openDocFromRow('${esc(d.src)}','${d.uploaded ? "up" : ""}')">
-          <span class="di">${d.kind === "pdf" ? "📄" : d.kind === "html" ? "🖨" : (d.kind || "").startsWith("image") ? "🖼" : "📃"}</span>
+          <span class="di">${icon(d.kind === "html" ? "print" : (d.kind || "").startsWith("image") ? "image" : "file", 18)}</span>
           <span>${esc(d.title)}${d.uploaded ? ` <span class="muted tny">· ${esc(d.by || "")}</span>` : ""}</span>
-          <span class="dsz">${(d.kind || "file").toUpperCase()} · ${fmtKB(d.size || 0)}${d.uploaded && isLead() ? ` <button class="danger" onclick="event.stopPropagation();delDocument('${d.id}')">✕</button>` : ""}</span>
+          <span class="dsz">${(d.kind || "file").toUpperCase()} · ${fmtKB(d.size || 0)}${d.uploaded && isLead() ? ` <button class="danger ib" title="Delete" onclick="event.stopPropagation();delDocument('${d.id}')">${icon("trash", 14)}</button>` : ""}</span>
         </div>`).join("")}
       </div>
     </div>`;
@@ -128,7 +128,7 @@ function renderDocViewer() {
   }
   return `
   <div class="toolbar no-print">
-    <button onclick="closeDocument()">← All documents</button>
+    <button class="ib" onclick="closeDocument()">${icon("chevronLeft",16)} All documents</button>
     <a href="${esc(d.src)}" target="_blank" rel="noopener"><button>Open in new tab</button></a>
     <span class="muted" style="align-self:center">${esc(d.title)}${dl}</span>
   </div>

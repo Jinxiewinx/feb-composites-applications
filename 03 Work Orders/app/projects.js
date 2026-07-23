@@ -99,7 +99,7 @@ function renderProjBoard() {
   const cols = PROJ_STATUS.map(st => {
     const list = DB.projects.filter(p => p.status === st && projMatch(p))
       .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
-    return `<div class="col" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="projDrop('${st}',this)">
+    return `<div class="col col-${st}" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="projDrop('${st}',this)">
       <h4>${st}<span>${list.length}</span></h4>
       ${list.map(projCard).join("")}
     </div>`;
@@ -114,8 +114,8 @@ function projCard(p) {
     <div class="t">${esc(p.title || p.id)}${projUnread(p) ? ' <span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>' : ""}</div>
     <div class="meta">
       <span class="prio ${esc(p.priority)}">${esc(p.priority || "")}</span>
-      ${p.dueDate ? `<span class="${late ? "warn" : ""}">${esc(p.dueDate)}${late ? " ⚠" : ""}</span>` : ""}
-      <span class="right">${nComments ? `💬 ${nComments}` : ""} ${nFiles ? `📎 ${nFiles}` : ""}<span class="avatar-stack">${av}</span></span>
+      ${p.dueDate ? `<span class="${late ? "warn" : ""}">${esc(p.dueDate)}${late ? " " + icon("warning", 13) : ""}</span>` : ""}
+      <span class="right">${nComments ? `<span class="cnt">${icon("message", 14)}${nComments}</span>` : ""}${nFiles ? `<span class="cnt">${icon("paperclip", 14)}${nFiles}</span>` : ""}<span class="avatar-stack">${av}</span></span>
     </div>
   </div>`;
 }
@@ -137,8 +137,8 @@ function renderProjTable() {
         <td><span class="pill ${projStatusClass(p.status)}">${esc(p.status)}</span></td>
         <td class="prio ${esc(p.priority)}">${esc(p.priority || "")}</td>
         <td><span class="avatar-stack">${(p.assignees || []).slice(0, 5).map(e => avatar(e, 22)).join("")}</span></td>
-        <td class="${late ? "warn" : ""}">${esc(p.dueDate || "")}${late ? " ⚠" : ""}</td>
-        <td class="tny">${projComments(p).length}💬 ${(p.files || []).length}📎</td>
+        <td class="${late ? "warn" : ""}">${esc(p.dueDate || "")}${late ? " " + icon("warning", 13) : ""}</td>
+        <td class="tny"><span class="cnt">${icon("message", 13)}${projComments(p).length}</span> <span class="cnt">${icon("paperclip", 13)}${(p.files || []).length}</span></td>
       </tr>`;
     }).join("")}
   </table>`;
@@ -189,7 +189,7 @@ function renderProjDetail() {
   if (E) {
     return `
     <div class="toolbar no-print">
-      <button onclick="view={...view,mode:'list',edit:false};render()">← All projects</button>
+      <button class="ib" onclick="view={...view,mode:'list',edit:false};render()">${icon("chevronLeft",16)} All projects</button>
       <button class="primary" onclick="saveProjectEdits()">Save</button>
       <button onclick="view.edit=false;render()">Cancel</button>
       ${isLead() ? `<button class="danger" onclick="delProject('${p.id}')">Delete</button>` : ""}
@@ -210,7 +210,7 @@ function renderProjDetail() {
   const dd = daysUntil(p.dueDate);
   return `
   <div class="toolbar no-print">
-    <button onclick="view={...view,mode:'list'};render()">← All projects</button>
+    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All projects</button>
     <button class="primary" onclick="editProject()">Edit</button>
     <button onclick="toggleWatch()">${watching ? "★ Watching" : "☆ Watch"}</button>
   </div>
@@ -248,7 +248,7 @@ function renderProjDetail() {
         <button title="Bigger" onclick="rte('fontSize','5')">A+</button>
         <button title="Smaller" onclick="rte('fontSize','2')">A−</button>
         <button title="Bullet list" onclick="rte('insertUnorderedList')">• List</button>
-        <button title="Attach image" onclick="attachCommentImage()">📎 Image</button>
+        <button title="Attach image" onclick="attachCommentImage()">${icon("paperclip", 15)} Image</button>
       </div>
       <div class="rte" id="comment-editor" contenteditable="true" data-ph="Write a comment…"></div>
       <div style="margin-top:6px"><button class="primary" onclick="postComment('${p.id}')">Comment as ${esc(signerName())}</button></div>
@@ -258,7 +258,7 @@ function renderProjDetail() {
 
 function fileItem(f) {
   const isImg = (f.type || "").startsWith("image/");
-  const thumb = isImg ? `<div class="thumb" style="background-image:url('${esc(f.url)}')"></div>` : `<div class="thumb">📄</div>`;
+  const thumb = isImg ? `<div class="thumb" style="background-image:url('${esc(f.url)}')"></div>` : `<div class="thumb">${icon("file", 26)}</div>`;
   return `<div class="fileitem">${thumb}<div class="fn"><a href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.name)}">${esc(f.name)}</a></div></div>`;
 }
 function addProjectFiles() {

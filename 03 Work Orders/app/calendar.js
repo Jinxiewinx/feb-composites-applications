@@ -41,9 +41,9 @@ function renderCalendar() {
   const td = today();
   return `
   <div class="toolbar no-print">
-    <button onclick="shiftMonth(-1)">← Prev</button>
+    <button class="ib" onclick="shiftMonth(-1)">${icon("chevronLeft", 16)} Prev</button>
     <b style="align-self:center;min-width:150px;text-align:center">${MONTHS[m - 1]} ${y}</b>
-    <button onclick="shiftMonth(1)">Next →</button>
+    <button class="ib" onclick="shiftMonth(1)">Next ${icon("chevronRight", 16)}</button>
     <button onclick="view.calMonth='${today().slice(0, 7)}';render()">Today</button>
     <span class="muted" style="align-self:center;margin-left:auto">${Object.values(byDay).reduce((s, a) => s + a.length, 0)} deadlines this month</span>
   </div>

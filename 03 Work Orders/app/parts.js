@@ -82,7 +82,7 @@ function renderPartList() {
       <td>${stagePill(p.moldProgress, STAGE_MOLD)}</td>
       <td>${stagePill(p.layupProgress, STAGE_LAYUP)}</td>
       <td class="tny">${esc(p.moldEngineer || "—")} / ${esc(p.manufacturingEngineer || "—")}</td>
-      <td class="${late ? "warn" : ""}">${esc(p.layupDeadline || "")}${late ? " ⚠" : ""}</td>
+      <td class="${late ? "warn" : ""}">${esc(p.layupDeadline || "")}${late ? " " + icon("warning", 13) : ""}</td>
     </tr>`; }).join("")}
   </table>`;
 }
@@ -103,7 +103,7 @@ function renderPartDetail() {
   const dd = daysUntil(p.layupDeadline);
   return `
   <div class="toolbar no-print">
-    <button onclick="view={...view,mode:'list'};render()">← All parts</button>
+    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All parts</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     ${E && isLead() ? `<button class="danger" onclick="delPart('${p.id}')">Delete</button>` : ""}
   </div>

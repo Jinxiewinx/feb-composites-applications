@@ -175,7 +175,7 @@ function renderWODetail() {
     </div>` : "";
   return `
   <div class="toolbar no-print">
-    <button onclick="view={...view,mode:'list'};render()">← All work orders</button>
+    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All work orders</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     <button onclick="openPrintPreview('${wo.id}')">Print</button>
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>

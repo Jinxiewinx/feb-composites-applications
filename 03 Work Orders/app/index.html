@@ -336,6 +336,42 @@
   body.previewing #app { display: none; }
 
   /* ============================================================
+     REVAMP POLISH — placed after the base components so it wins on source order:
+     icon-in-button alignment, hover micro-interactions, motorsport accents.
+     ============================================================ */
+  .ib { display: inline-flex; align-items: center; gap: 6px; }
+  .cnt { display: inline-flex; align-items: center; gap: 3px; }
+  .cnt .ico { opacity: .7; }
+  /* rounder surfaces + hover response */
+  .card { border-radius: var(--r-md); transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease); }
+  table.list, table.cal, table.tl { border-radius: var(--r-md); }
+  table.list td, .docrow, .gitem { transition: background var(--t-fast) var(--ease); }
+  input, select, textarea { transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+  .grid .f input:focus, .grid .f select:focus, .field input:focus, .field select:focus,
+  .filters input:focus, .filters select:focus, .login .f input:focus, textarea:focus,
+  table.sub input:focus, table.sub select:focus, table.tl input:focus, table.tl select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  /* project cards + stat tiles lift on hover */
+  .pcard { transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .pcard:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: var(--border-2); }
+  .gitem { transition: transform var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+  .gitem:hover { transform: translateY(-1px); border-color: var(--accent); background: var(--surface); }
+  .gitem .gn { font-family: var(--font-display); }
+  /* board columns: a status-colored accent strip across the top */
+  .col { border: 1px solid var(--line); position: relative; overflow: hidden; }
+  .col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border-2); }
+  .col.col-Backlog::before { background: var(--faint); }
+  .col.col-Active::before  { background: var(--accent); }
+  .col.col-Blocked::before { background: var(--bad); }
+  .col.col-Done::before    { background: var(--ok); }
+  .col h4 { font-family: var(--font-display); letter-spacing: .02em; }
+  /* slightly softer pill/chip corners to match the new radius language */
+  .pill, .stage { border-radius: 5px; }
+  .chip { border-radius: 5px; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .kind { border-radius: 4px; }
+
+  /* ============================================================
      RESPONSIVE. Placed at the end on purpose: at equal specificity the later
      rule wins, so keeping every screen-width override here means it reliably
      beats the base rules above. Tablet (≤900) folds the sidebar into a slide-in

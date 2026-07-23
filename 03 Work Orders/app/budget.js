@@ -80,7 +80,7 @@ function renderBuyDetail() {
   const E = view.edit;
   return `
   <div class="toolbar no-print">
-    <button onclick="view={...view,mode:'list'};render()">← All purchases</button>
+    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All purchases</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     ${E && isLead() ? `<button class="danger" onclick="delBuy('${b.id}')">Delete</button>` : ""}
   </div>

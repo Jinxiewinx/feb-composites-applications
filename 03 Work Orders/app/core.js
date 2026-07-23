@@ -111,6 +111,7 @@ const ICONS = {
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   archive: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-4.5-4.5L5 21"/>',
   _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size) {
@@ -400,7 +401,7 @@ function rosterDel(email) {
 function renderRoster() {
   const rows = rosterCache || [];
   return `
-  <div class="toolbar no-print"><button onclick="view={...view,mode:'list'};render()">← Back</button></div>
+  <div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} Back</button></div>
   <div class="card">
     <h2>Roster</h2>
     <p class="muted">Who can use this database. Anyone can create an account, but nothing works until their email is on this list. Remove people when they leave — accounts stick around, access shouldn't.</p>
