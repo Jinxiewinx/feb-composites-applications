@@ -616,6 +616,27 @@ function render() {
   if (view.mode === "roster") { el.innerHTML = renderRoster(); return; }
   const tab = TABS.find(t => t.id === view.tab) || TABS[0];
   el.innerHTML = tab.render();
+  labelListTables();
+}
+
+// Copy each `table.list` header cell's text onto every body cell's data-label.
+// The stacked-card mobile layout (index.html, <=640px) reveals these as row
+// labels via a ::before; on desktop they're inert. Keeps the responsive table
+// generic so no tab renderer has to emit data-label itself. The list tables all
+// share the shape: first <tr> is <th> headers, matching <td> cells follow.
+function labelListTables() {
+  const main = document.getElementById("main");
+  if (!main || !main.querySelectorAll) return;
+  main.querySelectorAll("table.list").forEach(tbl => {
+    const rows = tbl.rows;
+    if (!rows || rows.length < 2) return;
+    const headers = [...rows[0].cells].map(c => (c.textContent || "").trim());
+    for (let i = 1; i < rows.length; i++) {
+      [...rows[i].cells].forEach((cell, ci) => {
+        if (headers[ci]) cell.setAttribute("data-label", headers[ci]);
+      });
+    }
+  });
 }
 
 // ⌘K / Ctrl-K opens global search (only once signed in).

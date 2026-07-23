@@ -55,8 +55,10 @@ unread count. That's in-app only; email would be a later Cloud Function.
 
 It works on a phone. The blue sidebar folds into a slide-in drawer behind the ☰
 button, and the account and lead actions (Backup, Restore, Roster, Sign out) move
-into a ⋯ menu next to search and the bell. The desktop layout is unchanged above
-roughly a tablet width.
+into a ⋯ menu next to search and the bell. The wide list tables (work orders,
+parts, budget, projects) turn into one card per row with labeled fields, so
+nothing runs off the edge; narrow detail tables scroll sideways instead. The
+desktop layout is unchanged above roughly a tablet width.
 
 The old single-file `../work-orders.html` stays as the offline backup and archive
 viewer, since it still opens any exported JSON anywhere, forever. Don't delete

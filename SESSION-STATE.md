@@ -40,9 +40,24 @@ Drawer reuses the existing `.sidebar` markup, no duplication. Verified in-browse
 at 390 and 1300px: drawer opens/closes, overflow menu lists lead actions, desktop
 unchanged.
 
-Remaining: chunk 2 stacked list tables (generic `data-label` post-render pass +
-CSS) + `table.sub` scroll wrappers; chunk 3 board/calendar/modal/touch targets;
-chunk 4 visual sweep + doc updates.
+Chunk 2 (done, pushed): stacked list tables. `labelListTables()` in core.js runs
+at the end of render(), copying each `table.list` header cell's text onto every
+body cell's `data-label`. CSS (≤640) hides the header row, makes each `<tr>` a
+card and each `<td>` a `Label  value` flex line via `::before { content:
+attr(data-label) }`; first cell is the card title. `table.sub` gets
+`display:block; overflow-x:auto` to scroll instead of blowing out. Zero edits to
+tab renderers. Verified: all 10 tabs no h-overflow at mobile width; work orders
+and parts stack cleanly (stage badges, status pills as values); desktop
+unchanged (td stays table-cell, ::before content none).
+
+Remaining: chunk 3 board (single-column stacked on phones) / calendar (compact,
+tap-day) / modal `.row2` single-column / 16px inputs / coarse-pointer touch
+targets; chunk 4 visual sweep + doc updates.
+
+Testing note: the Chrome window on this Mac floors around 606px wide, so true
+375px phone width can't be hit by resize alone — 606 still exercises the ≤640
+mobile path. For genuinely narrow checks (calendar 7-col grid, board) use CDP
+device emulation or CSS zoom in chunk 3.
 
 ## Where things stand
 
