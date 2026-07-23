@@ -63,16 +63,29 @@ page run identical code.
 
 ```
 npm run build:mac      # .dmg and .zip in dist/
-npm run build:win      # .exe installer and portable build in dist/
+npm run build:win      # dist/win-unpacked/ — a runnable Windows x64 folder
 ```
 
 The macOS build is verified: it produces a 115 MB .dmg and .zip, and the packaged
 app boots and indexes a report. It is not code-signed, so the first launch needs
 right-click then Open, or Gatekeeper will refuse it.
 
-The Windows target is configured but has not been built or tested. Cross-building
-Windows from macOS needs Wine, so it stays unverified until someone runs it on a
-Windows machine or through CI.
+**Windows.** `build:win` produces `dist/win-unpacked/`, a folder with
+`FEB CFD Viewer.exe` and its libraries. Zip that folder and send it; the
+recipient unzips and runs the .exe. The whole folder has to stay together — the
+.exe needs the DLLs next to it — so send the zip, not the .exe alone. It targets
+x64, which is what nearly every Windows PC runs (not ARM Windows). It is
+unsigned, so Windows SmartScreen shows "Windows protected your PC" on first run;
+click **More info** then **Run anyway**.
+
+This folder build cross-compiles from macOS with no extra tools, because it skips
+the installer step. A single-file installer (`build:win-installer`, producing an
+NSIS .exe) additionally needs Wine on macOS, or a Windows machine, or CI.
+
+Caveat: the Windows build is assembled from Electron's official Windows binaries
+plus the exact app code the macOS build runs and the tests cover, but it has not
+been launched on real Windows from here. Smoke it on a Windows machine before
+handing it to the team.
 
 `npm run smoke` drives a running desktop build over the DevTools protocol and
 checks that a report actually loads and indexes in the window. Start the app with
