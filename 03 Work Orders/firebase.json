@@ -7,6 +7,11 @@
         "//": "Always revalidate app code so a deploy shows up immediately instead of hiding behind a stale browser cache (the 1-hour default bit us during setup). Data is live regardless; this only affects the HTML/JS/JSON shell.",
         "source": "**/*.@(html|js|json|css)",
         "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+      },
+      {
+        "//": "Fonts and icons are content-addressed by name and effectively immutable; cache them hard so the app loads instantly on repeat visits and works offline.",
+        "source": "**/*.@(woff2|png|svg|ico)",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
       }
     ]
   },
