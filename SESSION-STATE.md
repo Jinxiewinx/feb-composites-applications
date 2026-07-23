@@ -10,9 +10,8 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-07-22
-Status: responsive UI/UX for the composites app in flight. Chunk 1 (shell) done
-and pushed; chunks 2–4 pending. Plan file:
-`~/.claude/plans/dapper-strolling-pine.md`.
+Status: responsive UI/UX for the composites app COMPLETE and pushed (chunks 1–4).
+Clean stopping point. Plan file: `~/.claude/plans/dapper-strolling-pine.md`.
 
 ## Composites app responsive work (in flight)
 
@@ -75,8 +74,21 @@ no-cache server at `scratchpad/nocache_server.py` on port 8126 (adds
 `Cache-Control: no-store`) for browser testing. Same cache class as the prod
 firebase.json no-cache headers.
 
-Remaining: chunk 4 — full visual sweep at desktop/tablet/phone, README +
-SESSION-STATE final, push. (README already updated incrementally per chunk.)
+Chunk 4 (done, pushed): tablet fix + full visual sweep. The 8-column Parts table
+overflowed at 768px (tablet) because tables only stacked at ≤640. Since the
+sidebar already becomes a drawer at ≤900, moved the table-stacking rules up to
+the ≤900 block so tables card-stack across the whole compact range; phone-only
+chrome (topbar ⋯ fold, calendar dots, board 1-col, 16px inputs) stays ≤640. Also
+switched the stacked-card cell from `display:flex; justify-content:space-between`
+to `display:block` with a floated label in a 92px gutter, so a value made of
+several spans (a date plus a "(179d late)" tag) stays grouped and right-aligned
+instead of being spread apart. Swept all 10 tabs + WO/parts/project detail views
+at 400/768/1300px: zero horizontal overflow anywhere, desktop byte-identical
+(table/table-cell, no ::before). 73 logic tests pass.
+
+Net result: the composites app is responsive end to end. Drawer nav + card tables
+≤900; phone chrome ≤640; desktop unchanged >900. All in index.html's end-of-style
+responsive block + core.js labelListTables() + calendar.js calDay().
 
 ## Where things stand
 

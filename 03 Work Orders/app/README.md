@@ -53,16 +53,16 @@ Press ⌘K (Ctrl-K) anywhere for global search. The bell collects @mentions, typ
 as `@name` in a project comment, along with project assignments, and shows an
 unread count. That's in-app only; email would be a later Cloud Function.
 
-It works on a phone. The blue sidebar folds into a slide-in drawer behind the ☰
-button, and the account and lead actions (Backup, Restore, Roster, Sign out) move
-into a ⋯ menu next to search and the bell. The wide list tables (work orders,
-parts, budget, projects) turn into one card per row with labeled fields, so
-nothing runs off the edge; narrow detail tables scroll sideways instead. The
-projects board stacks its four status columns into full-width sections, and the
-calendar shows each deadline as a colored dot, tapping a day lists what's due.
-Form controls render at 16px so iOS doesn't zoom on focus, and buttons grow to a
-comfortable tap size on touch screens. The desktop layout is unchanged above
-roughly a tablet width.
+It works on phones and tablets. The blue sidebar folds into a slide-in drawer
+behind the ☰ button, and on a phone the account and lead actions (Backup,
+Restore, Roster, Sign out) move into a ⋯ menu next to search and the bell. The
+wide list tables (work orders, parts, budget, projects) turn into one card per
+row with labeled fields, so nothing runs off the edge; narrow detail tables
+scroll sideways instead. The projects board stacks its four status columns into
+full-width sections, and the calendar shows each deadline as a colored dot,
+tapping a day lists what's due. Form controls render at 16px so iOS doesn't zoom
+on focus, and buttons grow to a comfortable tap size on touch screens. Above
+roughly a tablet width the layout is the unchanged desktop one.
 
 The old single-file `../work-orders.html` stays as the offline backup and archive
 viewer, since it still opens any exported JSON anywhere, forever. Don't delete

@@ -282,15 +282,12 @@
     body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
     header.topbar { padding: 10px 14px; }
     main { padding: 16px 14px 72px; }
-  }
-  @media (max-width: 640px) {
-    .tb-desktop { display: none; }
-    .tb-morebtn { display: inline-flex; }
-    header.topbar h1 { font-size: 16px; }
 
-    /* Wide list tables collapse into stacked cards: header row hidden, each row
-       a card, each cell a `Label  value` line via the data-label set in core.js.
-       The table's own border/shadow is dropped so the cards own the chrome. */
+    /* Wide list tables collapse into stacked cards across the whole compact
+       range (matches the drawer breakpoint), so the 8-column Parts table can't
+       run off a tablet either. Header row hidden, each row a card, each cell a
+       `Label  value` line via the data-label set in core.js. The table's own
+       border/shadow is dropped so the cards own the chrome. */
     table.list { display: block; border: none; box-shadow: none; background: none; border-radius: 0; overflow: visible; }
     table.list tbody { display: block; }
     table.list tr:first-child { display: none; }            /* the <th> header row */
@@ -299,14 +296,16 @@
       border-radius: 8px; box-shadow: var(--shadow); padding: 10px 13px; margin-bottom: 10px;
     }
     table.list tr:hover td { background: none; }
+    /* Label floats left, the whole value (which may be several spans, e.g. a
+       date plus a "(179d late)" tag) stays grouped and right-aligned on the line
+       rather than being spread apart by a flex distribution. */
     table.list td {
-      display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
-      padding: 4px 0; border: none; border-top: none; text-align: right;
+      display: block; padding: 4px 0 4px 92px; border: none; border-top: none; text-align: right;
     }
     table.list td::before {
-      content: attr(data-label); flex: none; text-align: left;
+      content: attr(data-label); float: left; margin-left: -92px; text-align: left;
       font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      color: var(--muted); white-space: nowrap;
+      color: var(--muted); white-space: nowrap; line-height: 1.5;
     }
     /* First cell is the card title (id / name), not a label:value row. */
     table.list td:first-child {
@@ -320,6 +319,11 @@
     /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
        rather than blowing out their card. */
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  }
+  @media (max-width: 640px) {
+    .tb-desktop { display: none; }
+    .tb-morebtn { display: inline-flex; }
+    header.topbar h1 { font-size: 16px; }
 
     /* Projects board: one status section per row (Backlog / Active / Blocked /
        Done), each full width. Desktop drag isn't used here; a card tap opens it. */
