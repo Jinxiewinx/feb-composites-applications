@@ -9,8 +9,40 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-07-21
-Status: no work in flight, clean stopping point.
+Last updated: 2026-07-22
+Status: responsive UI/UX for the composites app in flight. Chunk 1 (shell) done
+and pushed; chunks 2–4 pending. Plan file:
+`~/.claude/plans/dapper-strolling-pine.md`.
+
+## Composites app responsive work (in flight)
+
+Making `03 Work Orders/app/` work on phones/tablets without changing desktop.
+Simon picked two forks: mobile nav is a **slide-in drawer** (hamburger), and wide
+list tables become **stacked cards** on narrow screens. Breakpoints: phone ≤640,
+tablet ≤900; `max-width` queries so desktop is the untouched default.
+
+Testing without a backend: serve `app/` on a local port, open in Chrome, then
+inject a stub `window.fb = {state:'ready', user, roster, save:()=>…}` plus the SN5
+seeds into `DB` and call `render()`. Everything is global scope so this gives a
+fully populated signed-in UI with no Firebase. `window.__seed()` in the page does
+it. Guard against horizontal overflow with
+`document.documentElement.scrollWidth <= innerWidth+1` per tab per width.
+
+Gotcha already hit: `closeDrawer()`/`toggleDrawer()` touch `document.body.classList`,
+which is undefined in the DOM-stub test harness (`tools/test_app.mjs`), so they
+must guard `if (document.body)`. Without it 19 tests threw. Back to 73 passing.
+
+Chunk 1 (done, pushed): breakpoint system replacing the old lone 760px rule;
+sidebar becomes a fixed off-canvas drawer slid in by `body.drawer-open` with a
+`#drawer-backdrop`; topbar gets a `.hamburger` (≤900) and, on phones (≤640),
+folds the secondary actions (`.tb-desktop`) into a `⋯` sheet via `openMoreMenu()`.
+Drawer reuses the existing `.sidebar` markup, no duplication. Verified in-browser
+at 390 and 1300px: drawer opens/closes, overflow menu lists lead actions, desktop
+unchanged.
+
+Remaining: chunk 2 stacked list tables (generic `data-label` post-render pass +
+CSS) + `table.sub` scroll wrappers; chunk 3 board/calendar/modal/touch targets;
+chunk 4 visual sweep + doc updates.
 
 ## Where things stand
 

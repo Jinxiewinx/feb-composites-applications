@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FEB Composites</title>
 <style>
   :root {
@@ -41,13 +41,42 @@
   header.topbar:empty { display: none; }
   header.topbar h1 { font-size: 17px; margin: 0 auto 0 0; color: var(--ink); font-weight: 600; }
   .topbar .actions { display: flex; align-items: center; gap: 8px; }
+  .tb-desktop { display: flex; align-items: center; gap: 8px; }
+  /* Hamburger + overflow "⋯" appear only on small screens (see media queries). */
+  .hamburger { display: none; border: none; background: none; font-size: 20px; line-height: 1; padding: 6px 8px; cursor: pointer; color: var(--ink); border-radius: 6px; }
+  .hamburger:hover { background: #f0f2f5; }
+  .tb-morebtn { display: none; }
+  .menu-actions { display: flex; flex-direction: column; gap: 8px; }
+  .menu-actions button { width: 100%; text-align: left; padding: 11px 12px; }
+  #drawer-backdrop { display: none; }
   main { max-width: 1180px; width: 100%; margin: 0 auto; padding: 18px 20px 60px; }
-  @media (max-width: 760px) {
-    #app { flex-direction: column; }
-    nav.sidebar { width: 100%; height: auto; position: static; flex-direction: row; overflow-x: auto; }
-    .sb-brand { display: none; }
-    .sb-nav { flex-direction: row; }
-    .content { }
+
+  /* ---- responsive: tablet (≤900) collapses the sidebar into a slide-in
+     drawer; phone (≤640) also folds the secondary topbar actions into a
+     "⋯" sheet. Desktop is the default above, untouched. ---- */
+  @media (max-width: 900px) {
+    .hamburger { display: inline-flex; align-items: center; }
+    nav.sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
+      width: 264px; max-width: 84vw; z-index: 40;
+      transform: translateX(-100%); transition: transform .22s ease;
+      box-shadow: 2px 0 18px rgba(9,30,66,.32); overflow-y: auto;
+      padding-top: env(safe-area-inset-top);
+    }
+    body.drawer-open nav.sidebar { transform: translateX(0); }
+    #drawer-backdrop {
+      display: block; position: fixed; inset: 0; z-index: 35;
+      background: rgba(9,30,66,.5); opacity: 0; pointer-events: none;
+      transition: opacity .22s;
+    }
+    body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
+    header.topbar { padding: 10px 14px; }
+    main { padding: 16px 14px 72px; }
+  }
+  @media (max-width: 640px) {
+    .tb-desktop { display: none; }
+    .tb-morebtn { display: inline-flex; }
+    header.topbar h1 { font-size: 16px; }
   }
 
   /* ---- avatars ---- */
@@ -285,6 +314,7 @@
 <link rel="stylesheet" href="print.css">
 </head>
 <body>
+<div id="drawer-backdrop" onclick="closeDrawer()"></div>
 <div id="app">
   <nav class="sidebar" id="sidebar"></nav>
   <div class="content">

@@ -145,7 +145,7 @@ function chip(coll, id, label) {
   const known = recById(coll, id);
   return `<span class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</span>`;
 }
-function openRecord(tab, id) { view = { ...view, tab, mode: "detail", id, edit: false }; render(); }
+function openRecord(tab, id) { view = { ...view, tab, mode: "detail", id, edit: false }; closeDrawer(); render(); }
 
 /* ---------- shared layup-stack viz + editor (parts + work orders) ---------- */
 function plyClass(m) {
@@ -481,6 +481,7 @@ const TABS = [
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "" };
+  closeDrawer();
   render();
 }
 function tabLabel() { const t = TABS.find(t => t.id === view.tab); return t ? t.label : ""; }
@@ -504,19 +505,46 @@ function renderTopbar() {
   if (st !== "ready") { el.innerHTML = ""; return; }
   const unread = (DB.notifications || []).filter(n => !n.read).length;
   el.innerHTML = `
+    <button class="hamburger no-print" title="Menu" aria-label="Menu" onclick="toggleDrawer()">☰</button>
     <h1>${esc(view.mode === "roster" ? "Roster" : tabLabel())}</h1>
     <div class="actions">
       <button class="icon-btn" title="Search (⌘K)" onclick="openSearch()">🔍</button>
       <button class="icon-btn bell" title="Notifications" onclick="openNotifs()">🔔${unread ? `<span class="badge">${unread}</span>` : ""}</button>
-      <button onclick="exportAll()">Backup</button>
-      ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
-      <button onclick="loadArchive()">Load SN5 archive</button>
-      <button onclick="openRoster()">Roster</button>` : ""}
-      <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
-      <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
-      <button onclick="fb.signOut()">Sign out</button>
+      <span class="tb-desktop">
+        <button onclick="exportAll()">Backup</button>
+        ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
+        <button onclick="loadArchive()">Load SN5 archive</button>
+        <button onclick="openRoster()">Roster</button>` : ""}
+        <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
+        <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
+        <button onclick="fb.signOut()">Sign out</button>
+      </span>
+      <button class="icon-btn tb-morebtn" title="More" aria-label="More" onclick="openMoreMenu()">⋯</button>
     </div>`;
 }
+// Small-screen overflow for the account/admin actions that don't fit the topbar.
+// Reuses the same global handlers the desktop buttons call.
+function openMoreMenu() {
+  const lead = isLead();
+  openModal(`
+    <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px">
+      ${avatar(myEmail(), 40)}
+      <div><div style="font-weight:600">${esc(signerName())}</div>
+        <div class="muted tny">${esc(myEmail())}${lead ? " · lead" : ""}</div></div>
+    </div>
+    <div class="menu-actions">
+      <button onclick="closeModal();setMyAvatar()">Change photo</button>
+      <button onclick="closeModal();exportAll()">Backup database</button>
+      ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">Restore from backup</button>
+      <button onclick="closeModal();loadArchive()">Load SN5 archive</button>
+      <button onclick="closeModal();openRoster()">Roster</button>` : ""}
+      <button class="danger" onclick="closeModal();fb.signOut()">Sign out</button>
+    </div>`);
+}
+/* ---------- mobile drawer ---------- */
+// Guard document.body: the DOM-stub test harness has no body element.
+function toggleDrawer() { if (document.body) document.body.classList.toggle("drawer-open"); }
+function closeDrawer() { if (document.body) document.body.classList.remove("drawer-open"); }
 
 /* ---------- global search (⌘K command palette) ---------- */
 function searchAll(q) {
@@ -595,4 +623,7 @@ document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
     if (window.fb && fb.state === "ready") { e.preventDefault(); openSearch(); }
   }
+  // Escape closes the mobile drawer (modal Escape is handled separately while a
+  // modal is open, so this only fires for the drawer).
+  if (e.key === "Escape" && document.body.classList.contains("drawer-open")) closeDrawer();
 });
