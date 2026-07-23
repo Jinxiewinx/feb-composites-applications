@@ -184,14 +184,24 @@ export function renderOverlay(main) {
       ctrl.appendChild(document.createTextNode("Amplify"));
       ctrl.appendChild(slider);
 
-      const tmp = document.createElement("canvas");
-      tmp.width = out.width; tmp.height = out.height;
-      const tctx = tmp.getContext("2d", { willReadFrequently: true });
-      tctx.drawImage(ca, 0, 0);
-      const ia = tctx.getImageData(0, 0, out.width, out.height);
-      tctx.clearRect(0, 0, out.width, out.height);
-      tctx.drawImage(cb, 0, 0);
-      const ib = tctx.getImageData(0, 0, out.width, out.height);
+      // Read each canvas's pixels directly rather than drawing both onto one
+      // scratch canvas and reading it back twice. That round-trip added a
+      // couple of least-significant-bit differences on a GPU-backed canvas, so
+      // two identical reports read as "0.00% differ" instead of identical.
+      // After jointCrop ca and cb share out's dimensions, so a direct read lines
+      // up. Fall back to the scratch path if a size ever mismatches.
+      const readCanvas = (cv) => {
+        if (cv.width === out.width && cv.height === out.height) {
+          return cv.getContext("2d").getImageData(0, 0, out.width, out.height);
+        }
+        const t = document.createElement("canvas");
+        t.width = out.width; t.height = out.height;
+        const tc = t.getContext("2d", { willReadFrequently: true });
+        tc.drawImage(cv, 0, 0);
+        return tc.getImageData(0, 0, out.width, out.height);
+      };
+      const ia = readCanvas(ca);
+      const ib = readCanvas(cb);
 
       const paintDiff = () => {
         const amp = S.overlay.amp;

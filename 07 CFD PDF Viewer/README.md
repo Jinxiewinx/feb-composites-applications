@@ -101,6 +101,15 @@ more of the strip than the pitch suggests, by up to 152 pt. Panel height is
 therefore measured from where the next panel or section heading actually begins.
 Assuming the pitch cropped the bottom off half the contours.
 
+Pages are also laid out in **content space**: each page's print margins are
+measured once at load (render small, scan for the first and last inked row) and
+dropped, so pages abut their ink rather than their paper edges. A convergence
+plot that Chromium split across a page break then composites as one continuous
+image with no white band through it, and the panel crop no longer mistakes that
+band for the gap under the title. `withContentSpace` in `indexer.js` does the
+geometry; `measureMargins` in `render.js` does the measurement. Both reports get
+identical trimming, so two identical reports still difference to exactly zero.
+
 So pages are stacked into a single continuous strip of PDF points, and a panel is
 a window into that strip. Rendering one is a crop that may composite two page
 canvases, which handles vector convergence plots, raster contours and

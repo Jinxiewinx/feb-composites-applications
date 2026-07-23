@@ -148,6 +148,40 @@ The window is frameless, so the toolbar is the drag region (`-webkit-app-region`
 and every control in it opts out, with an 84 px left inset on macOS for the
 traffic lights. Verified by computed style in both the dev and packaged builds.
 
+Second bug-fix round, 2026-07-22:
+
+Content-space layout. Pages now lay out with their print margins removed
+(`measureMargins` in render.js, `withContentSpace` in indexer.js), so a plot that
+spans a page break is one continuous image and the panel crop stops mistaking the
+seam's white band for the title gap. This is the core model change. Paper-space
+`absY` is kept as `paperAbsY`; everything reading geometry now reads content
+space. `pagesForRange` composites in content space, skipping each page's top/
+bottom margin. `measureMargins` needs a canvas so it runs in the browser after
+the (node-testable, text-only) `indexDocument`; the node test feeds synthetic
+margins to `withContentSpace` instead.
+
+Delete button: pdf.js 6 has no `PDFDocumentProxy.destroy()`. The old
+`d.pdf.destroy()` threw before the list filter ran, so nothing was removed. Now
+teardown goes through the loading task (`doc.task`), guarded, and the filter runs
+regardless.
+
+Zoom streaks were the diagonal `.placeholder` hatch flashing on every rebuild.
+Fixed by rescaling the existing canvases in place (`rescaleStrip`) and keeping the
+old bitmap until a debounced sharp re-raster lands, plus a flat placeholder.
+
+Overlay diff: reading the two cropped canvases directly instead of drawing both
+onto one scratch canvas and reading it back twice. The round-trip added a couple
+of LSB differences on a GPU-backed canvas, so identical reports read "0.00%
+differ" instead of identical. Render + jointCrop were already bit-exact.
+
+Overlay now defaults to swipe.
+
+Build gotcha: after editing app/, `open`ing dist/ runs the OLD app if a prior
+instance is still alive; and `asar extract-file | node` truncates, which looked
+like a stale build when it was not. Use full `asar extract` to verify, and kill
+every running instance before relaunching. Verified content-space runs in the
+packaged app via CDP (contentHeight 41288).
+
 ## Open questions for Simon
 
 Nothing blocking.

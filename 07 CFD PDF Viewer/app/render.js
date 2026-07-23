@@ -28,6 +28,43 @@ export function clearCache(docId) {
   for (const k of [...cache.keys()]) if (k.startsWith(docId + "|")) cache.delete(k);
 }
 
+/* Measure each page's ink margins, so withContentSpace can drop them.
+
+   Renders every page small (a plot is a big object, a coarse raster locates it
+   fine) and finds the first and last inked row. Returns per-page
+   { top, bottom } in page points. One pass at load; the pages view already
+   rasterises all of them at full size, so a low-res pass is cheap. A page that
+   fails to render contributes no trim rather than blocking the load. */
+export async function measureMargins(doc, opts = {}) {
+  const scale = opts.scale || 0.34;
+  const threshold = opts.threshold ?? 246;
+  const out = [];
+  for (const pg of doc.index.pages) {
+    let top = 0, bottom = 0;
+    try {
+      const { canvas } = await renderPage(doc, pg.index, scale);
+      const w = canvas.width, h = canvas.height;
+      const data = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      const inkRow = (y) => {
+        const base = y * w * 4;
+        for (let x = 0; x < w; x += 3) {
+          const i = base + x * 4;
+          if (data[i] < threshold || data[i + 1] < threshold || data[i + 2] < threshold) return true;
+        }
+        return false;
+      };
+      let a = 0, b = 0;
+      for (let y = 0; y < h; y++) { if (inkRow(y)) break; a++; }
+      for (let y = h - 1; y >= 0; y--) { if (inkRow(y)) break; b++; }
+      // A blank page (a === h) would trim everything; leave it whole instead.
+      if (a < h) { top = (a / h) * pg.height; bottom = (b / h) * pg.height; }
+    } catch { /* leave this page untrimmed */ }
+    out.push({ top, bottom });
+    if (opts.onProgress) opts.onProgress(pg.index, doc.index.pages.length);
+  }
+  return out;
+}
+
 /* Render one page at a given CSS scale. Device pixel ratio is folded in so text
    and thin plot lines stay crisp on a retina display. */
 export async function renderPage(doc, pageNum, scale) {
@@ -58,19 +95,29 @@ export async function renderPage(doc, pageNum, scale) {
   return job;
 }
 
-/* Which pages does a strip range touch, and where does it land on each? */
+/* Which pages does a content-space range touch, and where does it land on each?
+
+   Ranges are in content space (margins already collapsed, see withContentSpace),
+   so a page occupies [cy, cy + cHeight]. The source rows read from the page start
+   at cTop, which is what skips the print margin: the whitespace above cTop and
+   below cBottom is never sampled, so consecutive pages composite back to back
+   with no seam. Falls back to full-page coordinates when a page has no measured
+   margins (contentTop/Height absent). */
 export function pagesForRange(index, absY, height) {
   const out = [];
   for (const p of index.pages) {
-    const top = p.absY, bottom = p.absY + p.height;
+    const cy = p.cy != null ? p.cy : p.absY;
+    const cH = p.cHeight != null ? p.cHeight : p.height;
+    const cTop = p.cTop != null ? p.cTop : 0;
+    const top = cy, bottom = cy + cH;
     if (bottom <= absY || top >= absY + height) continue;
+    const takeFrom = Math.max(0, absY - top);            // offset into this page's content
+    const takeTo = Math.min(cH, absY + height - top);
     out.push({
       page: p.index,
-      // portion of this page to take, in page points
-      srcY: Math.max(0, absY - top),
-      srcH: Math.min(p.height, absY + height - top) - Math.max(0, absY - top),
-      // where that portion lands in the panel, in strip points
-      dstY: Math.max(0, top - absY),
+      srcY: cTop + takeFrom,                             // page points, past the top margin
+      srcH: takeTo - takeFrom,
+      dstY: Math.max(0, top - absY),                     // where it lands in the output
       pageHeight: p.height,
       pageWidth: p.width,
     });

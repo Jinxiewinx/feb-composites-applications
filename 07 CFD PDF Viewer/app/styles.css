@@ -136,16 +136,19 @@ main { flex: 1; min-width: 0; background: var(--canvas); position: relative; ove
 .col-h .nm { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-h .meta { color: var(--faint); margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .scroller { flex: 1; overflow: auto; padding: 14px 0 40px; scroll-behavior: auto; }
-.pagewrap { margin: 0 auto 14px; position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+/* Pages abut in content space now (margins dropped), so there is no gap between
+   consecutive page boxes. Shadow only the sides, so vertically-abutting pages
+   cast no hairline at the seam; the first and last page cap the ends. */
+.pagewrap { position: relative; background: #fff; box-shadow: 4px 0 12px -6px rgba(0,0,0,.4), -4px 0 12px -6px rgba(0,0,0,.4); }
+.pagewrap:first-child { box-shadow: 4px 0 12px -6px rgba(0,0,0,.4), -4px 0 12px -6px rgba(0,0,0,.4), 0 -3px 10px -6px rgba(0,0,0,.4); }
+.pagewrap:last-child { box-shadow: 4px 0 12px -6px rgba(0,0,0,.4), -4px 0 12px -6px rgba(0,0,0,.4), 0 4px 12px -6px rgba(0,0,0,.4); }
 .pagewrap canvas { display: block; width: 100%; height: 100%; }
-.pagewrap .placeholder {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: #b9bec7; font-size: 12px; background:
-    repeating-linear-gradient(45deg, #f2f3f5 0 10px, #eceef1 10px 20px);
-}
+/* Flat, not the old diagonal hatch: the hatch is what flashed as "streaky lines"
+   over the PDF on every zoom tick. */
+.pagewrap .placeholder { position: absolute; inset: 0; background: #f4f5f6; }
 .pagenum {
-  position: absolute; right: 6px; bottom: 6px; font-size: 10.5px; color: #7c8493;
-  background: rgba(255,255,255,.82); padding: 1px 6px; border-radius: 4px;
+  position: absolute; right: 6px; bottom: 4px; font-size: 10px; color: #9aa2ad;
+  background: rgba(255,255,255,.7); padding: 0 5px; border-radius: 4px; opacity: .6;
 }
 /* Marks the panel the user jumped to, so it is findable in a wall of plots. */
 .panelmark {

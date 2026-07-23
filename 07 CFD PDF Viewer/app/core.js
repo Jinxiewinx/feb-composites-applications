@@ -8,8 +8,8 @@
    rebuild their own subtree when render() is called. */
 
 import * as pdfjs from "./vendor/pdf.mjs";
-import { indexDocument } from "./indexer.js";
-import { clearCache } from "./render.js";
+import { indexDocument, withContentSpace } from "./indexer.js";
+import { clearCache, measureMargins } from "./render.js";
 import { renderPages, resyncColumns, resyncAndLock, setSync, zoomBy, zoomFit, setZoomListener, currentZoom } from "./pages.js";
 import { renderPanelView } from "./panels.js";
 import { renderOverlay } from "./compare.js";
@@ -27,7 +27,7 @@ export const S = {
   fit: true,
   sync: true,
   panelId: null,         // panel being compared / overlaid
-  overlay: { mode: "diff", a: 0, b: 1, blend: 0.5, swipe: 0.5, amp: 6 },
+  overlay: { mode: "swipe", a: 0, b: 1, blend: 0.5, swipe: 0.5, amp: 6 },
   query: "",
 };
 
@@ -68,8 +68,16 @@ export async function addDocs(sources) {
     renderChrome();
     try {
       const data = src.data || new Uint8Array(await src.file.arrayBuffer());
-      doc.pdf = await pdfjs.getDocument({ data }).promise;
+      // Keep the loading task: in pdf.js 6 the document proxy has no destroy(),
+      // so tearing a report down goes through the task, not the proxy.
+      doc.task = pdfjs.getDocument({ data });
+      doc.pdf = await doc.task.promise;
       doc.index = await indexDocument(doc.pdf);
+      // Drop the page print margins so a plot spanning a page break renders as
+      // one continuous image. Needs a canvas, so it runs here rather than inside
+      // the (node-testable) indexer.
+      const margins = await measureMargins(doc);
+      doc.index = withContentSpace(doc.index, margins);
       doc.loading = false;
       renderChrome(); render();
     } catch (e) {
@@ -88,7 +96,10 @@ export async function addDocs(sources) {
 
 export function removeDoc(id) {
   const d = S.docs.find(x => x.id === id);
-  if (d?.pdf) d.pdf.destroy();
+  // Tear down through the loading task, guarded: a failed teardown must never
+  // stop the report from being removed from the list, which is the bug this
+  // replaces (destroy() threw and the filter below never ran).
+  try { d?.task?.destroy?.(); } catch (e) { console.warn("pdf teardown failed", e); }
   clearCache(id);
   S.docs = S.docs.filter(x => x.id !== id);
   if (S.overlay.a >= S.docs.length) S.overlay.a = 0;

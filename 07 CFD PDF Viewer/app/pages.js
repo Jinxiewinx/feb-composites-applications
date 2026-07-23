@@ -11,7 +11,7 @@
    That is the "look at this one bit closer, then carry on together" move. */
 
 import { S, el, esc } from "./core.js";
-import { renderPage, panelRange } from "./render.js";
+import { renderRange, panelRange } from "./render.js";
 
 const COL_GAP = 22;              // page margin inside a column
 let cols = [];                   // { doc, scroller, scale }
@@ -151,15 +151,45 @@ function fitScale(c) {
   return avail / c.doc.index.pages[0].width;
 }
 
-/* Apply a zoom factor to one column, keeping `anchorY` (a strip position) at the
-   same place on screen. Rebuilds the strip in place instead of re-rendering the
-   whole view, so zooming no longer throws you back to page 1. */
+/* Apply a zoom factor to one column, keeping `anchorY` (a content-space
+   position) at the same place on screen. Rescales the existing strip in place,
+   keeping each already-rendered page visible (briefly soft, never wiped to a
+   placeholder) until the crisp re-raster lands. That is what removes the
+   streaks: the old code wiped to a diagonal placeholder on every tick. */
 function applyZoom(c, zoom, anchorY, anchorOffsetPx) {
   c.zoom = Math.max(0.15, Math.min(6, zoom));
   c.scale = fitScale(c) * c.zoom;
-  buildStrip(c);
+  rescaleStrip(c);
   if (anchorY != null) c.scroller.scrollTop = anchorY * c.scale + COL_GAP - (anchorOffsetPx || 0);
-  draw(c);
+  scheduleDraw(c);
+}
+
+/* Resize the existing boxes and their canvases to the new scale without
+   rebuilding. The old bitmap stretches to fill the new box (soft while a pinch
+   is in flight), and scheduleDraw re-renders it sharp once things settle. */
+function rescaleStrip(c) {
+  const colW = c.scroller.clientWidth;
+  for (const s of c.slots) {
+    const p = c.doc.index.pages[s.page - 1];
+    const cH = p.cHeight != null ? p.cHeight : p.height;
+    const cy = p.cy != null ? p.cy : p.absY;
+    const w = p.width * c.scale, h = cH * c.scale;
+    const y = cy * c.scale + COL_GAP;
+    const left = Math.max(COL_GAP, (colW - w) / 2);
+    s.y = y; s.h = h; s.done = false;
+    s.box.style.top = y + "px"; s.box.style.left = left + "px";
+    s.box.style.width = w + "px"; s.box.style.height = h + "px";
+    const cv = s.box.querySelector("canvas");
+    if (cv) { cv.style.width = "100%"; cv.style.height = "100%"; }
+  }
+  const last = c.slots[c.slots.length - 1];
+  c.strip.style.height = (last ? last.y + last.h : 0) + COL_GAP + "px";
+}
+
+/* Debounced sharp re-raster after a burst of zoom events. */
+function scheduleDraw(c) {
+  clearTimeout(c.drawTimer);
+  c.drawTimer = setTimeout(() => draw(c), 90);
 }
 
 /* Notifies core.js so the zoom readout in the toolbar stays truthful. */
@@ -204,18 +234,22 @@ function matchZoomToLeader() {
 
 export function currentZoom() { return cols.length ? cols[0].zoom : 1; }
 
-/* Placeholders sized to the real page, so the scrollbar is honest before
-   anything has rendered. Canvases drop in as they scroll into view. */
+/* Lay the pages out in CONTENT space, butted together with no gap, so a plot
+   that spans a page break reads as one continuous image. Each box shows a page's
+   content slice; the print margins were dropped by withContentSpace. */
 function buildStrip(c) {
   const { strip, doc, scale } = c;
   strip.innerHTML = "";
   c.slots = [];
-  let y = COL_GAP;
   const colW = c.scroller.clientWidth;
+  let bottom = COL_GAP;
   for (const p of doc.index.pages) {
-    const w = p.width * scale, h = p.height * scale;
-    // Centre the page when it is narrower than the column; when it is wider,
-    // sit at the gutter and let the column scroll sideways.
+    const cH = p.cHeight != null ? p.cHeight : p.height;
+    const cy = p.cy != null ? p.cy : p.absY;
+    const w = p.width * scale, h = cH * scale;
+    const y = cy * scale + COL_GAP;
+    // Centre when narrower than the column; when wider, sit at the gutter and
+    // let the column scroll sideways.
     const left = Math.max(COL_GAP, (colW - w) / 2);
     const box = el("div", "pagewrap");
     box.style.position = "absolute";
@@ -223,15 +257,16 @@ function buildStrip(c) {
     box.style.left = left + "px";
     box.style.width = w + "px";
     box.style.height = h + "px";
-    box.innerHTML = `<div class="placeholder">page ${p.index}</div><div class="pagenum">${p.index}</div>`;
+    box.innerHTML = `<div class="placeholder"></div><div class="pagenum">${p.index}</div>`;
     strip.appendChild(box);
     c.slots.push({ page: p.index, box, done: false, y, h });
-    y += h + 10;
+    bottom = y + h;
   }
-  strip.style.height = (y + COL_GAP) + "px";
+  strip.style.height = (bottom + COL_GAP) + "px";
 }
 
-/* Render the pages near the viewport, nearest first. */
+/* Render the pages near the viewport, nearest first. Renders each page's content
+   slice (not the whole paper page), so the margins never appear. */
 function draw(c) {
   const top = c.scroller.scrollTop, vh = c.scroller.clientHeight;
   const pad = vh * 0.75;
@@ -239,8 +274,14 @@ function draw(c) {
   wanted.sort((a, b) => Math.abs(a.y - top) - Math.abs(b.y - top));
   for (const slot of wanted) {
     slot.done = true;
-    renderPage(c.doc, slot.page, c.scale).then(({ canvas }) => {
-      if (!slot.box.isConnected) return;
+    const p = c.doc.index.pages[slot.page - 1];
+    const cH = p.cHeight != null ? p.cHeight : p.height;
+    const cy = p.cy != null ? p.cy : p.absY;
+    const targetW = p.width * c.scale;
+    renderRange(c.doc, cy, cH, targetW).then((canvas) => {
+      if (!slot.box.isConnected || slot.renderScale === c.scale) return;
+      slot.renderScale = c.scale;
+      canvas.style.width = "100%"; canvas.style.height = "100%";
       const ph = slot.box.querySelector(".placeholder");
       if (ph) ph.remove();
       const existing = slot.box.querySelector("canvas");

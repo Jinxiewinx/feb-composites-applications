@@ -165,6 +165,69 @@ export async function indexDocument(doc, opts = {}) {
   };
 }
 
+/* Re-lay the document in CONTENT space, dropping each page's print margins so
+   pages abut their ink rather than their paper edges.
+
+   The reason is the convergence plots: Chromium breaks a page in the middle of
+   one, so the bottom margin of the upper page and the top margin of the lower
+   page meet as a white band straight through the plot. In paper space that band
+   is real, so the plot renders split and the content crop mistakes the band for
+   the gap under the title. Collapsing the margins makes a seam-spanning plot one
+   continuous image and removes the false gap.
+
+   Kept as a separate pure step, fed measured margins, so indexDocument stays
+   text-only and node-testable while the margin measurement (which needs a
+   canvas) lives in the browser. `margins[i]` is { top, bottom } in page points
+   for page i; a missing entry means no trim, so the app still works if
+   measurement fails.
+
+   Paper-space fields are preserved with a `paper` prefix for reference; absY and
+   height are replaced with content-space values, since that is what every
+   consumer now reads. */
+export function withContentSpace(index, margins = []) {
+  const pages = index.pages.map((p, i) => {
+    const m = margins[i] || { top: 0, bottom: 0 };
+    const cTop = Math.max(0, m.top || 0);
+    const cBottom = Math.min(p.height, p.height - (m.bottom || 0));
+    const cHeight = Math.max(1, cBottom - cTop);
+    return { ...p, cTop, cBottom, cHeight };
+  });
+  let cy = 0;
+  for (const p of pages) { p.cy = cy; cy += p.cHeight; }
+  const contentHeight = cy;
+
+  // Paper (page, pageY) -> content-space y.
+  const toContent = (pageNum, pageY) => {
+    const p = pages[pageNum - 1];
+    if (!p) return pageY;
+    const clamped = Math.max(p.cTop, Math.min(p.cBottom, pageY));
+    return p.cy + (clamped - p.cTop);
+  };
+
+  const remap = (h) => ({ ...h, paperAbsY: h.absY, absY: toContent(h.page, h.pageY) });
+  const sections = index.sections.map(remap);
+  const setup = index.setup.map(remap);
+
+  // Panel extents recomputed against the content-space stops.
+  const panelsC = index.panels.map(remap).sort((a, b) => a.absY - b.absY);
+  const stops = [...panelsC.map(p => p.absY), ...sections.map(s => s.absY)].sort((a, b) => a - b);
+  const MAX_EXTENT = index.pitch * 1.6;
+
+  const panels = panelsC.map((p, i) => {
+    const next = stops.find(y => y > p.absY + 1);
+    const extent = (next == null ? contentHeight : next) - p.absY;
+    return {
+      ...p,
+      paperHeight: p.height,
+      height: Math.max(index.pitch * 0.5, Math.min(extent, MAX_EXTENT, contentHeight - p.absY)),
+      extent,
+      order: i,
+    };
+  });
+
+  return { ...index, pages, contentHeight, stripHeight: contentHeight, sections, setup, panels };
+}
+
 /* Match panels across documents. Name is the primary key, because that is what
    makes two reports comparable at all. Position is the fallback for a panel that
    was renamed or added, so a mismatch degrades to "line them up by order"

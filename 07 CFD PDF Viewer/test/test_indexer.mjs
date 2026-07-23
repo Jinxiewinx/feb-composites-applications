@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { indexDocument, matchPanels } from "../app/indexer.js";
+import { indexDocument, withContentSpace, matchPanels } from "../app/indexer.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SAMPLE = join(root, "DP_22.pdf");
@@ -133,6 +133,50 @@ t("panels that straddle a page break are handled", () => {
 });
 t("no panel runs off the end of the strip", () => {
   ix.panels.forEach(p => assert(p.absY + p.height <= ix.stripHeight + 0.01, p.name + " overruns the strip"));
+});
+
+console.log("content space (page margins collapsed):");
+// The browser measures real margins by rendering; node has no canvas, so feed
+// synthetic ones. Every page gets a 40pt top and 60pt bottom margin, which is
+// the shape of a real Chromium print export and enough to test the geometry.
+const synthMargins = ix.pages.map(() => ({ top: 40, bottom: 60 }));
+const cs = withContentSpace(ix, synthMargins);
+
+t("every page loses its margins in content space", () => {
+  cs.pages.forEach((p, i) => {
+    assert(Math.abs(p.cHeight - (p.height - 100)) < 0.01, "page " + (i + 1) + " content height wrong");
+    assert(p.cTop === 40 && Math.abs(p.cBottom - (p.height - 60)) < 0.01, "margins not applied");
+  });
+  assert(Math.abs(cs.contentHeight - (ix.stripHeight - 100 * ix.numPages)) < 0.5,
+    "content height should be the strip minus every page's margins");
+});
+t("pages abut with no gap in content space", () => {
+  for (let i = 1; i < cs.pages.length; i++) {
+    const prevBottom = cs.pages[i - 1].cy + cs.pages[i - 1].cHeight;
+    assert(Math.abs(cs.pages[i].cy - prevBottom) < 0.01, "gap between pages " + i + " and " + (i + 1));
+  }
+});
+t("a seam-spanning panel has no internal margin band in content space", () => {
+  // rwing-cl-rplot straddles a page break. In paper space its range crosses a
+  // seam; in content space the two margins are gone, so the whole panel maps to
+  // a continuous run whose covered pages abut.
+  const p = cs.panels.find(x => x.name === "rwing-cl-rplot");
+  assert(p, "panel present after remap");
+  const covered = cs.pages.filter(pg => pg.cy < p.absY + p.height && pg.cy + pg.cHeight > p.absY);
+  assert(covered.length >= 2, "this panel should still cross a page boundary");
+  for (let i = 1; i < covered.length; i++) {
+    assert(Math.abs(covered[i].cy - (covered[i - 1].cy + covered[i - 1].cHeight)) < 0.01,
+      "covered pages must abut, leaving no white band inside the plot");
+  }
+});
+t("panels keep their order and ids through the remap", () => {
+  assert(cs.panels.length === ix.panels.length, "panel count unchanged");
+  assert(cs.panels.every((p, i) => i === 0 || p.absY >= cs.panels[i - 1].absY), "still top to bottom");
+  assert(new Set(cs.panels.map(p => p.id)).size === cs.panels.length, "ids still unique");
+});
+t("no measured margins means no trim (graceful fallback)", () => {
+  const plain = withContentSpace(ix, []);
+  assert(Math.abs(plain.contentHeight - ix.stripHeight) < 0.5, "without margins the layout is unchanged");
 });
 
 console.log("matching:");
