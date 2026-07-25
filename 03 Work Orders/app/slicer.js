@@ -172,6 +172,62 @@ function meshBounds(tris) {
   return { x0, y0, z0, x1, y1, z1 };
 }
 
+/* ShopSabre max cut depth, CS-005 §5. A stack taller than this cannot be
+   machined in one go and must be split into sections with alignment features
+   (CS-003 §7.1.6). Real molds exceed it routinely — four of the eight largest
+   bodies in the SN5 undertray export are 8-10.6in tall. */
+const MAX_CUT_DEPTH_MM = 152.4;   // 6in
+
+/* ---------------- bodies ----------------
+
+   A real Fusion STL export is often an ASSEMBLY, not one solid. The SN5
+   undertray file is 31 separate bodies scattered over 8.7m of assembly space:
+   taking the whole file's bounding box would slice a nine-metre void and
+   produce nonsense. Split first, then let the user plan one body at a time. */
+
+/* Union-find over triangles sharing a welded vertex. Returns bodies sorted
+   largest-first by triangle count, each { tris, bounds }. */
+function splitBodies(tris, tol) {
+  const t = tol || WELD_TOL_MM;
+  const parent = new Int32Array(tris.length);
+  for (let i = 0; i < tris.length; i++) parent[i] = i;
+  const find = a => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[b] = a; };
+  const seen = new Map();
+  const key = (x, y, z) => `${Math.round(x / t)},${Math.round(y / t)},${Math.round(z / t)}`;
+  tris.forEach((tri, i) => {
+    for (const [x, y, z] of [[tri.ax, tri.ay, tri.az], [tri.bx, tri.by, tri.bz], [tri.cx, tri.cy, tri.cz]]) {
+      const k = key(x, y, z);
+      if (seen.has(k)) union(seen.get(k), i); else seen.set(k, i);
+    }
+  });
+  const groups = new Map();
+  tris.forEach((tri, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(tri);
+  });
+  return [...groups.values()]
+    .map(g => ({ tris: g, bounds: meshBounds(g) }))
+    .sort((a, b) => b.tris.length - a.tris.length);
+}
+
+/* A plain rectangular prism, so "I just want a 12 x 8 x 4 block" goes through
+   the IDENTICAL pipeline as a sliced STL — same layers, same blanks, same cut
+   list, same stack view. A separate box code path would be a second thing to
+   keep correct, and this is four lines. Walls only: a cap never crosses a slice
+   plane, so it cannot contribute a contour. */
+function boxTris(lenMm, widMm, hgtMm) {
+  const p = [{ x: 0, y: 0 }, { x: lenMm, y: 0 }, { x: lenMm, y: widMm }, { x: 0, y: widMm }];
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4, a = p[i], b = p[j];
+    out.push({ ax: a.x, ay: a.y, az: 0, bx: b.x, by: b.y, bz: 0, cx: b.x, cy: b.y, cz: hgtMm });
+    out.push({ ax: a.x, ay: a.y, az: 0, bx: b.x, by: b.y, bz: hgtMm, cx: a.x, cy: a.y, cz: hgtMm });
+  }
+  return out;
+}
+
 /* ---------------- slicing ---------------- */
 
 /* Intersect every triangle with the plane z, returning boundary segments.
@@ -485,6 +541,171 @@ function clipHalf(poly, inside, zPlane) {
   return out;
 }
 
+/* ---------------- exact slab boxes (the robust path) ----------------
+
+   The monotone fast path (union over a slab == section at its bottom) is an
+   OPTIMISATION, not a requirement. It buys a pretty contour cheaply. But real
+   molds break it: in the SN5 undertray export, body #1 flares 85mm outward
+   above its base and body #3 flares 680mm. Those bodies are still perfectly
+   real objects that need blanks — refusing them was the wrong call.
+
+   A blank only has to CONTAIN the mold. That can be computed EXACTLY, with no
+   assumption about draft at all, because we only ever need boxes:
+
+       for every triangle: clip it to the slab, take the XY box of what survives
+       merge overlapping boxes -> islands
+
+   No sampling (so no missed geometry between planes), no polygon booleans, and
+   it is the same clip the containment test uses to verify the answer.
+
+   Merging 40k triangle boxes pairwise would be O(n^2), so occupancy is
+   rasterised onto a grid of cell size = the merge inflation and connected cells
+   are grouped. A grid is slightly MORE eager to merge than the exact rule,
+   which is the safe direction: fewer, larger blanks, never a collision. */
+function slabBoxes(tris, z0, z1, inflate) {
+  const infl = inflate == null ? MARGIN_MAX_MM : inflate;
+  const cell = Math.max(infl, 1);
+  const cells = new Map();      // "i,j" -> box of everything touching that cell
+  const grow = (b, p) => {
+    b.x0 = Math.min(b.x0, p.x); b.y0 = Math.min(b.y0, p.y);
+    b.x1 = Math.max(b.x1, p.x); b.y1 = Math.max(b.y1, p.y);
+  };
+  for (const t of tris) {
+    const poly = clipTriangleToSlab(t, z0, z1);
+    if (!poly.length) continue;
+    const b = bboxOf(poly);
+    const i0 = Math.floor(b.x0 / cell), i1 = Math.floor(b.x1 / cell);
+    const j0 = Math.floor(b.y0 / cell), j1 = Math.floor(b.y1 / cell);
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        const k = i + "," + j;
+        let c = cells.get(k);
+        if (!c) { c = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, i, j }; cells.set(k, c); }
+        grow(c, { x: b.x0, y: b.y0 }); grow(c, { x: b.x1, y: b.y1 });
+      }
+    }
+  }
+  if (!cells.size) return [];
+  // Connected components of occupied cells, 8-connected.
+  const keys = [...cells.keys()];
+  const seen = new Set();
+  const groups = [];
+  for (const k of keys) {
+    if (seen.has(k)) continue;
+    const stack = [k];
+    seen.add(k);
+    let box = null;
+    while (stack.length) {
+      const cur = cells.get(stack.pop());
+      box = box ? unionBox(box, cur) : { x0: cur.x0, y0: cur.y0, x1: cur.x1, y1: cur.y1 };
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          const nk = (cur.i + di) + "," + (cur.j + dj);
+          if (cells.has(nk) && !seen.has(nk)) { seen.add(nk); stack.push(nk); }
+        }
+      }
+    }
+    groups.push({ box, members: [groups.length] });
+  }
+  // Enforce the exact merge rule on the handful of groups that survive.
+  return mergeToFixedPoint(groups.map(g => ({ box: g.box })), infl);
+}
+
+/* ---------------- choosing the boards ----------------
+
+   Simon, on the first version: "I had to pick the thicknesses myself, so I
+   don't really know what the purpose of the slicer was." Fair. Picking the
+   stack by hand is most of the thinking, and it is exactly the part a machine
+   should do — it can try every combination the rack actually holds and measure
+   which one wastes least, which a person cannot do by eye. */
+
+/* Multisets of available thicknesses that reach the mold height. Ordered
+   thick-at-bottom and thin-at-bottom are BOTH emitted, because order changes
+   where the slices land and therefore how well the steps follow the taper. */
+function compositionCandidates(heightMm, thicknesses, opts) {
+  opts = opts || {};
+  const maxLayers = opts.maxLayers || 8;
+  const avail = [...new Set(thicknesses)].filter(t => t > 0).sort((a, b) => b - a);
+  if (!avail.length) return [];
+  const maxOver = opts.maxOvershoot == null ? avail[0] : opts.maxOvershoot;
+  const found = [];
+  const seen = new Set();
+  (function walk(start, sum, picked) {
+    if (found.length > 400) return;
+    if (sum >= heightMm - 1e-6) {
+      if (sum - heightMm <= maxOver) {
+        const k = [...picked].sort((a, b) => a - b).join(",");
+        if (!seen.has(k)) { seen.add(k); found.push([...picked]); }
+      }
+      return;
+    }
+    if (picked.length >= maxLayers) return;
+    for (let i = start; i < avail.length; i++) {
+      picked.push(avail[i]);
+      walk(i, sum + avail[i], picked);
+      picked.pop();
+    }
+  })(0, 0, []);
+  // Least overshoot first, then fewest boards: both are real costs (wasted
+  // board, and a 4h clamp cycle per glue joint).
+  found.sort((a, b) => {
+    const oa = a.reduce((s, v) => s + v, 0) - heightMm, ob = b.reduce((s, v) => s + v, 0) - heightMm;
+    return (oa - ob) || (a.length - b.length);
+  });
+  const out = [];
+  for (const m of found.slice(0, opts.maxCandidates || 8)) {
+    const desc = [...m].sort((a, b) => b - a);
+    const asc = [...m].sort((a, b) => a - b);
+    out.push(desc);
+    if (asc.join() !== desc.join()) out.push(asc);
+  }
+  return out;
+}
+
+/* Board VOLUME consumed by a sliced result — the honest material cost. Blank
+   area alone would rank a thin wide layer as cheap as a thick narrow one. */
+function boardVolume(layers) {
+  let v = 0;
+  for (const L of layers) for (const b of L.blanks) v += boxW(b) * boxH(b) * L.thickness;
+  return v;
+}
+
+/* Thin boards ALWAYS win on volume alone: each layer's blank only has to cover
+   the union over its own slab, so subdividing can never use more board. Left
+   unchecked the planner would pick the thinnest stack every time and hand the
+   shop eight glue joints — and CS-003 §7.3 is a 4h clamp minimum per glue-up.
+   So an extra layer has to pay for itself in saved board.
+
+   The constant is what one extra glue joint is "worth" in board volume: about
+   2% of a 4x8ft x 1in sheet. It is a starting point, not physics — tune it once
+   somebody has glued a few stacks and has an opinion. */
+const LAYER_PENALTY_MM3 = 1.5e6;
+function compositionScore(layers, layerPenalty) {
+  const pen = layerPenalty == null ? LAYER_PENALTY_MM3 : layerPenalty;
+  return boardVolume(layers) + layers.length * pen;
+}
+
+/* ---------------- sections (the 6in rule) ----------------
+
+   A stack taller than the machine's cut depth is split into sections, and the
+   split can only fall on a BOARD boundary — you cannot machine half a board
+   off. Each section is machined separately, then stacked with dowels per
+   CS-003 §7.1.6. */
+function sectionize(layers, maxDepth) {
+  const cap = maxDepth || MAX_CUT_DEPTH_MM;
+  const sections = [];
+  let cur = [];
+  let h = 0;
+  for (const L of layers) {
+    if (cur.length && h + L.thickness > cap + 1e-6) { sections.push({ layers: cur, height: h }); cur = []; h = 0; }
+    cur.push(L);
+    h += L.thickness;
+  }
+  if (cur.length) sections.push({ layers: cur, height: h });
+  sections.forEach((s, i) => { s.index = i; s.layers.forEach(L => { L.section = i; }); });
+  return sections;
+}
+
 /* ---------------- top level ---------------- */
 
 /* Slice a mold into layers.
@@ -493,6 +714,38 @@ function clipHalf(poly, inside, zPlane) {
      opts        — { margin, inflate, simplifyEps, onProgress }
    Returns { layers, bounds, warnings }. Throws with a human sentence on a bad
    mesh; the message is shown to whoever picked the file. */
+/* Slice with the boards chosen automatically from what the rack holds.
+   Evaluates each candidate by actually slicing it and keeping the one that
+   consumes least board volume, then sections it for the 6in cut depth.
+   Returns the same shape as sliceMold plus { composition, considered }. */
+function planMold(tris, availableThicknessesMm, opts) {
+  opts = opts || {};
+  const bounds = meshBounds(tris);
+  const height = bounds.z1 - bounds.z0;
+  const cands = compositionCandidates(height, availableThicknessesMm, opts);
+  if (!cands.length) {
+    throw new Error(`No combination of the board thicknesses you have on the rack reaches ${(height / 25.4).toFixed(2)}in. Add thicker stock, or add more of what you have.`);
+  }
+  let best = null, bestVol = Infinity, bestComp = null;
+  const errors = [];
+  for (const comp of cands) {
+    try {
+      const r = sliceMold(tris, comp, { ...opts, simplifyEps: opts.scoreEps == null ? 1 : opts.scoreEps });
+      const v = compositionScore(r.layers, opts.layerPenalty);
+      if (v < bestVol) { bestVol = v; best = r; bestComp = comp; }
+    } catch (e) { errors.push(e); }
+  }
+  // Every candidate failing is a property of the MOLD (an overhang), not of the
+  // board choice — surface the real reason rather than "nothing worked".
+  if (!best) throw errors[0] || new Error("Could not slice this mold with any available board combination.");
+  // Re-slice the winner at full fidelity; scoring ran coarse for speed.
+  const final = sliceMold(tris, bestComp, opts);
+  final.composition = bestComp;
+  final.considered = cands.length;
+  final.boardVolumeMm3 = boardVolume(final.layers);
+  return final;
+}
+
 function sliceMold(tris, thicknesses, opts) {
   opts = opts || {};
   const margin = opts.margin == null ? MARGIN_MIN_MM : opts.margin;
@@ -507,31 +760,41 @@ function sliceMold(tris, thicknesses, opts) {
   const layers = [];
   let z = bounds.z0;
   let prevIslands = null;
-  let usedTol = 0;   // highest weld tolerance any layer needed, 0 if none did
+  let usedTol = 0;          // highest weld tolerance any layer needed, 0 if none did
+  let contourFailures = 0;  // layers whose cosmetic outline could not be stitched
+  let draftWarning = null;  // first CS-003 §7.1.4 draft violation seen, if any
   for (let i = 0; i < thicknesses.length; i++) {
     const z0 = z, z1 = z + thicknesses[i];
     z = z1;
     if (z0 >= bounds.z1) break; // composition overshoots the mold; extra boards unused
-    const st = stitchRelaxed(sliceAt(tris, z0 + SLICE_EPS_MM), WELD_TOL_MM);
-    if (st.tol > WELD_TOL_MM) usedTol = Math.max(usedTol, st.tol);
-    const loops = st.loops;
-    const islands = outerContours(loops).map(c => {
-      const contour = simplify(c, eps);
-      return { contour, box: bboxOf(contour) };
-    });
-    if (!islands.length) throw new Error(`Layer ${i + 1} came out empty — the mold may not sit flat on Z.`);
 
-    if (prevIslands) {
-      const bad = checkMonotone(prevIslands, islands, MONO_TOL_MM);
-      if (bad) {
-        const e = new Error(`This mold has an overhang or negative draft near X ${bad.region.x.toFixed(1)}, Y ${bad.region.y.toFixed(1)} (layer ${i + 1}). CS-003 §7.1.4 requires positive draft — it cannot be machined in 3 axes as drawn.`);
-        e.region = { ...bad.region, layer: i + 1 };
-        throw e;
-      }
-    }
-
-    const groups = mergeToFixedPoint(islands, inflate);
+    /* BLANKS come from the exact slab clip — no draft assumption, so an
+       overhung mold still gets a correct blank instead of a refusal. */
+    const groups = slabBoxes(tris, z0, Math.min(z1, bounds.z1), inflate);
+    if (!groups.length) throw new Error(`Layer ${i + 1} came out empty — the mold may not sit flat on Z.`);
     const blanks = groups.map(g => applyMargin(g.box, margin));
+
+    /* CONTOURS are cosmetic: they draw the mold outline inside the block so a
+       reviewer can see the fit. Best-effort — a rough or overhung mesh that
+       cannot be stitched must not cost anyone their cut list. */
+    let islands = [];
+    try {
+      const st = stitchRelaxed(sliceAt(tris, z0 + SLICE_EPS_MM), WELD_TOL_MM);
+      if (st.tol > WELD_TOL_MM) usedTol = Math.max(usedTol, st.tol);
+      islands = outerContours(st.loops).map(c => {
+        const contour = simplify(c, eps);
+        return { contour, box: bboxOf(contour) };
+      });
+    } catch (e) { contourFailures++; }
+
+    /* Draft is now a DESIGN-REVIEW finding, not a hard stop. CS-003 §7.1.4 says
+       a mold needs positive draft to be machined in 3 axes, and that is worth
+       telling the designer — but it is their call, and it does not change what
+       board we saw. */
+    if (prevIslands && prevIslands.length && islands.length && !draftWarning) {
+      const bad = checkMonotone(prevIslands, islands, MONO_TOL_MM);
+      if (bad) draftWarning = { ...bad.region, layer: i + 1 };
+    }
     layers.push({
       index: i, z0, z1, thickness: thicknesses[i],
       islands, groups: groups.map(g => ({ box: g.box, count: g.members.length })), blanks,
@@ -540,16 +803,22 @@ function sliceMold(tris, thicknesses, opts) {
     if (opts.onProgress) opts.onProgress((i + 1) / thicknesses.length);
   }
 
-  // Nesting lemma, asserted rather than assumed: every blank must sit on
-  // material below it. If this ever fires, the merge rule changed and the
-  // group-refinement argument no longer holds.
+  // Support: every blank should sit on material below it. With a drafted mold
+  // this is automatic; with an overhung one it genuinely is not, and the person
+  // gluing needs to know which layer hangs over air.
   for (let i = 1; i < layers.length; i++) {
     for (const up of layers[i].blanks) {
       if (!layers[i - 1].blanks.some(lo => boxContains(lo, up, MONO_TOL_MM))) {
-        warnings.push(`Layer ${i + 1} has a blank that overhangs the layer below it.`);
+        warnings.push(`Layer ${i + 1} has a blank that overhangs the layer below it — support it during glue-up so it cannot sag or shift.`);
         break;
       }
     }
+  }
+  if (draftWarning) {
+    warnings.push(`This mold has an overhang or negative draft near X ${draftWarning.x.toFixed(0)}, Y ${draftWarning.y.toFixed(0)} (layer ${draftWarning.layer}). CS-003 §7.1.4 wants positive draft for 3-axis machining — check it in CAD before booking the ShopSabre. The blanks below are still correct and contain the mold.`);
+  }
+  if (contourFailures) {
+    warnings.push(`${contourFailures} layer${contourFailures > 1 ? "s" : ""} could not draw a mold outline (rough mesh), so the stack view shows blocks only. Blank sizes are computed from the mesh directly and are unaffected.`);
   }
   // No two blanks in a layer may occupy the same place.
   for (const L of layers) {
@@ -562,7 +831,19 @@ function sliceMold(tris, thicknesses, opts) {
   if (usedTol > 0) {
     warnings.push(`This STL is rough: outlines only closed after loosening the join tolerance to ${usedTol}mm (normally ${WELD_TOL_MM}mm). The blanks are unaffected — the tolerance is far below anything CS-003 lets a mold contain — but a finer Fusion export would be cleaner.`);
   }
-  return { layers, bounds, warnings };
+
+  // Split for the machine's cut depth. This is not advisory: a stack over 6in
+  // cannot be machined in one setup, and CS-003 §7.1.6 wants the split designed
+  // in rather than improvised at the bed.
+  const maxDepth = opts.maxCutDepth == null ? MAX_CUT_DEPTH_MM : opts.maxCutDepth;
+  const sections = sectionize(layers, maxDepth);
+  if (sections.length > 1) {
+    warnings.push(`This mold is ${((bounds.z1 - bounds.z0) / 25.4).toFixed(2)}in tall, past the ShopSabre's ${(maxDepth / 25.4).toFixed(0)}in cut depth, so it is split into ${sections.length} sections machined separately. Design dowel and datum features into the mating faces in CAD (CS-003 §7.1.6) — do not improvise them at the machine.`);
+  }
+  const tooThick = layers.find(L => L.thickness > maxDepth + 1e-6);
+  if (tooThick) warnings.push(`Layer ${tooThick.index + 1} is a single board ${(tooThick.thickness / 25.4).toFixed(2)}in thick, deeper than the machine can cut. Use thinner boards for that layer.`);
+
+  return { layers, sections, bounds, warnings };
 }
 
 /* Node (tests) and the Worker both need these; the browser gets them as
@@ -573,7 +854,7 @@ if (typeof module !== "undefined" && module.exports) {
     polyArea, pointInPoly, bboxOf, unionBox, inflateBox, boxesOverlap, boxContains,
     boxW, boxH, mergeToFixedPoint, applyMargin, checkMonotone, simplify,
     clipTriangleToSlab, sliceMold,
-    stitchRelaxed,
-    MARGIN_MIN_MM, MARGIN_MAX_MM, WELD_TOL_MM, MAX_WELD_TOL_MM, DEDUPE_TOL_MM, SLICE_EPS_MM,
+    stitchRelaxed, splitBodies, boxTris, slabBoxes, compositionCandidates, compositionScore, sectionize, planMold, boardVolume,
+    MARGIN_MIN_MM, MARGIN_MAX_MM, WELD_TOL_MM, MAX_WELD_TOL_MM, DEDUPE_TOL_MM, SLICE_EPS_MM, MAX_CUT_DEPTH_MM,
   };
 }

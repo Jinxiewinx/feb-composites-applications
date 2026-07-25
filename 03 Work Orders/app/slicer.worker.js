@@ -18,23 +18,66 @@
 
 importScripts("slicer.js");
 
+/* Kept between messages so picking a body doesn't re-parse a 9MB mesh. */
+let cached = null;   // { key, bodies }
+
+function bodiesFor(msg) {
+  const key = msg.cacheKey;
+  if (cached && cached.key === key) return cached.bodies;
+  const parsed = parseSTL(msg.buffer);
+  const tris = scaleTris(parsed.tris, msg.unit);
+  const bodies = splitBodies(tris);
+  cached = { key, bodies, triangleCount: parsed.tris.length };
+  return bodies;
+}
+
 self.onmessage = function (e) {
   const msg = e.data || {};
-  if (msg.cmd !== "slice") return;
   try {
-    const parsed = parseSTL(msg.buffer);
-    const tris = scaleTris(parsed.tris, msg.unit);
-    const result = sliceMold(tris, msg.thicknesses, {
-      ...(msg.opts || {}),
-      onProgress: v => self.postMessage({ type: "progress", value: v }),
-    });
+    /* Step one for any STL: how many separate bodies is this? A real Fusion
+       export is often an assembly — the SN5 undertray is 31 bodies over 8.7m of
+       assembly space — and slicing the whole file's bounding box would plan a
+       nine-metre void. */
+    if (msg.cmd === "bodies") {
+      const bodies = bodiesFor(msg);
+      self.postMessage({
+        type: "bodies",
+        triangleCount: cached.triangleCount,
+        bodies: bodies.map((b, i) => ({
+          index: i, triangles: b.tris.length,
+          w: b.bounds.x1 - b.bounds.x0, d: b.bounds.y1 - b.bounds.y0, h: b.bounds.z1 - b.bounds.z0,
+        })),
+      });
+      return;
+    }
+    if (msg.cmd !== "slice") return;
+    // Either a box typed in by hand, or one body of an uploaded STL.
+    let tris, triangleCount;
+    if (msg.box) {
+      tris = boxTris(msg.box.len, msg.box.wid, msg.box.hgt);
+      triangleCount = tris.length;
+    } else {
+      const bodies = bodiesFor(msg);
+      const body = bodies[msg.bodyIndex || 0];
+      if (!body) throw new Error("That body is not in this file any more — re-pick it.");
+      tris = body.tris;
+      triangleCount = body.tris.length;
+    }
+    const opts = { ...(msg.opts || {}), onProgress: v => self.postMessage({ type: "progress", value: v }) };
+    // thicknesses null => choose them from what the rack actually holds.
+    const result = msg.thicknesses && msg.thicknesses.length
+      ? sliceMold(tris, msg.thicknesses, opts)
+      : planMold(tris, msg.available, opts);
     self.postMessage({
       type: "done",
       result: {
         layers: result.layers,
+        sections: (result.sections || []).map(s => ({ index: s.index, height: s.height, count: s.layers.length })),
         bounds: result.bounds,
         warnings: result.warnings,
-        triangleCount: parsed.tris.length,
+        composition: result.composition || msg.thicknesses,
+        considered: result.considered || 0,
+        triangleCount,
       },
     });
   } catch (err) {

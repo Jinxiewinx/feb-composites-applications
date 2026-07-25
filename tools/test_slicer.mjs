@@ -20,7 +20,7 @@ const src = readFileSync(join(root, "slicer.js"), "utf8").replace(/"use strict";
 // invisible to this module. Hand them out through globalThis, the same trick
 // test_app.mjs uses for core.js's lexical bindings.
 globalThis.__S = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,checkMonotone,simplify,clipTriangleToSlab,sliceMold,stitchRelaxed,MARGIN_MIN_MM,MARGIN_MAX_MM,WELD_TOL_MM,MAX_WELD_TOL_MM,DEDUPE_TOL_MM});");
+(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,checkMonotone,simplify,clipTriangleToSlab,sliceMold,stitchRelaxed,MARGIN_MIN_MM,MARGIN_MAX_MM,WELD_TOL_MM,MAX_WELD_TOL_MM,DEDUPE_TOL_MM,MAX_CUT_DEPTH_MM,splitBodies,boxTris,slabBoxes,planMold,compositionCandidates});");
 const S = globalThis.__S;
 
 /* ---------- mesh builders ----------
@@ -335,10 +335,35 @@ t("boards that do not add up to the mold height are refused", () => {
   const tris = frustum(200, 80, 0, 100);
   throws(() => S.sliceMold(tris, [25, 25], {}), /add up to/i);
 });
-t("an overhung mold is refused end to end, with the region attached", () => {
-  const tris = frustum(80, 200, 0, 100);
-  const e = throws(() => S.sliceMold(tris, [25, 25, 25, 25], {}), /overhang|draft/i);
-  assert(e.region && Number.isFinite(e.region.x), "the error should carry a location for the UI");
+t("CRITICAL an overhung mold still gets a blank that CONTAINS it, and a warning", () => {
+  // Behaviour change, deliberate. Monotonicity was only ever an optimisation
+  // that let us slice once per layer; a blank merely has to contain the mold.
+  // Real molds break draft — SN5 undertray body #1 flares 85mm above its base,
+  // body #3 flares 680mm — and refusing them was wrong. Draft is now a
+  // design-review finding (CS-003 §7.1.4), not a hard stop.
+  const tris = frustum(80, 200, 0, 100);   // widens upward: negative draft
+  const out = S.sliceMold(tris, [25, 25, 25, 25], {});
+  assert(out.layers.length === 4, "an overhung mold must still plan");
+  assert(out.warnings.some(w => /draft|overhang/i.test(w)), "and must still say the draft is wrong: " + out.warnings.join("; "));
+  // The guarantee that matters: every triangle, clipped to its slab, inside a blank.
+  for (const L of out.layers) {
+    for (const tri of tris) {
+      const poly = S.clipTriangleToSlab(tri, L.z0 + 0.01, L.z1 - 0.01);
+      if (poly.length < 3) continue;
+      assert(L.blanks.some(b => poly.every(p =>
+        p.x >= b.x0 - 0.01 && p.x <= b.x1 + 0.01 && p.y >= b.y0 - 0.01 && p.y <= b.y1 + 0.01)),
+        `overhung layer ${L.index + 1} has mold material outside every blank`);
+    }
+  }
+});
+t("a mold taller than the 6in cut depth splits into sections at board boundaries", () => {
+  const tris = frustum(200, 120, 0, 9 * 25.4);          // 9in tall
+  const out = S.sliceMold(tris, new Array(9).fill(25.4), {});
+  assert(out.sections.length === 2, "9in over a 6in cut depth is two sections, got " + out.sections.length);
+  for (const s of out.sections) assert(s.height <= S.MAX_CUT_DEPTH_MM + 1e-6, "no section may exceed the cut depth");
+  const total = out.sections.reduce((n, s) => n + s.layers.length, 0);
+  assert(total === out.layers.length, "every layer belongs to exactly one section");
+  assert(out.warnings.some(w => /cut depth|section/i.test(w)), "and the split must be called out for CS-003 §7.1.6 dowels");
 });
 t("a two-spike mold gives two blanks on the upper layers and one below", () => {
   const base = prism(rect(0, 0, 900, 300), 0, 25);

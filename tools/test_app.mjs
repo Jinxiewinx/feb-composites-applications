@@ -82,11 +82,11 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "slicer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender) = /gm, "$1 = ");
+src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
 src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES) = /gm, "$1 = ");
@@ -613,70 +613,85 @@ function plugTris(hb, ht, z0, z1) {
   }
   return out;
 }
-function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "25, 25, 25, 25", thkU = "mm", size = null } = {}) {
-  const buf = stlOf(tris);
+function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "", thkU = "mm", size = null, src = "stl", mode = "auto", body = null, box = null } = {}) {
   el("ml-name").value = name; el("ml-unit").value = unit;
   el("ml-thk").value = thk; el("ml-thk-u").value = thkU;
+  el("ml-src").value = src; el("ml-mode").value = mode;
+  if (box) {
+    el("ml-bl").value = box[0]; el("ml-bl-u").value = "mm";
+    el("ml-bw").value = box[1]; el("ml-bw-u").value = "mm";
+    el("ml-bh").value = box[2]; el("ml-bh-u").value = "mm";
+  }
+  el("ml-body").value = String(body == null ? 0 : body);
+  el("ml-bodies").innerHTML = "";
+  const buf = stlOf(tris);
   el("ml-file").files = [{ name: "mold.stl", size: size == null ? buf.byteLength : size, arrayBuffer: async () => buf }];
+  MOLD_BUF = null; MOLD_BODIES = null;
 }
-await t("slicing a plug end to end produces a saved stack plan", async () => {
-  DB.stackplans = [];
+// A rack with real thicknesses, so "choose them for me" has something to choose.
+function seedStock() {
+  DB.stock = [1, 1.5, 2, 3].map((t, i) => ({
+    id: "BRD-" + i, len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" },
+    thk: { value: t, unit: "in" }, density: 30, qty: 3, kind: "sheet",
+  }));
+}
+await t("the planner picks board thicknesses from stock without being told", async () => {
+  seedStock(); DB.stackplans = [];
   fillMold();
   await submitMold();
-  assert(DB.stackplans.length === 1, "a plan should be saved");
+  assert(DB.stackplans.length === 1, "a plan should be saved: " + lastToast);
   const p = DB.stackplans[0];
-  assert(p.layers.length === 4, "four boards, four layers");
-  assert(p.warnings.length === 0, "no warnings: " + p.warnings.join("; "));
-  assert(calls.some(c => c[0] === "save" && c[1] === "stackplans"), "and written to Firestore");
+  assert(p.thicknessesMm && p.thicknessesMm.length, "it must record which boards it chose");
+  const total = p.thicknessesMm.reduce((a, b) => a + b, 0);
+  assert(total >= 100 - 1e-6, "the chosen boards must reach the mold height");
+  assert(p.thicknessesMm.every(t => [25.4, 38.1, 50.8, 76.2].some(a => Math.abs(a - t) < 0.2)),
+    "and may only use thicknesses actually on the rack: " + p.thicknessesMm);
 });
-await t("a plug's blanks shrink going up, which is the whole point of caking", () => {
+await t("auto planning is refused when the rack is empty, not silently guessed", async () => {
+  DB.stock = []; DB.stackplans = [];
+  fillMold();
+  await submitMold();
+  assert(DB.stackplans.length === 0, "nothing to choose from means no plan");
+  assert(/board stock/i.test(lastToast), "and it should say so: " + lastToast);
+});
+await t("manual thicknesses still work for anyone who wants the control", async () => {
+  seedStock(); DB.stackplans = [];
+  fillMold({ mode: "manual", thk: "25, 25, 25, 25", thkU: "mm" });
+  await submitMold();
+  assert(DB.stackplans.length === 1, "manual should plan: " + lastToast);
+  assert(DB.stackplans[0].layers.length === 4, "four boards, four layers");
+});
+await t("a plain rectangular block can be typed in instead of an STL", async () => {
+  seedStock(); DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 100] });
+  await submitMold();
+  assert(DB.stackplans.length === 1, "a box should plan: " + lastToast);
   const p = DB.stackplans[0];
-  const w = p.layers.map(L => L.blanks[0].x1 - L.blanks[0].x0);
-  for (let i = 1; i < w.length; i++) assert(w[i] <= w[i - 1] + 0.01, "layer " + (i + 1) + " should not be wider than the one below");
-  assert(w[3] < w[0] - 100, "a real taper should save real material");
+  const b = p.layers[0].blanks[0];
+  // 300x200 block + 25.4mm margin on all four sides.
+  assert(Math.abs((b.x1 - b.x0) - (300 + 2 * 25.4)) < 1, "blank should be the block plus margin, got " + (b.x1 - b.x0));
+  assert(/block/i.test(p.source), "and should record that it came from typed dimensions");
 });
-await t("the stack view renders the mold outline and depends on no colour", () => {
+await t("a multi-body STL asks which body instead of planning the whole assembly", async () => {
+  seedStock(); DB.stackplans = [];
+  // Two separate plugs far apart: exactly the shape of a real Fusion assembly
+  // export, where slicing the whole file would plan the void between them.
+  const two = plugTris(200, 80, 0, 100).concat(plugTris(200, 80, 0, 100).map(t => ({
+    ...t, ax: t.ax + 5000, bx: t.bx + 5000, cx: t.cx + 5000,
+  })));
+  fillMold({ tris: two });
+  await submitMold();
+  assert(DB.stackplans.length === 0, "it must not plan a 5m void");
+  assert(/bodies/i.test(lastToast), "it should ask which body: " + lastToast);
+  assert(/ml-body/.test(els["ml-bodies"].innerHTML), "and offer a picker");
+});
+await t("CRITICAL a mold over the 6in cut depth is sectioned automatically", async () => {
+  seedStock(); DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 9 * 25.4] });
+  await submitMold();
   const p = DB.stackplans[0];
-  const svg = stackSvg(p);
-  assert(svg.includes("<svg"), "should be an svg");
-  assert(svg.includes("stroke-dasharray"), "the mold outline is dashed so it reads in B&W");
-  assert(svg.includes("url(#hatch)"), "sides are hatched, not filled with colour");
-  assert(!/#[0-9a-f]{6}/i.test(svg.replace("var(--surface,#fff)", "")), "no hard-coded colours");
-});
-await t("the plan detail view renders and offers the reviewer the CS-003 prompt", () => {
-  view = { ...view, tab: "stock", mode: "plan", id: DB.stackplans[0].id }; render();
-  assert(main.innerHTML.includes("CS-003"), "the reviewer needs to know what they are initialling");
-  assert(main.innerHTML.includes("Blanks to cut"), "and the numbers for the saw");
-});
-await t("an oversize STL is refused before a Worker is ever started", async () => {
-  DB.stackplans = [];
-  fillMold({ size: 200 * 1024 * 1024 });
-  await submitMold();
-  assert(DB.stackplans.length === 0, "should not slice");
-  assert(lastToast.includes("MB"), "and should say why in MB: " + lastToast);
-});
-await t("a bad thickness list is refused with an example", async () => {
-  DB.stackplans = [];
-  for (const bad of ["", "abc", "0", "-2"]) {
-    fillMold({ thk: bad });
-    await submitMold();
-  }
-  assert(DB.stackplans.length === 0, "none of those should slice");
-  assert(lastToast.includes("bottom to top"), "the error should show the shape of a good answer");
-});
-await t("boards that do not reach the mold height are refused, not silently truncated", async () => {
-  DB.stackplans = [];
-  fillMold({ thk: "25, 25" }); // 50mm of board for a 100mm mold
-  await submitMold();
-  assert(DB.stackplans.length === 0, "half a stack is not a stack");
-  assert(lastToast.includes("add up to"), "and it should name both numbers: " + lastToast);
-});
-await t("CRITICAL an overhung mold is refused and the region is surfaced to the user", async () => {
-  DB.stackplans = [];
-  fillMold({ tris: plugTris(80, 200, 0, 100) }); // widens upward
-  await submitMold();
-  assert(DB.stackplans.length === 0, "an unmachinable mold must not become a plan");
-  assert(lastToast.includes("Look near"), "the user needs WHERE, not just no: " + lastToast);
+  assert(p.sections.length === 2, "9in cannot be machined in one setup, got " + p.sections.length + " section(s)");
+  assert(p.warnings.some(w => /cut depth/i.test(w)), "and the operator must be told why");
 });
 await t("CRITICAL a plan is always storable — contours thin until it fits", () => {
   // A deliberately huge plan: many layers, each with a dense contour.

@@ -17,6 +17,74 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
 
+## Mold Stack Planner — phase 2 (auto boards, sections, cut list)
+
+**SN5 consumed ~20 sheets**, so the optimizer is worth building — a 20% saving
+is 4 sheets. Offcuts ARE stored, down to about 4x10in. Mostly 30 pcf. And "you
+can only cut all the way across" is a HARD constraint, not a preference.
+
+Built on top of phase 1: the planner now picks board thicknesses itself from
+what the rack holds, sections anything over the 6in cut depth, accepts a typed
+rectangular block as well as an STL, and emits a guillotine cut list.
+
+### What the two real SN5 molds taught us
+
+`Clamshell Mold With Mating Surface.stl` — one body, 889 x 533 x 61.6mm, i.e.
+exactly 35.00 x 21.00 x 2.43in. Designed in inches, exported in mm. This is the
+mold that hit the 889.00 stitching bug.
+
+`Undertray Mold.stl` — **31 separate bodies** scattered over 8.7m of assembly
+space. Taking the whole file's bounding box plans a nine-metre void. Individual
+bodies are sane (43x45x8in, 70x54x10in, 52x46x10.6in) and FOUR of the eight
+largest exceed the 6in cut depth. Multi-body handling is not optional, and the
+6in rule is confirmed by real data rather than theory.
+
+### The big design correction
+
+**Monotonicity was only ever an OPTIMISATION.** It let us slice once per layer
+(union over a slab == section at its bottom, given positive draft). Real molds
+break it: undertray body #1 flares 85mm outward above its base, body #3 flares
+680mm — in every one of the six axis orientations. Refusing them was wrong.
+
+A blank only has to CONTAIN the mold, and that is computable exactly with no
+draft assumption, because we only ever need boxes: clip every triangle to the
+slab, take the XY box of what survives, merge overlapping boxes (`slabBoxes`).
+No sampling, no polygon booleans, same clip the containment test already used.
+Occupancy is rasterised on a grid of cell = merge inflation so merging is not
+O(n^2); a grid merges slightly MORE eagerly, which is the safe direction.
+
+So now: blanks come from the exact path, contours are cosmetic (best-effort, for
+the drawn outline), and bad draft is a CS-003 §7.1.4 design-review WARNING
+instead of a refusal.
+
+### Other things worth not rediscovering
+
+- **Thin boards always win on volume alone** — each layer only covers its own
+  slab, so subdividing can never use more board. Without a counterweight the
+  planner picks the thinnest stack every time and hands the shop 8 glue joints
+  at a 4h clamp each. `LAYER_PENALTY_MM3` (~2% of a sheet) is what an extra
+  glue joint must save to be worth it. Tune it once somebody has glued a few.
+- **The packer models cuts as a binary tree, not placements.** Guillotine
+  feasibility is then structural rather than checked afterwards. The span of the
+  SECOND cut at each node depends on whether the FIRST happened — if the
+  leftover was thinner than the blade there is no cut and the piece in hand is
+  still the full rectangle. Get that wrong and you print a notch, which a saw
+  cannot make.
+- **Kerf is not optional in the test either.** The cut-replay simulation must
+  separate pieces by the blade width; modelling them as touching makes every
+  downstream boundary drift and spans stop matching.
+- **Boards are tried smallest-first** so offcuts get spent before fresh sheets.
+- Density is NOT interchangeable (CS-004), so a 1in 30lb blank will report a
+  shortfall rather than quietly come off a 1in 60lb board.
+
+### Still open
+
+- Remnant write-back into stock (the packer already returns reusable offcuts).
+- Work-order attachment + the CS-003 §7.2 blocker wiring.
+- Elastic margin band / strip-sharing quantisation — the design doc's best idea,
+  still unimplemented; margins are currently a fixed 1in.
+- `@berkeley.edu` fixtures in `tools/test_app.mjs` on a public repo.
+
 ## Mold Stack Planner — phase 1 (built, uncommitted)
 
 New **Stock** tab. Two jobs: a live tooling-board inventory (CS-011 wants one and

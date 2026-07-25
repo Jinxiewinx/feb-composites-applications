@@ -55,6 +55,7 @@ function thkKey(b) { return `${Math.round(toMm(b.thk) * 10) / 10}mm · ${b.densi
 /* ---------- list ---------- */
 function renderStock() {
   if (view.mode === "plan") return renderStackPlan();
+  if (view.mode === "cuts") return renderCutList();
   const D = DB.stock || [];
   const q = (view.q || "").toLowerCase();
   const rows = D
@@ -70,7 +71,8 @@ function renderStock() {
   return `
   <div class="toolbar no-print">
     <button class="primary" onclick="newBoard()">+ Add board</button>
-    <button onclick="uploadMold()">${icon("parts", 15)} Slice a mold</button>
+    <button onclick="uploadMold()">${icon("parts", 15)} Plan a mold</button>
+    ${(DB.stackplans||[]).length ? `<button onclick="view={...view,mode:'cuts',cutSel:''};render()">${icon("print", 15)} Cut list</button>` : ""}
   </div>
   ${plans.length ? `<div class="card">
     <h3>Mold stack plans <span class="muted">(${plans.length})</span></h3>
@@ -207,13 +209,39 @@ const PLAN_BYTE_BUDGET = 900000;
 /* Run the slicer. Uses a Worker in the browser so the tab stays alive; falls
    back to a direct call where Worker is absent (the node test harness), which
    is the same code either way because slicer.js is pure. */
-function runSlice(buffer, unit, thicknesses, opts, onProgress) {
+/* Same job, no Worker: used by the node test harness, and it keeps the two
+   paths honest because slicer.js is pure either way. */
+function runSliceInline(msg) {
+  let tris;
+  if (msg.box) tris = boxTris(msg.box.len, msg.box.wid, msg.box.hgt);
+  else {
+    const bodies = splitBodies(scaleTris(parseSTL(msg.buffer).tris, msg.unit));
+    if (msg.cmd === "bodies") {
+      return {
+        type: "bodies", triangleCount: 0,
+        bodies: bodies.map((b, i) => ({
+          index: i, triangles: b.tris.length,
+          w: b.bounds.x1 - b.bounds.x0, d: b.bounds.y1 - b.bounds.y0, h: b.bounds.z1 - b.bounds.z0,
+        })),
+      };
+    }
+    tris = (bodies[msg.bodyIndex || 0] || {}).tris;
+    if (!tris) throw new Error("That body is not in this file.");
+  }
+  const r = (msg.thicknesses && msg.thicknesses.length)
+    ? sliceMold(tris, msg.thicknesses, msg.opts || {})
+    : planMold(tris, msg.available, msg.opts || {});
+  return {
+    layers: r.layers, sections: (r.sections || []).map(s => ({ index: s.index, height: s.height, count: s.layers.length })),
+    bounds: r.bounds, warnings: r.warnings, composition: r.composition || msg.thicknesses,
+    considered: r.considered || 0, triangleCount: tris.length,
+  };
+}
+
+function runSlice(msg, onProgress) {
   if (typeof Worker === "undefined") {
     return new Promise((resolve, reject) => {
-      try {
-        const parsed = parseSTL(buffer);
-        resolve(sliceMold(scaleTris(parsed.tris, unit), thicknesses, opts || {}));
-      } catch (e) { reject(e); }
+      try { resolve(runSliceInline(msg)); } catch (e) { reject(e); }
     });
   }
   return new Promise((resolve, reject) => {
@@ -225,6 +253,7 @@ function runSlice(buffer, unit, thicknesses, opts, onProgress) {
     w.onmessage = (e) => {
       const m = e.data || {};
       if (m.type === "progress") { if (onProgress) onProgress(m.value); return; }
+      if (m.type === "bodies") return finish(resolve, m);
       if (m.type === "done") return finish(resolve, m.result);
       if (m.type === "error") {
         const err = new Error(m.message);
@@ -234,7 +263,7 @@ function runSlice(buffer, unit, thicknesses, opts, onProgress) {
     };
     // Fires on an uncaught throw AND is our only signal if the worker dies.
     w.onerror = () => finish(reject, new Error("The slicer stopped unexpectedly. The mesh may be too large for this browser — try a coarser STL export."));
-    w.postMessage({ cmd: "slice", buffer, unit, thicknesses, opts: opts || {} });
+    w.postMessage(msg);
   });
 }
 
@@ -257,52 +286,150 @@ function fitPlanForStorage(plan) {
   return { plan, notes };
 }
 
+/* Distinct thicknesses actually on the rack, in mm — what the planner is
+   allowed to choose from. No point offering a 3in stack we do not own. */
+function stockThicknessesMm(density) {
+  const d = density == null ? null : Number(density);
+  const set = new Map();
+  for (const b of (DB.stock || [])) {
+    if (d != null && Number(b.density) !== d) continue;
+    const mm = toMm(b.thk);
+    if (Number.isFinite(mm) && mm > 0) set.set(Math.round(mm * 10) / 10, true);
+  }
+  return [...set.keys()].sort((a, b) => a - b);
+}
+
 function uploadMold() {
+  const avail = stockThicknessesMm();
   openModal(`
-    <h2>Slice a mold</h2>
+    <h2>Plan a mold</h2>
     <div class="field"><label>Name</label><input id="ml-name" placeholder="e.g. UT nose plug"></div>
-    <div class="field"><label>Mold STL</label><input id="ml-file" type="file" accept=".stl,model/stl,application/sla"></div>
-    <div class="field"><label>STL units</label><select id="ml-unit">
-      <option value="mm">millimetres</option><option value="in">inches</option>
-    </select><span class="muted tny">An STL carries no units. Getting this wrong is a 25.4&times; mistake.</span></div>
-    <div class="field"><label>Board thicknesses, bottom to top</label>
+    <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
+      <option value="stl">an STL file</option>
+      <option value="box">a rectangular block</option>
+    </select></div>
+    <div id="ml-stl">
+      <div class="field"><label>Mold STL</label><input id="ml-file" type="file" accept=".stl,model/stl,application/sla"></div>
+      <div class="field"><label>STL units</label><select id="ml-unit">
+        <option value="mm">millimetres</option><option value="in">inches</option>
+      </select><span class="muted tny">An STL carries no units. Getting this wrong is a 25.4&times; mistake.</span></div>
+    </div>
+    <div id="ml-box" style="display:none">
+      <div class="field"><label>Length</label><input id="ml-bl" placeholder="0"><select id="ml-bl-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="field"><label>Width</label><input id="ml-bw" placeholder="0"><select id="ml-bw-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="field"><label>Height</label><input id="ml-bh" placeholder="0"><select id="ml-bh-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+    </div>
+    <div class="field"><label>Boards</label><select id="ml-mode" onchange="moldModeChanged()">
+      <option value="auto">choose them for me, from stock</option>
+      <option value="manual">I'll pick the thicknesses</option>
+    </select></div>
+    <div class="field" id="ml-avail"><label></label><span class="muted tny">${avail.length
+      ? `Available on the rack: ${avail.map(t => (Math.round(t / 25.4 * 100) / 100) + "″").join(", ")}`
+      : `<b>No board stock recorded yet</b> — add boards first, or the planner has nothing to choose from.`}</span></div>
+    <div class="field" id="ml-manual" style="display:none"><label>Thicknesses, bottom to top</label>
       <input id="ml-thk" placeholder="e.g. 2, 2, 1">
       <select id="ml-thk-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select>
     </div>
+    <div id="ml-bodies"></div>
     <div id="ml-progress" class="muted tny"></div>
-    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitMold()">Slice</button></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitMold()">Plan</button></div>
   `);
 }
+function moldSrcChanged() {
+  const stl = document.getElementById("ml-src").value === "stl";
+  const a = document.getElementById("ml-stl"), b = document.getElementById("ml-box");
+  if (a) a.style.display = stl ? "" : "none";
+  if (b) b.style.display = stl ? "none" : "";
+}
+function moldModeChanged() {
+  const m = document.getElementById("ml-manual");
+  if (m) m.style.display = document.getElementById("ml-mode").value === "manual" ? "" : "none";
+}
+
+let MOLD_BUF = null;     // last STL read, so picking a body doesn't re-read the file
+/* null = this file has not been probed for separate bodies yet. Explicit state
+   rather than "is the picker in the DOM?" — control flow that depends on an
+   element existing is invisible to tests and breaks the moment markup moves. */
+let MOLD_BODIES = null;
 
 async function submitMold() {
   const val = k => (document.getElementById(k) || {}).value || "";
   const name = String(val("ml-name")).trim();
-  const fileEl = document.getElementById("ml-file");
-  const f = fileEl && fileEl.files && fileEl.files[0];
-  if (!f) { toast("Pick an STL first.", "error"); return; }
-  if (f.size > MAX_STL_BYTES) { toast(`That STL is ${Math.round(f.size / 1e6)} MB. Export it at a coarser tolerance — the limit is ${MAX_STL_BYTES / 1e6} MB.`, "error"); return; }
+  const isBox = val("ml-src") === "box";
+  const auto = val("ml-mode") !== "manual";
 
-  const unit = val("ml-unit") === "in" ? "in" : "mm";
-  const tUnit = val("ml-thk-u") === "mm" ? "mm" : "in";
-  const thicknesses = String(val("ml-thk")).split(/[, ]+/).filter(Boolean).map(Number);
-  if (!thicknesses.length || thicknesses.some(n => !Number.isFinite(n) || n <= 0)) {
-    toast("List the board thicknesses bottom to top, e.g. 2, 2, 1.", "error"); return;
+  let thkMm = null;
+  if (!auto) {
+    const tUnit = val("ml-thk-u") === "mm" ? "mm" : "in";
+    const list = String(val("ml-thk")).split(/[, ]+/).filter(Boolean).map(Number);
+    if (!list.length || list.some(n => !Number.isFinite(n) || n <= 0)) {
+      toast("List the board thicknesses bottom to top, e.g. 2, 2, 1.", "error"); return;
+    }
+    thkMm = list.map(v => toMm({ value: v, unit: tUnit }));
   }
-  const thkMm = thicknesses.map(v => toMm({ value: v, unit: tUnit }));
+  const available = stockThicknessesMm();
+  if (auto && !available.length) { toast("Add some board stock first — the planner picks thicknesses from what you actually have.", "error"); return; }
 
   const prog = document.getElementById("ml-progress");
   const setProg = m => { if (prog) prog.textContent = m; };
-  setProg("Reading the file…");
+
+  let msg, sourceName, sourceBytes = 0;
+  if (isBox) {
+    const dim = (k) => parseDim(val("ml-b" + k), val(`ml-b${k}-u`));
+    const L = dim("l"), W = dim("w"), H = dim("h");
+    for (const [r, label] of [[L, "Length"], [W, "Width"], [H, "Height"]]) {
+      if (r.err) { toast(`${label} ${r.err}.`, "error"); return; }
+    }
+    msg = { cmd: "slice", box: { len: toMm(L.dim), wid: toMm(W.dim), hgt: toMm(H.dim) }, thicknesses: thkMm, available, opts: {} };
+    sourceName = `block ${fmtDim(L.dim)} x ${fmtDim(W.dim)} x ${fmtDim(H.dim)}`;
+  } else {
+    const fileEl = document.getElementById("ml-file");
+    const f = fileEl && fileEl.files && fileEl.files[0];
+    if (!f && !MOLD_BUF) { toast("Pick an STL first.", "error"); return; }
+    if (f) {
+      if (f.size > MAX_STL_BYTES) { toast(`That STL is ${Math.round(f.size / 1e6)} MB. Export it at a coarser tolerance — the limit is ${MAX_STL_BYTES / 1e6} MB.`, "error"); return; }
+      setProg("Reading the file…");
+      MOLD_BUF = { buffer: await f.arrayBuffer(), name: f.name, size: f.size, key: f.name + ":" + f.size };
+      MOLD_BODIES = null;   // new file, re-probe
+    }
+    const unit = val("ml-unit") === "in" ? "in" : "mm";
+    /* A real export is often an assembly. Ask which body BEFORE planning, or
+       we would slice the bounding box of everything and plan a void. */
+    if (MOLD_BODIES === null) {
+      setProg("Looking for separate bodies…");
+      const info = await runSlice({ cmd: "bodies", buffer: MOLD_BUF.buffer, unit, cacheKey: MOLD_BUF.key });
+      MOLD_BODIES = info.bodies || [];
+      if (MOLD_BODIES.length > 1) {
+        const host = document.getElementById("ml-bodies");
+        if (host) host.innerHTML = `<div class="field"><label>Which body?</label><select id="ml-body">
+          ${MOLD_BODIES.map(b => `<option value="${b.index}">#${b.index + 1} — ${(b.w / 25.4).toFixed(1)} &times; ${(b.d / 25.4).toFixed(1)} &times; ${(b.h / 25.4).toFixed(1)} in (${b.triangles.toLocaleString()} tris)</option>`).join("")}
+        </select></div><div class="muted tny">This file holds ${MOLD_BODIES.length} separate bodies — an assembly export, not one mold. Plan them one at a time.</div>`;
+        setProg("");
+        toast(`${MOLD_BODIES.length} bodies in that file — pick one, then Plan again.`, "info");
+        return;
+      }
+      const host = document.getElementById("ml-bodies");
+      if (host) host.innerHTML = `<input type="hidden" id="ml-body" value="0">`;
+    }
+    msg = {
+      cmd: "slice", buffer: MOLD_BUF.buffer, unit, cacheKey: MOLD_BUF.key,
+      bodyIndex: Number((document.getElementById("ml-body") || {}).value || 0),
+      thicknesses: thkMm, available, opts: {},
+    };
+    sourceName = MOLD_BUF.name; sourceBytes = MOLD_BUF.size;
+  }
+
   try {
-    const buffer = await f.arrayBuffer();
-    setProg("Slicing…");
-    const result = await runSlice(buffer, unit, thkMm, {}, v => setProg(`Slicing… ${Math.round(v * 100)}%`));
+    setProg("Planning…");
+    const result = await runSlice(msg, v => setProg(`Planning… ${Math.round(v * 100)}%`));
     const id = await allocId("stackplans");
     if (!id) return;
     const raw = {
-      id, name: name || f.name, source: f.name, sourceBytes: f.size,
-      unit, thicknessesMm: thkMm, bounds: result.bounds,
-      layers: result.layers, warnings: result.warnings || [],
+      id, name: name || sourceName, source: sourceName, sourceBytes,
+      unit: isBox ? "mm" : (val("ml-unit") === "in" ? "in" : "mm"),
+      thicknessesMm: result.composition || thkMm, bounds: result.bounds,
+      layers: result.layers, sections: result.sections || [],
+      warnings: result.warnings || [], considered: result.considered || 0,
       triangleCount: result.triangleCount || 0,
       by: myEmail(), ts: new Date().toISOString(),
     };
@@ -329,6 +456,82 @@ function delStackPlan(id) {
     view = { ...view, mode: "list", id: null };
     render();
   });
+}
+
+/* ---------- the cut list ----------
+   This is the batch view, and batching is the whole point: caking one mold by
+   eye is already decent, the win is packing several molds' blanks into one pool
+   of board and spending the offcut pile first. */
+function blanksFromPlans(plans) {
+  const out = [];
+  plans.forEach(p => (p.layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
+    id: `${p.name} L${i + 1}${L.blanks.length > 1 ? String.fromCharCode(97 + k) : ""}`,
+    planId: p.id, w: b.x1 - b.x0, h: b.y1 - b.y0,
+    thickness: L.thickness, density: p.density || 30,
+  }))));
+  return out;
+}
+function boardsForPacking() {
+  return (DB.stock || []).map(b => ({
+    id: b.id, label: b.label, kind: b.kind,
+    len: toMm(b.len), wid: toMm(b.wid), thk: toMm(b.thk),
+    density: Number(b.density) || 30, qty: b.qty || 1,
+  })).filter(b => Number.isFinite(b.len) && Number.isFinite(b.wid) && Number.isFinite(b.thk));
+}
+function renderCutList() {
+  const plans = (DB.stackplans || []).filter(p => !view.cutSel || view.cutSel === p.id);
+  const blanks = blanksFromPlans(plans);
+  const boards = boardsForPacking();
+  const back = `<div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft", 16)} All stock</button>
+    <select onchange="view.cutSel=this.value;render()">
+      <option value="">Every planned mold (${(DB.stackplans || []).length})</option>
+      ${(DB.stackplans || []).map(p => `<option value="${esc(p.id)}" ${view.cutSel === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+    </select>
+    <button onclick="printCutList()">${icon("print", 15)} Print</button></div>`;
+  if (!blanks.length) return back + `<div class="card">Nothing to cut yet — plan a mold first.</div>`;
+  if (!boards.length) return back + `<div class="card">No board stock recorded, so there is nothing to cut from. Add boards first.</div>`;
+
+  const res = packAll(blanks, boards, {});
+  const util = utilisation(res.plans);
+  return back + `
+  <div class="card">
+    <h2>Cut list</h2>
+    <div class="muted">${blanks.length} blanks from ${plans.length} mold${plans.length > 1 ? "s" : ""} · ${res.boardsUsed} board${res.boardsUsed === 1 ? "" : "s"} opened · ${(util * 100).toFixed(0)}% of opened board used · kerf ${KERF_MM}mm</div>
+    ${res.shortfall.length ? `<div class="warn">${icon("warning", 14)} <b>Short ${res.shortfall.length} blank${res.shortfall.length > 1 ? "s" : ""}.</b> Nothing on the rack fits these — order board before starting:
+      <ul>${res.shortfall.map(s => `<li>${esc(s.id)} — ${mmIn(s.w)} &times; ${mmIn(s.h)} at ${mmIn(s.thickness)} thick</li>`).join("")}</ul></div>` : ""}
+  </div>
+  ${res.plans.map((pl, i) => `<div class="card">
+    <h3>Board ${i + 1} — ${esc(pl.board.src.id)}${pl.board.src.label ? " · " + esc(pl.board.src.label) : ""} <span class="pill ${pl.board.kind === "remnant" ? "retro" : ""}">${pl.board.kind === "remnant" ? "offcut" : "sheet"}</span></h3>
+    <div class="muted tny">${mmIn(pl.board.w)} &times; ${mmIn(pl.board.h)} &times; ${mmIn(pl.thickness)} · ${pl.density} lb/ft³</div>
+    ${cutDiagram(pl)}
+    <table class="list">
+      <tr><th>#</th><th>Cut</th></tr>
+      ${cutSequence(pl).map(c => `<tr><td><b>${c.n}</b></td><td>${esc(c.text)}</td></tr>`).join("")}
+    </table>
+    <div class="muted tny">Yields: ${pl.placed.map(p => esc(p.part.id) + (p.rotated ? " (turned 90°)" : "")).join(", ")}${pl.leftover.length ? ` · keeps ${pl.leftover.length} reusable offcut${pl.leftover.length > 1 ? "s" : ""}` : ""}</div>
+  </div>`).join("")}`;
+}
+/* Top-down view of one board. Black and white only — this gets printed on the
+   laser at RFS, same rule as the traveler. */
+function cutDiagram(pl) {
+  const W = 640, s = W / pl.board.w, H = Math.max(60, pl.board.h * s);
+  return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" width="100%" role="img" aria-label="Cutting layout for this board" style="max-height:340px">
+    <rect x="0" y="0" width="${W}" height="${H.toFixed(0)}" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    ${pl.placed.map(p => `<rect x="${(p.x * s).toFixed(1)}" y="${((pl.board.h - p.y - p.h) * s).toFixed(1)}" width="${(p.w * s).toFixed(1)}" height="${(p.h * s).toFixed(1)}"
+      fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="${((p.x + p.w / 2) * s).toFixed(1)}" y="${((pl.board.h - p.y - p.h / 2) * s).toFixed(1)}" font-size="10" text-anchor="middle" fill="currentColor">${esc(p.part.id)}</text>`).join("")}
+    ${pl.cuts.map((c, i) => c.axis === "x"
+      ? `<line x1="${(c.at * s).toFixed(1)}" y1="${((pl.board.h - c.to) * s).toFixed(1)}" x2="${(c.at * s).toFixed(1)}" y2="${((pl.board.h - c.from) * s).toFixed(1)}" stroke="currentColor" stroke-width="0.8" stroke-dasharray="4 3"/>`
+      : `<line x1="${(c.from * s).toFixed(1)}" y1="${((pl.board.h - c.at) * s).toFixed(1)}" x2="${(c.to * s).toFixed(1)}" y2="${((pl.board.h - c.at) * s).toFixed(1)}" stroke="currentColor" stroke-width="0.8" stroke-dasharray="4 3"/>`).join("")}
+  </svg>`;
+}
+function printCutList() {
+  const host = printRoot();
+  if (!host) { toast("Nothing to print.", "error"); return; }
+  host.innerHTML = `<div class="sheet"><h1>Cut list</h1>${renderCutList().replace(/<div class="toolbar[\s\S]*?<\/div>/, "")}</div>`;
+  document.body.classList.add("sheet");
+  window.print();
+  setTimeout(() => { document.body.classList.remove("sheet"); host.innerHTML = ""; }, 100);
 }
 
 function renderStackPlan() {
