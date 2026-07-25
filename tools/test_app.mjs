@@ -71,7 +71,7 @@ globalThis.fb = {
   async upload(path, file) { calls.push(["upload", path]); return { url: "https://x/" + path, path, name: (file && file.name) || "f", size: 100, type: (file && file.type) || "" }; },
   async deleteFile(path) { calls.push(["deleteFile", path]); },
   async del(coll, id) { calls.push(["del", coll, id]); },
-  async allocId(coll) { counters[coll] = (counters[coll] || 0) + 1; const id = `${({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY"})[coll]}-SN6-${String(counters[coll]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
+  async allocId(coll) { counters[coll] = (counters[coll] || 0) + 1; const id = `${({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK"})[coll]}-SN6-${String(counters[coll]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
   async importMany(coll, arr) { calls.push(["importMany", coll, arr.length]); },
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
@@ -82,7 +82,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "slicer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
@@ -506,6 +506,191 @@ await t("Print button opens the traveler, not window.print()", () => {
   view = { ...view, tab: "workorders", mode: "detail", id: r.id, edit: false }; render();
   assert(main.innerHTML.includes("openPrintPreview"), "detail toolbar should preview the sheet");
   assert(!main.innerHTML.includes('onclick="window.print()"'), "raw window.print() should be gone");
+});
+
+console.log("stock (board inventory):");
+// Fill the board modal the way a person would, then submit it.
+function fillBoard({ len = "48", lenU = "in", wid = "96", widU = "in", thk = "2", thkU = "in", qty = "1", density = "30", kind = "sheet", label = "", origin = "" } = {}) {
+  el("bd-len").value = len; el("bd-len-u").value = lenU;
+  el("bd-wid").value = wid; el("bd-wid-u").value = widU;
+  el("bd-thk").value = thk; el("bd-thk-u").value = thkU;
+  el("bd-qty").value = qty; el("bd-density").value = density;
+  el("bd-kind").value = kind; el("bd-label").value = label; el("bd-origin").value = origin;
+}
+await t("toMm converts inches and passes mm straight through", () => {
+  assert(toMm({ value: 1, unit: "in" }) === 25.4, "1in should be 25.4mm");
+  assert(toMm({ value: 50, unit: "mm" }) === 50, "mm should not be scaled");
+  assert(Number.isNaN(toMm(null)), "a missing dim is NaN, not 0 — 0 would silently pack");
+});
+await t("dimensions are stored as entered, so an edit round-trip cannot drift", () => {
+  DB.stock = [];
+  fillBoard({ len: "48", lenU: "in" });
+  return submitBoard(null).then(() => {
+    const b = DB.stock[0];
+    assert(b.len.value === 48 && b.len.unit === "in", "should keep 48in verbatim");
+    // Re-open and re-save without touching anything: the classic drift path.
+    fillBoard({ len: String(b.len.value), lenU: b.len.unit });
+    return submitBoard(b.id).then(() => {
+      assert(DB.stock[0].len.value === 48, "48in must still be exactly 48 after a re-save");
+      assert(DB.stock.length === 1, "editing must not create a second board");
+    });
+  });
+});
+await t("a board rejects zero, negative, non-numeric and absurd dimensions", async () => {
+  for (const bad of ["0", "-5", "abc", ""]) {
+    DB.stock = []; fillBoard({ len: bad });
+    await submitBoard(null);
+    assert(DB.stock.length === 0, `"${bad}" should be rejected, not stored`);
+  }
+  DB.stock = []; fillBoard({ len: "400", lenU: "in" }); // 10.16 m
+  await submitBoard(null);
+  assert(DB.stock.length === 0, "over 10 m should be rejected as a unit mistake");
+  assert(lastToast.toLowerCase().includes("10 m"), "the error should name the real reason");
+});
+await t("quantity must be a whole number of boards", async () => {
+  DB.stock = []; fillBoard({ qty: "2.5" });
+  await submitBoard(null);
+  assert(DB.stock.length === 0, "a fractional board is not a thing");
+});
+await t("offcuts and full sheets are the same object, differing only by kind", async () => {
+  DB.stock = [];
+  fillBoard({ kind: "remnant", len: "19", wid: "30", origin: "WO-SN6-004", label: "offcut" });
+  await submitBoard(null);
+  const b = DB.stock[0];
+  assert(b.kind === "remnant" && b.origin === "WO-SN6-004", "provenance should survive");
+  assert(toMm(b.len) > 0 && toMm(b.wid) > 0, "a remnant is measured like any board");
+});
+await t("stock list renders, escapes labels, and shows an empty state", async () => {
+  DB.stock = [];
+  view = { ...view, tab: "stock", mode: "list", q: "", fSub: "" }; render();
+  assert(main.innerHTML.includes("No board stock recorded yet"), "empty state should explain what to do");
+  fillBoard({ label: '<img src=x onerror=alert(1)>' });
+  await submitBoard(null);
+  render();
+  // The payload text survives as inert text — what must NOT survive is a real tag.
+  assert(!main.innerHTML.includes("<img src=x"), "board labels must never produce a live tag");
+  assert(main.innerHTML.includes("&lt;img"), "the label should render as escaped text");
+});
+await t("mm and inch boards both land in the same on-hand bucket by real size", async () => {
+  DB.stock = [];
+  fillBoard({ thk: "1", thkU: "in" }); await submitBoard(null);
+  fillBoard({ thk: "25.4", thkU: "mm" }); await submitBoard(null);
+  render();
+  assert(DB.stock.length === 2, "both boards should be stored");
+  assert(thkKey(DB.stock[0]) === thkKey(DB.stock[1]), "1in and 25.4mm are the same stock bucket");
+});
+await t("deleting a board is lead-only in the UI and drops it from the list", async () => {
+  DB.stock = []; fillBoard(); await submitBoard(null);
+  const id = DB.stock[0].id;
+  render();
+  assert(main.innerHTML.includes("delBoard"), "a lead should see the delete control");
+  delBoard(id); confirmProceed();
+  assert(DB.stock.length === 0, "the board should be gone locally");
+  assert(calls.some(c => c[0] === "del" && c[1] === "stock"), "and deleted server-side");
+});
+
+console.log("mold slicing (stack plans):");
+// Minimal STL writer + a tapered plug, so the whole upload path runs for real.
+function stlOf(tris) {
+  const buf = new ArrayBuffer(84 + tris.length * 50);
+  const dv = new DataView(buf);
+  dv.setUint32(80, tris.length, true);
+  let o = 84;
+  for (const t of tris) {
+    o += 12;
+    for (const f of [t.ax, t.ay, t.az, t.bx, t.by, t.bz, t.cx, t.cy, t.cz]) { dv.setFloat32(o, f, true); o += 4; }
+    o += 2;
+  }
+  return buf;
+}
+function plugTris(hb, ht, z0, z1) {
+  const R = (h) => [{ x: -h, y: -h }, { x: h, y: -h }, { x: h, y: h }, { x: -h, y: h }];
+  const b = R(hb), t = R(ht), out = [];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    out.push({ ax: b[i].x, ay: b[i].y, az: z0, bx: b[j].x, by: b[j].y, bz: z0, cx: t[j].x, cy: t[j].y, cz: z1 });
+    out.push({ ax: b[i].x, ay: b[i].y, az: z0, bx: t[j].x, by: t[j].y, bz: z1, cx: t[i].x, cy: t[i].y, cz: z1 });
+  }
+  return out;
+}
+function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "25, 25, 25, 25", thkU = "mm", size = null } = {}) {
+  const buf = stlOf(tris);
+  el("ml-name").value = name; el("ml-unit").value = unit;
+  el("ml-thk").value = thk; el("ml-thk-u").value = thkU;
+  el("ml-file").files = [{ name: "mold.stl", size: size == null ? buf.byteLength : size, arrayBuffer: async () => buf }];
+}
+await t("slicing a plug end to end produces a saved stack plan", async () => {
+  DB.stackplans = [];
+  fillMold();
+  await submitMold();
+  assert(DB.stackplans.length === 1, "a plan should be saved");
+  const p = DB.stackplans[0];
+  assert(p.layers.length === 4, "four boards, four layers");
+  assert(p.warnings.length === 0, "no warnings: " + p.warnings.join("; "));
+  assert(calls.some(c => c[0] === "save" && c[1] === "stackplans"), "and written to Firestore");
+});
+await t("a plug's blanks shrink going up, which is the whole point of caking", () => {
+  const p = DB.stackplans[0];
+  const w = p.layers.map(L => L.blanks[0].x1 - L.blanks[0].x0);
+  for (let i = 1; i < w.length; i++) assert(w[i] <= w[i - 1] + 0.01, "layer " + (i + 1) + " should not be wider than the one below");
+  assert(w[3] < w[0] - 100, "a real taper should save real material");
+});
+await t("the stack view renders the mold outline and depends on no colour", () => {
+  const p = DB.stackplans[0];
+  const svg = stackSvg(p);
+  assert(svg.includes("<svg"), "should be an svg");
+  assert(svg.includes("stroke-dasharray"), "the mold outline is dashed so it reads in B&W");
+  assert(svg.includes("url(#hatch)"), "sides are hatched, not filled with colour");
+  assert(!/#[0-9a-f]{6}/i.test(svg.replace("var(--surface,#fff)", "")), "no hard-coded colours");
+});
+await t("the plan detail view renders and offers the reviewer the CS-003 prompt", () => {
+  view = { ...view, tab: "stock", mode: "plan", id: DB.stackplans[0].id }; render();
+  assert(main.innerHTML.includes("CS-003"), "the reviewer needs to know what they are initialling");
+  assert(main.innerHTML.includes("Blanks to cut"), "and the numbers for the saw");
+});
+await t("an oversize STL is refused before a Worker is ever started", async () => {
+  DB.stackplans = [];
+  fillMold({ size: 200 * 1024 * 1024 });
+  await submitMold();
+  assert(DB.stackplans.length === 0, "should not slice");
+  assert(lastToast.includes("MB"), "and should say why in MB: " + lastToast);
+});
+await t("a bad thickness list is refused with an example", async () => {
+  DB.stackplans = [];
+  for (const bad of ["", "abc", "0", "-2"]) {
+    fillMold({ thk: bad });
+    await submitMold();
+  }
+  assert(DB.stackplans.length === 0, "none of those should slice");
+  assert(lastToast.includes("bottom to top"), "the error should show the shape of a good answer");
+});
+await t("boards that do not reach the mold height are refused, not silently truncated", async () => {
+  DB.stackplans = [];
+  fillMold({ thk: "25, 25" }); // 50mm of board for a 100mm mold
+  await submitMold();
+  assert(DB.stackplans.length === 0, "half a stack is not a stack");
+  assert(lastToast.includes("add up to"), "and it should name both numbers: " + lastToast);
+});
+await t("CRITICAL an overhung mold is refused and the region is surfaced to the user", async () => {
+  DB.stackplans = [];
+  fillMold({ tris: plugTris(80, 200, 0, 100) }); // widens upward
+  await submitMold();
+  assert(DB.stackplans.length === 0, "an unmachinable mold must not become a plan");
+  assert(lastToast.includes("Look near"), "the user needs WHERE, not just no: " + lastToast);
+});
+await t("CRITICAL a plan is always storable — contours thin until it fits", () => {
+  // A deliberately huge plan: many layers, each with a dense contour.
+  const dense = [];
+  for (let i = 0; i < 4000; i++) dense.push({ x: Math.cos(i) * 100, y: Math.sin(i) * 100 });
+  const fat = { layers: [] };
+  for (let i = 0; i < 8; i++) {
+    fat.layers.push({ index: i, thickness: 25, islands: [{ contour: dense.slice(), box: { x0: -100, y0: -100, x1: 100, y1: 100 } }], blanks: [{ x0: -125, y0: -125, x1: 125, y1: 125 }] });
+  }
+  assert(JSON.stringify(fat).length > 900000, "the fixture should start over budget");
+  const { plan, notes } = fitPlanForStorage(fat);
+  assert(JSON.stringify(plan).length <= 900000, "must end under the Firestore ceiling");
+  assert(notes.length === 1, "and must say that detail was lost");
+  assert(plan.layers.every(L => L.blanks.length === 1), "blanks are never dropped — they are what gets cut");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

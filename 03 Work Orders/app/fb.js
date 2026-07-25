@@ -66,10 +66,10 @@ async function downscaleImage(file, maxDim) {
 // The data collections the app syncs. Add one here + a rules block + a counter
 // prefix below to introduce a new record type. `roster` and `meta` are infra,
 // not in this list.
-const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents"];
+const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents", "stock", "stackplans"];
 // Id prefix per collection for allocId(). schedule ids are week keys, not
 // counter-allocated, so it has no prefix.
-const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC" };
+const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK" };
 
 const unsubs = {}; // collection name -> onSnapshot unsub
 

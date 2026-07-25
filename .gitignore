@@ -18,3 +18,7 @@ __pycache__/
 # tools/make-test-variant.mjs regenerates on demand.
 07 CFD PDF Viewer/dist/
 07 CFD PDF Viewer/DP_22_variant.pdf
+.gstack/
+
+# Firebase emulator log, rewritten every time tools/test_wo_rules.mjs runs.
+03 Work Orders/firestore-debug.log

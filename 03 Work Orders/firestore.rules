@@ -27,6 +27,11 @@ service cloud.firestore {
     match /projects/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     match /schedule/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     match /budget/{id}     { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    // stock (BRD-###) = tooling-board inventory: full sheets and offcuts alike.
+    // stackplans (STK-###) = a mold's sliced layer geometry, saved so the CS-003
+    // §7.2 reviewer can reopen and initial it without re-slicing the mesh.
+    match /stock/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /stackplans/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     // Documents: any member can upload/edit; only a lead prunes the library.
     match /documents/{id}  { allow read, create, update: if onRoster(); allow delete: if isLead(); }
 

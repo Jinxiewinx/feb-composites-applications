@@ -9,10 +9,105 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-07-22
-Status: motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed
-(4 commits). Clean stopping point. Plan: `~/.claude/plans/dapper-strolling-pine.md`.
-(Prior responsive UI work also complete — see below.)
+Last updated: 2026-07-25
+Status: **Mold Stack Planner phase 1 built, not yet committed.** Branch
+`mold-sheet-stacking-app`. Board inventory + STL slicer + exploded stack view.
+Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
+`~/.gstack/projects/Jinxiewinx-feb-composites-applications/simonstarbuck-chisinau-design-20260724-190934.md`.
+Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
+(Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
+
+## Mold Stack Planner — phase 1 (built, uncommitted)
+
+New **Stock** tab. Two jobs: a live tooling-board inventory (CS-011 wants one and
+never had one), and slicing a mold STL into a layer stack so CS-003 §7.2
+checklist item 7 — "stack plan drawn", a BLOCKER step — stops being hand-drawn.
+
+Phase 2 (the guillotine cut-plan optimizer across a batch of molds) is
+deliberately NOT built. Its value is unvalidated until someone measures how many
+sheets SN5 actually consumed. See "Open questions" below.
+
+New files: `app/stock.js`, `app/slicer.js`, `app/slicer.worker.js`,
+`app/stackview.js`, `tools/test_slicer.mjs`, `tools/nocache_server.py`.
+Touched: `app/core.js` (DB + TABS row), `app/fb.js` (COLLECTIONS + ID_PREFIX),
+`app/index.html`, `firestore.rules`, `tools/test_app.mjs`, `tools/test_wo_rules.mjs`.
+
+### Decisions that cost something to rediscover
+
+**Dimensions are stored AS ENTERED with a unit tag** (`{value:48, unit:"in"}`),
+never normalised on write. Storing canonical mm and redisplaying in inches drifts
+on every edit: 48 → 1219.2 → 47.99999 → saved. `toMm()` is the only conversion
+point. There is a test for exactly this round-trip.
+
+**Derived geometry is persisted, not the STL.** The reviewer needs the plan, not
+the mesh. This also dodges a live bug: `.stl` has no browser MIME type, so
+`fb.js` falls through to `application/octet-stream`, which the `storage.rules`
+content-type allowlist rejects — an STL upload would fail as a permissions error
+on a normal file pick. `storage.rules` is untouched as a result.
+
+**The slicer is PURE and lives off the main thread.** `render()` in core.js is
+fully synchronous and nothing else in the app ever blocks, so slicing inline
+freezes the tab with no spinner to borrow. `slicer.worker.js` is a thin
+`importScripts('slicer.js')` wrapper. Purity is why `tools/test_slicer.mjs` can
+run the geometry under node with nothing stubbed.
+
+**Geometry model — do not "simplify" these, both were bugs caught in review:**
+
+- Layer footprint is the union over the whole slab, NOT a section at one height.
+  A plane at the top of a layer undersizes the blank by thickness × tan(wall
+  angle), which exceeds the entire margin band. Because CS-003 §7.1.4 requires
+  positive draft, the solid grows downward, so the union equals the section at
+  the layer's BOTTOM exactly — one slice, no polygon booleans.
+- Monotonicity is asserted on 2D OUTER contours only. A bounding box cannot see
+  an interior hole, so blind bottom dowel holes (which CS-003 §7.1.6 *requires*
+  on split sections) must not be rejected. A "vertical ray crosses twice" test is
+  NOT equivalent — that is vertical convexity and it passes a blind hole where
+  monotonicity genuinely fails.
+- Island merging iterates on GROUP boxes, never island boxes. A U of three rails
+  plus a central boss: the rails merge into one huge group box, the boss never
+  merges, and the boss's blank ends up entirely INSIDE the rails' blank. Two
+  solid blocks in the same place. `test_slicer.mjs` guards this both ways — it
+  also asserts the old island-level rule really does collide, so the guard can't
+  go vacuous.
+
+**The containment test is the spine.** Clip each triangle to the slab and check
+the clipped POLYGON (not its bounding box) against the blank set, run against raw
+STL triangles. Both naive versions are wrong: vertex-in-slab is unsound (a
+triangle can cross with no vertex inside), and all-vertices-of-overlapping-
+triangles false-fails on drafted walls. Clip the OPEN slab — material exactly on
+a boundary plane belongs to the neighbouring layer.
+
+**Two silent-failure gaps, both closed.** Worker OOM (size guard + `onerror` +
+timeout) and the Firestore 1 MB document ceiling (`fitPlanForStorage` thins
+contours until it fits, never dropping blanks, and says when detail was lost).
+
+**Explode gap scales with the mold** (`isoGap`, 0.45 × footprint). A fixed gap
+turned a 490mm board into overlapping diamonds. Layer labels are drawn in a final
+pass or the next layer paints over them.
+
+### Verified in a real browser, not just asserted
+
+Served with `python3 tools/nocache_server.py 8126` (new — `python3 -m
+http.server` sends no cache headers and will serve a stale slicer.js; same class
+of bug that already bit this project). Stubbed `window.fb` per the pattern below,
+then: stock tab renders with mixed in/mm boards; a 24-triangle plug sliced
+through the real Worker into 4 layers, blanks shrinking 490.8 → 371.3 mm;
+exploded view correct in light AND dark mode; an overhung mold refused with
+"Look near X 115, Y -115 on layer 2".
+
+### Open questions for Simon (these gate phase 2)
+
+- **How many sheets did the SN5 mold set actually consume?** This decides whether
+  the optimizer is worth ~10 weeks. 6 sheets → a 20% saving is one sheet. 40 →
+  it pays for itself. Purchase history / #purchasing has it.
+- **Do 30 and 60 lb/ft³ boards mix within one stack?** CS-004 says 60 seals
+  better and the mold surface is machined into the top. Changes the data model.
+- **Are offcuts physically stored and labelled?** The remnant ledger describes
+  boards someone has to find. If they're scattered, the ledger is fiction. This
+  is the question most likely to quietly kill phase 2.
+- Which saw, who runs it, smallest piece safe to cut (sets the minimum blank).
+- Is "cut all the way across first" a hard rule or a habit?
+- Default margin: 1″ or 2″? Currently 1″ min, 2″ max.
 
 Revamp verified: light+dark across all 10 tabs + WO detail + login + mobile drawer;
 WCAG AA contrast on all token pairs in both themes (faint nudged to clear 4.5:1 —

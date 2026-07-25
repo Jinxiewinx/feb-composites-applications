@@ -9,7 +9,7 @@
 /* ---------- shared store ---------- */
 // One array per Firestore collection, kept in sync by fb.js → onFbData().
 // `users` is the live roster (email, name, role, avatar) for pickers/avatars.
-let DB = { workOrders: [], parts: [], projects: [], schedule: [], budget: [], documents: [], notifications: [], users: [] };
+let DB = { workOrders: [], parts: [], projects: [], schedule: [], budget: [], documents: [], stock: [], stackplans: [], notifications: [], users: [] };
 let view = {
   tab: "dashboard", mode: "list", id: null, edit: false,
   q: "", fStatus: "", fSub: "", authMode: "in",
@@ -533,6 +533,7 @@ const TABS = [
   { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
   { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
   { id: "people", label: "People", ic: "people", coll: null, render: () => renderPeople() },
+  { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },
 ];
