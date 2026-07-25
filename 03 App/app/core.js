@@ -522,20 +522,29 @@ function pickerSearch(id, q) {
 function pickerField(id) { return `<div class="picker" id="pk-${id}">${pickerBody(id)}</div>`; }
 
 /* ---------- tabs + top-level render ---------- */
-// Order = sidebar order. render() is resolved at click time, after every tab
-// script has loaded. Add a tab by adding a row here + its renderX().
+/* Order = sidebar order. render() is resolved at click time, after every tab
+   script has loaded. Add a tab by adding a row here + its renderX().
+
+   Grouped by what you are doing, roughly in the order a job moves:
+     overview          Dashboard
+     the build         Work Orders -> Parts -> Stock   (jobs, what they make,
+                                                        what they are made from)
+     planning          Projects -> Timeline -> Calendar
+     money             Budget
+     reference         Documents -> Reports
+     admin             People                          (rarely opened, so last) */
 const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, render: () => renderDashboard() },
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
+  { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
   { id: "projects", label: "Projects", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
   { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
   { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
-  { id: "people", label: "People", ic: "people", coll: null, render: () => renderPeople() },
-  { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },
+  { id: "people", label: "People", ic: "people", coll: null, render: () => renderPeople() },
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {

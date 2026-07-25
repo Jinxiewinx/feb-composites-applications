@@ -305,19 +305,20 @@ function uploadMold() {
     <h2>Plan a mold</h2>
     <div class="field"><label>Name</label><input id="ml-name" placeholder="e.g. UT nose plug"></div>
     <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
-      <option value="stl">an STL file</option>
-      <option value="box">a rectangular block</option>
+      <option value="box">dimensions (X &times; Y &times; Z)</option>
+      <option value="stl">an STL file &mdash; beta</option>
     </select></div>
-    <div id="ml-stl">
+    <div id="ml-box">
+      <div class="field"><label>Length (X)</label><input id="ml-bl" placeholder="0"><select id="ml-bl-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="field"><label>Width (Y)</label><input id="ml-bw" placeholder="0"><select id="ml-bw-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="field"><label>Height (Z)</label><input id="ml-bh" placeholder="0"><select id="ml-bh-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+    </div>
+    <div id="ml-stl" style="display:none">
       <div class="field"><label>Mold STL</label><input id="ml-file" type="file" accept=".stl,model/stl,application/sla"></div>
       <div class="field"><label>STL units</label><select id="ml-unit">
         <option value="mm">millimetres</option><option value="in">inches</option>
       </select><span class="muted tny">An STL carries no units. Getting this wrong is a 25.4&times; mistake.</span></div>
-    </div>
-    <div id="ml-box" style="display:none">
-      <div class="field"><label>Length</label><input id="ml-bl" placeholder="0"><select id="ml-bl-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
-      <div class="field"><label>Width</label><input id="ml-bw" placeholder="0"><select id="ml-bw-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
-      <div class="field"><label>Height</label><input id="ml-bh" placeholder="0"><select id="ml-bh-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="field"><label></label><span class="muted tny"><b>Beta.</b> Real exports still turn up surprises &mdash; assemblies holding many bodies, rough meshes, odd draft. Check the stack view before anyone cuts, and fall back to dimensions if it looks wrong.</span></div>
     </div>
     <div class="field"><label>Boards</label><select id="ml-mode" onchange="moldModeChanged()">
       <option value="auto">choose them for me, from stock</option>
@@ -355,7 +356,7 @@ let MOLD_BODIES = null;
 async function submitMold() {
   const val = k => (document.getElementById(k) || {}).value || "";
   const name = String(val("ml-name")).trim();
-  const isBox = val("ml-src") === "box";
+  const isBox = val("ml-src") !== "stl";
   const auto = val("ml-mode") !== "manual";
 
   let thkMm = null;

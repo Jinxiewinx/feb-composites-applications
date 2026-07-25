@@ -672,6 +672,13 @@ await t("a plain rectangular block can be typed in instead of an STL", async () 
   assert(Math.abs((b.x1 - b.x0) - (300 + 2 * 25.4)) < 1, "blank should be the block plus margin, got " + (b.x1 - b.x0));
   assert(/block/i.test(p.source), "and should record that it came from typed dimensions");
 });
+await t("dimensions are the default source, STL is the opt-in", async () => {
+  seedStock(); DB.stackplans = [];
+  fillMold({ src: "", box: [300, 200, 100] });   // nothing chosen = the default
+  await submitMold();
+  assert(DB.stackplans.length === 1, "the default path should plan: " + lastToast);
+  assert(/block/i.test(DB.stackplans[0].source), "and it should be the typed block, not the file");
+});
 await t("a multi-body STL asks which body instead of planning the whole assembly", async () => {
   seedStock(); DB.stackplans = [];
   // Two separate plugs far apart: exactly the shape of a real Fusion assembly
