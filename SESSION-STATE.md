@@ -70,6 +70,19 @@ run the geometry under node with nothing stubbed.
   also asserts the old island-level rule really does collide, so the guard can't
   go vacuous.
 
+**Contour stitching welds on a RADIUS, never an exact grid cell.** Endpoints are
+bucketed on a `WELD_TOL_MM` grid for speed, but matching searches the 3x3
+neighbourhood and confirms by real distance. Requiring an exact cell match looks
+correct and is not: two points a millionth of a millimetre apart land in
+different cells whenever they straddle a cell boundary, and a perfectly good mesh
+then reports "the outline does not close". Real molds hit this constantly,
+because designers put corners on round numbers and round numbers are exactly
+where grid boundaries sit. Found in production on a mold with a corner at
+889.005mm (35.000in). `test_slicer.mjs` has a REGRESSION test pinning it, plus a
+counter-test that a genuine 5mm hole is still refused — the fix must not become
+"join anything". The error now quantifies the gap, which is what distinguishes a
+too-tight tolerance from a broken mesh.
+
 **The containment test is the spine.** Clip each triangle to the slab and check
 the clipped POLYGON (not its bounding box) against the blank set, run against raw
 STL triangles. Both naive versions are wrong: vertex-in-slab is unsound (a

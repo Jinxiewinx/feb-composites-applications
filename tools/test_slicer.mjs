@@ -130,9 +130,37 @@ t("a vertex exactly on the plane does not produce a doubled point", () => {
   const segs = S.sliceAt(tris, 5);
   assert(segs.length <= 1, "one triangle gives at most one segment");
 });
-t("a mesh with a gap reports where it broke instead of silently closing it", () => {
+t("a mesh with a real hole reports where it broke instead of silently closing it", () => {
   const tris = prism(rect(0, 0, 100, 100), 0, 50).slice(0, 4); // drop two walls
-  throws(() => S.stitchContours(S.sliceAt(tris, 25)), /gap/i);
+  const e = throws(() => S.stitchContours(S.sliceAt(tris, 25)), /hole/i);
+  assert(/re-export|mesh repair/i.test(e.message), "and should say what to do about it");
+});
+t("REGRESSION endpoints straddling a weld-grid boundary still join", () => {
+  // Bucketing endpoints on a grid and requiring an EXACT cell match is a trap:
+  // two points a millionth of a millimetre apart land in different cells when
+  // they straddle a boundary, and a good mesh reports a gap. Real molds hit this
+  // constantly, because designers put corners on round numbers and round numbers
+  // are where the boundaries sit. 889.005mm = 35.00 inches, a real reported case.
+  const X = 889.005, EPS = 1e-7;
+  const segs = [
+    [{ x: 0, y: 0 }, { x: X - EPS, y: 0 }],
+    [{ x: X + EPS, y: 0 }, { x: X, y: 500 }],
+    [{ x: X, y: 500 }, { x: 0, y: 500 }],
+    [{ x: 0, y: 500 }, { x: 0, y: 0 }],
+  ];
+  const loops = S.stitchContours(segs);
+  assert(loops.length === 1, "2e-7mm apart is the same corner, not a hole; got " + loops.length + " loops");
+});
+t("a genuine hole is still refused, and the message says how far the gap is", () => {
+  // The fix must not become "join anything". A 5mm gap is a real defect.
+  const segs = [
+    [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+    [{ x: 105, y: 0 }, { x: 100, y: 100 }],
+    [{ x: 100, y: 100 }, { x: 0, y: 100 }],
+    [{ x: 0, y: 100 }, { x: 0, y: 0 }],
+  ];
+  const e = throws(() => S.stitchContours(segs), /hole/i);
+  assert(/mm away/.test(e.message), "should quantify the gap so a tolerance problem is distinguishable from a defect");
 });
 t("holes are discarded — a bounding box cannot see them anyway", () => {
   const tris = prism(rect(0, 0, 200, 200), 0, 50).concat(prism(rect(80, 80, 120, 120), 0, 50));

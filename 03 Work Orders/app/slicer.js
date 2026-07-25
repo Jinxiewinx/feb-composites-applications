@@ -186,20 +186,49 @@ function sliceAt(tris, z) {
   return segs;
 }
 
-/* Walk segments into closed loops. Endpoints are welded on a tolerance grid,
-   because a tessellated mesh never has bit-identical shared vertices. */
+/* Walk segments into closed loops. A tessellated mesh never has bit-identical
+   shared vertices — the same corner reached from two triangles differs by float
+   noise — so endpoints are welded within a tolerance.
+
+   Endpoints are BUCKETED on a grid for speed, but matching ALWAYS searches the
+   3x3 neighbourhood and confirms by real distance. Requiring an exact cell match
+   is a trap that looks correct and is not: two points a millionth of a
+   millimetre apart land in different cells whenever they straddle a cell
+   boundary, and a perfectly good mesh then reports a gap. Real molds hit this
+   constantly because designers put corners on round numbers, and round numbers
+   are exactly where grid boundaries sit. */
 function stitchContours(segs, tol) {
   tol = tol || WELD_TOL_MM;
-  const key = p => `${Math.round(p.x / tol)},${Math.round(p.y / tol)}`;
-  const byStart = new Map();
+  const cell = p => [Math.floor(p.x / tol), Math.floor(p.y / tol)];
+  const buckets = new Map();
+  const put = (p, rec) => {
+    const [i, j] = cell(p);
+    const k = i + "," + j;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(rec);
+  };
   segs.forEach((s, i) => {
-    for (const [from, to] of [[s[0], s[1]], [s[1], s[0]]]) {
-      const k = key(from);
-      if (!byStart.has(k)) byStart.set(k, []);
-      byStart.get(k).push({ i, from, to });
-    }
+    put(s[0], { i, from: s[0], to: s[1] });
+    put(s[1], { i, from: s[1], to: s[0] });
   });
   const used = new Array(segs.length).fill(false);
+  /* Nearest unused endpoint within tol. Returns { rec, dist } so the caller can
+     report HOW FAR the nearest edge was — the difference between "your
+     tolerance is too tight" and "this mesh genuinely has a hole in it". */
+  const nearest = (p) => {
+    const [ci, cj] = cell(p);
+    let best = null, bestD = Infinity;
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        for (const rec of buckets.get((ci + di) + "," + (cj + dj)) || []) {
+          if (used[rec.i]) continue;
+          const d = Math.hypot(rec.from.x - p.x, rec.from.y - p.y);
+          if (d < bestD) { bestD = d; best = rec; }
+        }
+      }
+    }
+    return { rec: best, dist: bestD };
+  };
   const loops = [];
   for (let i = 0; i < segs.length; i++) {
     if (used[i]) continue;
@@ -209,11 +238,25 @@ function stitchContours(segs, tol) {
     let cur = segs[i][1];
     let guard = segs.length + 2;
     while (guard-- > 0) {
-      if (Math.abs(cur.x - start.x) < tol && Math.abs(cur.y - start.y) < tol) break;
-      const cand = (byStart.get(key(cur)) || []).find(c => !used[c.i]);
-      if (!cand) throw new Error("This mesh has a gap near " + cur.x.toFixed(2) + ", " + cur.y.toFixed(2) + " — the outline does not close.");
-      used[cand.i] = true;
-      cur = cand.to;
+      if (Math.hypot(cur.x - start.x, cur.y - start.y) <= tol) break;
+      const { rec, dist } = nearest(cur);
+      if (!rec || dist > tol) {
+        // Error path only: the bucket search reaches ~3 cells, so a genuinely
+        // large hole finds nothing nearby and we'd have no distance to report.
+        // The distance is the whole diagnostic — 0.0001mm means the tolerance is
+        // too tight, 5mm means the mesh is broken — so pay for a full scan here.
+        let far = Infinity;
+        for (let k = 0; k < segs.length; k++) {
+          if (used[k]) continue;
+          for (const p of segs[k]) far = Math.min(far, Math.hypot(p.x - cur.x, p.y - cur.y));
+        }
+        const how = Number.isFinite(far)
+          ? ` The nearest loose edge is ${far < 0.01 ? far.toExponential(1) : far.toFixed(3)}mm away, past the ${tol}mm join tolerance.`
+          : " No edge continues from there at all.";
+        throw new Error(`This mesh has a hole near X ${cur.x.toFixed(2)}, Y ${cur.y.toFixed(2)} — the outline does not close.${how} Re-export the STL from Fusion, or run a mesh repair on it.`);
+      }
+      used[rec.i] = true;
+      cur = rec.to;
       pts.push(cur);
     }
     if (pts.length >= 4) loops.push(pts);
