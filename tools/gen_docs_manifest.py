@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bundle the team's reference docs into the app so the Documents tab can open
-them in-browser. Copies into `03 Work Orders/app/docs/` and writes manifest.json.
+them in-browser. Copies into `03 App/app/docs/` and writes manifest.json.
 
 - Datasheets (public manufacturer PDFs)  -> docs/datasheets/*.pdf   (kind: pdf)
 - CS standards (our markdown + built docx) -> docs/standards/*        (kind: md, with docx download)
@@ -13,7 +13,7 @@ import json, re, shutil, subprocess
 from pathlib import Path
 
 RES = Path(__file__).resolve().parent.parent          # SN6 Resources/
-APP = RES / "03 Work Orders" / "app"
+APP = RES / "03 App" / "app"
 DOCS = APP / "docs"
 
 for sub in ("datasheets", "standards"):

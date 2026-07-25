@@ -53,7 +53,7 @@ for f in cs_files:
     check(cited, f"{f.name} cites at least one PP / SN5 doc / datasheet")
 
 # 3. WO refs resolve
-wos = json.loads((ROOT / "03 Work Orders" / "data" / "sn5-work-orders.json").read_text())
+wos = json.loads((ROOT / "03 App" / "data" / "sn5-work-orders.json").read_text())
 bad_refs = set()
 for w in wos:
     for ref in w.get("standardsRefs", []):

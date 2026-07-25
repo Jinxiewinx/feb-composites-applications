@@ -202,7 +202,7 @@ Everything runs offline against the Firebase emulators, which need Java 11+ and
 `firebase-tools`:
 
 ```
-cd "03 Work Orders"
+cd "03 App"
 firebase emulators:start --project demo-feb-work-orders
 # app on http://localhost:5050, emulator UI on http://localhost:4000
 # (5050 not 5000 because macOS AirPlay squats on 5000)
@@ -217,7 +217,7 @@ Tests, from `SN6 Resources/`:
 
 ```
 node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake backend)
-cd "03 Work Orders" && firebase emulators:exec --only firestore \
+cd "03 App" && firebase emulators:exec --only firestore \
   --project demo-feb-work-orders "node '../tools/test_wo_rules.mjs'"
 ```
 

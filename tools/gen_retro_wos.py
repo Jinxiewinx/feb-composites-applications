@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate the 26 retro SN5 work orders (25 Master Tracker parts + catch can)
-into 03 Work Orders/data/sn5-work-orders.json and inject them into
+into 03 App/data/sn5-work-orders.json and inject them into
 work-orders.html at the __SN5_SEED_JSON__ placeholder (if present).
 
 Sources: Composites Master Tracker 25-26 Season (SN5).xlsx (Part Tracker,
@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "03 Work Orders" / "data" / "sn5-work-orders.json"
-APP = ROOT / "03 Work Orders" / "work-orders.html"
+OUT = ROOT / "03 App" / "data" / "sn5-work-orders.json"
+APP = ROOT / "03 App" / "work-orders.html"
 
 NR = "not recorded (retro)"
 

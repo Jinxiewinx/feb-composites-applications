@@ -1,6 +1,6 @@
 # FEB Composites App
 
-> This folder is named "03 Work Orders" for historical reasons. It started as
+> This folder is named "03 App" for historical reasons. It started as
 > just the work-order tool and now holds the whole composites app, of which work
 > orders are one tab. The name is kept so deploy paths don't move.
 

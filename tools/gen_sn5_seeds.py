@@ -17,8 +17,8 @@ from pathlib import Path
 
 XLSX = Path("/Users/simonstarbuck/Downloads/composites_programs/SN5 Composites/Composites Master Tracker 25-26 Season (SN5).xlsx")
 HERE = Path(__file__).resolve().parent
-APP = HERE.parent / "03 Work Orders" / "app"
-DATA = HERE.parent / "03 Work Orders" / "data"
+APP = HERE.parent / "03 App" / "app"
+DATA = HERE.parent / "03 App" / "data"
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 RNS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"

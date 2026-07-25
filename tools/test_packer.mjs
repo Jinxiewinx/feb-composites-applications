@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Cut-list tests for 03 Work Orders/app/packer.js.
+/* Cut-list tests for 03 App/app/packer.js.
 
    The property that matters here is GUILLOTINE FEASIBILITY: every cut must span
    the whole piece being held, because Simon confirmed "you can only cut all the
@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 Work Orders", "app");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const src = readFileSync(join(root, "packer.js"), "utf8").replace(/"use strict";\n/, "");
 globalThis.__P = {};
 (0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,KERF_MM,MIN_REMNANT_MM});");

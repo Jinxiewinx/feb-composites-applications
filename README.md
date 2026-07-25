@@ -11,7 +11,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses (5-why / fishbone), a minor-issues table, and traceability to the fixes | the .docx |
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013) with revision tracking, approvals, changelogs and photo placeholders. The markdown in `src/` is the source of truth; the .docx files are built outputs | `CS-INDEX` |
-| `03 Work Orders/` | The composites app, live at feb-composites.web.app, plus the retro SN5 archive that seeds it (26 work orders, 33 parts, a timeline) | `app/README.md` |
+| `03 App/` | The composites app, live at feb-composites.web.app: work orders, parts, projects, budget, timeline, board stock and the mold stack planner. Plus the retro SN5 archive that seeds it (26 work orders, 33 parts, a timeline) | `app/README.md` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use, chosen from purchase history rather than the stale inventory sheet | `INDEX.md` |
 | `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, infusion and wet-layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE, process blockers | print it |
 | `07 CFD PDF Viewer/` | Desktop app for comparing Fluent CFD reports: load two or more, scroll them together, put the same plot side by side, and overlay them to see what moved | `README.md` |
@@ -19,13 +19,31 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 ## The app
 
-`03 Work Orders/app/` is a shared workspace for work orders, parts, projects, budget and the season timeline, running on Firebase with an email allowlist for the roster. It is live at **https://feb-composites.web.app**.
+`03 App/app/` is a shared workspace for work orders, parts, projects, budget, the season timeline, board stock and mold planning, running on Firebase with an email allowlist for the roster. It is live at **https://feb-composites.web.app**.
+
+The folder was called `03 Work Orders/` until work orders stopped being most of what it did.
 
 Work orders print as a hand-fillable shop traveler rather than a screenshot of the screen: ruled boxes for every field, an initial-and-date cell on every step, blockers called out in heavy rule and hatching, and blank rows at the end of each list so plies, steps and BOM lines can be added at the bench. Print on a work order opens a preview of the exact sheet. Print blank traveler gives you empty forms with the standard step list already on them, a stack to take to RFS. It's all designed for a black-and-white laser, so nothing depends on colour.
 
 Every sheet is two pages, always. The writing space does the adjusting: the app renders the sheet, measures it, and picks the most generous layout that still fits, so a sparse work order comes out with plenty of room to write and a dense one comes out tighter. Nothing spills onto a third page that then gets separated from the first two. Step titles no longer carry CS standard numbers either, since they made the sheet dense and the standards are in the Documents tab.
 
-Setup, deploy and architecture are in `03 Work Orders/app/README.md`. The `work-orders.html` file in the same folder is the original single-file version, kept as an offline viewer.
+### Stock and the mold stack planner
+
+The **Stock** tab is a live tooling-board inventory — CS-011 asked for one and we never had one, which is how the Master Tracker sheet went stale. A full 4×8 sheet and a 19×30 offcut are the same kind of record here, so remnants come back into stock instead of quietly becoming a pile.
+
+On top of that it plans molds. Give it a mold STL, or just type a rectangular block, and it works out which boards to glue and how to saw them:
+
+- **It picks the thicknesses**, from what the rack actually holds. It tries every combination that reaches the mold height, slices each, and keeps the one that wastes least board — with a penalty per extra layer, because every glue joint is a 4-hour clamp (CS-003 §7.3).
+- **It cakes the layers.** Each layer's blank is only as big as the mold needs at that height, so a tapered plug comes out as a stepped stack rather than a solid block. Separated features get their own blocks.
+- **It splits past 6 inches.** CS-005 §5 caps the ShopSabre at ~6″ of cut depth, so anything taller is sectioned at board boundaries, with a reminder to design the dowels in CAD rather than improvise them at the bed (CS-003 §7.1.6).
+- **It prints a cut list.** Numbered cuts per board, in the order you make them, every one running edge to edge because that is all a saw can do. Offcuts get opened before fresh sheets. Anything the rack cannot supply comes out as a purchase list instead of a surprise.
+- **It draws the stack** exploded, with the mold outlined inside each block, so the CS-003 §7.2 reviewer can see the fit before initialling — that checklist item was hand-drawn until now.
+
+A real Fusion export is often an assembly rather than one solid (the SN5 undertray file is 31 separate bodies), so it splits bodies and asks which one you mean.
+
+The geometry is deliberately conservative: a blank is computed to *contain* the mold, verified by clipping every triangle of the mesh against every blank. A mold with bad draft still gets a correct plan plus a CS-003 §7.1.4 warning, rather than being refused.
+
+Setup, deploy and architecture are in `03 App/app/README.md`. The `work-orders.html` file in the same folder is the original single-file version, kept as an offline viewer.
 
 ## How the pieces connect
 
@@ -69,6 +87,18 @@ Each row maps to a numbered standard in `02 CS Standards/`; `CS-INDEX` is the lo
 
 Edit the markdown in `src/`, then rebuild with `tools/.venv/bin/python tools/build_docx.py --all` (fallback: `tools/build_docx.sh`). Regenerate the retro work orders only if the source data was wrong: `tools/.venv/bin/python tools/gen_retro_wos.py` rewrites both `data/sn5-work-orders.json` and the seed embedded in `work-orders.html`, and is safe to re-run.
 
+Tests, all runnable from here:
+
+```bash
+node tools/test_app.mjs      # app logic across every tab, in a DOM stub
+node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
+node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
+cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
+  "node '../tools/test_wo_rules.mjs'"                      # security rules
+```
+
+To drive the app locally, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
+
 `SESSION-STATE.md` is a rolling handoff file for picking work back up mid-stream. Start there if a session got cut off.
 
-One quirk worth knowing: the git root is this folder rather than `03 Work Orders/`, because the scripts in `tools/` resolve their paths relative to here. `firebase deploy` still has to run from inside `03 Work Orders/`.
+One quirk worth knowing: the git root is this folder rather than `03 App/`, because the scripts in `tools/` resolve their paths relative to here. `firebase deploy` still has to run from inside `03 App/`.

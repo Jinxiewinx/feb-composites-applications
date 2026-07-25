@@ -2,8 +2,8 @@
 # composites app, datasheets, printables, and the tooling that builds them.
 #
 # The git root is SN6 Resources/ because the scripts in tools/ resolve their
-# paths as  <tools>/../03 Work Orders/... , so they only run correctly from here.
-# Note that firebase deploy still runs from inside "03 Work Orders/".
+# paths as  <tools>/../03 App/... , so they only run correctly from here.
+# Note that firebase deploy still runs from inside "03 App/".
 #
 # Track everything except build artifacts and OS junk:
 
@@ -21,4 +21,4 @@ __pycache__/
 .gstack/
 
 # Firebase emulator log, rewritten every time tools/test_wo_rules.mjs runs.
-03 Work Orders/firestore-debug.log
+03 App/firestore-debug.log

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Geometry tests for 03 Work Orders/app/slicer.js.
+/* Geometry tests for 03 App/app/slicer.js.
    Standalone, like test_wo_rules.mjs — NOT part of test_app.mjs, whose DOM stub
    has no File/FileReader and whose FILES list is UI logic. The slicer is pure,
    so it runs here with nothing stubbed at all.
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 Work Orders", "app");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const src = readFileSync(join(root, "slicer.js"), "utf8").replace(/"use strict";\n/, "");
 // Indirect eval runs in global scope, so the slicer's top-level `const`s are
 // invisible to this module. Hand them out through globalThis, the same trick

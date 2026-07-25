@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-/* Firestore security-rules tests for 03 Work Orders/firestore.rules.
+/* Firestore security-rules tests for 03 App/firestore.rules.
    Runs against the Firestore emulator via its REST API, with unsigned JWTs
    (the emulator accepts them — same trick @firebase/rules-unit-testing uses).
-   Run from "03 Work Orders/":
+   Run from "03 App/":
      firebase emulators:exec --only firestore --project demo-feb-work-orders \
        "node '../tools/test_wo_rules.mjs'"                                    */
 

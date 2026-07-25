@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Functional tests for the FEB composites app (03 Work Orders/app/*.js).
+/* Functional tests for the FEB composites app (03 App/app/*.js).
    Loads the classic-script app files into a DOM stub with a fake window.fb, so
    app logic across all tabs is tested without a browser or Firebase. Rules
    enforcement is tested separately against the emulator (test_wo_rules.mjs).
@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 Work Orders", "app");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8"));
 
 /* ---------- DOM + browser stubs ---------- */

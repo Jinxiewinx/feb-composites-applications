@@ -255,7 +255,7 @@ Test fix: `tools/test_app.mjs` bell assertion checked for the 🔔 emoji; now ch
 
 ## Composites app responsive work (in flight)
 
-Making `03 Work Orders/app/` work on phones/tablets without changing desktop.
+Making `03 App/app/` work on phones/tablets without changing desktop.
 Simon picked two forks: mobile nav is a **slide-in drawer** (hamburger), and wide
 list tables become **stacked cards** on narrow screens. Breakpoints: phone ≤640,
 tablet ≤900; `max-width` queries so desktop is the untouched default.
@@ -345,9 +345,9 @@ Finished and pushed. `tools/test_app.mjs` is at 67 passing.
 
 ### Repo
 
-The git root is this folder, not `03 Work Orders/`. The scripts in `tools/`
-resolve `Path(__file__).parent.parent / "03 Work Orders"`, so they only run from
-one level up. `firebase deploy` still runs from inside `03 Work Orders/`.
+The git root is this folder, not `03 App/`. The scripts in `tools/`
+resolve `Path(__file__).parent.parent / "03 App"`, so they only run from
+one level up. `firebase deploy` still runs from inside `03 App/`.
 
 Push over HTTPS, never SSH. The machine's SSH key authenticates as
 `starbuckgold`, but the repo belongs to `Jinxiewinx`, which is the `gh` CLI
