@@ -83,6 +83,19 @@ counter-test that a genuine 5mm hole is still refused — the fix must not becom
 "join anything". The error now quantifies the gap, which is what distinguishes a
 too-tight tolerance from a broken mesh.
 
+**Weld tolerance is a floor that RELAXES, and it is not the dedupe tolerance.**
+0.05mm floor, doubling to a 1mm cap (`stitchRelaxed`), and the last attempt is
+clamped to the cap or the real limit would be 0.8mm. A hard 0.01mm refused a real
+mold whose triangles were 0.012mm apart — ordinary tessellation noise, not a
+defect. Loosening is safe because contours only feed a bounding box, the
+monotonicity check and a drawn outline: blanks carry a 25.4mm margin and CS-003
+§7.1.5 forbids any machined section under 15mm, so a 1mm weld is 15x below the
+smallest feature that may exist. Past the cap it is a genuine hole and we refuse.
+`DEDUPE_TOL_MM` (1e-4) is deliberately separate — it only collapses the doubled
+hit from a vertex sitting exactly on the slice plane, and tying it to a relaxed
+weld would start eating whole segments on a fine mesh, losing real geometry to
+fix a joining problem. A stack that needed relaxing emits a warning.
+
 **The containment test is the spine.** Clip each triangle to the slab and check
 the clipped POLYGON (not its bounding box) against the blank set, run against raw
 STL triangles. Both naive versions are wrong: vertex-in-slab is unsound (a

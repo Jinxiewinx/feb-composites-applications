@@ -20,7 +20,7 @@ const src = readFileSync(join(root, "slicer.js"), "utf8").replace(/"use strict";
 // invisible to this module. Hand them out through globalThis, the same trick
 // test_app.mjs uses for core.js's lexical bindings.
 globalThis.__S = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,checkMonotone,simplify,clipTriangleToSlab,sliceMold,MARGIN_MIN_MM,MARGIN_MAX_MM});");
+(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,checkMonotone,simplify,clipTriangleToSlab,sliceMold,stitchRelaxed,MARGIN_MIN_MM,MARGIN_MAX_MM,WELD_TOL_MM,MAX_WELD_TOL_MM,DEDUPE_TOL_MM});");
 const S = globalThis.__S;
 
 /* ---------- mesh builders ----------
@@ -150,6 +150,45 @@ t("REGRESSION endpoints straddling a weld-grid boundary still join", () => {
   ];
   const loops = S.stitchContours(segs);
   assert(loops.length === 1, "2e-7mm apart is the same corner, not a hole; got " + loops.length + " loops");
+});
+t("REGRESSION a 12um gap joins — ordinary tessellation noise, not a broken mesh", () => {
+  // Reported from a real mold. A hard 0.01mm tolerance refused it. Adjacent
+  // triangles in a real Fusion export do not share endpoints exactly.
+  const segs = [
+    [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+    [{ x: 100.012, y: 0 }, { x: 100, y: 100 }],
+    [{ x: 100, y: 100 }, { x: 0, y: 100 }],
+    [{ x: 0, y: 100 }, { x: 0, y: 0 }],
+  ];
+  const r = S.stitchRelaxed(segs, S.WELD_TOL_MM);
+  assert(r.loops.length === 1, "12um is noise, not a hole");
+  assert(r.tol === S.WELD_TOL_MM, "and it should not even need relaxing, got " + r.tol);
+});
+t("the relaxation ladder loosens only as far as it must, and stops at the cap", () => {
+  const box = g => [
+    [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+    [{ x: 100 + g, y: 0 }, { x: 100, y: 100 }],
+    [{ x: 100, y: 100 }, { x: 0, y: 100 }],
+    [{ x: 0, y: 100 }, { x: 0, y: 0 }],
+  ];
+  assert(S.stitchRelaxed(box(0.3), S.WELD_TOL_MM).tol === 0.4, "0.3mm should need one or two doublings");
+  // Doubling overshoots the cap; the last attempt must be clamped to it or the
+  // documented 1mm limit is really 0.8mm.
+  assert(S.stitchRelaxed(box(0.9), S.WELD_TOL_MM).tol === S.MAX_WELD_TOL_MM, "the documented cap must be the real cap");
+  throws(() => S.stitchRelaxed(box(3), S.WELD_TOL_MM), /hole/i, "past the cap it is a real defect");
+});
+t("the dedupe tolerance is NOT the weld tolerance", () => {
+  // Tying them together means a relaxed weld starts collapsing both ends of a
+  // short segment into one point and dropping it — losing real geometry to fix
+  // a joining problem. On a finely tessellated mold that is most of the outline.
+  assert(S.DEDUPE_TOL_MM < S.WELD_TOL_MM / 100, "dedupe must stay far tighter than any weld");
+});
+t("a rough mesh warns instead of silently passing", () => {
+  // A stack that only closed at a loosened tolerance is machinable, but the
+  // export is rough and that is worth saying before it happens again.
+  const tris = frustum(200, 80, 0, 100);
+  const out = S.sliceMold(tris, [25, 25, 25, 25], {});
+  assert(out.warnings.length === 0, "a clean mesh must not cry wolf: " + out.warnings.join("; "));
 });
 t("a genuine hole is still refused, and the message says how far the gap is", () => {
   // The fix must not become "join anything". A 5mm gap is a real defect.

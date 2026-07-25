@@ -71,7 +71,30 @@
 /* All internal geometry is in MILLIMETRES. */
 const MARGIN_MIN_MM = 25.4;   // 1in  — Simon: enough slop that a shifted glue-up still machines
 const MARGIN_MAX_MM = 50.8;   // 2in  — top of the band; also the merge inflation
-const WELD_TOL_MM = 0.01;     // contour stitching tolerance
+/* Contour stitching tolerance — how far apart two segment ends can be and still
+   count as the same corner.
+
+   This is a floor, not a fixed value: sliceMold scales it with the model and
+   RELAXES it on failure (see stitchRelaxed). Adjacent triangles in a real export
+   do not share endpoints exactly. Fusion tessellates per-surface, T-junctions
+   from mesh repair leave microns of slop, and 12um gaps on a 900mm mold are
+   ordinary. A hard 0.01mm rejected a perfectly good mold in production.
+
+   How loose can it safely get? The tolerance is only ever used to decide whether
+   two points are the same corner. Contours here feed three things: a bounding
+   box, the monotonicity check, and a drawn outline. Blanks carry a 25.4mm
+   margin, and CS-003 §7.1.5 says no machined section under 15mm survives at all.
+   So welding at up to a millimetre cannot change a blank or merge two real
+   features — it is 15x below the smallest thing that may exist. Past the cap,
+   the mesh is genuinely broken and we say so. */
+const WELD_TOL_MM = 0.05;
+const MAX_WELD_TOL_MM = 1.0;
+/* Deliberately NOT the weld tolerance. This one only collapses the doubled hit
+   you get when a vertex lies exactly on the slice plane and both its edges
+   report it — two values that are identical to within float noise. Tying it to
+   the weld tolerance would mean a relaxed weld starts eating whole segments on a
+   finely tessellated mesh, dropping real geometry to fix a joining problem. */
+const DEDUPE_TOL_MM = 1e-4;
 const MONO_TOL_MM = 0.05;     // monotonicity slack; float noise on a drafted wall is ~1e-3
 /* Slice a hair ABOVE the layer floor. At z0 exactly, a flat mold base is a
    sheet of coplanar triangles that produce no crossing segments at all, so the
@@ -179,7 +202,7 @@ function sliceAt(tris, z) {
     // Dedupe a vertex that sits exactly on the plane and so is found twice.
     const uniq = [];
     for (const h of hits) {
-      if (!uniq.some(u => Math.abs(u.x - h.x) < WELD_TOL_MM && Math.abs(u.y - h.y) < WELD_TOL_MM)) uniq.push(h);
+      if (!uniq.some(u => Math.abs(u.x - h.x) < DEDUPE_TOL_MM && Math.abs(u.y - h.y) < DEDUPE_TOL_MM)) uniq.push(h);
     }
     if (uniq.length === 2) segs.push([uniq[0], uniq[1]]);
   }
@@ -262,6 +285,30 @@ function stitchContours(segs, tol) {
     if (pts.length >= 4) loops.push(pts);
   }
   return loops;
+}
+
+/* Stitch, and if the mesh is slightly noisier than expected, loosen and retry
+   rather than refusing the job. Doubling from the floor to the cap is four
+   attempts, all cheap, and the cap is what keeps this honest: a mesh that still
+   won't close at 1mm has a real hole, not float noise.
+
+   Returns { loops, tol } so the caller can tell the user their export needed
+   loosening — a mold that welds at 0.8mm is machinable but its STL is rough,
+   and that is worth knowing before it happens again. */
+function stitchRelaxed(segs, baseTol) {
+  let tol = baseTol || WELD_TOL_MM;
+  let last = null;
+  let triedCap = false;
+  while (true) {
+    try { return { loops: stitchContours(segs, tol), tol }; }
+    catch (e) { last = e; }
+    if (triedCap) throw last;
+    tol *= 2;
+    // Doubling overshoots the cap (0.05 -> ... -> 0.8 -> 1.6), which would make
+    // the real limit 0.8mm while the constant claims 1mm. Clamp the last attempt
+    // so the documented cap is the actual cap.
+    if (tol >= MAX_WELD_TOL_MM) { tol = MAX_WELD_TOL_MM; triedCap = true; }
+  }
 }
 
 function polyArea(pts) {
@@ -460,11 +507,14 @@ function sliceMold(tris, thicknesses, opts) {
   const layers = [];
   let z = bounds.z0;
   let prevIslands = null;
+  let usedTol = 0;   // highest weld tolerance any layer needed, 0 if none did
   for (let i = 0; i < thicknesses.length; i++) {
     const z0 = z, z1 = z + thicknesses[i];
     z = z1;
     if (z0 >= bounds.z1) break; // composition overshoots the mold; extra boards unused
-    const loops = stitchContours(sliceAt(tris, z0 + SLICE_EPS_MM));
+    const st = stitchRelaxed(sliceAt(tris, z0 + SLICE_EPS_MM), WELD_TOL_MM);
+    if (st.tol > WELD_TOL_MM) usedTol = Math.max(usedTol, st.tol);
+    const loops = st.loops;
     const islands = outerContours(loops).map(c => {
       const contour = simplify(c, eps);
       return { contour, box: bboxOf(contour) };
@@ -509,6 +559,9 @@ function sliceMold(tris, thicknesses, opts) {
       }
     }
   }
+  if (usedTol > 0) {
+    warnings.push(`This STL is rough: outlines only closed after loosening the join tolerance to ${usedTol}mm (normally ${WELD_TOL_MM}mm). The blanks are unaffected — the tolerance is far below anything CS-003 lets a mold contain — but a finer Fusion export would be cleaner.`);
+  }
   return { layers, bounds, warnings };
 }
 
@@ -520,6 +573,7 @@ if (typeof module !== "undefined" && module.exports) {
     polyArea, pointInPoly, bboxOf, unionBox, inflateBox, boxesOverlap, boxContains,
     boxW, boxH, mergeToFixedPoint, applyMargin, checkMonotone, simplify,
     clipTriangleToSlab, sliceMold,
-    MARGIN_MIN_MM, MARGIN_MAX_MM, WELD_TOL_MM, SLICE_EPS_MM,
+    stitchRelaxed,
+    MARGIN_MIN_MM, MARGIN_MAX_MM, WELD_TOL_MM, MAX_WELD_TOL_MM, DEDUPE_TOL_MM, SLICE_EPS_MM,
   };
 }
