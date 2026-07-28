@@ -538,9 +538,12 @@ const TABS = [
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
   { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
-  { id: "projects", label: "Projects", ic: "projects", coll: "projects", render: () => renderProjects() },
+  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
-  { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
+  // Calendar cut from the nav for now — most of this ground is already
+  // covered by Slack (outside this app) and the Timeline tab. calendar.js is
+  // untouched; uncommenting this row restores the tab.
+  // { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
   { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },
@@ -643,7 +646,10 @@ function searchAll(q) {
   const add = (tab, id, label, sub) => out.push({ tab, id, label, sub });
   DB.workOrders.forEach(w => { if ((w.id + " " + (w.partName || "")).toLowerCase().includes(q)) add("workorders", w.id, w.partName || w.id, "Work order " + w.id); });
   DB.parts.forEach(p => { if ((p.id + " " + (p.partName || "")).toLowerCase().includes(q)) add("parts", p.id, p.partName || p.id, "Part " + p.id); });
-  DB.projects.forEach(p => { if ((p.title || "" + p.id).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, "Project"); });
+  // (p.title || "" + p.id) was a precedence bug: "" + p.id runs first, so the
+  // id branch was unreachable whenever a title existed — search never matched
+  // by ticket id. Matches the id+label pattern already used for work orders/parts.
+  DB.projects.forEach(p => { if ((p.id + " " + (p.title || "")).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Project"); });
   DB.budget.forEach(b => { if ((b.item || "").toLowerCase().includes(q)) add("budget", b.id, b.item || b.id, "Purchase"); });
   DB.users.forEach(u => { if (((u.name || "") + " " + u.email).toLowerCase().includes(q)) add("people", u.email, u.name || u.email, "Person"); });
   (typeof allDocs === "function" ? allDocs() : []).forEach(d => { if ((d.title || "").toLowerCase().includes(q)) out.push({ tab: "documents", docSrc: d.src, uploaded: d.uploaded, label: d.title, sub: "Document · " + d.category }); });

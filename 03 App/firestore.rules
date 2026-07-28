@@ -70,5 +70,14 @@ service cloud.firestore {
       allow update: if onRoster()
         && request.resource.data.next == resource.data.next + 1;
     }
+
+    // config/<key> = small settings docs, e.g. config/slack { webhookUrl }.
+    // Any roster member reads (the client needs it to post at runtime), but
+    // only a lead configures it — a webhook URL is a live credential, so
+    // writing it is not the same trust level as an ordinary record edit.
+    match /config/{key} {
+      allow read: if onRoster();
+      allow create, update: if isLead();
+    }
   }
 }

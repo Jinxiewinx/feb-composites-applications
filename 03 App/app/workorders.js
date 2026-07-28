@@ -111,6 +111,14 @@ function blockerOpenBefore(wo, idx) {
   }
   return null;
 }
+// Issues required-linked to this WO (workOrderId, not the informational
+// relatedWorkOrders list) — same in-memory filter every other tab uses, no
+// Firestore query/index needed. isIssue()/projStatus() live in projects.js;
+// script load order doesn't matter here since these only run at call time,
+// well after every classic script has finished loading.
+function issuesForWO(woId) { return (DB.projects || []).filter(p => isIssue(p) && p.workOrderId === woId); }
+// Cancelled issues need no disposition — they turned out not to be real.
+function undisposedIssuesForWO(woId) { return issuesForWO(woId).filter(p => projStatus(p) !== "Cancelled" && !p.resolutionMethod); }
 function renderWorkOrders() {
   return view.mode === "detail" ? renderWODetail() : renderWOList();
 }
@@ -173,17 +181,25 @@ function renderWODetail() {
       ${mf(wo, "Mold ID", "moldId")}${mf(wo, "Layers", "layers")}${mf(wo, "Density (lb/ft³)", "density")}
       ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
     </div>` : "";
+  const issues = issuesForWO(wo.id);
+  const undisposed = undisposedIssuesForWO(wo.id);
   return `
   <div class="toolbar no-print">
     <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All work orders</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     <button onclick="openPrintPreview('${wo.id}')">Print</button>
+    <button onclick="createIssueFromWO('${wo.id}')">⚠ Create issue</button>
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
   </div>
   <div class="card">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
     <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span>${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
+    ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
+    ${issues.length ? `
+    <h3>Issues</h3>
+    <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>
+    ` : ""}
     <h3>Overview</h3>
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
@@ -247,7 +263,29 @@ function renderWODetail() {
 }
 
 /* field update helpers (operate on current WO; each saves only its field) */
-function updWO(key, val) { const w = woById(view.id); w[key] = val; saveWO(w, key); }
+function updWO(key, val) {
+  const w = woById(view.id);
+  // The CS-003 enforcement point at the Work Order level: intercepting this
+  // generic field-write is the actual hook (there's no dedicated "Mark
+  // Complete" button — status is just one editable field, same shape as the
+  // existing step-blocker check below).
+  if (key === "status" && val === "Complete") {
+    const undisposed = undisposedIssuesForWO(w.id);
+    if (undisposed.length) {
+      toast(`Can't complete this work order — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => i.id).join(", ")}) ${undisposed.length > 1 ? "aren't" : "isn't"} disposed yet.`, "error");
+      render(); return;
+    }
+  }
+  w[key] = val; saveWO(w, key);
+}
+// Reuses the Tickets "new ticket" modal wholesale, pre-selected to Issue and
+// pre-filled with this work order — same modal, same fields, no duplication.
+function createIssueFromWO(woId) {
+  openNewProject();
+  document.getElementById("np-kind").value = "issue";
+  ticketKindChanged();
+  document.getElementById("np-wo").value = woId;
+}
 function mf(wo, label, key) {
   const v = (wo.mold || {})[key] ?? "";
   return view.edit

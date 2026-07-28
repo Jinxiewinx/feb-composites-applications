@@ -48,6 +48,7 @@
     --amber: #a25c00; --warn-bg: #fdf1d8; --warn-border: #f0d081;
     --bad: #cf3430; --bad-bg: #fdeceb; --bad-border: #f4bbb6;
     --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;
+    --purple: #6a3fb0; --purple-bg: #efe7fb; --purple-border: #d3c0f0;
     --info-bg: #e8f0fd; --gold-bg: #fff7e0;
     /* effects */
     --radius: 6px; --r-md: 9px; --r-lg: 14px;
@@ -72,6 +73,7 @@
     --amber: #e0a53a; --warn-bg: #2a2211; --warn-border: #4a3d1c;
     --bad: #ff6f62; --bad-bg: #2c1613; --bad-border: #56291f;
     --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
+    --purple: #a385e6; --purple-bg: #241c3a; --purple-border: #3d2f5c;
     --info-bg: #182842; --gold-bg: #2a2411;
     --shadow: 0 1px 2px rgba(0,0,0,.5); --shadow-md: 0 4px 18px rgba(0,0,0,.55); --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
     --carbon: rgba(255,255,255,.03);
@@ -155,19 +157,61 @@
   table.list.dash td { cursor: default; }
   .pill { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: var(--fill); color: var(--muted); }
   .pill.Complete { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
-  .pill.InWork { background: var(--surface)ae6; border-color: var(--warn-border); color: var(--amber); }
+  .pill.InWork { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
   .pill.Draft { background: var(--fill); }
   .pill.OnHold { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad); }
   .pill.retro { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
   .stage { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; border: 1px solid var(--line); white-space: nowrap; }
   .stage.st-0 { background: var(--fill); color: var(--muted); }
-  .stage.st-mid { background: var(--surface)ae6; border-color: var(--warn-border); color: var(--amber); }
+  .stage.st-mid { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
   .stage.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
   .stage.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
   .stagerow { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 3px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
   .chip:hover { filter: brightness(.97); }
   .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
+
+  /* ---- tickets: kind badge, colored status, gates, sub-tickets ---- */
+  .kindfilter { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .kindfilter span { padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--muted); }
+  .kindfilter span.on { background: var(--blue); color: #fff; }
+  .kindbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 4px; padding: 2px 7px; vertical-align: 1px; }
+  .kindbadge.project { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
+  .kindbadge.issue { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-border); }
+  .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 5px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .status.todo { background: var(--fill); color: var(--muted); border-color: var(--border-2); } .status.todo .dot { background: var(--faint); }
+  .status.inprogress { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); } .status.inprogress .dot { background: var(--accent); }
+  .status.collecting { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); } .status.collecting .dot { background: var(--purple); }
+  .status.onhold { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); } .status.onhold .dot { background: var(--amber); }
+  .status.done { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); } .status.done .dot { background: var(--ok); }
+  .status.cancelled { background: var(--surface-2); color: var(--faint); border-color: var(--line); text-decoration: line-through; } .status.cancelled .dot { background: var(--faint); }
+  /* the "large dropdown near the top with colors" — status is directly editable from here, no Edit mode needed */
+  .statusdrop { position: relative; display: inline-block; }
+  .statusdrop select { appearance: none; font: inherit; font-weight: 700; font-size: 13px; padding: 7px 28px 7px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border-2); background: var(--fill); color: var(--muted); }
+  .statusdrop.todo select { background: var(--fill); color: var(--muted); border-color: var(--border-2); }
+  .statusdrop.inprogress select { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); }
+  .statusdrop.collecting select { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+  .statusdrop.onhold select { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); }
+  .statusdrop.done select { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
+  .statusdrop.cancelled select { background: var(--surface-2); color: var(--faint); border-color: var(--line); }
+  .statusdrop::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: .6; font-size: 10px; }
+  .req { color: var(--bad); font-weight: 600; font-size: 10px; text-transform: none; }
+  /* the CS-003 enforcement made visible — same amber blocker language as a Work Order step */
+  .gate { display: flex; gap: 10px; align-items: flex-start; background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 7px; padding: 10px 12px; margin: 8px 0; }
+  .gate .gi { color: var(--amber); font-weight: 900; font-size: 15px; line-height: 1.4; }
+  .gate b { color: var(--amber); }
+  .gate.blocked { background: var(--bad-bg); border-color: var(--bad-border); } .gate.blocked .gi, .gate.blocked b { color: var(--bad); }
+  .subticket { display: flex; align-items: center; gap: 10px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); margin-bottom: 6px; cursor: pointer; }
+  .subticket:hover { border-color: var(--border-2); background: var(--hover); }
+  .subticket .stt { flex: 1; font-weight: 600; font-size: 13.5px; }
+  .linkrow { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+  .col.col-todo::before { background: var(--faint); }
+  .col.col-inprogress::before { background: var(--accent); }
+  .col.col-collecting::before { background: var(--purple); }
+  .col.col-onhold::before { background: var(--amber); }
+  .col.col-done::before { background: var(--ok); }
+  .col.col-cancelled::before { background: var(--faint); }
 
   /* ---- cards / detail ---- */
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 0 0 14px; box-shadow: var(--shadow); }
@@ -244,17 +288,17 @@
   .gsr:hover { background: var(--accent-soft); }
   .notif { padding: 9px 10px; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }
   .notif:hover { background: var(--fill); }
-  .notif.unread { border-left-color: var(--gold); background: var(--surface)df4; }
+  .notif.unread { border-left-color: var(--gold); background: var(--gold-bg); }
 
   /* ---- calendar ---- */
   table.cal { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); table-layout: fixed; }
   table.cal th { background: var(--surface-2); color: var(--muted); font-size: 11px; text-transform: uppercase; padding: 6px; text-align: center; border-bottom: 1px solid var(--line); }
   table.cal td { border: 1px solid var(--line); vertical-align: top; height: 92px; padding: 3px; overflow: hidden; }
   table.cal td.empty { background: var(--surface-2); }
-  table.cal td.istoday { background: var(--surface)df4; outline: 2px solid var(--gold); outline-offset: -2px; }
+  table.cal td.istoday { background: var(--gold-bg); outline: 2px solid var(--gold); outline-offset: -2px; }
   table.cal .daynum { font-size: 11px; color: var(--muted); text-align: right; }
   .calitem { font-size: 11px; padding: 1px 5px; border-radius: 3px; margin: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--line); }
-  .calitem.st-mid { background: var(--surface)ae6; border-color: var(--warn-border); } .calitem.InWork { background: var(--info-bg); } .calitem.Draft { background: var(--fill); } .calitem.retro { background: var(--retro-bg); border-color: var(--retro-border); }
+  .calitem.st-mid { background: var(--warn-bg); border-color: var(--warn-border); } .calitem.InWork { background: var(--info-bg); } .calitem.Draft { background: var(--fill); } .calitem.retro { background: var(--retro-bg); border-color: var(--retro-border); }
 
   /* ---- people ---- */
   .peoplegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -304,7 +348,7 @@
   .step .num { font-weight: 700; color: var(--brand-ink); min-width: 22px; }
   .step .body { flex: 1; } .step .meta { font-size: 12px; color: var(--muted); }
   .step .buyoff { display: flex; gap: 6px; align-items: center; font-size: 12px; }
-  .step.blocker { background: var(--surface)ae6; margin: 0 -8px; padding: 8px; }
+  .step.blocker { background: var(--warn-bg); margin: 0 -8px; padding: 8px; }
   .step.done { opacity: .72; } .step.failed { background: var(--bad-bg); margin: 0 -8px; padding: 8px; }
 
   /* ---- timeline grid ---- */
@@ -364,13 +408,10 @@
   .gitem { transition: transform var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
   .gitem:hover { transform: translateY(-1px); border-color: var(--accent); background: var(--surface); }
   .gitem .gn { font-family: var(--font-display); }
-  /* board columns: a status-colored accent strip across the top */
+  /* board columns: a status-colored accent strip across the top (states + colors
+     defined in the tickets block above, since they're the same 6-value enum) */
   .col { border: 1px solid var(--line); position: relative; overflow: hidden; }
   .col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border-2); }
-  .col.col-Backlog::before { background: var(--faint); }
-  .col.col-Active::before  { background: var(--accent); }
-  .col.col-Blocked::before { background: var(--bad); }
-  .col.col-Done::before    { background: var(--ok); }
   .col h4 { font-family: var(--font-display); letter-spacing: .02em; }
   /* slightly softer pill/chip corners to match the new radius language */
   .pill, .stage { border-radius: 5px; }

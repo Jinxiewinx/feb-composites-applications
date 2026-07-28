@@ -14,9 +14,12 @@ function deadlineItems() {
     mine: isMine([p.moldEngineer, p.manufacturingEngineer]),
   }));
   DB.projects.forEach(p => items.push({
-    coll: "projects", id: p.id, kind: "Project", label: p.title || p.id,
+    // projStatus()/ticketKind() migrate the old 4-value status and default an
+    // absent kind, same as everywhere else a ticket is read — going around
+    // them here would show a stale "Backlog" or the wrong kind on this list.
+    coll: "projects", id: p.id, kind: isIssue(p) ? "Issue" : "Project", label: p.title || p.id,
     who: (p.assignees || []).join(" / "),
-    date: p.dueDate, done: p.status === "Done",
+    date: p.dueDate, done: projStatus(p) === "Done",
     mine: isMine(p.assignees || []),
   }));
   DB.workOrders.forEach(w => items.push({
@@ -57,7 +60,7 @@ function renderDashboard() {
   const openSum = openOrders.reduce((s, b) => s + num(b.cost), 0);
   const counts = [
     ["Parts", DB.parts.length, "parts"], ["Work orders", DB.workOrders.length, "workorders"],
-    ["Projects", DB.projects.length, "projects"], ["Purchases", DB.budget.length, "budget"],
+    ["Tickets", DB.projects.length, "projects"], ["Purchases", DB.budget.length, "budget"],
   ];
 
   // Projects you watch that changed since you last opened them.
@@ -67,9 +70,9 @@ function renderDashboard() {
   return `
   ${watched.length ? `<div class="card" style="border-left:3px solid var(--gold)">
     <h3>Watched — new activity <span class="warn">(${watched.length})</span></h3>
-    <table class="list dash"><tr><th>Project</th><th>Status</th><th>Last activity</th></tr>
-      ${watched.map(p => `<tr><td>${chip("projects", p.id, p.title || p.id)}</td>
-        <td><span class="pill ${projStatusClass(p.status)}">${esc(p.status)}</span></td>
+    <table class="list dash"><tr><th>Ticket</th><th>Status</th><th>Last activity</th></tr>
+      ${watched.map(p => `<tr><td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${chip("projects", p.id, p.title || p.id)}</td>
+        <td><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span></td>
         <td class="tny">${fmtWhen(p.updatedAt)} by ${esc(p.updatedBy || "?")}</td></tr>`).join("")}
     </table>
   </div>` : ""}

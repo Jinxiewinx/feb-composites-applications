@@ -13,10 +13,11 @@ const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8
 
 /* ---------- DOM + browser stubs ---------- */
 let lastToast = "";
+let testIssueId = null; // set once an unambiguous fixture issue ticket exists; several tests reuse it
 const els = {};
 function el(id) {
   if (!els[id]) els[id] = {
-    id, innerHTML: "", value: "", tagName: "INPUT", files: [],
+    id, innerHTML: "", value: "", tagName: "INPUT", files: [], style: {},
     classList: { add() {}, remove() {} },
     closest: () => null, focus() {}, setSelectionRange() {}, click() {},
     querySelector: () => null, querySelectorAll: () => [],
@@ -79,6 +80,9 @@ globalThis.fb = {
   async notify(to, type, text, link) { calls.push(["notify", to, type]); },
   async markNotifRead(id) { calls.push(["markNotifRead", id]); },
   async signOut() {}, async refreshRoster() {},
+  // No webhook configured in tests → postToSlack() no-ops before ever calling fetch().
+  async getConfig(key) { calls.push(["getConfig", key]); return null; },
+  async setConfig(key, data) { calls.push(["setConfig", key, data]); },
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
@@ -89,7 +93,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -131,6 +135,40 @@ await t("blocker blocks later buy-off", () => { const id = view.id; lastToast = 
 await t("buy-off stamps identity + writes steps concurrency-safe", () => { calls.length = 0; buyoff(0); const b = woById(view.id).steps[0].buyoff; assert(b.name === "Simon" && b.email === "simon@berkeley.edu" && b.uid === "u1" && b.date); assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "buy-off must use transaction, not whole-field write: " + JSON.stringify(calls)); });
 await t("retro WO exempt from blockers, no buy-off button", () => { const r = DB.workOrders.find(w => w.retro); view = { ...view, tab: "workorders", mode: "detail", id: r.id, edit: false }; render(); assert(!main.innerHTML.includes("buy off as")); assert(blockerOpenBefore(r, r.steps.length) === null); });
 await t("reset steps lead-only + counts buy-offs", async () => { fb.roster = { name: "M", role: "member" }; const wo = woById(view.id); lastToast = ""; resetSteps(wo); assert(lastToast.includes("lead-only")); fb.roster = { name: "Simon", role: "lead" }; });
+await t("an undisposed linked issue blocks WO completion; disposing it unblocks", async () => {
+  await newWO();
+  const woId = view.id;
+  const issue = { id: "TKT-GATE-1", title: "Test nonconformance", kind: "issue", status: "To Do", workOrderId: woId, resolutionMethod: "", whatHappened: "", assignees: [], watchers: [], files: [], comments: [] };
+  DB.projects.push(issue);
+  lastToast = "";
+  updWO("status", "Complete");
+  assert(lastToast.includes("linked issue"), "blocked: " + lastToast);
+  assert(woById(woId).status !== "Complete", "not completed while undisposed");
+  issue.resolutionMethod = "Corrective Action"; // doesn't have to be resolved right away, but must carry a method before the WO can close
+  updWO("status", "Complete");
+  assert(woById(woId).status === "Complete", "completes once disposed");
+});
+await t("a Cancelled issue needs no disposition and doesn't block completion", async () => {
+  await newWO();
+  const woId = view.id;
+  DB.projects.push({ id: "TKT-GATE-2", title: "False alarm", kind: "issue", status: "Cancelled", workOrderId: woId, resolutionMethod: "", assignees: [], watchers: [] });
+  updWO("status", "Complete");
+  assert(woById(woId).status === "Complete", "cancelled issues don't gate completion");
+});
+await t("relatedWorkOrders links do NOT count toward the completion gate, only the required workOrderId", async () => {
+  await newWO();
+  const woId = view.id;
+  DB.projects.push({ id: "TKT-GATE-3", title: "Unrelated issue, just linked informationally", kind: "issue", status: "To Do", workOrderId: "WO-SOMETHING-ELSE", relatedWorkOrders: [woId], resolutionMethod: "", assignees: [], watchers: [] });
+  updWO("status", "Complete");
+  assert(woById(woId).status === "Complete", "an informational relatedWorkOrders link must not gate completion");
+});
+await t("createIssueFromWO pre-fills the work order in the new-ticket modal", () => {
+  const woId = DB.workOrders[0].id;
+  createIssueFromWO(woId);
+  assert(document.getElementById("np-kind").value === "issue", "kind pre-selected");
+  assert(document.getElementById("np-wo").value === woId, "work order pre-filled");
+  closeModal();
+});
 
 console.log("parts:");
 await t("newPart creates with three stages", async () => { setTab("parts"); calls.length = 0; await newPart(); const p = partById(view.id); assert(p.cadProgress === "Not Started" && p.moldProgress === "Not Started" && p.layupProgress === "Not Started"); assert(calls.some(c => c[0] === "save" && c[1] === "parts")); });
@@ -144,45 +182,121 @@ await t("stage pills colored by progress", () => {
 await t("partDone true only when layup complete/polished", () => { assert(!partDone({ layupProgress: "In Layup" })); assert(partDone({ layupProgress: "Polished" })); assert(partDone({ layupProgress: "Layup Complete" })); });
 await t("part field edit saves only that field", () => { view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-009", edit: true }; calls.length = 0; updPart("subteam", "AERO"); assert(partById("P-SN6-009").subteam === "AERO"); assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "subteam")); });
 
-console.log("projects (modal, board, comments):");
+console.log("tickets (modal, board, comments):");
 // give the picker some real users + parts to choose from
 DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }, { email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
 DB.parts = [{ id: "P-SN6-010", partName: "NOSECONE" }];
-await t("create modal → submit builds a real project", async () => {
+await t("Slack messages are plain text, not HTML-escaped (esc() would leak &amp; etc.)", () => {
+  const p = { id: "TKT-SLK-1", title: "A & B mismatch", kind: "issue", workOrderId: "WO-T-900", assignees: [], resolutionMethod: "Corrective Action" };
+  assert(slackIssueCreatedMsg(p).includes("A & B mismatch"), "no HTML entities in created message: " + slackIssueCreatedMsg(p));
+  assert(slackIssueResolvedMsg(p).includes("A & B mismatch"), "no HTML entities in resolved message: " + slackIssueResolvedMsg(p));
+  assert(slackIssueResolvedMsg(p).includes("Corrective Action"), "names the disposition");
+});
+// Must run before anything else calls postToSlack() this session — slackWebhookUrl()
+// caches after its first call, so this is the only point a fresh getConfig call
+// is guaranteed rather than possibly already warm from an earlier trigger.
+await t("Slack push fetches the roster-gated config, never a hardcoded URL", async () => {
+  calls.length = 0;
+  await postToSlack("first push of the test run");
+  assert(calls.some(c => c[0] === "getConfig" && c[1] === "slack"), "fetched config instead of a hardcoded secret: " + JSON.stringify(calls));
+});
+await t("create modal → submit builds a real project ticket", async () => {
   setTab("projects");
   openNewProject();
-  assert(document.getElementById("modal").innerHTML.includes("New project"), "modal open");
+  assert(document.getElementById("modal").innerHTML.includes("New ticket"), "modal open");
   assert(pickerValues("pa").includes("simon@berkeley.edu"), "creator preselected as assignee");
+  // The DOM stub caches elements by id across the whole test file and doesn't
+  // parse rendered HTML, so it can't see that np-kind's first <option> (project)
+  // is the real default — an earlier test may have left "issue" on this stub.
+  // Every test that cares about a field's value sets it explicitly; this is that.
+  document.getElementById("np-kind").value = "project";
   document.getElementById("np-title").value = "Grounding fix";
-  document.getElementById("np-status").value = "Active";
+  document.getElementById("np-status").value = "In Progress";
   document.getElementById("np-priority").value = "High";
   document.getElementById("np-due").value = "2026-09-01";
   pickerToggle("pa", "nick@berkeley.edu"); // add Nick
   pickerToggle("pp", "P-SN6-010");         // relate a part
-  document.getElementById("np-desc").value = "fix the diffuser ground";
+  document.getElementById("np-desc-editor").innerHTML = "fix the diffuser ground";
   calls.length = 0;
   await submitNewProject();
   const p = projById(view.id);
-  assert(p.title === "Grounding fix" && p.status === "Active" && p.priority === "High" && p.dueDate === "2026-09-01");
+  assert(p.title === "Grounding fix" && p.status === "In Progress" && p.priority === "High" && p.dueDate === "2026-09-01");
+  assert(p.kind === "project", "defaults to project kind: " + p.kind);
   assert(p.assignees.includes("simon@berkeley.edu") && p.assignees.includes("nick@berkeley.edu"), "assignees");
   assert(p.watchers.includes("simon@berkeley.edu"), "creator watches");
   assert(p.relatedParts.includes("P-SN6-010"), "related part");
-  assert(view.mode === "detail", "opens the project page");
+  assert(view.mode === "detail", "opens the ticket page");
   assert(document.getElementById("modal").innerHTML === "", "modal closed");
 });
 await t("modal requires a title", async () => {
   openNewProject(); document.getElementById("np-title").value = "  "; lastToast = "";
   await submitNewProject(); assert(lastToast.includes("name"), lastToast); closeModal();
 });
+await t("issue kind requires a work order before it can be created", async () => {
+  DB.workOrders.push({ id: "WO-T-900", partName: "Test part", status: "InWork", steps: [] });
+  openNewProject();
+  document.getElementById("np-kind").value = "issue"; ticketKindChanged();
+  document.getElementById("np-title").value = "Mating surface proud";
+  document.getElementById("np-wo").value = "";
+  lastToast = "";
+  await submitNewProject();
+  assert(lastToast.includes("work order"), "rejected with no work order: " + lastToast);
+  document.getElementById("np-wo").value = "WO-T-900";
+  await submitNewProject();
+  const p = projById(view.id);
+  assert(p.kind === "issue" && p.workOrderId === "WO-T-900", "issue created with its work order");
+  assert(p.resolutionMethod === "", "starts undisposed");
+  closeModal();
+  testIssueId = p.id; // several tests below need this exact ticket, unambiguously — DB.projects
+  // accumulates issue fixtures from other test blocks too, so "the first issue" is not unique.
+});
 await t("board drag moves status (field-scoped write)", () => {
-  const id = view.id; view = { ...view, mode: "list", projView: "board" }; render();
+  view = { ...view, tab: "projects", mode: "list", id: null, edit: false };
+  const id = DB.projects.find(p => p.kind === "project").id;
+  view = { ...view, mode: "list", projView: "board" }; render();
   assert(main.innerHTML.includes('class="board"'), "board renders");
   projDragStart(id); calls.length = 0; projDrop("Done", { classList: { remove() {} } });
   assert(projById(id).status === "Done");
   assert(calls.some(c => c[0] === "save" && c[1] === "projects" && c[3] === "status"), "status field write: " + JSON.stringify(calls));
 });
+await t("an issue can't be dragged/dropped to Done without a disposition", () => {
+  const p = projById(testIssueId);
+  view = { ...view, mode: "list", projView: "board" }; render();
+  projDragStart(p.id); calls.length = 0; lastToast = "";
+  projDrop("Done", { classList: { remove() {} } });
+  assert(projStatus(p) !== "Done", "blocked");
+  assert(lastToast.includes("resolution method"), lastToast);
+});
+await t("issue closes once disposed + documented", () => {
+  const p = projById(testIssueId);
+  p.resolutionMethod = "Corrective Action"; p.whatHappened = "Blank faced from the wrong datum.";
+  const blocked = statusGate(p, "Done");
+  assert(blocked === null, "gate clears once disposed+documented: " + blocked);
+  setTicketStatus(p.id, "Done");
+  assert(projStatus(p) === "Done", "now closes");
+});
+await t("old 4-value status migrates at read time, no backfill", () => {
+  const legacy = { id: "PROJ-LEGACY", title: "old record", status: "Blocked", kind: "project" };
+  assert(projStatus(legacy) === "On Hold", "Blocked -> On Hold");
+  assert(legacy.status === "Blocked", "stored value untouched until an edit saves it");
+});
+await t("sub-ticket creates as a full child ticket, no rollup to the parent", async () => {
+  const parent = DB.projects.find(p => p.kind === "project");
+  openNewSubTicket(parent.id);
+  assert(document.getElementById("modal").innerHTML.includes("New sub-ticket"), "sub-ticket modal, no kind selector");
+  assert(!document.getElementById("modal").innerHTML.includes('id="np-kind"'), "sub-tickets can't themselves be issues");
+  document.getElementById("np-title").value = "Create updated BOM";
+  document.getElementById("np-status").value = "Done";
+  await submitNewProject();
+  const kids = subTickets(parent);
+  assert(kids.length === 1 && kids[0].parentId === parent.id, "child linked to parent");
+  assert(kids[0].kind === "project", "inherits project kind");
+  parent.status = "In Progress"; // parent set independently
+  assert(projStatus(parent) !== projStatus(kids[0]), "parent status is untouched by the child's status");
+});
 await t("rich-text comment posts via appendTo, sanitized", () => {
-  const id = view.id; view = { ...view, mode: "detail", id, edit: false }; render();
+  const id = DB.projects.find(p => p.kind === "project" && !p.parentId).id;
+  view = { ...view, mode: "detail", id, edit: false }; render();
   const ed = el("comment-editor"); ed.innerHTML = "<b>hi</b><script>alert(1)<\/script>"; ed.textContent = "hi";
   calls.length = 0; postComment(id);
   const p = projById(id); const c = (p.comments || [])[p.comments.length - 1];
@@ -219,16 +333,33 @@ await t("sanitizeHtml FAILS CLOSED when DOMPurify absent (escapes, no HTML)", ()
   window.DOMPurify = saved;
 });
 await t("saveProjectEdits writes each field scoped, not whole-doc", () => {
-  const id = view.id; view = { ...view, tab: "projects", mode: "detail", id, edit: true };
-  pickerInit("ea", assigneeItems(), projById(id).assignees || []);
-  pickerInit("ep", partItems(), projById(id).relatedParts || []);
-  render();
-  el("ep-title").value = "Renamed"; el("ep-status").value = "Blocked"; el("ep-priority").value = "Low";
-  el("ep-due").value = "2026-10-01"; el("ep-desc").value = "d";
+  const id = view.id; view = { ...view, tab: "projects", mode: "detail", id, edit: false };
+  editProject();
+  el("ep-title").value = "Renamed"; el("ep-status").value = "On Hold"; el("ep-priority").value = "Low";
+  el("ep-due").value = "2026-10-01"; el("ep-desc-editor").innerHTML = "d";
   calls.length = 0; saveProjectEdits();
-  assert(projById(id).title === "Renamed" && projById(id).status === "Blocked");
+  assert(projById(id).title === "Renamed" && projById(id).status === "On Hold");
   const saved = calls.filter(c => c[0] === "save" && c[1] === "projects");
   assert(saved.length >= 6 && saved.every(c => c[3]), "every write must be field-scoped: " + JSON.stringify(saved));
+});
+await t("resolving an issue completes cleanly through the (fire-and-forget) Slack announcement", () => {
+  // announceIfResolved()/postToSlack() must never block or throw on the real
+  // status write, even though this is the second Slack-triggering action in
+  // the file (slackWebhookUrl() caches after its first call, so a repeat
+  // getConfig call here is neither expected nor required — only that the
+  // ticket actually reaches Done).
+  const p = { id: "TKT-SLK-2", title: "resolve trigger", kind: "issue", status: "In Progress", workOrderId: "WO-T-900", assignees: [], resolutionMethod: "UAI (Use As Is)", whatHappened: "documented" };
+  DB.projects.push(p);
+  setTicketStatus(p.id, "Done");
+  assert(projStatus(p) === "Done", "status write completes regardless of the Slack push outcome");
+});
+await t("editing an issue requires a work order to stay set", () => {
+  const p = projById(testIssueId);
+  view = { ...view, tab: "projects", mode: "detail", id: p.id, edit: false };
+  editProject();
+  el("ep-wo").value = ""; lastToast = "";
+  saveProjectEdits();
+  assert(lastToast.includes("work order"), lastToast);
 });
 
 console.log("timeline:");
@@ -271,6 +402,26 @@ await t("isMine: exact name/first/email match, NOT shared-first-name overmatch",
   assert(isMine(["Ansh", "Nico"]) === false, "unrelated names");
   fb.user = { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" };
   fb.roster = { name: "Simon", role: "lead" };
+});
+await t("dashboard deadline items reflect ticket kind and migrated status, not raw fields", () => {
+  // Deliberately doesn't touch DB.parts/DB.workOrders — later tests in this
+  // file depend on fixtures set earlier (e.g. P-SN6-001 for openRecord below).
+  DB.projects = [
+    { id: "TKT-D1", kind: "issue", title: "issue kind on dashboard", assignees: ["simon@berkeley.edu"], status: "In Progress" },
+    { id: "TKT-D2", kind: "project", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" }, // pre-migration record
+  ];
+  const items = deadlineItems();
+  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "issue kind surfaces, not a blanket 'Project'");
+  assert(items.find(i => i.id === "TKT-D2").kind === "Project");
+  assert(items.find(i => i.id === "TKT-D2").done === true, "legacy Done status still reads as done through projStatus()");
+});
+await t("dashboard Watched card uses the new colored .status pill, not the old flat .pill", () => {
+  DB.projects = [{ id: "TKT-D3", kind: "issue", title: "watched issue", status: "Blocked", // legacy status string
+    watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
+  const html = renderDashboard();
+  assert(html.includes('class="status onhold"'), "migrated Blocked->On Hold renders with the new dot-pill class: " + html.slice(0, 400));
+  assert(html.includes(">On Hold<"), "shows the migrated label, not the stale 'Blocked': " + html);
+  assert(html.includes('class="kindbadge issue"'), "kind badge shown on the Watched row");
 });
 
 console.log("cross-links + backup:");
@@ -350,6 +501,16 @@ await t("gotoResult navigates to the record", () => {
   renderSearchResults("diff"); gotoResult(0);
   assert(view.tab === "parts" && view.id === "P-9");
 });
+await t("searchAll matches a ticket by id even when it has a title (precedence bug regression)", () => {
+  // (p.title || "" + p.id) used to make the id branch unreachable whenever a
+  // title existed, since "" + p.id evaluates first — searching by ticket id
+  // silently never worked. TKT-77 has a title, so this only passes post-fix.
+  DB.parts = []; DB.budget = []; DB.workOrders = []; DB.users = [];
+  DB.projects = [{ id: "TKT-77", kind: "issue", title: "unrelated words here" }];
+  const res = searchAll("tkt-77");
+  assert(res.some(r => r.tab === "projects" && r.id === "TKT-77"), "finds by id despite having a title: " + JSON.stringify(res));
+  assert(res.find(r => r.id === "TKT-77").sub === "Issue", "labels the kind, not a blanket 'Project': " + JSON.stringify(res));
+});
 
 console.log("notifications + @mentions:");
 await t("@mention adds watcher + notifies", () => {
@@ -375,14 +536,18 @@ await t("openNotifs + gotoNotif marks read + navigates", () => {
 });
 
 console.log("calendar / people / reports:");
-await t("calendar buckets items into the right month", () => {
+await t("calendar buckets items into the right month (code kept alive, cut from the nav)", () => {
+  // Calendar is deliberately absent from TABS right now, so render()'s normal
+  // tab dispatch can't reach it — call the still-intact renderer directly to
+  // prove calendar.js itself keeps working, ready to restore with one line.
+  assert(!TABS.some(t => t.id === "calendar"), "confirms it's actually cut from the nav");
   const iso = today().slice(0, 7) + "-15";
   DB.parts = [{ id: "P-C", partName: "CALPART", layupDeadline: iso, layupProgress: "Not Started" }];
   DB.projects = []; DB.workOrders = []; DB.schedule = [];
-  view = { ...view, tab: "calendar", calMonth: today().slice(0, 7) };
-  render();
-  assert(main.innerHTML.includes("CALPART"), "part deadline shows on calendar");
-  assert(main.innerHTML.includes("table") && main.innerHTML.includes("Sun"), "month grid");
+  view = { ...view, calMonth: today().slice(0, 7) };
+  const html = renderCalendar();
+  assert(html.includes("CALPART"), "part deadline shows on calendar");
+  assert(html.includes("table") && html.includes("Sun"), "month grid");
 });
 await t("people shows a member's live assignments", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
@@ -390,6 +555,14 @@ await t("people shows a member's live assignments", () => {
   DB.projects = []; DB.workOrders = [];
   view = { ...view, tab: "people", q: "" }; render();
   assert(main.innerHTML.includes("Nick Jepsen") && main.innerHTML.includes("WING"), "shows Nick + his part");
+});
+await t("a Cancelled ticket doesn't count as an open assignment on People", () => {
+  DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
+  DB.parts = [];
+  DB.projects = [{ id: "TKT-CX", kind: "project", title: "abandoned idea", status: "Cancelled", assignees: ["nick@b.edu"] }];
+  DB.workOrders = [];
+  const a = assignmentsFor("nick@b.edu");
+  assert(a.projects.length === 0, "Cancelled shouldn't read as a live commitment: " + JSON.stringify(a.projects));
 });
 await t("reports CSV has header + rows", () => {
   DB.parts = [{ id: "P-R", partName: "SEAT", subteam: "BERGO" }];

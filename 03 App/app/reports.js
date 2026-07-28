@@ -17,7 +17,7 @@ function downloadCSV(name, csv) {
 const CSV_SPECS = {
   parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline]] },
   workOrders: { file: "work-orders", rows: () => DB.workOrders, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["process", r => r.processType], ["status", r => r.status], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["due", r => r.dueDate]] },
-  projects: { file: "projects", rows: () => DB.projects, cols: [["id", r => r.id], ["title", r => r.title], ["status", r => r.status], ["priority", r => r.priority], ["due", r => r.dueDate], ["assignees", r => (r.assignees || []).join("; ")]] },
+  projects: { file: "tickets", rows: () => DB.projects, cols: [["id", r => r.id], ["kind", r => ticketKind(r)], ["title", r => r.title], ["status", r => projStatus(r)], ["priority", r => r.priority], ["due", r => r.dueDate], ["assignees", r => (r.assignees || []).join("; ")]] },
   budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose], ["status", r => r.status], ["cost", r => r.cost], ["dateOrdered", r => r.dateOrdered]] },
 };
 function exportCSV(which) {
@@ -49,7 +49,7 @@ function renderReports() {
     <b style="align-self:center">Export CSV:</b>
     <button onclick="exportCSV('parts')">Parts</button>
     <button onclick="exportCSV('workOrders')">Work Orders</button>
-    <button onclick="exportCSV('projects')">Projects</button>
+    <button onclick="exportCSV('projects')">Tickets</button>
     <button onclick="exportCSV('budget')">Budget</button>
     <button class="primary" style="margin-left:auto" onclick="window.print()">Print status board</button>
   </div>

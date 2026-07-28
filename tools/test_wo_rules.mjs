@@ -100,6 +100,13 @@ await expect(200, "member", "PATCH", "/notifications/NM", { to: S("member@feb.te
 await expect(403, "member", "PATCH", "/notifications/NL", { read: { booleanValue: true } }, ["read"]); // can't touch others'
 await expect(403, "rando", "GET", "/notifications/NM");
 
+console.log("config (roster read, lead-only write — a webhook URL is a live credential):");
+await expect(403, "member", "PATCH", "/config/slack", { webhookUrl: S("https://hooks.slack.test/x") });
+await expect(200, "lead", "PATCH", "/config/slack", { webhookUrl: S("https://hooks.slack.test/x") });
+await expect(200, "member", "GET", "/config/slack"); // any roster member reads — the client needs it at runtime
+await expect(403, "rando", "GET", "/config/slack");
+await expect(403, "none", "GET", "/config/slack");
+
 console.log("per-collection counters (increment-only):");
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(2) });      // create
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(3) });      // increment ok

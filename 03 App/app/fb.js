@@ -214,6 +214,21 @@ const fb = {
     });
   },
   async markNotifRead(id) { await updateDoc(doc(db, "notifications", id), { read: true }); },
+
+  /* ---- config (small roster-readable, lead-only-writable settings docs) ----
+     Live outside COLLECTIONS: these are single keyed docs (e.g. "slack"), not
+     an array collection every tab syncs. The Slack incoming-webhook URL is the
+     first user — it must never be hardcoded in source (this repo is public),
+     so it's read from here at runtime by anyone on the roster instead. */
+  async getConfig(key) {
+    const snap = await getDoc(doc(db, "config", key));
+    return snap.exists() ? snap.data() : null;
+  },
+  async setConfig(key, data) {
+    await setDoc(doc(db, "config", key), {
+      ...data, updatedAt: serverTimestamp(), updatedBy: fb.user ? fb.user.email : "?",
+    }, { merge: true });
+  },
 };
 window.fb = fb;
 

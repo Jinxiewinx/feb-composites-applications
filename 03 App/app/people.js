@@ -12,7 +12,7 @@ function assignmentsFor(email) {
     return vals.some(v => { v = String(v || "").toLowerCase(); return v === email.toLowerCase() || v === name.toLowerCase() || v === name.toLowerCase().split(" ")[0]; });
   };
   const parts = DB.parts.filter(p => !["Layup Complete", "Polished"].includes(p.layupProgress) && mine([p.moldEngineer, p.manufacturingEngineer]));
-  const projects = DB.projects.filter(p => p.status !== "Done" && mine(p.assignees || []));
+  const projects = DB.projects.filter(p => !["Done", "Cancelled"].includes(projStatus(p)) && mine(p.assignees || []));
   const wos = DB.workOrders.filter(w => w.status !== "Complete" && mine([w.moldEngineer, w.manufacturingEngineer]));
   return { parts, projects, wos };
 }
