@@ -44,12 +44,22 @@ function renderDocuments() {
 
   const q = (view.q || "").toLowerCase();
   const all = allDocs();
-  const docs = all.filter(d => !q || d.title.toLowerCase().includes(q) || d.category.toLowerCase().includes(q));
+  // Derived, never hardcoded, so a new kind (a bundled doc's "html"/"md",
+  // say) shows up in the filter automatically instead of going stale —
+  // same technique the category list below already uses.
+  const kinds = [...new Set(all.map(d => d.kind || "file"))].sort();
+  const docs = all
+    .filter(d => !view.fSub || (d.kind || "file") === view.fSub)
+    .filter(d => !q || d.title.toLowerCase().includes(q) || d.category.toLowerCase().includes(q));
   const cats = ["Datasheets", "Standards", "Guides", "Uploads", ...new Set(all.map(d => d.category))]
     .filter((c, i, a) => a.indexOf(c) === i);
   return `
   <div class="toolbar no-print"><button class="primary" onclick="uploadDocument()">+ Upload document</button></div>
   <div class="filters no-print">
+    <select onchange="view.fSub=this.value;render()">
+      <option value="">All types</option>
+      ${kinds.map(k => `<option value="${esc(k)}" ${view.fSub === k ? "selected" : ""}>${esc(k.toUpperCase())}</option>`).join("")}
+    </select>
     <input id="searchbox" placeholder="search documents…" value="${esc(view.q || "")}" oninput="searchInput(this)">
     <span class="muted" style="align-self:center">${docs.length} of ${all.length} documents</span>
   </div>

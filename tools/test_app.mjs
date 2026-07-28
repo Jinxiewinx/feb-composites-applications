@@ -86,14 +86,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -331,6 +331,53 @@ await t("sanitizeHtml strips onerror + javascript: URLs, incl. slash form", () =
   assert(!/javascript:/i.test(clean), "js url stripped: " + clean);
   assert(/<b>ok<\/b>/.test(clean), "keeps allowed");
 });
+await t("sanitizeHtml preserves a download attribute (needed for downloadable attachments)", () => {
+  const clean = sanitizeHtml(`<a href="https://x.test/f.png" download="f.png">f</a>`);
+  assert(/download="f\.png"/.test(clean), "download attr survives sanitization: " + clean);
+});
+await t("sanitizeHtml allows the new formatting tags (h3/code/table) but still strips scripts", () => {
+  const clean = sanitizeHtml(`<h3>Why</h3><code>x=1</code><table><tr><td>a</td></tr></table><script>alert(1)</script>`);
+  assert(/<h3>Why<\/h3>/.test(clean), "heading kept: " + clean);
+  assert(/<code>x=1<\/code>/.test(clean), "code kept: " + clean);
+  assert(/<table>.*<tr>.*<td>a<\/td>/.test(clean), "table kept: " + clean);
+  assert(!/<script/i.test(clean), "still no script: " + clean);
+});
+await t("isSafeLinkUrl accepts only http(s), rejects javascript:/data:/relative", () => {
+  assert(isSafeLinkUrl("https://example.com") === true);
+  assert(isSafeLinkUrl("http://example.com") === true);
+  assert(isSafeLinkUrl("javascript:alert(1)") === false);
+  assert(isSafeLinkUrl("data:text/html,<script>alert(1)</script>") === false);
+  assert(isSafeLinkUrl("/relative/path") === false);
+  assert(isSafeLinkUrl("") === false);
+});
+await t("rteLink rejects an unsafe URL before ever calling execCommand (prompt stub always returns a non-URL, exercising the reject path)", () => {
+  let called = false;
+  const origExec = document.execCommand;
+  document.execCommand = () => { called = true; };
+  lastToast = "";
+  rteLink("np-desc-editor"); // global prompt() stub returns the literal string "stub" — not http(s)
+  document.execCommand = origExec;
+  assert(!called, "must not reach execCommand with an unsafe/invalid URL");
+  assert(/http/i.test(lastToast), "explains why it was rejected: " + lastToast);
+});
+await t("rteCode/rteTable insert their fixed templates via execCommand", () => {
+  const seen = [];
+  const origExec = document.execCommand;
+  document.execCommand = (cmd, ui, val) => seen.push([cmd, val]);
+  rteCode("np-desc-editor");
+  rteTable("np-desc-editor");
+  document.execCommand = origExec;
+  assert(seen[0][0] === "insertHTML" && /<code>/.test(seen[0][1]), "code wraps selection: " + JSON.stringify(seen[0]));
+  assert(seen[1][0] === "insertHTML" && /<table>/.test(seen[1][1]) && /<td>/.test(seen[1][1]), "table inserts a fixed template: " + JSON.stringify(seen[1]));
+});
+await t("fileItem() links are downloadable, not just openable", () => {
+  const html = fileItem({ url: "https://x.test/receipt.jpg", name: "receipt.jpg", type: "image/jpeg" });
+  assert(/download="receipt\.jpg"/.test(html), "download attr present: " + html);
+});
+await t("imgAttachHtml() wraps the image in a downloadable link (regression: bare <img>, no download affordance)", () => {
+  const html = imgAttachHtml("https://x.test/photo.png", "photo.png");
+  assert(/<a href="https:\/\/x\.test\/photo\.png" download="photo\.png"[^>]*><img src="https:\/\/x\.test\/photo\.png"/.test(html), html);
+});
 await t("sanitizeHtml FAILS CLOSED when DOMPurify absent (escapes, no HTML)", () => {
   const saved = window.DOMPurify; window.DOMPurify = undefined;
   const clean = sanitizeHtml("<b>hi</b><script>alert(1)</script>");
@@ -380,10 +427,105 @@ await t("undated retro weeks sort BELOW dated weeks", () => {
   assert(html.includes("sort to the bottom"), "note must match the actual sort direction");
 });
 
+console.log("weekly plan:");
+await t("weekDates derives Mon-Sun from weekOf (assumed to be the Monday)", () => {
+  const dates = weekDates("2026-08-24"); // a Monday
+  assert(dates.length === 7 && dates[0] === "2026-08-24" && dates[6] === "2026-08-30", "Mon through Sun: " + JSON.stringify(dates));
+});
+await t("weekDates handles a missing/invalid weekOf without throwing", () => {
+  assert(weekDates("").length === 0);
+  assert(weekDates(undefined).length === 0);
+});
+await t("weekPlanWeeks excludes undated retro weeks (nothing to derive a grid from)", () => {
+  DB.schedule = [{ id: "W00", weekOf: "", retro: true }, { id: "S1", weekOf: "2026-08-24" }];
+  const weeks = weekPlanWeeks();
+  assert(weeks.length === 1 && weeks[0].id === "S1", "only the dated week: " + JSON.stringify(weeks));
+});
+await t("renderWeekPlan shows a guidance card when there are no dated weeks yet", () => {
+  DB.schedule = [];
+  const html = renderWeekPlan();
+  assert(/Timeline/.test(html) && !html.includes("<table"), "points at Timeline instead of an empty grid: " + html);
+});
+await t("tickets bucket into the right day + subteam cell; unassigned-subteam and unscheduled tickets get their own catch-all sections", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [] }]; // Mon 2026-08-24
+  DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  DB.projects = [
+    { id: "TKT-W1", kind: "project", title: "AERO task", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" }, // Tue
+    { id: "TKT-W2", kind: "project", title: "no subteam task", dueDate: "2026-08-26", assignees: [], status: "To Do" }, // Wed, no subteam
+    { id: "TKT-W3", kind: "project", title: "no due date task", dueDate: "", assignees: [], status: "To Do" },
+    { id: "TKT-W4", kind: "project", title: "done already", subteam: "AERO", dueDate: "2026-08-25", assignees: [], status: "Done" }, // must not appear
+    { id: "TKT-W5", kind: "project", title: "next month, out of range", subteam: "AERO", dueDate: "2026-09-25", assignees: [], status: "To Do" },
+  ];
+  view = { ...view, wpWeek: "S1" };
+  const html = renderWeekPlan();
+  assert(html.includes("AERO task"), "in-week AERO ticket shows: " + html);
+  assert(html.includes("No subteam set") && html.includes("no subteam task"), "no-subteam catch-all: " + html);
+  assert(html.includes("Unscheduled") && html.includes("no due date task"), "no-due-date catch-all: " + html);
+  assert(!html.includes("done already"), "Done tickets are excluded");
+  assert(!html.includes("next month, out of range"), "out-of-week tickets are excluded");
+});
+await t("manual assignment add/remove round-trips through schedule.assignments[]", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [] }];
+  calls.length = 0;
+  addManualAssignment("S1", "Tue", "AERO", "nick@berkeley.edu", "Layup prep", "2");
+  const w = weekById("S1");
+  assert(w.assignments.length === 1 && w.assignments[0].task === "Layup prep", "added: " + JSON.stringify(w.assignments));
+  assert(calls.some(c => c[0] === "appendTo" && c[1] === "schedule" && c[3] === "assignments"), "atomic append, not a whole-doc save");
+  const id = w.assignments[0].id;
+  removeManualAssignment("S1", id);
+  assert(weekById("S1").assignments.length === 0, "removed");
+});
+await t("personWeekTasks bounds to the week's date range and includes manual assignments", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [{ id: "A1", day: "Wed", subteam: "AERO", person: "nick@berkeley.edu", task: "manual thing", hours: "1" }] }];
+  DB.projects = [
+    { id: "TKT-P1", kind: "project", title: "in week", dueDate: "2026-08-27", assignees: ["nick@berkeley.edu"], status: "In Progress" },
+    { id: "TKT-P2", kind: "project", title: "out of week", dueDate: "2026-09-27", assignees: ["nick@berkeley.edu"], status: "In Progress" },
+  ];
+  const week = weekById("S1");
+  const { tickets, manual } = personWeekTasks("nick@berkeley.edu", week);
+  assert(tickets.length === 1 && tickets[0].id === "TKT-P1", "only the in-week ticket: " + JSON.stringify(tickets));
+  assert(manual.length === 1 && manual[0].task === "manual thing", "manual assignment included: " + JSON.stringify(manual));
+});
+await t("subteam field round-trips through ticket creation and editing", async () => {
+  setTab("projects");
+  openNewProject();
+  // The DOM stub caches elements by id across the whole test file, so a
+  // prior test may have left np-kind at "issue" — reset it explicitly (same
+  // convention the very first ticket-creation test already established).
+  document.getElementById("np-kind").value = "project";
+  document.getElementById("np-title").value = "Subteam round-trip";
+  document.getElementById("np-subteam").value = "BERGO";
+  await submitNewProject();
+  const p = projById(view.id);
+  assert(p.kind === "project", "sanity check: must actually be a project, not a stale issue: " + p.kind);
+  assert(p.subteam === "BERGO", "captured on create: " + p.subteam);
+  editProject();
+  document.getElementById("ep-subteam").value = "AUTO-MECH";
+  saveProjectEdits();
+  assert(projById(p.id).subteam === "AUTO-MECH", "captured on edit: " + projById(p.id).subteam);
+});
+
 console.log("budget:");
 await t("newBuy defaults purchaser to me", async () => { setTab("budget"); await newBuy(); assert(buyById(view.id).purchaser === "Simon" && buyById(view.id).status === "Submitted"); });
 await t("num parses money strings", () => { assert(num("$41.68") === 41.68 && num("") === 0 && num("1,200") === 1200); });
 await t("list totals season + open sums", () => { view = { ...view, tab: "budget", mode: "list" }; DB.budget = [{ id: "B1", cost: "100", status: "Reimbursed" }, { id: "B2", cost: "50", status: "Ordered" }]; render(); assert(main.innerHTML.includes("$150.00")); assert(main.innerHTML.includes("1 open ($50.00)")); });
+await t("newBuy starts with empty receipt fields", async () => { await newBuy(); const b = buyById(view.id); assert(b.receiptUrl === "" && b.receiptPath === "", "no receipt yet"); });
+await t("purchase detail shows add-receipt prompt when none, thumbnail when attached", () => {
+  view = { ...view, tab: "budget", mode: "detail", id: "B-R1", edit: false };
+  DB.budget.push({ id: "B-R1", item: "epoxy", status: "Submitted", receiptUrl: "", receiptPath: "" });
+  let html = renderBuyDetail();
+  assert(/Add \/ scan receipt/.test(html) && !html.includes('class="thumb"'), "no receipt: prompts to add one: " + html);
+  const b2 = buyById("B-R1"); b2.receiptUrl = "https://x.test/r.jpg"; b2.receiptPath = "budget/B-R1/r.jpg";
+  html = renderBuyDetail();
+  assert(html.includes('class="thumb"') && /Replace receipt/.test(html), "receipt attached: shows thumbnail + replace: " + html);
+});
+await t("deleting a purchase with a receipt cleans up its file (regression: nothing to clean up before this feature, must not regress once there is)", () => {
+  DB.budget = [{ id: "B-R2", item: "resin", receiptUrl: "https://x.test/r2.jpg", receiptPath: "budget/B-R2/r2.jpg" }];
+  calls.length = 0;
+  delBuy("B-R2"); confirmProceed();
+  assert(calls.some(c => c[0] === "deleteFile" && c[1] === "budget/B-R2/r2.jpg"), "receipt file deleted: " + JSON.stringify(calls));
+  assert(!DB.budget.some(b => b.id === "B-R2"), "purchase removed");
+});
 
 console.log("dashboard:");
 await t("aggregates deadlines across tabs", () => {
@@ -470,6 +612,41 @@ await t("opening a PDF doc renders an in-app viewer", () => {
   openDocument("docs/datasheets/xcr.pdf");
   assert(main.innerHTML.includes("<iframe") && main.innerHTML.includes("xcr.pdf"), "pdf iframe");
   closeDocument();
+});
+await t("documents can be filtered by type, options derived not hardcoded", () => {
+  setTab("documents");
+  view.fSub = "";
+  let html = renderDocuments();
+  assert(html.includes(">PDF<") && html.includes(">MD<"), "kind options are derived from the actual docs: " + html);
+  assert(html.includes("XCR TDS") && html.includes("CS-000 Docs"), "unfiltered shows both");
+  view.fSub = "pdf";
+  html = renderDocuments();
+  assert(html.includes("XCR TDS") && !html.includes("CS-000 Docs"), "filtered to pdf hides the md doc: " + html);
+  view.fSub = "";
+});
+
+console.log("mobile:");
+await t("shouldOpenDrawerFromSwipe: edge-start + rightward swipe + narrow + closed -> opens", () => {
+  assert(shouldOpenDrawerFromSwipe(10, 200, 90, 205, false, true) === true, "clean left-edge swipe right");
+});
+await t("shouldOpenDrawerFromSwipe: start not near the edge -> false", () => {
+  assert(shouldOpenDrawerFromSwipe(120, 200, 200, 205, false, true) === false, "started mid-screen, not the edge");
+});
+await t("shouldOpenDrawerFromSwipe: vertical-dominant motion (scrolling) -> false", () => {
+  assert(shouldOpenDrawerFromSwipe(10, 100, 40, 400, false, true) === false, "mostly vertical, don't hijack scroll");
+});
+await t("shouldOpenDrawerFromSwipe: drawer already open -> false (avoids racing the backdrop-close handler)", () => {
+  assert(shouldOpenDrawerFromSwipe(10, 200, 90, 205, true, true) === false);
+});
+await t("shouldOpenDrawerFromSwipe: wide/desktop viewport -> false regardless of coordinates", () => {
+  assert(shouldOpenDrawerFromSwipe(10, 200, 90, 205, false, false) === false);
+});
+await t("shouldOpenDrawerFromSwipe: too flush with x=0 -> false (iOS Safari owns the true edge for its own back-swipe)", () => {
+  assert(shouldOpenDrawerFromSwipe(0, 200, 80, 205, false, true) === true, "x=0 still within the 24px inset, should pass"); // 0 <= 24, allowed
+  assert(shouldOpenDrawerFromSwipe(40, 200, 120, 205, false, true) === false, "40px in is past the edge inset");
+});
+await t("shouldOpenDrawerFromSwipe: short movement (tap/jitter) -> false", () => {
+  assert(shouldOpenDrawerFromSwipe(10, 200, 30, 202, false, true) === false, "only 20px of horizontal movement, below the 60px threshold");
 });
 
 console.log("bug fixes:");

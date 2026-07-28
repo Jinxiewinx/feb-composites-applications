@@ -469,8 +469,14 @@ function confirmModal(msg, onConfirm, opts) {
 function sanitizeHtml(html) {
   if (window.DOMPurify && window.DOMPurify.sanitize) {
     return window.DOMPurify.sanitize(String(html || ""), {
-      ALLOWED_TAGS: ["b", "i", "u", "strong", "em", "span", "br", "p", "ul", "ol", "li", "a", "img", "div", "font"],
-      ALLOWED_ATTR: ["style", "href", "src", "alt", "size", "color"],
+      // h3/code/table family added for the comment/description editor's
+      // Heading/Code/Table buttons — a fixed, small addition, not an open door
+      // (no script-bearing tags, no event-handler attributes below).
+      ALLOWED_TAGS: ["b", "i", "u", "strong", "em", "span", "br", "p", "ul", "ol", "li", "a", "img", "div", "font", "h3", "code", "table", "thead", "tbody", "tr", "th", "td"],
+      // "download" is a normal, non-executable attribute (still https-only via
+      // ALLOWED_URI_REGEXP below) — lets an attached image/file link force a
+      // save instead of just navigating to it in a new tab.
+      ALLOWED_ATTR: ["style", "href", "src", "alt", "size", "color", "download"],
       ALLOWED_URI_REGEXP: /^https?:/i,
     });
   }
@@ -544,6 +550,7 @@ const TABS = [
   { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
+  { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", render: () => renderWeekPlan() },
   // Calendar cut from the nav for now — most of this ground is already
   // covered by Slack (outside this app) and the Timeline tab. calendar.js is
   // untouched; uncommenting this row restores the tab.
@@ -622,6 +629,35 @@ function openMoreMenu() {
 // Guard document.body: the DOM-stub test harness has no body element.
 function toggleDrawer() { if (document.body) document.body.classList.toggle("drawer-open"); }
 function closeDrawer() { if (document.body) document.body.classList.remove("drawer-open"); }
+
+/* ---------- swipe from the left edge opens the drawer ----------
+   The decision is a pure function so it's testable without a real TouchEvent
+   (the DOM-stub harness has none, and document.addEventListener is a no-op
+   there anyway — this glue only ever runs in a real browser). Discrete
+   open-only trigger at gesture-end, not a live drag-follows-finger transform:
+   the existing CSS transition already handles the slide, and a v1 doesn't
+   need to re-architect that into a per-frame transform. */
+function isNarrowViewport() { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(max-width: 900px)").matches; }
+function shouldOpenDrawerFromSwipe(startX, startY, endX, endY, drawerOpen, narrowViewport) {
+  if (drawerOpen || !narrowViewport) return false;
+  if (startX > 24) return false; // a narrow edge zone (0-24px), not the whole screen
+  const dx = endX - startX, dy = endY - startY;
+  if (dx < 60) return false; // a real rightward swipe, not a tap or jitter
+  if (Math.abs(dy) > Math.abs(dx)) return false; // vertical-dominant = scrolling, not this gesture
+  return true;
+}
+let SWIPE_START = null;
+document.addEventListener("touchstart", (e) => {
+  const t = e.touches && e.touches[0]; if (!t) { SWIPE_START = null; return; }
+  SWIPE_START = { x: t.clientX, y: t.clientY };
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  const start = SWIPE_START; SWIPE_START = null;
+  if (!start) return;
+  const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+  const drawerOpen = !!(document.body && document.body.classList.contains("drawer-open"));
+  if (shouldOpenDrawerFromSwipe(start.x, start.y, t.clientX, t.clientY, drawerOpen, isNarrowViewport())) toggleDrawer();
+}, { passive: true });
 
 /* ---------- theme (light / dark) ----------
    The no-FOUC <head> script set data-theme before paint; this just flips and

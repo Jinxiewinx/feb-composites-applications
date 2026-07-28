@@ -20,16 +20,37 @@ async function newBuy() {
   const b = {
     id, item: "", purchaser: signerName(), purpose: "Manufacturing", status: "Submitted",
     cost: "", dateOrdered: today(), source: "", notes: "", retro: false, createdBy: myEmail(),
+    receiptUrl: "", receiptPath: "",
   };
   DB.budget.push(b); saveBuy(b);
   view = { ...view, mode: "detail", id, edit: true }; render();
 }
 function delBuy(id) {
   confirmModal("Delete " + id + " for everyone? Back up first if unsure.", () => {
+    const b = buyById(id);
     del("budget", id);
+    if (b && b.receiptPath) fb.deleteFile(b.receiptPath);
     DB.budget = DB.budget.filter(b => b.id !== id);
     view = { ...view, mode: "list", id: null }; render();
   });
+}
+// "Scan" on mobile is just this input opening the camera directly via the
+// capture attribute — no OCR, no new JS for that part. Reuses fb.upload()
+// (already downscales images client-side) exactly like ticket/document files.
+function attachReceipt(id) {
+  const b = buyById(id);
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try {
+      const rec = await fb.upload(`budget/${b.id}/${Date.now()}-${f.name}`, f);
+      b.receiptUrl = rec.url; b.receiptPath = rec.path;
+      saveBuy(b, "receiptUrl"); saveBuy(b, "receiptPath");
+      render();
+    } catch (e) { toast("Receipt upload failed: " + e.message, "error"); }
+  };
+  inp.click();
 }
 
 function renderBudget() {
@@ -94,6 +115,11 @@ function renderBuyDetail() {
       ${buyFld(b, "Status", "status", BUY_STATUS)}${buyFld(b, "Cost ($)", "cost")}${buyFld(b, "Date ordered", "dateOrdered")}
       ${buyFld(b, "Source / vendor", "source")}
     </div>
+    <h3>Receipt</h3>
+    ${b.receiptUrl
+      ? `<div class="fileitem"><div class="thumb" style="background-image:url('${esc(b.receiptUrl)}')"></div><div class="fn"><a href="${esc(b.receiptUrl)}" download="receipt-${esc(b.id)}.jpg" target="_blank" rel="noopener">receipt</a></div></div>`
+      : '<span class="muted">No receipt yet.</span>'}
+    <div class="no-print" style="margin-top:8px"><button onclick="attachReceipt('${b.id}')">${b.receiptUrl ? "Replace" : "+ Add / scan"} receipt</button></div>
     <h3>Notes</h3>
     ${E ? `<textarea onchange="updBuy('notes',this.value)">${esc(b.notes)}</textarea>` : `<div>${esc(b.notes) || '<span class="muted">—</span>'}</div>`}
   </div>`;

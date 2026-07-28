@@ -5,8 +5,8 @@
    cases (which gate on contentType) can't be asserted here without the full
    resumable protocol — those are exercised by the app's Firebase SDK in prod.
    What this proves cleanly is the security boundary that matters: sign-in is
-   required, and writes outside the three allowed path trees (avatars/, projects/,
-   documents/) are denied. Run from "03 App/":
+   required, and writes outside the four allowed path trees (avatars/, projects/,
+   documents/, budget/) are denied. Run from "03 App/":
      firebase emulators:exec --only auth,storage --project demo-feb-work-orders \
        "node '../tools/test_storage_rules.mjs'"                                */
 
@@ -41,6 +41,7 @@ console.log("storage boundary (deny-critical):");
 await denied("unauthenticated write to documents/", null, "documents/x.pdf");
 await denied("unauthenticated write to projects/", null, "projects/P-1/x.pdf");
 await denied("unauthenticated write to avatars/", null, "avatars/someuid");
+await denied("unauthenticated write to budget/", null, "budget/BUY-1/receipt.jpg");
 await denied("authed write to an unmatched path", token, "secret/x.pdf");
 await denied("authed write to bucket root", token, "rootfile.pdf");
 

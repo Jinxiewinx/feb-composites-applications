@@ -48,6 +48,15 @@ service firebase.storage {
         && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
     }
 
+    // budget/{purchaseId}/{file} — a receipt photo attached to a purchase; the
+    // record lands in the roster-gated `budget` Firestore collection. A
+    // receipt is always a photo (unlike documents/projects, no PDF/doc types).
+    match /budget/{purchaseId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && sizeOk()
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Everything else: denied (no rule = deny).
   }
 }

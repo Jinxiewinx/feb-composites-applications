@@ -364,6 +364,15 @@
   table.tl td.wk { white-space: nowrap; font-weight: 600; color: var(--brand-ink); }
   table.tl input, table.tl select { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; max-width: 130px; }
   table.tl tr.retrorow td { background: var(--retro-bg); }
+  /* Weekly Plan's day x subteam grid — its own table class (not table.tl,
+     Timeline's), so a wider per-cell min-width here doesn't also widen
+     Timeline's station columns, which are sized for short part-name chips. */
+  table.wp { border-collapse: collapse; font-size: 12.5px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  table.wp th { background: var(--surface-2); color: var(--muted); padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  table.wp td { border: 1px solid var(--line); padding: 4px 6px; vertical-align: top; min-width: 140px; }
+  table.wp td.wk { white-space: nowrap; font-weight: 600; color: var(--brand-ink); min-width: auto; }
+  .wp-item { display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 0; }
+  .wp-item .chip, .wp-item > span:first-child { flex: 1; min-width: 0; }
 
   /* dashboard */
   .dashgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
@@ -592,6 +601,7 @@
 <script src="parts.js"></script>
 <script src="projects.js"></script>
 <script src="timeline.js"></script>
+<script src="weeklyplan.js"></script>
 <script src="budget.js"></script>
 <script src="dashboard.js"></script>
 <script src="slicer.js"></script>

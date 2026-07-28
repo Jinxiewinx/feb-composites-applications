@@ -131,6 +131,8 @@ function openNewProject(parentId) {
       <div class="field"><label>Priority</label><select id="np-priority">${PRIORITY.map(s => `<option ${s === "Medium" ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     </div>
     <div class="field"><label>Due date</label><input id="np-due" type="date"></div>
+    <div class="field"><label>Subteam <span class="muted" style="text-transform:none">— for Weekly Plan</span></label>
+      <select id="np-subteam"><option value="">Unassigned</option>${SUBTEAMS.map(s => `<option>${s}</option>`).join("")}</select></div>
     <div class="field"><label>Assignees</label>${pickerField("pa")}</div>
     <div id="np-issue-fields" style="display:none">
       <div class="field"><label>Work order <span class="req">*required</span></label><select id="np-wo">${woSelectOptions("")}</select></div>
@@ -148,16 +150,55 @@ function openNewProject(parentId) {
 // The same rich-text toolbar the comment box uses, pointed at a description
 // field — one more call site, not a new component. targetId lets rte() know
 // which contenteditable div a toolbar click applies to.
-function rteField(targetId, html) {
-  return `<div class="rte-toolbar">
+// Shared by rteField() (ticket description) and the comment editor, so the
+// two toolbars can't drift out of sync — a button added to one is added to
+// both. Image attach is comment-only (see the comment section below) since
+// that's the one thing the two editors don't have in common.
+function rteToolbarButtons(targetId) {
+  return `
     <button type="button" title="Bold" onclick="rte('bold',null,'${targetId}')"><b>B</b></button>
     <button type="button" title="Italic" onclick="rte('italic',null,'${targetId}')"><i>I</i></button>
     <button type="button" title="Underline" onclick="rte('underline',null,'${targetId}')"><u>U</u></button>
+    <button type="button" title="Heading" onclick="rte('formatBlock','h3','${targetId}')">H</button>
     <button type="button" title="Bigger" onclick="rte('fontSize','5','${targetId}')">A+</button>
     <button type="button" title="Smaller" onclick="rte('fontSize','2','${targetId}')">A−</button>
     <button type="button" title="Bullet list" onclick="rte('insertUnorderedList',null,'${targetId}')">• List</button>
-  </div>
+    <button type="button" title="Link" onclick="rteLink('${targetId}')">🔗</button>
+    <button type="button" title="Code" onclick="rteCode('${targetId}')">&lt;/&gt;</button>
+    <button type="button" title="Table" onclick="rteTable('${targetId}')">⊞</button>`;
+}
+function rteField(targetId, html) {
+  return `<div class="rte-toolbar">${rteToolbarButtons(targetId)}</div>
   <div class="rte" id="${targetId}" contenteditable="true" data-ph="Details, goals, links…">${sanitizeHtml(html || "")}</div>`;
+}
+// Reject anything but a plain http(s) URL BEFORE execCommand ever runs —
+// sanitizeHtml() stripping a bad scheme afterward isn't enough defense in
+// depth for a link the editor already inserted and displayed as if it were fine.
+function isSafeLinkUrl(url) { return /^https?:\/\//i.test(String(url || "").trim()); }
+function rteLink(targetId) {
+  const el = document.getElementById(targetId); if (el) el.focus();
+  const url = prompt("Link URL (https://…)");
+  if (url == null) return; // cancelled
+  if (!isSafeLinkUrl(url)) { toast("Links must start with http:// or https://.", "error"); return; }
+  document.execCommand("createLink", false, url.trim());
+  // createLink doesn't let us set target/rel directly — the freshly-inserted
+  // <a> is the current selection's anchor; force it to open safely.
+  const sel = window.getSelection && window.getSelection();
+  const a = sel && sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest("a");
+  if (a) { a.target = "_blank"; a.rel = "noopener"; }
+}
+// No native execCommand for inline code — wrap the current selection manually.
+function rteCode(targetId) {
+  const el = document.getElementById(targetId); if (el) el.focus();
+  const sel = window.getSelection && window.getSelection();
+  const text = (sel && sel.toString()) || "code";
+  document.execCommand("insertHTML", false, `<code>${esc(text)}</code>`);
+}
+// Fixed 2x2 template only — no size prompt, keeps the sanitizer allowlist
+// narrow and predictable rather than accepting arbitrary row/col growth.
+function rteTable(targetId) {
+  const el = document.getElementById(targetId); if (el) el.focus();
+  document.execCommand("insertHTML", false, "<table><tr><td> </td><td> </td></tr><tr><td> </td><td> </td></tr></table>");
 }
 function openNewSubTicket(parentId) { openNewProject(parentId); }
 function ticketKindChanged() {
@@ -191,6 +232,7 @@ async function submitNewProject() {
     status: document.getElementById("np-status").value,
     priority: document.getElementById("np-priority").value,
     dueDate: document.getElementById("np-due").value,
+    subteam: document.getElementById("np-subteam").value,
     description: sanitizeHtml(document.getElementById("np-desc-editor").innerHTML || ""),
     assignees,
     // assignees + creator watch by default (creator watches the ticket they made)
@@ -337,6 +379,7 @@ function saveProjectEdits() {
   p.status = newStatus;
   p.priority = document.getElementById("ep-priority").value;
   p.dueDate = document.getElementById("ep-due").value;
+  p.subteam = document.getElementById("ep-subteam").value;
   p.description = sanitizeHtml(document.getElementById("ep-desc-editor").innerHTML || "");
   p.assignees = pickerValues("ea");
   p.relatedTickets = pickerValues("ert");
@@ -350,7 +393,7 @@ function saveProjectEdits() {
   // Field-scoped writes, NOT a whole-doc save — so a teammate's concurrent
   // comment/file/watcher change (which lands on other fields) can't be clobbered
   // by this edit landing between their write and our Save.
-  const fields = ["title", "status", "priority", "dueDate", "description", "assignees", "relatedTickets", "relatedWorkOrders", "watchers"];
+  const fields = ["title", "status", "priority", "dueDate", "subteam", "description", "assignees", "relatedTickets", "relatedWorkOrders", "watchers"];
   fields.push(isIssue(p) ? "workOrderId" : "relatedParts");
   if (isIssue(p)) fields.push("resolutionMethod", "whatHappened");
   fields.forEach(f => saveProj(p, f));
@@ -397,6 +440,8 @@ function renderProjDetail() {
         <div class="field"><label>Priority</label><select id="ep-priority">${PRIORITY.map(s => `<option ${p.priority === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       </div>
       <div class="field"><label>Due date</label><input id="ep-due" type="date" value="${esc(p.dueDate || "")}"></div>
+      <div class="field"><label>Subteam <span class="muted" style="text-transform:none">— for Weekly Plan</span></label>
+        <select id="ep-subteam"><option value="" ${p.subteam ? "" : "selected"}>Unassigned</option>${SUBTEAMS.map(s => `<option ${p.subteam === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       <div class="field"><label>Assignees</label>${pickerField("ea")}</div>
       ${isIssue(p) ? `
       <div class="field"><label>Work order <span class="req">*required</span></label><select id="ep-wo">${woSelectOptions(p.workOrderId)}</select></div>
@@ -473,14 +518,8 @@ function renderProjDetail() {
       </div>
     </div>`).join("") || '<span class="muted">No comments yet.</span>'}
     <div class="no-print" style="margin-top:10px">
-      <div class="rte-toolbar">
-        <button title="Bold" onclick="rte('bold')"><b>B</b></button>
-        <button title="Italic" onclick="rte('italic')"><i>I</i></button>
-        <button title="Underline" onclick="rte('underline')"><u>U</u></button>
-        <button title="Bigger" onclick="rte('fontSize','5')">A+</button>
-        <button title="Smaller" onclick="rte('fontSize','2')">A−</button>
-        <button title="Bullet list" onclick="rte('insertUnorderedList')">• List</button>
-        <button title="Attach image" onclick="attachCommentImage()">${icon("paperclip", 15)} Image</button>
+      <div class="rte-toolbar">${rteToolbarButtons("comment-editor")}
+        <button type="button" title="Attach image" onclick="attachCommentImage()">${icon("paperclip", 15)} Image</button>
       </div>
       <div class="rte" id="comment-editor" contenteditable="true" data-ph="Write a comment…"></div>
       <div style="margin-top:6px"><button class="primary" onclick="postComment('${p.id}')">Comment as ${esc(signerName())}</button></div>
@@ -491,7 +530,7 @@ function renderProjDetail() {
 function fileItem(f) {
   const isImg = (f.type || "").startsWith("image/");
   const thumb = isImg ? `<div class="thumb" style="background-image:url('${esc(f.url)}')"></div>` : `<div class="thumb">${icon("file", 26)}</div>`;
-  return `<div class="fileitem">${thumb}<div class="fn"><a href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.name)}">${esc(f.name)}</a></div></div>`;
+  return `<div class="fileitem">${thumb}<div class="fn"><a href="${esc(f.url)}" download="${esc(f.name)}" target="_blank" rel="noopener" title="${esc(f.name)}">${esc(f.name)}</a></div></div>`;
 }
 function addProjectFiles() {
   const p = projById(view.id);
@@ -512,6 +551,12 @@ function addProjectFiles() {
 
 /* ---- rich-text comment editor ---- */
 function rte(cmd, val, targetId) { document.execCommand(cmd, false, val); document.getElementById(targetId || "comment-editor").focus(); }
+// A bare <img> has no click-to-download affordance — wrap it in a link, same
+// as fileItem()'s anchor, so an inline comment image behaves like every other
+// attachment instead of being a dead end you can only right-click.
+function imgAttachHtml(url, name) {
+  return `<a href="${url}" download="${esc(name)}" target="_blank" rel="noopener"><img src="${url}" alt="${esc(name)}"></a>`;
+}
 function attachCommentImage() {
   const p = projById(view.id);
   const inp = document.createElement("input");
@@ -520,7 +565,7 @@ function attachCommentImage() {
     const f = inp.files[0]; if (!f) return;
     try {
       const rec = await fb.upload(`projects/${p.id}/${Date.now()}-${f.name}`, f);
-      document.execCommand("insertHTML", false, `<img src="${rec.url}" alt="${esc(f.name)}">`);
+      document.execCommand("insertHTML", false, imgAttachHtml(rec.url, f.name));
       // an attached image is also a file on the project
       const entry = { id: "F" + Date.now(), name: rec.name, url: rec.url, type: rec.type, size: rec.size, by: myEmail(), ts: new Date().toISOString(), path: rec.path };
       p.files = (p.files || []).concat([entry]);
