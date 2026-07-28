@@ -93,7 +93,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -203,7 +203,7 @@ await t("Slack push fetches the roster-gated config, never a hardcoded URL", asy
 await t("create modal → submit builds a real project ticket", async () => {
   setTab("projects");
   openNewProject();
-  assert(document.getElementById("modal").innerHTML.includes("New ticket"), "modal open");
+  assert(document.getElementById("modal").innerHTML.includes("New project"), "modal open, defaulting to Project kind's wording");
   assert(pickerValues("pa").includes("simon@berkeley.edu"), "creator preselected as assignee");
   // The DOM stub caches elements by id across the whole test file and doesn't
   // parse rendered HTML, so it can't see that np-kind's first <option> (project)
@@ -236,6 +236,12 @@ await t("issue kind requires a work order before it can be created", async () =>
   DB.workOrders.push({ id: "WO-T-900", partName: "Test part", status: "InWork", steps: [] });
   openNewProject();
   document.getElementById("np-kind").value = "issue"; ticketKindChanged();
+  // Regression: heading/placeholder/submit button used to always say "ticket"
+  // regardless of Kind, even though ticketKindChanged() already fired on this
+  // same event to toggle the issue-only fields.
+  assert(document.getElementById("np-heading").textContent === "New issue", document.getElementById("np-heading").textContent);
+  assert(document.getElementById("np-title").placeholder === "What is this issue?", document.getElementById("np-title").placeholder);
+  assert(document.getElementById("np-submit-btn").textContent === "Create issue", document.getElementById("np-submit-btn").textContent);
   document.getElementById("np-title").value = "Mating surface proud";
   document.getElementById("np-wo").value = "";
   lastToast = "";
@@ -392,6 +398,14 @@ await t("aggregates deadlines across tabs", () => {
   assert(items.find(i => i.id === "P-SN6-002").mine === false, "Nick's part not mine");
 });
 await t("renders upcoming, behind, mine sections", () => { setTab("dashboard"); assert(main.innerHTML.includes("Upcoming team deadlines") && main.innerHTML.includes("Behind schedule") && main.innerHTML.includes("Your open items")); assert(main.innerHTML.includes("SOON PART") && main.innerHTML.includes("LATE PART")); });
+await t("itemRow closes exactly one paren per case, future/late/today (regression: used to double-close future dates and never close late ones)", () => {
+  const soonRow = itemRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
+  assert(/\(3d\)/.test(soonRow) && !/\(3d\)\)/.test(soonRow), "future date: single close paren: " + soonRow);
+  const lateRow = itemRow({ date: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
+  assert(/\(5d late\)/.test(lateRow), "late date gets its closing paren too: " + lateRow);
+  const todayRow = itemRow({ date: today(), kind: "Part", coll: "parts", id: "x", label: "x" });
+  assert(/\(today\)/.test(todayRow), "today: " + todayRow);
+});
 await t("isMine: exact name/first/email match, NOT shared-first-name overmatch", () => {
   fb.user = { uid: "u2", email: "nick.ortiz@berkeley.edu", name: "Nick Ortiz" };
   fb.roster = { name: "Nick Ortiz", role: "member" };
@@ -411,8 +425,12 @@ await t("dashboard deadline items reflect ticket kind and migrated status, not r
     { id: "TKT-D2", kind: "project", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" }, // pre-migration record
   ];
   const items = deadlineItems();
-  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "issue kind surfaces, not a blanket 'Project'");
-  assert(items.find(i => i.id === "TKT-D2").kind === "Project");
+  // This list is peer to "Part"/"WO" tags — Issues stay distinctly labeled
+  // (that visibility is the point), but a Project-kind ticket reads as the
+  // generic "Ticket" here, not "Project" (that distinction belongs to the
+  // Tickets tab's own board/table/detail views, not this cross-type list).
+  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "issue kind still stands out, not a blanket 'Ticket'");
+  assert(items.find(i => i.id === "TKT-D2").kind === "Ticket", "project-kind ticket reads as the generic 'Ticket' here");
   assert(items.find(i => i.id === "TKT-D2").done === true, "legacy Done status still reads as done through projStatus()");
 });
 await t("dashboard Watched card uses the new colored .status pill, not the old flat .pill", () => {
@@ -461,6 +479,14 @@ await t("picker starts collapsed, opens on demand", () => {
   pickerOpen("tt");
   assert(pickerField("tt").includes('class="opts"'), "open: shows options");
 });
+await t("clicking the chosen row a second time closes it (regression: onclick always called open, never toggled)", () => {
+  pickerInit("tt2", [{ value: "a", label: "Apple" }], []);
+  assert(!PICKERS["tt2"].open, "starts closed");
+  pickerToggleOpen("tt2");
+  assert(PICKERS["tt2"].open === true, "first click opens");
+  pickerToggleOpen("tt2");
+  assert(PICKERS["tt2"].open === false, "second click closes");
+});
 await t("sidebar brand links home", () => { signInAsLead(); render(); assert(sidebar.innerHTML.includes("setTab('dashboard')")); });
 await t("parts layup stack mirrors to linked work order (transaction-safe)", () => {
   DB.parts = [{ id: "P-1", partName: "NOSECONE", workOrderId: "WO-1", layupStack: [] }];
@@ -506,10 +532,14 @@ await t("searchAll matches a ticket by id even when it has a title (precedence b
   // title existed, since "" + p.id evaluates first — searching by ticket id
   // silently never worked. TKT-77 has a title, so this only passes post-fix.
   DB.parts = []; DB.budget = []; DB.workOrders = []; DB.users = [];
-  DB.projects = [{ id: "TKT-77", kind: "issue", title: "unrelated words here" }];
-  const res = searchAll("tkt-77");
+  DB.projects = [
+    { id: "TKT-77", kind: "issue", title: "unrelated words here" },
+    { id: "TKT-78", kind: "project", title: "another unrelated title" },
+  ];
+  const res = searchAll("tkt-7");
   assert(res.some(r => r.tab === "projects" && r.id === "TKT-77"), "finds by id despite having a title: " + JSON.stringify(res));
-  assert(res.find(r => r.id === "TKT-77").sub === "Issue", "labels the kind, not a blanket 'Project': " + JSON.stringify(res));
+  assert(res.find(r => r.id === "TKT-77").sub === "Issue", "issue still stands out, not a blanket label: " + JSON.stringify(res));
+  assert(res.find(r => r.id === "TKT-78").sub === "Ticket", "project-kind ticket reads as the generic 'Ticket' in search: " + JSON.stringify(res));
 });
 
 console.log("notifications + @mentions:");
@@ -548,6 +578,16 @@ await t("calendar buckets items into the right month (code kept alive, cut from 
   const html = renderCalendar();
   assert(html.includes("CALPART"), "part deadline shows on calendar");
   assert(html.includes("table") && html.includes("Sun"), "month grid");
+});
+await t("calItems labels a project-kind ticket 'Ticket' and an issue 'Issue' (was hardcoded 'Project' with no isIssue check)", () => {
+  DB.parts = []; DB.workOrders = []; DB.schedule = [];
+  DB.projects = [
+    { id: "TKT-CAL1", kind: "project", title: "cal project", dueDate: today() },
+    { id: "TKT-CAL2", kind: "issue", title: "cal issue", dueDate: today() },
+  ];
+  const items = calItems();
+  assert(items.find(i => i.id === "TKT-CAL1").kind === "Ticket", "project-kind ticket: " + JSON.stringify(items));
+  assert(items.find(i => i.id === "TKT-CAL2").kind === "Issue", "issue still stands out: " + JSON.stringify(items));
 });
 await t("people shows a member's live assignments", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
@@ -864,6 +904,24 @@ await t("a multi-body STL asks which body instead of planning the whole assembly
   assert(DB.stackplans.length === 0, "it must not plan a 5m void");
   assert(/bodies/i.test(lastToast), "it should ask which body: " + lastToast);
   assert(/ml-body/.test(els["ml-bodies"].innerHTML), "and offer a picker");
+});
+await t("picking a body and clicking Plan again actually plans it (regression: used to re-ask forever)", async () => {
+  seedStock(); DB.stackplans = [];
+  const two = plugTris(200, 80, 0, 100).concat(plugTris(200, 80, 0, 100).map(t => ({
+    ...t, ax: t.ax + 5000, bx: t.bx + 5000, cx: t.cx + 5000,
+  })));
+  fillMold({ tris: two }); // fresh file pick — MOLD_BUF/MOLD_BODIES reset to null
+  await submitMold(); // first submit: probes, finds 2 bodies, shows the picker, returns
+  assert(DB.stackplans.length === 0, "still just asking, not planning yet");
+  // The user now picks a body from the rendered <select> — the <input type=file>
+  // itself is untouched (browsers don't clear it), so el("ml-file").files is
+  // still the SAME file as before. Do not call fillMold() again here — that
+  // would mask the bug by simulating a fresh file pick.
+  el("ml-body").value = "0";
+  lastToast = "";
+  await submitMold(); // second submit: must plan body 0, not re-ask
+  assert(DB.stackplans.length === 1, "must actually plan once a body is chosen: " + lastToast);
+  assert(!/bodies/i.test(lastToast), "must not re-ask which body: " + lastToast);
 });
 await t("CRITICAL a mold over the 6in cut depth is sectioned automatically", async () => {
   seedStock(); DB.stackplans = [];

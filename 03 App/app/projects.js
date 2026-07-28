@@ -104,6 +104,11 @@ function woSelectOptions(selected) {
     sorted.map(w => `<option value="${esc(w.id)}" ${w.id === selected ? "selected" : ""}>${esc(w.id)} — ${esc(w.partName || "")}</option>`).join("");
 }
 
+// "ticket" is only the right word before a Kind is picked (or for a sub-ticket,
+// which has no Kind at all) — once Kind is Project/Issue, the modal chrome
+// should say that, not a generic umbrella word. Kept in one place so the
+// initial render and ticketKindChanged() can never drift apart.
+function kindNoun(kind) { return kind === "issue" ? "issue" : "project"; }
 function openNewProject(parentId) {
   NEW_TICKET_PARENT = parentId || null;
   const forSub = !!NEW_TICKET_PARENT;
@@ -112,7 +117,7 @@ function openNewProject(parentId) {
   pickerInit("rt", ticketItems(), []);
   pickerInit("rwo", workOrderItems(), []);
   openModal(`
-    <h2>${forSub ? "New sub-ticket" : "New ticket"}</h2>
+    <h2 id="np-heading">${forSub ? "New sub-ticket" : "New " + kindNoun("project")}</h2>
     ${forSub ? "" : `
     <div class="field"><label>Kind</label>
       <select id="np-kind" onchange="ticketKindChanged()">
@@ -120,7 +125,7 @@ function openNewProject(parentId) {
         <option value="issue">Issue — production nonconformance, links to a work order</option>
       </select>
     </div>`}
-    <div class="field"><label>Title</label><input id="np-title" placeholder="What is this ${forSub ? "sub-task" : "ticket"}?"></div>
+    <div class="field"><label>Title</label><input id="np-title" placeholder="What is this ${forSub ? "sub-task" : kindNoun("project") + "?"}"></div>
     <div class="row2">
       <div class="field"><label>Status</label><select id="np-status">${PROJ_STATUS.map(s => `<option>${s}</option>`).join("")}</select></div>
       <div class="field"><label>Priority</label><select id="np-priority">${PRIORITY.map(s => `<option ${s === "Medium" ? "selected" : ""}>${s}</option>`).join("")}</select></div>
@@ -137,7 +142,7 @@ function openNewProject(parentId) {
     <div class="field"><label>Related tickets</label>${pickerField("rt")}</div>
     <div class="field"><label>Related work orders</label>${pickerField("rwo")}</div>
     <div class="field"><label>Description</label>${rteField("np-desc-editor")}</div>
-    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitNewProject()">Create ${forSub ? "sub-ticket" : "ticket"}</button></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button id="np-submit-btn" class="primary" onclick="submitNewProject()">Create ${forSub ? "sub-ticket" : kindNoun("project")}</button></div>
   `);
 }
 // The same rich-text toolbar the comment box uses, pointed at a description
@@ -156,9 +161,14 @@ function rteField(targetId, html) {
 }
 function openNewSubTicket(parentId) { openNewProject(parentId); }
 function ticketKindChanged() {
-  const isIss = document.getElementById("np-kind").value === "issue";
+  const kind = document.getElementById("np-kind").value;
+  const isIss = kind === "issue";
   document.getElementById("np-issue-fields").style.display = isIss ? "" : "none";
   document.getElementById("np-project-fields").style.display = isIss ? "none" : "";
+  const noun = kindNoun(kind);
+  document.getElementById("np-heading").textContent = "New " + noun;
+  document.getElementById("np-title").placeholder = "What is this " + noun + "?";
+  document.getElementById("np-submit-btn").textContent = "Create " + noun;
 }
 async function submitNewProject() {
   const title = document.getElementById("np-title").value.trim();

@@ -114,8 +114,13 @@
   .sb-item { position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 7px; color: var(--sb-text); cursor: pointer; font-size: 13.5px; font-weight: 500; border: none; background: none; text-align: left; width: 100%; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
   .sb-item:hover { background: var(--sb-hover); color: #fff; }
   .sb-item.active { background: var(--sb-active); color: #fff; font-weight: 600; }
-  /* gold "speed slash" marking the active tab */
-  .sb-item.active::before { content: ""; position: absolute; left: -8px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); transform: skewX(-12deg); }
+  /* gold "speed slash" marking the active tab. Sits INSIDE .sb-item's own box
+     (left:2px, not a negative offset into the parent's padding) on purpose:
+     nav.sidebar becomes an overflow:auto clipping container on mobile (see the
+     responsive block below), and a marker positioned outside its own item's
+     box — plus the extra reach from the skew transform — got silently clipped
+     there even though it rendered fine on desktop where nothing clips. */
+  .sb-item.active::before { content: ""; position: absolute; left: 2px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); transform: skewX(-12deg); }
   .sb-item .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
   .sb-item .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
   .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -441,7 +446,11 @@
       transition: opacity .22s;
     }
     body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
-    header.topbar { padding: 10px 14px; }
+    /* Additive, not a replacement: a device with no notch still gets the
+       normal 10px; a notched/dynamic-island device gets 10px of breathing
+       room BELOW the inset, not instead of it (the topbar is sticky at
+       top:0, so with no inset compensation its content sits under the notch). */
+    header.topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
     main { padding: 16px 14px 72px; }
 
     /* Wide list tables collapse into stacked cards across the whole compact

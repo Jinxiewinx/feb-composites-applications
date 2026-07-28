@@ -10,7 +10,7 @@ const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 function calItems() {
   const items = [];
   DB.parts.forEach(p => { if (p.layupDeadline) items.push({ date: p.layupDeadline, tab: "parts", id: p.id, label: p.partName || p.id, kind: "Part" }); });
-  DB.projects.forEach(p => { if (p.dueDate) items.push({ date: p.dueDate, tab: "projects", id: p.id, label: p.title || p.id, kind: "Project" }); });
+  DB.projects.forEach(p => { if (p.dueDate) items.push({ date: p.dueDate, tab: "projects", id: p.id, label: p.title || p.id, kind: isIssue(p) ? "Issue" : "Ticket" }); });
   DB.workOrders.forEach(w => { if (w.dueDate) items.push({ date: w.dueDate, tab: "workorders", id: w.id, label: w.partName || w.id, kind: "WO" }); });
   DB.schedule.forEach(w => { if (w.weekOf && w.notes) items.push({ date: w.weekOf, tab: "timeline", id: w.id, label: w.notes, kind: "Milestone" }); });
   return items;

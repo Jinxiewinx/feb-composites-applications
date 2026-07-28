@@ -493,12 +493,16 @@ function pickerBody(id) {
     return `<span class="tok">${it.avatarEmail ? avatar(it.avatarEmail, 18) : ""}${esc(it.label)}<button onclick="event.stopPropagation();pickerToggle('${id}','${esc(v)}')">×</button></span>`;
   }).join("") || `<span class="muted" style="padding:2px 4px">click to add…</span>`;
   // Collapsed by default: the chosen area is a button that opens the list.
-  return `<div class="chosen" onclick="pickerOpen('${id}')">${tok}<span class="pk-caret ${p.open ? "open" : ""}">${icon("chevronDown", 15)}</span></div>
+  return `<div class="chosen" onclick="pickerToggleOpen('${id}')">${tok}<span class="pk-caret ${p.open ? "open" : ""}">${icon("chevronDown", 15)}</span></div>
     ${p.open ? `<input class="psearch" placeholder="search…" value="${esc(p.q)}" oninput="pickerSearch('${id}',this.value)" onkeydown="if(event.key==='Escape')pickerClose('${id}')">
     <div class="opts" id="pk-opts-${id}">${pickerOpts(id, opts)}</div>` : ""}`;
 }
 function pickerOpen(id) { const p = PICKERS[id]; if (!p) return; p.open = true; const el = document.getElementById("pk-" + id); if (el) { el.innerHTML = pickerBody(id); const s = el.querySelector(".psearch"); if (s) s.focus(); } }
 function pickerClose(id) { const p = PICKERS[id]; if (!p) return; p.open = false; p.q = ""; const el = document.getElementById("pk-" + id); if (el) el.innerHTML = pickerBody(id); }
+// Clicking the chosen row toggled it open every time, even when already open,
+// so a second click never closed it — this is the actual click target; open()
+// and close() stay as explicit setters (Escape, the search input's blur path).
+function pickerToggleOpen(id) { const p = PICKERS[id]; if (!p) return; if (p.open) pickerClose(id); else pickerOpen(id); }
 function pickerOpts(id, opts) {
   const p = PICKERS[id];
   return opts.map(it => `<div class="opt ${p.sel.includes(it.value) ? "sel" : ""}" onclick="pickerToggle('${id}','${esc(it.value)}')">
@@ -649,7 +653,7 @@ function searchAll(q) {
   // (p.title || "" + p.id) was a precedence bug: "" + p.id runs first, so the
   // id branch was unreachable whenever a title existed — search never matched
   // by ticket id. Matches the id+label pattern already used for work orders/parts.
-  DB.projects.forEach(p => { if ((p.id + " " + (p.title || "")).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Project"); });
+  DB.projects.forEach(p => { if ((p.id + " " + (p.title || "")).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Ticket"); });
   DB.budget.forEach(b => { if ((b.item || "").toLowerCase().includes(q)) add("budget", b.id, b.item || b.id, "Purchase"); });
   DB.users.forEach(u => { if (((u.name || "") + " " + u.email).toLowerCase().includes(q)) add("people", u.email, u.name || u.email, "Person"); });
   (typeof allDocs === "function" ? allDocs() : []).forEach(d => { if ((d.title || "").toLowerCase().includes(q)) out.push({ tab: "documents", docSrc: d.src, uploaded: d.uploaded, label: d.title, sub: "Document · " + d.category }); });

@@ -388,10 +388,17 @@ async function submitMold() {
     const f = fileEl && fileEl.files && fileEl.files[0];
     if (!f && !MOLD_BUF) { toast("Pick an STL first.", "error"); return; }
     if (f) {
-      if (f.size > MAX_STL_BYTES) { toast(`That STL is ${Math.round(f.size / 1e6)} MB. Export it at a coarser tolerance — the limit is ${MAX_STL_BYTES / 1e6} MB.`, "error"); return; }
-      setProg("Reading the file…");
-      MOLD_BUF = { buffer: await f.arrayBuffer(), name: f.name, size: f.size, key: f.name + ":" + f.size };
-      MOLD_BODIES = null;   // new file, re-probe
+      // The <input type="file"> is never cleared, so f is still truthy on the
+      // second "Plan" click after picking a body — without this key check,
+      // MOLD_BODIES got reset to null on every submit, re-triggering the
+      // "pick one" prompt forever instead of ever reaching bodyIndex below.
+      const key = f.name + ":" + f.size;
+      if (!MOLD_BUF || MOLD_BUF.key !== key) {
+        if (f.size > MAX_STL_BYTES) { toast(`That STL is ${Math.round(f.size / 1e6)} MB. Export it at a coarser tolerance — the limit is ${MAX_STL_BYTES / 1e6} MB.`, "error"); return; }
+        setProg("Reading the file…");
+        MOLD_BUF = { buffer: await f.arrayBuffer(), name: f.name, size: f.size, key };
+        MOLD_BODIES = null;   // genuinely a new file — re-probe
+      }
     }
     const unit = val("ml-unit") === "in" ? "in" : "mm";
     /* A real export is often an assembly. Ask which body BEFORE planning, or

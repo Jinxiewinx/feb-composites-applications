@@ -17,7 +17,12 @@ function deadlineItems() {
     // projStatus()/ticketKind() migrate the old 4-value status and default an
     // absent kind, same as everywhere else a ticket is read — going around
     // them here would show a stale "Backlog" or the wrong kind on this list.
-    coll: "projects", id: p.id, kind: isIssue(p) ? "Issue" : "Project", label: p.title || p.id,
+    // This list is peer to "Part"/"WO" tags, so a non-issue ticket reads as the
+    // generic "Ticket" here — Issues still stand out as "Issue" since that
+    // visibility is the whole point of the kind. Inside the Tickets tab itself
+    // (board/table/detail), keep showing "Project"/"Issue" — that distinction
+    // is what those views are for.
+    coll: "projects", id: p.id, kind: isIssue(p) ? "Issue" : "Ticket", label: p.title || p.id,
     who: (p.assignees || []).join(" / "),
     date: p.dueDate, done: projStatus(p) === "Done",
     mine: isMine(p.assignees || []),
@@ -33,7 +38,11 @@ function deadlineItems() {
 
 function itemRow(it) {
   const dd = daysUntil(it.date);
-  const when = it.date ? esc(it.date) + (dd != null ? ` <span class="muted">(${dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d)"}${dd >= 0 ? ")" : ""}</span>` : "") : '<span class="muted">no date</span>';
+  // Each branch supplies exactly one closing paren — the old version baked a
+  // ")" into the future-date branch AND appended a trailing one whenever
+  // dd >= 0, double-closing it ("(3d))"), while the late branch got none at all.
+  const paren = dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d";
+  const when = it.date ? esc(it.date) + (dd != null ? ` <span class="muted">(${paren})</span>` : "") : '<span class="muted">no date</span>';
   return `<tr>
     <td><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}</td>
     <td class="tny">${esc(it.who || "—")}</td>
