@@ -21,6 +21,8 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 `03 App/app/` is the team's shared workspace for a season, running on Firebase with an email allowlist for the roster. It's live at **https://feb-composites.web.app**, updates live for everyone, and works on phones and tablets as well as desktop. Full detail, setup and architecture are in `03 App/app/README.md`; this is the tour.
 
+![Dashboard tab: open items, deadlines, watched tickets and budget at a glance](03%20App/design/dashboard-mockup-20260728.png)
+
 **Tabs:**
 
 - **Dashboard** — your open items, team deadlines in the next two weeks, anything behind schedule, watched tickets with new activity, and the budget at a glance. Read-only; every row links into the tab it came from.
@@ -34,6 +36,8 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 - **Documents** — every reference doc in one place: the manufacturer datasheets, CS standards (rendered from markdown, with the .docx also downloadable) and shop printables, filterable by type. Anyone can upload a doc.
 - **Reports** — per-dataset CSV export, plus a one-click printable Monday-meeting status board.
 - **People** — the roster with photos, roles, and each person's live assignments across parts, tickets and work orders.
+
+![Mold stack planner: an STL turns into an exploded board stack and a numbered cut list](03%20App/design/stock-mockup-20260728.png)
 
 Cross-links are everywhere — click a chip to jump to the related record. Press ⌘K (Ctrl-K) for global search. It has a light and dark theme (follows system setting, remembered after that), and printing always comes out black-on-white regardless of theme.
 
