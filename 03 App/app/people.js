@@ -19,31 +19,33 @@ function assignmentsFor(email) {
 
 function renderPeople() {
   const users = usersSorted();
+  const rows = users.filter(u => { const q = (view.q || "").toLowerCase(); return !q || (u.name || "").toLowerCase().includes(q) || u.email.toLowerCase().includes(q); });
   return `
   <div class="filters no-print">
     <input id="searchbox" placeholder="search name / email…" value="${esc(view.q)}" oninput="searchInput(this)">
     <span class="muted" style="align-self:center">${users.length} people on the roster</span>
   </div>
-  <div class="peoplegrid">
-    ${users.filter(u => { const q = (view.q || "").toLowerCase(); return !q || (u.name || "").toLowerCase().includes(q) || u.email.toLowerCase().includes(q); }).map(u => {
+  ${rows.length === 0 ? `<div class="card">No one on the roster yet.</div>` : `
+  <table class="list dash">
+    <tr><th>Person</th><th>Role</th><th>Assignments</th></tr>
+    ${rows.map(u => {
       const a = assignmentsFor(u.email);
       const me = u.email === myEmail();
-      return `<div class="card personcard">
-        <div class="phead">${avatar(u.email, 44)}
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:8px">${avatar(u.email, 26)}
           <div><div class="pname">${esc(u.name || u.email)}${me ? ' <span class="muted tny">(you)</span>' : ""}</div>
-          <div class="muted tny">${esc(u.email)} · ${esc(u.role || "member")}</div></div>
-          ${isLead() && !me ? `<select class="prole" onchange="setRole('${esc(u.email)}',this.value)"><option ${u.role === "member" ? "selected" : ""}>member</option><option ${u.role === "lead" ? "selected" : ""}>lead</option></select>` : ""}
-          ${me ? `<button onclick="setMyAvatar()">Set photo</button>` : ""}
-        </div>
-        <div class="passign">
-          ${a.parts.length + a.projects.length + a.wos.length === 0 ? '<span class="muted tny">no open assignments</span>' : `
+          <div class="muted tny">${esc(u.email)}</div></div></div></td>
+        <td>${isLead() && !me
+          ? `<select onchange="setRole('${esc(u.email)}',this.value)"><option ${u.role === "member" ? "selected" : ""}>member</option><option ${u.role === "lead" ? "selected" : ""}>lead</option></select>`
+          : `<span class="pill">${esc(u.role || "member")}</span>`}
+          ${me ? ` <button class="sm" onclick="setMyAvatar()">Set photo</button>` : ""}</td>
+        <td>${a.parts.length + a.projects.length + a.wos.length === 0 ? '<span class="muted tny">no open assignments</span>' : `
           ${a.projects.map(p => chip("projects", p.id, p.title || p.id)).join(" ")}
           ${a.parts.map(p => chip("parts", p.id, p.partName || p.id)).join(" ")}
-          ${a.wos.map(w => chip("workOrders", w.id, w.id)).join(" ")}`}
-        </div>
-      </div>`;
-    }).join("") || '<div class="card">No one on the roster yet.</div>'}
-  </div>`;
+          ${a.wos.map(w => chip("workOrders", w.id, w.id)).join(" ")}`}</td>
+      </tr>`;
+    }).join("")}
+  </table>`}`;
 }
 
 function setRole(email, role) {

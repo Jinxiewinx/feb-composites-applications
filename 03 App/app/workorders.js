@@ -219,14 +219,21 @@ function renderWODetail() {
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
     <h3>Steps and buy-offs (blockers shaded: no sign-off, no moving on)</h3>
-    ${(wo.steps || []).map((s, i) => {
+    ${(() => {
+      // The first not-done, not-failed step is the one to act on right now —
+      // computed from existing state (open/done/failed), not a new status
+      // value: a real "in progress" status would ripple into printing,
+      // CS-013, and the retro-WO convention, well beyond a styling pass.
+      // Retro records are historical, nothing on them is "next".
+      const nextIdx = wo.retro ? -1 : (wo.steps || []).findIndex(s => stepState(s) !== "done" && stepState(s) !== "failed");
+      return (wo.steps || []).map((s, i) => {
       const blocker = isBlocker(s);
       const state = stepState(s);
       const blocked = blockerOpenBefore(wo, i);
-      return `<div class="step ${blocker ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""}">
+      return `<div class="step ${blocker ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${i === nextIdx ? "upnext" : ""}">
         <div class="num">${s.seq}</div>
         <div class="body">
-          <div>${esc(stripCS(s.title))} ${blocker ? "<b>· BLOCKER</b>" : ""}</div>
+          <div>${esc(stripCS(s.title))} ${blocker ? '<span class="step-badge">blocker</span>' : ""}</div>
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
           ${E ? `<div class="meta no-print"><input style="width:90%" placeholder="notes / photo filenames" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)"></div>` : ""}
           ${(s.photoRefs || []).length ? `<div class="meta">photos: ${s.photoRefs.map(p => esc(p.filename || p)).join(", ")}</div>` : ""}
@@ -242,7 +249,8 @@ function renderWODetail() {
                 : `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
       </div>`;
-    }).join("")}
+      }).join("");
+    })()}
     <h3>Quality checks / acceptance criteria</h3>
     <table class="sub"><thead><tr><th>Criterion</th><th>Target (set at creation!)</th><th>Actual</th><th>Pass</th></tr></thead><tbody>
       ${(wo.qualityChecks || []).map((q, i) => E

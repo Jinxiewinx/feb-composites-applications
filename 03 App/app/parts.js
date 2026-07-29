@@ -26,6 +26,21 @@ function stagePill(val, enumArr) {
   val = val || enumArr[0];
   return `<span class="stage ${stageClass(val, enumArr)}">${esc(val)}</span>`;
 }
+// A bar alongside the pill for at-a-glance scanning — the pill still carries
+// the exact stage name, the bar just makes "how far along" visible without
+// reading text. N/A (Flat) means the stage doesn't apply, so no bar (a bar
+// would wrongly imply partial progress toward something that isn't happening).
+function stageBar(val, enumArr) {
+  val = val || enumArr[0];
+  const cls = stageClass(val, enumArr);
+  if (cls === "st-na") return "";
+  const i = Math.max(0, enumArr.indexOf(val));
+  const pct = enumArr.length > 1 ? (i / (enumArr.length - 1)) * 100 : 100;
+  return `<div class="stage-bar"><div class="stage-bar-fill ${cls}" style="width:${pct}%"></div></div>`;
+}
+function stageCell(val, enumArr) {
+  return `<div class="stagecell">${stagePill(val, enumArr)}${stageBar(val, enumArr)}</div>`;
+}
 // A part counts as "done" (not behind-schedule) once layup is complete.
 function partDone(p) { return ["Layup Complete", "Polished"].includes(p.layupProgress); }
 
@@ -78,9 +93,9 @@ function renderPartList() {
       return `<tr onclick="view={...view,mode:'detail',id:'${p.id}',edit:false};render()">
       <td><b>${esc(p.partName || p.id)}</b>${p.retro ? ' <span class="pill retro">retro</span>' : ""}</td>
       <td>${esc(p.subteam)}</td><td class="tny">${esc(p.layupType)}</td>
-      <td>${stagePill(p.cadProgress, STAGE_CAD)}</td>
-      <td>${stagePill(p.moldProgress, STAGE_MOLD)}</td>
-      <td>${stagePill(p.layupProgress, STAGE_LAYUP)}</td>
+      <td>${stageCell(p.cadProgress, STAGE_CAD)}</td>
+      <td>${stageCell(p.moldProgress, STAGE_MOLD)}</td>
+      <td>${stageCell(p.layupProgress, STAGE_LAYUP)}</td>
       <td class="tny">${esc(p.moldEngineer || "—")} / ${esc(p.manufacturingEngineer || "—")}</td>
       <td class="${late ? "warn" : ""}">${esc(p.layupDeadline || "")}${late ? " " + icon("warning", 13) : ""}</td>
     </tr>`; }).join("")}
@@ -116,7 +131,7 @@ function renderPartDetail() {
       ${pfld(p, "Mold", "moldProgress", STAGE_MOLD)}
       ${pfld(p, "Layup", "layupProgress", STAGE_LAYUP)}
     </div>
-    ${!E ? `<div class="stagerow">${stagePill(p.cadProgress, STAGE_CAD)} ${stagePill(p.moldProgress, STAGE_MOLD)} ${stagePill(p.layupProgress, STAGE_LAYUP)}</div>` : ""}
+    ${!E ? `<div class="stagerow">${stageCell(p.cadProgress, STAGE_CAD)}${stageCell(p.moldProgress, STAGE_MOLD)}${stageCell(p.layupProgress, STAGE_LAYUP)}</div>` : ""}
     <h3>Details</h3>
     <div class="grid">
       ${pfld(p, "Part name", "partName")}${pfld(p, "Subteam", "subteam", SUBTEAMS)}${pfld(p, "Layup type", "layupType", LAYUP_TYPES)}

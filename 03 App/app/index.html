@@ -172,6 +172,12 @@
   .stage.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
   .stage.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
   .stagerow { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  .stage-bar { width: 64px; height: 5px; border-radius: 999px; background: var(--fill); overflow: hidden; margin-top: 4px; }
+  .stage-bar-fill { height: 100%; border-radius: 999px; }
+  .stage-bar-fill.st-0 { background: var(--muted); }
+  .stage-bar-fill.st-mid { background: var(--amber); }
+  .stage-bar-fill.st-done { background: var(--ok); }
+  .stagecell { display: inline-block; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 3px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
   .chip:hover { filter: brightness(.97); }
   .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
@@ -306,11 +312,7 @@
   .calitem.st-mid { background: var(--warn-bg); border-color: var(--warn-border); } .calitem.InWork { background: var(--info-bg); } .calitem.Draft { background: var(--fill); } .calitem.retro { background: var(--retro-bg); border-color: var(--retro-border); }
 
   /* ---- people ---- */
-  .peoplegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-  .personcard .phead { display: flex; align-items: center; gap: 10px; }
-  .personcard .pname { font-weight: 600; }
-  .personcard .prole { margin-left: auto; }
-  .personcard .passign { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .pname { font-weight: 600; }
 
   /* ---- toasts ---- */
   #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
@@ -355,6 +357,8 @@
   .step .buyoff { display: flex; gap: 6px; align-items: center; font-size: 12px; }
   .step.blocker { background: var(--warn-bg); margin: 0 -8px; padding: 8px; }
   .step.done { opacity: .72; } .step.failed { background: var(--bad-bg); margin: 0 -8px; padding: 8px; }
+  .step.upnext { border-left: 3px solid var(--accent); margin-left: -13px; padding-left: 10px; }
+  .step-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--amber); vertical-align: 1px; }
 
   /* ---- timeline grid ---- */
   .tlwrap { overflow-x: auto; }
@@ -377,6 +381,10 @@
   /* dashboard */
   .dashgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
   .bignum { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--brand-ink); letter-spacing: .01em; }
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .stat-tile { background: var(--surface-2); border-radius: var(--r-md); padding: 12px 14px; }
+  .stat-tile .bignum { font-size: 22px; }
+  .stat-tile .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-top: 2px; }
   .glance { display: flex; gap: 10px; flex-wrap: wrap; }
   .gitem { flex: 1; min-width: 70px; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; }
   .gitem:hover { background: var(--hover); }

@@ -133,6 +133,23 @@ await t("seed loads, 26 rows", () => { setTab("workorders"); onFbData("workOrder
 await t("newWO allocates + saves + opens detail", async () => { calls.length = 0; await newWO(); assert(calls.some(c => c[0] === "allocId" && c[1] === "workOrders")); assert(calls.some(c => c[0] === "save" && c[1] === "workOrders")); assert(view.mode === "detail" && view.edit); });
 await t("blocker blocks later buy-off", () => { const id = view.id; lastToast = ""; buyoff(2); assert(lastToast.includes("Blocked")); assert(!isSigned(woById(id).steps[2])); });
 await t("buy-off stamps identity + writes steps concurrency-safe", () => { calls.length = 0; buyoff(0); const b = woById(view.id).steps[0].buyoff; assert(b.name === "Simon" && b.email === "simon@berkeley.edu" && b.uid === "u1" && b.date); assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "buy-off must use transaction, not whole-field write: " + JSON.stringify(calls)); });
+await t("blocker gets a real badge (not bold text), and the first actionable step is marked up-next", () => {
+  const wo = { id: "WO-TEST-UPNEXT", partName: "TEST PART", subteam: "AERO", processType: "Wet Layup", revision: "A", status: "InWork", bom: [], qualityChecks: [], steps: [
+    { seq: 1, title: "Stack frozen", status: "done", buyoff: { name: "Simon", date: "2026-07-01" } },
+    { seq: 2, title: "Mold design review", status: "open", buyoff: { name: "", date: "" } }, // blocker (title matches BLOCKER_WORDS) AND the first not-done step
+    { seq: 3, title: "Machine and zero Z", status: "open", buyoff: { name: "", date: "" } },
+  ] };
+  DB.workOrders = DB.workOrders.concat([wo]); // append — later tests need the seeded/retro WOs still present
+  view = { ...view, tab: "workorders", mode: "detail", id: wo.id, edit: false };
+  render();
+  assert(main.innerHTML.includes('<span class="step-badge">blocker</span>'), "blocker renders as a badge, not bold text: " + main.innerHTML);
+  assert(!main.innerHTML.includes("<b>· BLOCKER</b>"), "old bold-text marker is gone");
+  const stepDivs = main.innerHTML.match(/<div class="step[^"]*">/g);
+  assert(stepDivs && stepDivs.length === 3, "one div per step: " + JSON.stringify(stepDivs));
+  assert(!stepDivs[0].includes("upnext"), "step 1 is already done, not up-next: " + stepDivs[0]);
+  assert(stepDivs[1].includes("blocker") && stepDivs[1].includes("upnext"), "step 2 is both the blocker and the up-next step: " + stepDivs[1]);
+  assert(!stepDivs[2].includes("upnext"), "step 3 isn't reached yet: " + stepDivs[2]);
+});
 await t("retro WO exempt from blockers, no buy-off button", () => { const r = DB.workOrders.find(w => w.retro); view = { ...view, tab: "workorders", mode: "detail", id: r.id, edit: false }; render(); assert(!main.innerHTML.includes("buy off as")); assert(blockerOpenBefore(r, r.steps.length) === null); });
 await t("reset steps lead-only + counts buy-offs", async () => { fb.roster = { name: "M", role: "member" }; const wo = woById(view.id); lastToast = ""; resetSteps(wo); assert(lastToast.includes("lead-only")); fb.roster = { name: "Simon", role: "lead" }; });
 await t("an undisposed linked issue blocks WO completion; disposing it unblocks", async () => {
@@ -178,6 +195,13 @@ await t("stage pills colored by progress", () => {
   assert(main.innerHTML.includes("stage st-done"), "CAD done → st-done");
   assert(main.innerHTML.includes("stage st-na"), "N/A mold → st-na");
   assert(main.innerHTML.includes("stage st-0"), "layup not started → st-0");
+});
+await t("stage bar sits alongside the pill and skips N/A (a bar would imply progress toward a stage that doesn't apply)", () => {
+  DB.parts = [{ id: "P-SN6-009", partName: "STG", cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" }];
+  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "" }; render();
+  assert(main.innerHTML.includes('stage-bar-fill st-done" style="width:100%'), "CAD fully done (last of 3) → 100% bar");
+  assert(main.innerHTML.includes('stage-bar-fill st-0" style="width:0%'), "layup not started (first of 4) → 0% bar");
+  assert((main.innerHTML.match(/class="stage-bar"/g) || []).length === 2, "only CAD + Layup get a bar; N/A mold gets none");
 });
 await t("partDone true only when layup complete/polished", () => { assert(!partDone({ layupProgress: "In Layup" })); assert(partDone({ layupProgress: "Polished" })); assert(partDone({ layupProgress: "Layup Complete" })); });
 await t("part field edit saves only that field", () => { view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-009", edit: true }; calls.length = 0; updPart("subteam", "AERO"); assert(partById("P-SN6-009").subteam === "AERO"); assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "subteam")); });
@@ -508,7 +532,16 @@ await t("subteam field round-trips through ticket creation and editing", async (
 console.log("budget:");
 await t("newBuy defaults purchaser to me", async () => { setTab("budget"); await newBuy(); assert(buyById(view.id).purchaser === "Simon" && buyById(view.id).status === "Submitted"); });
 await t("num parses money strings", () => { assert(num("$41.68") === 41.68 && num("") === 0 && num("1,200") === 1200); });
-await t("list totals season + open sums", () => { view = { ...view, tab: "budget", mode: "list" }; DB.budget = [{ id: "B1", cost: "100", status: "Reimbursed" }, { id: "B2", cost: "50", status: "Ordered" }]; render(); assert(main.innerHTML.includes("$150.00")); assert(main.innerHTML.includes("1 open ($50.00)")); });
+await t("list totals season + open sums", () => { view = { ...view, tab: "budget", mode: "list" }; DB.budget = [{ id: "B1", cost: "100", status: "Reimbursed" }, { id: "B2", cost: "50", status: "Ordered" }]; render(); assert(main.innerHTML.includes("$150")); assert(main.innerHTML.includes("Open orders ($50)")); });
+await t("budget stat row counts over-$50-and-still-Submitted, not just over-$50", () => {
+  DB.budget = [
+    { id: "B3", cost: "80", status: "Submitted" },  // over $50, unapproved
+    { id: "B4", cost: "80", status: "Ordered" },     // over $50 but already past approval
+    { id: "B5", cost: "10", status: "Submitted" },   // under $50, needs no approval
+  ];
+  view = { ...view, tab: "budget", mode: "list" }; render();
+  assert(main.innerHTML.includes('bignum">1</div><div class="stat-label">Over $50, unapproved'), "only B3 counts: " + main.innerHTML);
+});
 await t("newBuy starts with empty receipt fields", async () => { await newBuy(); const b = buyById(view.id); assert(b.receiptUrl === "" && b.receiptPath === "", "no receipt yet"); });
 await t("purchase detail shows add-receipt prompt when none, thumbnail when attached", () => {
   view = { ...view, tab: "budget", mode: "detail", id: "B-R1", edit: false };
@@ -540,6 +573,17 @@ await t("aggregates deadlines across tabs", () => {
   assert(items.find(i => i.id === "P-SN6-002").mine === false, "Nick's part not mine");
 });
 await t("renders upcoming, behind, mine sections", () => { setTab("dashboard"); assert(main.innerHTML.includes("Upcoming team deadlines") && main.innerHTML.includes("Behind schedule") && main.innerHTML.includes("Your open items")); assert(main.innerHTML.includes("SOON PART") && main.innerHTML.includes("LATE PART")); });
+await t("dashboard stat row shows real counts, not just the lists below it", () => {
+  // Same fixture as "aggregates deadlines across tabs" above (SOON PART is
+  // Simon's, LATE PART is Nick's and overdue), plus an explicit budget so
+  // spend isn't left over from whatever the previous test happened to set.
+  DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
+  setTab("dashboard");
+  assert(main.innerHTML.includes('class="stat-row"'), "has a stat row");
+  assert(/bignum">1<\/div><div class="stat-label">Your open items/.test(main.innerHTML), "1 item is Simon's (SOON PART): " + main.innerHTML);
+  assert(/bignum">1<\/div><div class="stat-label">Behind schedule/.test(main.innerHTML), "1 item is overdue (LATE PART)");
+  assert(main.innerHTML.includes('bignum">$150</div><div class="stat-label">Season spend'), "spend totals $120 + $30");
+});
 await t("itemRow closes exactly one paren per case, future/late/today (regression: used to double-close future dates and never close late ones)", () => {
   const soonRow = itemRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
   assert(/\(3d\)/.test(soonRow) && !/\(3d\)\)/.test(soonRow), "future date: single close paren: " + soonRow);
@@ -772,6 +816,16 @@ await t("people shows a member's live assignments", () => {
   DB.projects = []; DB.workOrders = [];
   view = { ...view, tab: "people", q: "" }; render();
   assert(main.innerHTML.includes("Nick Jepsen") && main.innerHTML.includes("WING"), "shows Nick + his part");
+});
+await t("people renders as a table (not the old card grid), keeps role-editing and self photo-set", () => {
+  DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }, { email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
+  DB.parts = []; DB.projects = []; DB.workOrders = [];
+  view = { ...view, tab: "people", q: "" }; render();
+  assert(main.innerHTML.includes('<table class="list dash">'), "table, not .peoplegrid: " + main.innerHTML);
+  assert(!main.innerHTML.includes("peoplegrid") && !main.innerHTML.includes("personcard"), "old grid markup is gone");
+  assert(/onchange="setRole\('nick@b\.edu',this\.value\)"/.test(main.innerHTML), "lead can still edit someone else's role");
+  assert(!main.innerHTML.includes("setRole('simon@berkeley.edu'"), "no self-role-edit dropdown for you");
+  assert(main.innerHTML.includes("Set photo"), "signed-in user still gets a self photo-set button");
 });
 await t("a Cancelled ticket doesn't count as an open assignment on People", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];

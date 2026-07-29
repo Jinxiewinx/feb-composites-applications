@@ -66,7 +66,13 @@ function renderBuyList() {
   const total = D.reduce((s, b) => s + num(b.cost), 0);
   const open = D.filter(b => b.status !== "Reimbursed");
   const openSum = open.reduce((s, b) => s + num(b.cost), 0);
+  const unapproved = D.filter(needsApproval).length;
   return `
+  <div class="stat-row">
+    <div class="stat-tile"><div class="bignum">$${total.toFixed(0)}</div><div class="stat-label">Season total</div></div>
+    <div class="stat-tile"><div class="bignum">${open.length}</div><div class="stat-label">Open orders ($${openSum.toFixed(0)})</div></div>
+    <div class="stat-tile"><div class="bignum">${unapproved}</div><div class="stat-label">Over $50, unapproved</div></div>
+  </div>
   <div class="toolbar no-print"><button class="primary" onclick="newBuy()">+ New Purchase</button></div>
   <div class="filters no-print">
     <select onchange="view.fStatus=this.value;render()">
@@ -74,7 +80,6 @@ function renderBuyList() {
       ${BUY_STATUS.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${s}</option>`).join("")}
     </select>
     <input id="searchbox" placeholder="search item / purchaser…" value="${esc(view.q)}" oninput="searchInput(this)">
-    <span class="muted" style="align-self:center">Season total <b>$${total.toFixed(2)}</b> · ${open.length} open ($${openSum.toFixed(2)})</span>
   </div>
   ${D.length === 0 ? `<div class="card">No purchases logged yet. <b>New Purchase</b> to start.</div>` : ""}
   <table class="list">

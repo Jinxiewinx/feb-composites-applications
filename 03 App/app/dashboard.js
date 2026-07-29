@@ -77,6 +77,11 @@ function renderDashboard() {
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
   return `
+  <div class="stat-row">
+    <div class="stat-tile"><div class="bignum">${mine.length}</div><div class="stat-label">Your open items</div></div>
+    <div class="stat-tile"><div class="bignum">${behind.length}</div><div class="stat-label">Behind schedule</div></div>
+    <div class="stat-tile"><div class="bignum">$${spend.toFixed(0)}</div><div class="stat-label">Season spend</div></div>
+  </div>
   ${watched.length ? `<div class="card" style="border-left:3px solid var(--gold)">
     <h3>Watched — new activity <span class="warn">(${watched.length})</span></h3>
     <table class="list dash"><tr><th>Ticket</th><th>Status</th><th>Last activity</th></tr>
