@@ -5,7 +5,7 @@
 | **Doc ID** | CS-XXX |
 | **Title** | Full title |
 | **Revision** | A |
-| **Status** | Draft — pending Lead signature / Released / Under Revision / Retired (a doc is never "Released" while its Approver row is blank) |
+| **Status** | Draft, pending Lead signature / Released / Under Revision / Retired (a doc is never "Released" while its Approver row is blank) |
 | **Effective date** | YYYY-MM-DD |
 | **Supersedes** | — (or prior doc/practice) |
 
@@ -52,16 +52,16 @@ Terms and shorthand used below (write for a first-semester member).
 
 ## 6. Safety
 
-Mandatory section, even if it only says "no physical hazards — process standard." For anything touching chemicals, machines, or dust: PPE (which glove/filter standard), ventilation, exposure notes from the SDS (cite it), and what to do when it goes wrong. Numbers here too — "adequate ventilation" needs a where, "respirator" needs a cartridge type.
+Mandatory section, even if it only says "no physical hazards, process standard." For anything touching chemicals, machines, or dust: PPE (which glove/filter standard), ventilation, exposure notes from the SDS (cite it), and what to do when it goes wrong. Numbers here too: "adequate ventilation" needs a where, "respirator" needs a cartridge type.
 
 ## 7. Procedure
 
-Numbered steps. One action per step. State the number (time, temperature, ratio, grit, torque) in the step — never "see elsewhere". If a number lives in a TDS, restate it here AND cite the TDS; the member with gloves on does not open PDFs.
+Numbered steps. One action per step. State the number (time, temperature, ratio, grit, torque) in the step, never "see elsewhere". If a number lives in a TDS, restate it here AND cite the TDS; the member with gloves on does not open PDFs.
 
 1. Step.
 2. Step.
 
-> Cautions use blockquote lines like this — they render as ⚠ CAUTION callouts.
+> Cautions use blockquote lines like this; they render as ⚠ CAUTION callouts.
 
 [PHOTO: description of the photo that belongs here]
 
