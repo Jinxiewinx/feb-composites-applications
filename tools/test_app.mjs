@@ -204,6 +204,35 @@ await t("stage bar sits alongside the pill and skips N/A (a bar would imply prog
   assert((main.innerHTML.match(/class="stage-bar"/g) || []).length === 2, "only CAD + Layup get a bar; N/A mold gets none");
 });
 await t("partDone true only when layup complete/polished", () => { assert(!partDone({ layupProgress: "In Layup" })); assert(partDone({ layupProgress: "Polished" })); assert(partDone({ layupProgress: "Layup Complete" })); });
+await t("parts list columns sort on header click, with real progress order (not text order) for stage columns", () => {
+  DB.parts = DB.parts.concat([ // append — later tests need existing fixture parts (e.g. P-SN6-009) to stay put
+    { id: "P-A", partName: "Zeta Part", moldProgress: "Sealed", layupDeadline: "2026-08-01" },
+    { id: "P-B", partName: "Alpha Part", moldProgress: "Machining", layupDeadline: "2026-07-01" },
+    { id: "P-C", partName: "Mid Part", moldProgress: "Ready For Layup", layupDeadline: "2026-07-15" },
+  ]);
+  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "", sortKey: null, sortDir: null };
+  render();
+  let order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  assert(order[0] === "P-B" && order[2] === "P-A", "default (unsorted) is by deadline: " + order.join(","));
+
+  sortPartsBy("partName");
+  assert(main.innerHTML.includes("Part ▲"), "ascending arrow shows on the clicked column: " + main.innerHTML);
+  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  assert(order[0] === "P-B" && order[1] === "P-C" && order[2] === "P-A", "alphabetical: Alpha, Mid, Zeta: " + order.join(","));
+
+  sortPartsBy("partName");
+  assert(main.innerHTML.includes("Part ▼"), "clicking the same column again reverses it: " + main.innerHTML);
+  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  assert(order[0] === "P-A", "now descending, Zeta first: " + order.join(","));
+
+  sortPartsBy("moldProgress"); // STAGE_MOLD order is Machining < Sealed < Ready For Layup — alphabetically "Ready" would sort first, which would be wrong
+  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  assert(order[0] === "P-B" && order[1] === "P-A" && order[2] === "P-C", "real stage progression (Machining, Sealed, Ready For Layup), not alphabetical: " + order.join(","));
+});
+await t("Stock and Parts don't share a sidebar icon (regression: Stock used to reuse ic:'parts')", () => {
+  const stockTab = TABS.find(t => t.id === "stock"), partsTab = TABS.find(t => t.id === "parts");
+  assert(stockTab.ic !== partsTab.ic, "icons must differ: " + stockTab.ic + " vs " + partsTab.ic);
+});
 await t("part field edit saves only that field", () => { view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-009", edit: true }; calls.length = 0; updPart("subteam", "AERO"); assert(partById("P-SN6-009").subteam === "AERO"); assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "subteam")); });
 
 console.log("tickets (modal, board, comments):");

@@ -156,6 +156,8 @@
   .filters select, .filters input { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
   table.list { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
   table.list th { background: var(--surface-2); color: var(--muted); text-align: left; padding: 8px 11px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); }
+  table.list th.sortable { cursor: pointer; user-select: none; }
+  table.list th.sortable:hover { color: var(--brand-ink); }
   table.list td { padding: 9px 11px; border-top: 1px solid var(--line); cursor: pointer; vertical-align: middle; }
   table.list tr:hover td { background: var(--hover); }
   table.list .tny { font-size: 12px; color: var(--muted); }

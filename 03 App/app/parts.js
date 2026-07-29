@@ -69,12 +69,42 @@ function renderParts() {
   return view.mode === "detail" ? renderPartDetail() : renderPartList();
 }
 
+// Column sort for the Parts list. Progress columns sort by the part's index
+// in its own stage enum (real progress order), not alphabetically — "Machining"
+// vs "Sealed" vs "Ready For Layup" would be nonsense sorted as text.
+const PART_SORT_COLS = {
+  partName: p => (p.partName || p.id || "").toLowerCase(),
+  subteam: p => (p.subteam || "").toLowerCase(),
+  layupType: p => (p.layupType || "").toLowerCase(),
+  cadProgress: p => STAGE_CAD.indexOf(p.cadProgress || STAGE_CAD[0]),
+  moldProgress: p => STAGE_MOLD.indexOf(p.moldProgress || STAGE_MOLD[0]),
+  layupProgress: p => STAGE_LAYUP.indexOf(p.layupProgress || STAGE_LAYUP[0]),
+  layupDeadline: p => p.layupDeadline || "9999",
+};
+function sortPartsBy(key) {
+  if (view.sortKey === key) view.sortDir = view.sortDir === "desc" ? "asc" : "desc";
+  else { view.sortKey = key; view.sortDir = "asc"; }
+  render();
+}
+function sortedPartRows(rows) {
+  const get = PART_SORT_COLS[view.sortKey];
+  if (!get) return rows;
+  const mul = view.sortDir === "desc" ? -1 : 1;
+  return rows.slice().sort((a, b) => { const av = get(a), bv = get(b); return av < bv ? -mul : av > bv ? mul : 0; });
+}
+// A clickable <th> for a sortable column, with a ▲/▼ on whichever one is active.
+function sortTh(label, key) {
+  const active = view.sortKey === key;
+  const arrow = active ? (view.sortDir === "desc" ? " ▼" : " ▲") : "";
+  return `<th class="sortable" onclick="sortPartsBy('${key}')">${esc(label)}${arrow}</th>`;
+}
+
 function renderPartList() {
   const D = DB.parts;
-  const rows = D
+  let rows = D
     .filter(p => (!view.fSub || p.subteam === view.fSub))
-    .filter(p => { const q = view.q.toLowerCase(); return !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q); })
-    .sort((a, b) => (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id));
+    .filter(p => { const q = view.q.toLowerCase(); return !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q); });
+  rows = view.sortKey ? sortedPartRows(rows) : rows.sort((a, b) => (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id));
   return `
   <div class="toolbar no-print"><button class="primary" onclick="newPart()">+ New Part</button></div>
   <div class="filters no-print">
@@ -87,7 +117,7 @@ function renderPartList() {
   </div>
   ${D.length === 0 ? `<div class="card">No parts yet. <b>New Part</b> to start${isLead() ? ", or <b>Load SN5 archive</b> for last season's tracker" : ""}.</div>` : ""}
   <table class="list">
-    <tr><th>Part</th><th>Subteam</th><th>Type</th><th>CAD</th><th>Mold</th><th>Layup</th><th>ME / RE</th><th>Deadline</th></tr>
+    <tr>${sortTh("Part", "partName")}${sortTh("Subteam", "subteam")}${sortTh("Type", "layupType")}${sortTh("CAD", "cadProgress")}${sortTh("Mold", "moldProgress")}${sortTh("Layup", "layupProgress")}<th>ME / RE</th>${sortTh("Deadline", "layupDeadline")}</tr>
     ${rows.map(p => {
       const dd = daysUntil(p.layupDeadline), late = dd != null && dd < 0 && !partDone(p);
       return `<tr onclick="view={...view,mode:'detail',id:'${p.id}',edit:false};render()">

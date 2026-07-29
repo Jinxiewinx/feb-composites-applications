@@ -107,7 +107,6 @@ function renderDashboard() {
   <div class="dashgrid">
     <div class="card">
       <h3>Budget</h3>
-      <div class="bignum">$${spend.toFixed(0)}<span class="muted"> season spend</span></div>
       <p class="muted">${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"} · $${openSum.toFixed(0)} not yet reimbursed</p>
       <button onclick="setTab('budget')">Open Budget →</button>
     </div>

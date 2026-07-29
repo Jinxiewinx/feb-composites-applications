@@ -12,7 +12,7 @@
 let DB = { workOrders: [], parts: [], projects: [], schedule: [], budget: [], documents: [], stock: [], stackplans: [], notifications: [], users: [] };
 let view = {
   tab: "dashboard", mode: "list", id: null, edit: false,
-  q: "", fStatus: "", fSub: "", authMode: "in",
+  q: "", fStatus: "", fSub: "", authMode: "in", sortKey: null, sortDir: null,
 };
 let rosterCache = null;
 let pendingRender = false;
@@ -80,6 +80,7 @@ const ICONS = {
   dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
   workorders: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M9 12h6M9 16h6"/>',
   parts: '<path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  layers: '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
   projects: '<rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/>',
   timeline: '<path d="M3 5h11M3 12h18M3 19h8"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -547,7 +548,7 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, render: () => renderDashboard() },
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
-  { id: "stock", label: "Stock", ic: "parts", coll: "stock", render: () => renderStock() },
+  { id: "stock", label: "Stock", ic: "layers", coll: "stock", render: () => renderStock() },
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
   { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", render: () => renderWeekPlan() },
@@ -562,7 +563,7 @@ const TABS = [
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
-  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "" };
+  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null };
   closeDrawer();
   render();
 }
