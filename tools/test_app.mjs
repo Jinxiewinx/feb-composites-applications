@@ -499,45 +499,89 @@ await t("renderWeekPlan shows a guidance card when there are no dated weeks yet"
   const html = renderWeekPlan();
   assert(/Timeline/.test(html) && !html.includes("<table"), "points at Timeline instead of an empty grid: " + html);
 });
-await t("tickets bucket into the right day + subteam cell; unassigned-subteam and unscheduled tickets get their own catch-all sections", () => {
-  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [] }]; // Mon 2026-08-24
+await t("personTicketsThisWeek scopes to the week's date range, the person, and open status; no subteam grouping anywhere in the render", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }]; // Mon 2026-08-24
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
   DB.projects = [
-    { id: "TKT-W1", kind: "project", title: "AERO task", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" }, // Tue
-    { id: "TKT-W2", kind: "project", title: "no subteam task", dueDate: "2026-08-26", assignees: [], status: "To Do" }, // Wed, no subteam
-    { id: "TKT-W3", kind: "project", title: "no due date task", dueDate: "", assignees: [], status: "To Do" },
-    { id: "TKT-W4", kind: "project", title: "done already", subteam: "AERO", dueDate: "2026-08-25", assignees: [], status: "Done" }, // must not appear
-    { id: "TKT-W5", kind: "project", title: "next month, out of range", subteam: "AERO", dueDate: "2026-09-25", assignees: [], status: "To Do" },
-  ];
-  view = { ...view, wpWeek: "S1" };
-  const html = renderWeekPlan();
-  assert(html.includes("AERO task"), "in-week AERO ticket shows: " + html);
-  assert(html.includes("No subteam set") && html.includes("no subteam task"), "no-subteam catch-all: " + html);
-  assert(html.includes("Unscheduled") && html.includes("no due date task"), "no-due-date catch-all: " + html);
-  assert(!html.includes("done already"), "Done tickets are excluded");
-  assert(!html.includes("next month, out of range"), "out-of-week tickets are excluded");
-});
-await t("manual assignment add/remove round-trips through schedule.assignments[]", () => {
-  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [] }];
-  calls.length = 0;
-  addManualAssignment("S1", "Tue", "AERO", "nick@berkeley.edu", "Layup prep", "2");
-  const w = weekById("S1");
-  assert(w.assignments.length === 1 && w.assignments[0].task === "Layup prep", "added: " + JSON.stringify(w.assignments));
-  assert(calls.some(c => c[0] === "appendTo" && c[1] === "schedule" && c[3] === "assignments"), "atomic append, not a whole-doc save");
-  const id = w.assignments[0].id;
-  removeManualAssignment("S1", id);
-  assert(weekById("S1").assignments.length === 0, "removed");
-});
-await t("personWeekTasks bounds to the week's date range and includes manual assignments", () => {
-  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", assignments: [{ id: "A1", day: "Wed", subteam: "AERO", person: "nick@berkeley.edu", task: "manual thing", hours: "1" }] }];
-  DB.projects = [
-    { id: "TKT-P1", kind: "project", title: "in week", dueDate: "2026-08-27", assignees: ["nick@berkeley.edu"], status: "In Progress" },
-    { id: "TKT-P2", kind: "project", title: "out of week", dueDate: "2026-09-27", assignees: ["nick@berkeley.edu"], status: "In Progress" },
+    { id: "TKT-W1", kind: "project", title: "undertray task", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" }, // Tue, in week
+    { id: "TKT-W4", kind: "project", title: "done already", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "Done" }, // must not appear
+    { id: "TKT-W5", kind: "project", title: "next month, out of range", subteam: "AERO", dueDate: "2026-09-25", assignees: ["nick@berkeley.edu"], status: "To Do" },
   ];
   const week = weekById("S1");
-  const { tickets, manual } = personWeekTasks("nick@berkeley.edu", week);
-  assert(tickets.length === 1 && tickets[0].id === "TKT-P1", "only the in-week ticket: " + JSON.stringify(tickets));
-  assert(manual.length === 1 && manual[0].task === "manual thing", "manual assignment included: " + JSON.stringify(manual));
+  const tix = personTicketsThisWeek("nick@berkeley.edu", week);
+  assert(tix.length === 1 && tix[0].id === "TKT-W1", "only the in-week, open, assigned ticket: " + JSON.stringify(tix));
+
+  view = { ...view, tab: "weekplan", wpWeek: "S1" };
+  const html = renderWeekPlan();
+  assert(html.includes("Weekly Goals") && html.includes("Car Groups"), "both sections render: " + html);
+  assert(html.includes("undertray task"), "shows the in-week ticket: " + html);
+  assert(!html.includes("No subteam set") && !/<th>AERO<\/th>/.test(html), "no subteam grouping left anywhere: " + html);
+});
+await t("adding a goal writes to schedule.goals[] via atomic append; toggling done and removing round-trip", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }];
+  calls.length = 0;
+  document.getElementById("wg-text").value = "Layup prep";
+  document.getElementById("wg-due").value = "2026-08-27";
+  document.getElementById("wg-ticket").value = "";
+  submitGoal("S1", "nick@berkeley.edu");
+  const w = weekById("S1");
+  assert(w.goals.length === 1 && w.goals[0].text === "Layup prep" && w.goals[0].dueDate === "2026-08-27", "added: " + JSON.stringify(w.goals));
+  assert(calls.some(c => c[0] === "appendTo" && c[1] === "schedule" && c[3] === "goals"), "atomic append, not a whole-doc save: " + JSON.stringify(calls));
+  const id = w.goals[0].id;
+
+  toggleGoalDone("S1", id, true);
+  assert(weekById("S1").goals[0].done === true, "marked done");
+
+  removeGoal("S1", id);
+  assert(weekById("S1").goals.length === 0, "removed");
+});
+await t("checking off an auto ticket row is local to the week's plan — the real ticket status never changes", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }];
+  DB.projects = [{ id: "TKT-W1", kind: "project", title: "undertray task", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "In Progress" }];
+  calls.length = 0;
+  toggleTicketDoneThisWeek("S1", "nick@berkeley.edu", "TKT-W1", true);
+  assert(isTicketDoneThisWeek(weekById("S1"), "nick@berkeley.edu", "TKT-W1"), "marked done locally");
+  assert(projStatus(recById("projects", "TKT-W1")) === "In Progress", "the real ticket's status is untouched");
+  assert(calls.some(c => c[0] === "appendTo" && c[3] === "doneTickets"), "atomic append: " + JSON.stringify(calls));
+
+  toggleTicketDoneThisWeek("S1", "nick@berkeley.edu", "TKT-W1", false);
+  assert(!isTicketDoneThisWeek(weekById("S1"), "nick@berkeley.edu", "TKT-W1"), "unmarked");
+});
+await t("car groups: new car, add/remove passengers, capacity enforced", () => {
+  DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }];
+  DB.users = [
+    { email: "sam@b.edu", name: "Sam Rios", role: "member" },
+    { email: "nick@b.edu", name: "Nick Alva", role: "member" },
+    { email: "jamie@b.edu", name: "Jamie T", role: "member" },
+  ];
+  calls.length = 0;
+  document.getElementById("wc-driver").value = "sam@b.edu";
+  document.getElementById("wc-day").value = "Sat";
+  document.getElementById("wc-time").value = "9:00 AM";
+  document.getElementById("wc-cap").value = "2";
+  submitCar("S1");
+  const w = weekById("S1");
+  assert(w.cars.length === 1 && w.cars[0].driver === "sam@b.edu" && w.cars[0].capacity === 2, "car created: " + JSON.stringify(w.cars));
+  assert(calls.some(c => c[0] === "appendTo" && c[3] === "cars"), "atomic append: " + JSON.stringify(calls));
+  const carId = w.cars[0].id;
+
+  document.getElementById("wc-passenger").value = "nick@b.edu";
+  submitPassenger("S1", carId);
+  assert(weekById("S1").cars[0].passengers.includes("nick@b.edu"), "passenger added");
+
+  document.getElementById("wc-passenger").value = "jamie@b.edu";
+  submitPassenger("S1", carId); // capacity 2, now full
+  assert(weekById("S1").cars[0].passengers.length === 2, "second passenger fills the car: " + JSON.stringify(weekById("S1").cars[0].passengers));
+
+  lastToast = "";
+  openAddPassengerModal("S1", carId); // full — must refuse, not open a picker
+  assert(lastToast.includes("full"), "toasts instead of opening when full: " + lastToast);
+
+  removePassenger("S1", carId, "nick@b.edu");
+  assert(weekById("S1").cars[0].passengers.length === 1 && !weekById("S1").cars[0].passengers.includes("nick@b.edu"), "removed");
+
+  delCar("S1", carId);
+  assert(weekById("S1").cars.length === 0, "car deleted");
 });
 await t("subteam field round-trips through ticket creation and editing", async () => {
   setTab("projects");

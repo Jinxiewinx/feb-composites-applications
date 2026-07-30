@@ -1,15 +1,23 @@
 "use strict";
 /* weeklyplan.js — the Weekly Plan tab.
-   A second view over the `schedule` collection Timeline already owns —
-   Timeline is station x week; this is day x subteam, plus a per-person weekly
-   task rollup pulling from both tickets (DB.projects, via their optional
-   subteam/dueDate) and manual (non-ticket) assignments stored on the same
-   week doc. Deliberately doesn't touch Timeline's station grid or its data.
+   Two sections, deliberately unrelated to each other:
 
-   Assumes schedule.weekOf is the MONDAY of that production week — every day
-   in the grid is derived as weekOf + 0..6 days. If that assumption is ever
-   wrong for a real week, the grid dates will be off; there's no other signal
-   in a week doc to derive a different start-of-week from. */
+   1. Weekly Goals — one row per person, not per subteam. Subteam describes
+      what a *part* is for, not who's building it (composites builds every
+      part regardless of subteam), so it has no place organizing who's doing
+      what this week. Each person gets a checklist: tickets due this week
+      (auto-pulled from DB.projects, exactly like before) plus goals typed in
+      at the Monday meeting (freeform, with an optional link to a ticket).
+      Checking off a ticket-linked row is LOCAL to this week's plan — it does
+      not touch the ticket's real status in the Tickets tab.
+
+   2. Car Groups — literal carpools, not work teams. A driver sets up one car
+      for a specific day/time with a fixed seat count, then adds people until
+      it's full. Ad-hoc every week; nothing carries over.
+
+   Both live on the same `schedule/{weekId}` doc Timeline already owns, in
+   their own fields (goals, doneTickets, cars) — deliberately doesn't touch
+   Timeline's station grid or its fields. */
 
 const DOW_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -27,63 +35,195 @@ function weekById(id) { return DB.schedule.find(w => w.id === id); }
 // timeline.js) have nothing to derive dates from, so they're not offered here.
 function weekPlanWeeks() { return DB.schedule.filter(w => w.weekOf).slice().sort((a, b) => a.weekOf.localeCompare(b.weekOf)); }
 
-// Tickets due within a week's date range, excluding ones no longer live.
-function ticketsForWeek(dates) {
+/* ============================= Section 1: Weekly Goals ============================= */
+
+// Tickets due within a week's date range, assigned to this person, still open.
+function personTicketsThisWeek(email, week) {
+  const dates = weekDates(week.weekOf);
   if (!dates.length) return [];
   const start = dates[0], end = dates[dates.length - 1];
-  return DB.projects.filter(p => p.dueDate && p.dueDate >= start && p.dueDate <= end && !["Done", "Cancelled"].includes(projStatus(p)));
+  return DB.projects.filter(p => p.dueDate && p.dueDate >= start && p.dueDate <= end
+    && !["Done", "Cancelled"].includes(projStatus(p)) && (p.assignees || []).includes(email));
 }
-
-function addManualAssignment(weekId, day, subteam, person, task, hours) {
+function isTicketDoneThisWeek(week, email, ticketId) {
+  return (week.doneTickets || []).some(d => d.person === email && d.ticketId === ticketId);
+}
+// Local-only completion tracking for an auto ticket row — never writes to the
+// ticket itself. Add is a plain append (arrayUnion-safe); remove needs the
+// same transaction-safe filtered-rewrite pattern as everything else here,
+// since a raw overwrite could race a concurrent add from someone else.
+function toggleTicketDoneThisWeek(weekId, email, ticketId, done) {
   const w = weekById(weekId); if (!w) return;
-  const entry = { id: "A" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), day, subteam, person, task, hours: hours || "", createdBy: myEmail(), ts: new Date().toISOString() };
-  w.assignments = (w.assignments || []).concat([entry]); // optimistic
-  fb.appendTo("schedule", weekId, "assignments", entry).catch(() => save("schedule", w, "assignments"));
+  if (done) {
+    const entry = { person: email, ticketId };
+    w.doneTickets = (w.doneTickets || []).concat([entry]); // optimistic
+    fb.appendTo("schedule", weekId, "doneTickets", entry).catch(() => save("schedule", w, "doneTickets"));
+  } else {
+    w.doneTickets = (w.doneTickets || []).filter(d => !(d.person === email && d.ticketId === ticketId)); // optimistic
+    saveField("schedule", w, "doneTickets", arr => (arr || []).filter(d => !(d.person === email && d.ticketId === ticketId)));
+  }
   render();
 }
-// Removing (unlike adding) can't use arrayUnion, so this goes through the
-// same transaction-safe re-apply-the-delta pattern as stackEdit()'s ply
-// removal — a full-array overwrite here could race a concurrent add.
-function removeManualAssignment(weekId, assignmentId) {
-  const w = weekById(weekId); if (!w) return;
-  w.assignments = (w.assignments || []).filter(a => a.id !== assignmentId); // optimistic
-  saveField("schedule", w, "assignments", arr => (arr || []).filter(a => a.id !== assignmentId));
-  render();
-}
 
-function openAssignModal(weekId, day, subteam) {
-  pickerInit("wpPerson", assigneeItems(), []);
+function openAddGoalModal(weekId, email) {
+  const tickets = DB.projects.filter(p => !["Done", "Cancelled"].includes(projStatus(p)))
+    .slice().sort((a, b) => (a.title || a.id).localeCompare(b.title || b.id));
   openModal(`
-    <h2>Assign — ${esc(day)} · ${esc(subteam)}</h2>
-    <div class="field"><label>Person</label>${pickerField("wpPerson")}</div>
-    <div class="field"><label>Task</label><input id="wp-task" placeholder="What are they doing?"></div>
-    <div class="field"><label>Hours (optional)</label><input id="wp-hours" type="number" min="0" step="0.5"></div>
-    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitAssignment('${weekId}','${day}','${subteam}')">Assign</button></div>
+    <h2>Add goal — ${esc(userName(email))}</h2>
+    <div class="field"><label>Task</label><input id="wg-text" placeholder="What's the goal?"></div>
+    <div class="field"><label>Due date</label><input id="wg-due" type="date"></div>
+    <div class="field"><label>Linked ticket (optional)</label>
+      <select id="wg-ticket"><option value="">— none —</option>
+        ${tickets.map(t => `<option value="${esc(t.id)}">${esc(t.title || t.id)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitGoal('${weekId}','${esc(email)}')">Add goal</button></div>
   `);
 }
-function submitAssignment(weekId, day, subteam) {
-  const people = pickerValues("wpPerson");
-  const task = document.getElementById("wp-task").value.trim();
-  const hours = document.getElementById("wp-hours").value;
-  if (!people.length) { toast("Pick a person.", "error"); return; }
-  if (!task) { toast("Say what they're doing.", "error"); return; }
-  people.forEach(person => addManualAssignment(weekId, day, subteam, person, task, hours));
+function submitGoal(weekId, email) {
+  const text = document.getElementById("wg-text").value.trim();
+  const dueDate = document.getElementById("wg-due").value;
+  const ticketId = document.getElementById("wg-ticket").value;
+  if (!text) { toast("Say what the goal is.", "error"); return; }
+  const w = weekById(weekId); if (!w) return;
+  const entry = { id: "G" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), person: email, text, dueDate, ticketId: ticketId || "", done: false, createdBy: myEmail(), ts: new Date().toISOString() };
+  w.goals = (w.goals || []).concat([entry]); // optimistic
+  fb.appendTo("schedule", weekId, "goals", entry).catch(() => save("schedule", w, "goals"));
   closeModal();
+  render();
+}
+function toggleGoalDone(weekId, goalId, done) {
+  const w = weekById(weekId); if (!w) return;
+  w.goals = (w.goals || []).map(g => g.id === goalId ? { ...g, done } : g); // optimistic
+  saveField("schedule", w, "goals", arr => (arr || []).map(g => g.id === goalId ? { ...g, done } : g));
+  render();
+}
+function removeGoal(weekId, goalId) {
+  const w = weekById(weekId); if (!w) return;
+  w.goals = (w.goals || []).filter(g => g.id !== goalId); // optimistic
+  saveField("schedule", w, "goals", arr => (arr || []).filter(g => g.id !== goalId));
+  render();
 }
 
-// Tickets + manual assignments for one person, bounded to this week's date
-// range — a distinct, week-scoped contract from assignmentsFor()/isMine()
-// (people.js/dashboard.js), which are unbounded "what's open right now"
-// views used elsewhere. Don't fold this into those; they have a different job.
-function personWeekTasks(email, week) {
-  const dates = weekDates(week.weekOf);
-  if (!dates.length) return { tickets: [], manual: [] };
-  const start = dates[0], end = dates[dates.length - 1];
-  const tickets = DB.projects.filter(p => p.dueDate && p.dueDate >= start && p.dueDate <= end
-    && !["Done", "Cancelled"].includes(projStatus(p)) && (p.assignees || []).includes(email));
-  const manual = (week.assignments || []).filter(a => a.person === email);
-  return { tickets, manual };
+function dueDatePill(dueDate) {
+  if (!dueDate) return "";
+  const d = daysUntil(dueDate);
+  const cls = d != null && d < 0 ? "late" : d != null && d <= 2 ? "soon" : "";
+  const label = d != null && d < 0 ? Math.abs(d) + "d late" : "due " + dueDate;
+  return `<span class="due-pill ${cls}">${esc(label)}</span>`;
 }
+
+// One person's goal checklist: auto ticket rows first, then their manual goals.
+function personGoalsHtml(u, week) {
+  const tickets = personTicketsThisWeek(u.email, week);
+  const goals = (week.goals || []).filter(g => g.person === u.email);
+  if (!tickets.length && !goals.length) {
+    return `<div class="muted tny" style="margin-left:30px">Nothing yet this week.</div>
+      <button class="btn sm no-print" style="margin-left:30px;margin-top:6px" onclick="openAddGoalModal('${week.id}','${esc(u.email)}')">+ Add goal</button>`;
+  }
+  const ticketRows = tickets.map(t => {
+    const done = isTicketDoneThisWeek(week, u.email, t.id);
+    return `<div class="task-row ${done ? "done" : ""}">
+      <input type="checkbox" ${done ? "checked" : ""} onchange="toggleTicketDoneThisWeek('${week.id}','${esc(u.email)}','${esc(t.id)}',this.checked)">
+      ${chip("projects", t.id, t.title || t.id)}
+      ${dueDatePill(t.dueDate)}
+    </div>`;
+  }).join("");
+  const goalRows = goals.map(g => `<div class="task-row ${g.done ? "done" : ""}">
+    <input type="checkbox" ${g.done ? "checked" : ""} onchange="toggleGoalDone('${week.id}','${g.id}',this.checked)">
+    <span class="tsk-text">${esc(g.text)}</span>
+    ${g.ticketId && recById("projects", g.ticketId) ? `<span class="chip tny">linked: ${chip("projects", g.ticketId, g.ticketId)}</span>` : ""}
+    ${dueDatePill(g.dueDate)}
+    <button class="ib no-print" title="Remove" onclick="removeGoal('${week.id}','${g.id}')">${icon("trash", 12)}</button>
+  </div>`).join("");
+  return `<div style="margin-left:30px;display:flex;flex-direction:column;gap:6px">
+    ${ticketRows}${goalRows}
+    <button class="btn sm no-print" style="align-self:flex-start;margin-top:2px" onclick="openAddGoalModal('${week.id}','${esc(u.email)}')">+ Add goal</button>
+  </div>`;
+}
+
+/* ============================= Section 2: Car Groups ============================= */
+
+function openNewCarModal(weekId) {
+  const users = usersSorted();
+  openModal(`
+    <h2>New car</h2>
+    <div class="field"><label>Driver</label><select id="wc-driver">${users.map(u => `<option value="${esc(u.email)}">${esc(u.name || u.email)}</option>`).join("")}</select></div>
+    <div class="field"><label>Day</label><select id="wc-day">${DOW_SHORT.map(d => `<option>${d}</option>`).join("")}</select></div>
+    <div class="field"><label>Departure time</label><input id="wc-time" placeholder="e.g. 9:00 AM"></div>
+    <div class="field"><label>Seats</label><input id="wc-cap" type="number" min="1" step="1" value="4"></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitCar('${weekId}')">Create car</button></div>
+  `);
+}
+function submitCar(weekId) {
+  const driver = document.getElementById("wc-driver").value;
+  const day = document.getElementById("wc-day").value;
+  const time = document.getElementById("wc-time").value.trim();
+  const capacity = Math.max(1, parseInt(document.getElementById("wc-cap").value, 10) || 1);
+  if (!time) { toast("Set a departure time.", "error"); return; }
+  const w = weekById(weekId); if (!w) return;
+  const car = { id: "C" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), driver, day, time, capacity, passengers: [], createdBy: myEmail(), ts: new Date().toISOString() };
+  w.cars = (w.cars || []).concat([car]); // optimistic
+  fb.appendTo("schedule", weekId, "cars", car).catch(() => save("schedule", w, "cars"));
+  closeModal();
+  render();
+}
+function delCar(weekId, carId) {
+  const w = weekById(weekId); if (!w) return;
+  w.cars = (w.cars || []).filter(c => c.id !== carId); // optimistic
+  saveField("schedule", w, "cars", arr => (arr || []).filter(c => c.id !== carId));
+  render();
+}
+function openAddPassengerModal(weekId, carId) {
+  const w = weekById(weekId); const car = w && (w.cars || []).find(c => c.id === carId); if (!car) return;
+  const openSeats = car.capacity - car.passengers.length;
+  if (openSeats <= 0) { toast("This car is full.", "error"); return; }
+  const already = new Set([car.driver, ...car.passengers]);
+  const candidates = usersSorted().filter(u => !already.has(u.email));
+  if (!candidates.length) { toast("Everyone on the roster is already in this car.", "error"); return; }
+  openModal(`
+    <h2>Add passenger — ${openSeats} seat${openSeats === 1 ? "" : "s"} open</h2>
+    <div class="field"><label>Person</label><select id="wc-passenger">${candidates.map(u => `<option value="${esc(u.email)}">${esc(u.name || u.email)}</option>`).join("")}</select></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitPassenger('${weekId}','${carId}')">Add</button></div>
+  `);
+}
+function submitPassenger(weekId, carId) {
+  const email = document.getElementById("wc-passenger").value;
+  const w = weekById(weekId); const car = w && (w.cars || []).find(c => c.id === carId); if (!w || !car) return;
+  if (car.passengers.length >= car.capacity) { toast("This car is full.", "error"); return; }
+  if (car.driver === email || car.passengers.includes(email)) { toast("Already in this car.", "error"); return; }
+  w.cars = w.cars.map(c => c.id === carId ? { ...c, passengers: [...c.passengers, email] } : c); // optimistic
+  saveField("schedule", w, "cars", arr => (arr || []).map(c => c.id === carId && !c.passengers.includes(email) ? { ...c, passengers: [...c.passengers, email] } : c));
+  closeModal();
+  render();
+}
+function removePassenger(weekId, carId, email) {
+  const w = weekById(weekId); if (!w) return;
+  w.cars = (w.cars || []).map(c => c.id === carId ? { ...c, passengers: c.passengers.filter(p => p !== email) } : c); // optimistic
+  saveField("schedule", w, "cars", arr => (arr || []).map(c => c.id === carId ? { ...c, passengers: c.passengers.filter(p => p !== email) } : c));
+  render();
+}
+
+function carCardHtml(week, car) {
+  const openSeats = car.capacity - car.passengers.length;
+  const fillCls = openSeats <= 0 ? "pill-amber" : "pill-slate";
+  return `<div class="carcard">
+    <div class="carcard-hd">
+      ${avatar(car.driver, 22)}
+      <b>${esc(userName(car.driver))}'s car</b>
+      <span class="chip">${esc(car.day)} · ${esc(car.time)}</span>
+      <span class="pill ${fillCls}" style="margin-left:auto">${car.passengers.length} of ${car.capacity} spot${car.capacity === 1 ? "" : "s"} filled</span>
+      <button class="ib no-print" title="Delete car" onclick="delCar('${week.id}','${car.id}')">${icon("trash", 12)}</button>
+    </div>
+    <div class="carcard-seats">
+      ${car.passengers.map(p => `<span title="${esc(userName(p))}">${avatar(p, 26)}</span><button class="ib no-print" title="Remove" onclick="removePassenger('${week.id}','${car.id}','${esc(p)}')">${icon("x", 11)}</button>`).join("")}
+      ${Array.from({ length: openSeats }).map(() => `<span class="seat-open">+</span>`).join("")}
+      <button class="btn sm no-print" style="margin-left:auto" ${openSeats <= 0 ? "disabled" : ""} onclick="openAddPassengerModal('${week.id}','${car.id}')">+ Add passenger</button>
+    </div>
+  </div>`;
+}
+
+/* ============================= Render ============================= */
 
 function renderWeekPlan() {
   const weeks = weekPlanWeeks();
@@ -92,33 +232,7 @@ function renderWeekPlan() {
   }
   const weekId = (view.wpWeek && weekById(view.wpWeek) && weekById(view.wpWeek).weekOf) ? view.wpWeek : weeks[weeks.length - 1].id;
   const week = weekById(weekId);
-  const dates = weekDates(week.weekOf);
-  const weekTickets = ticketsForWeek(dates);
-  const unscheduled = DB.projects.filter(p => !p.dueDate && !["Done", "Cancelled"].includes(projStatus(p)));
-  const noSubteam = weekTickets.filter(p => !p.subteam);
-
-  const rows = dates.map((date, i) => {
-    const day = DOW_SHORT[i];
-    const cols = SUBTEAMS.map(sub => {
-      const dayTickets = weekTickets.filter(p => p.dueDate === date && p.subteam === sub);
-      const manual = (week.assignments || []).filter(a => a.day === day && a.subteam === sub);
-      return `<td>
-        ${dayTickets.map(p => `<div class="wp-item">${chip("projects", p.id, p.title || p.id)}</div>`).join("")}
-        ${manual.map(a => `<div class="wp-item">${esc(userName(a.person))} — ${esc(a.task)}${a.hours ? ` (${esc(String(a.hours))}h)` : ""} <button class="ib no-print" title="Remove" onclick="removeManualAssignment('${week.id}','${a.id}')">${icon("trash", 12)}</button></div>`).join("")}
-        <button class="sm no-print" onclick="openAssignModal('${week.id}','${day}','${sub}')">+ Assign</button>
-      </td>`;
-    }).join("");
-    return `<tr><td class="wk">${esc(day)}<div class="muted tny">${esc(date)}</div></td>${cols}</tr>`;
-  }).join("");
-
-  const rollupRows = usersSorted().map(u => {
-    const { tickets, manual } = personWeekTasks(u.email, week);
-    if (!tickets.length && !manual.length) return "";
-    return `<tr><td>${avatar(u.email, 20)} ${esc(u.name || u.email)}</td><td>
-      ${tickets.map(p => chip("projects", p.id, p.title || p.id)).join(" ")}
-      ${manual.map(a => `<span class="chip">${esc(a.task)}${a.hours ? ` (${esc(String(a.hours))}h)` : ""}</span>`).join(" ")}
-    </td></tr>`;
-  }).join("");
+  const cars = week.cars || [];
 
   return `
   <div class="toolbar no-print">
@@ -127,16 +241,18 @@ function renderWeekPlan() {
     </select>
   </div>
   <div class="card">
-    <h3>Week of ${esc(week.weekOf)}</h3>
-    <div class="tlwrap"><table class="wp">
-      <thead><tr><th>Day</th>${SUBTEAMS.map(s => `<th>${esc(s)}</th>`).join("")}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
-    ${noSubteam.length ? `<h3>No subteam set</h3><div class="stagerow">${noSubteam.map(p => chip("projects", p.id, p.title || p.id)).join(" ")}</div>` : ""}
-    ${unscheduled.length ? `<h3>Unscheduled <span class="muted" style="text-transform:none">(no due date)</span></h3><div class="stagerow">${unscheduled.map(p => chip("projects", p.id, p.title || p.id)).join(" ")}</div>` : ""}
+    <h3>Weekly Goals — week of ${esc(week.weekOf)}</h3>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      ${usersSorted().map((u, i) => `<div ${i > 0 ? 'style="border-top:1px solid var(--line);padding-top:14px"' : ""}>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">${avatar(u.email, 22)}<b>${esc(u.name || u.email)}</b></div>
+        ${personGoalsHtml(u, week)}
+      </div>`).join("")}
+    </div>
   </div>
   <div class="card">
-    <h3>Per-person this week</h3>
-    <table class="list dash"><tr><th>Person</th><th>Tasks</th></tr>${rollupRows || `<tr><td colspan="2" class="muted">Nobody has anything scheduled this week yet.</td></tr>`}</table>
+    <h3>Car Groups</h3>
+    <div class="toolbar no-print"><button class="primary" onclick="openNewCarModal('${week.id}')">+ New car</button></div>
+    ${cars.length ? `<div style="display:flex;flex-direction:column;gap:12px">${cars.map(c => carCardHtml(week, c)).join("")}</div>`
+      : `<p class="muted">No cars set up for this week yet.</p>`}
   </div>`;
 }
