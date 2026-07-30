@@ -93,6 +93,16 @@
   button.danger:hover { background: var(--bad-bg); border-color: var(--bad-border); }
   button.link { border: none; background: none; color: var(--accent); padding: 4px 6px; }
   button.link:hover { background: none; text-decoration: underline; }
+  /* `.btn` and `.sm` were written 13 times across weeklyplan/people/projects and
+     never defined, so every "small" button rendered full size. `.btn` carries
+     the base button look for real (it's a no-op on a <button>, but now also
+     works if it's ever put on an <a>), and `.sm` finally makes a button small. */
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-weight: 500;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+    padding: 7px 12px; cursor: pointer; color: var(--ink); text-decoration: none; }
+  /* No min-height override — the @media (pointer: coarse) block below still has
+     to be able to grow these to a 40px tap target on a tablet at the bench. */
+  .sm { padding: 4px 9px; font-size: 12.5px; }
   a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   :focus:not(:focus-visible) { outline: none; }
@@ -132,7 +142,12 @@
   /* Hamburger + overflow "⋯" appear only on small screens (see media queries). */
   .hamburger { display: none; border: none; background: none; font-size: 20px; line-height: 1; padding: 6px 8px; cursor: pointer; color: var(--ink); border-radius: 6px; }
   .hamburger:hover { background: var(--hover); }
-  .tb-morebtn { display: none; }
+  /* Two classes deep on purpose. The button is `class="icon-btn tb-morebtn"`,
+     and a plain `.tb-morebtn { display: none }` ties with `.icon-btn { display:
+     inline-flex }` further down — later wins, so the phone overflow menu was
+     showing on desktop *as well as* the full action row it exists to replace,
+     and pushed the topbar past the viewport around 950px. */
+  .icon-btn.tb-morebtn { display: none; }
   .menu-actions { display: flex; flex-direction: column; gap: 6px; }
   .menu-actions button { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 11px 12px; }
   .menu-actions button .ico { color: var(--muted); }
@@ -160,7 +175,10 @@
   table.list th.sortable:hover { color: var(--brand-ink); }
   table.list td { padding: 9px 11px; border-top: 1px solid var(--line); cursor: pointer; vertical-align: middle; }
   table.list tr:hover td { background: var(--hover); }
-  table.list .tny { font-size: 12px; color: var(--muted); }
+  /* Was scoped to `table.list .tny`, but 28 call sites use it outside a list
+     table (ticket detail, the ⋯ menu, Weekly Plan, Documents rows) where it
+     silently did nothing. Global, since that's how it's used. */
+  .tny { font-size: 12px; color: var(--muted); }
   table.list.dash td { cursor: default; }
   .pill { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: var(--fill); color: var(--muted); }
   .pill.Complete { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
@@ -236,6 +254,16 @@
   .grid .f input, .grid .f select, .field input, .field select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
   .grid .f .ro { padding: 5px 0; min-height: 1.5em; }
   .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  /* Work-order section jumps. Sticky under the topbar (which is 5) so it stays
+     reachable through a long traveler. */
+  .jumpbar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
+    position: sticky; top: 52px; z-index: 4; background: var(--canvas);
+    padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .jumpbar a { font-size: 12.5px; padding: 4px 9px; border-radius: 5px; text-decoration: none;
+    color: var(--muted); border: 1px solid transparent; }
+  .jumpbar a:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
+  /* Anchored headings clear the sticky topbar + jumpbar instead of hiding under them. */
+  #main [id^="wo-"] { scroll-margin-top: 108px; }
   .muted { color: var(--muted); }
   .warn { color: var(--bad); font-weight: 600; }
   .ok { color: var(--ok); font-weight: 600; }
@@ -246,16 +274,32 @@
   table.sub td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
   table.sub input, table.sub select { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; }
 
-  /* ---- projects board ---- */
-  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
-  @media (max-width: 900px) { .board { grid-template-columns: repeat(2, 1fr); } }
+  /* ---- projects board ----
+     One track per status, derived from the children rather than a hardcoded
+     count: PROJ_STATUS grew from 4 to 6 and a `repeat(4, 1fr)` silently wrapped
+     Done and Cancelled onto a second row *under* To Do, which reads as two
+     disconnected boards instead of one left-to-right flow. grid-auto-flow:column
+     can't drift when a status is added. Tracks hold a 190px floor and the
+     wrapper scrolls sideways rather than crushing them. */
+  .boardwrap { overflow-x: auto; padding-bottom: 4px; }
+  /* 176px floor: six tracks plus five 12px gaps fit inside main's 1140px content
+     box, so a normal desktop shows the whole board with no scrollbar and the
+     tracks still stretch. Narrower windows scroll instead of crushing cards. */
+  .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(176px, 1fr); gap: 12px; align-items: start; }
+  /* Tablet and phone keep the original stacked sections, so go back to explicit
+     row flow — auto-columns would ignore grid-template-columns entirely. */
+  @media (max-width: 900px) { .boardwrap { overflow-x: visible; } .board { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); } }
   .col { background: var(--fill); border-radius: 8px; padding: 8px; min-height: 80px; }
   .col.dragover { background: var(--info-bg); outline: 2px dashed var(--accent); }
   .col h4 { margin: 4px 6px 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; }
   .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: grab; }
   .pcard:hover { border-color: var(--border-2); }
   .pcard .t { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
-  .pcard .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  /* Six tracks means ~180px cards, so the meta line wraps instead of breaking a
+     date across three lines. nowrap on the children keeps "2026-08-02" and
+     "High" whole; the .right group drops to its own line when it has to. */
+  .pcard .meta { display: flex; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .pcard .meta > * { white-space: nowrap; }
   .pcard .meta .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
   .prio { font-size: 11px; font-weight: 700; }
   .prio.High { color: var(--bad); } .prio.Medium { color: var(--amber); } .prio.Low { color: var(--faint); }
@@ -276,6 +320,9 @@
   .rte-toolbar button { padding: 4px 8px; font-size: 13px; }
   .rte { min-height: 60px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--surface); }
   .rte:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  /* Both editors carried a data-ph hint that nothing ever rendered, so the
+     description and comment boxes were unlabelled blank rectangles. */
+  .rte:empty::before { content: attr(data-ph); color: var(--faint); pointer-events: none; }
 
   /* ---- multi-select picker (assignees / parts) ---- */
   .picker { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -303,16 +350,6 @@
   .notif:hover { background: var(--fill); }
   .notif.unread { border-left-color: var(--gold); background: var(--gold-bg); }
 
-  /* ---- calendar ---- */
-  table.cal { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); table-layout: fixed; }
-  table.cal th { background: var(--surface-2); color: var(--muted); font-size: 11px; text-transform: uppercase; padding: 6px; text-align: center; border-bottom: 1px solid var(--line); }
-  table.cal td { border: 1px solid var(--line); vertical-align: top; height: 92px; padding: 3px; overflow: hidden; }
-  table.cal td.empty { background: var(--surface-2); }
-  table.cal td.istoday { background: var(--gold-bg); outline: 2px solid var(--gold); outline-offset: -2px; }
-  table.cal .daynum { font-size: 11px; color: var(--muted); text-align: right; }
-  .calitem { font-size: 11px; padding: 1px 5px; border-radius: 3px; margin: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--line); }
-  .calitem.st-mid { background: var(--warn-bg); border-color: var(--warn-border); } .calitem.InWork { background: var(--info-bg); } .calitem.Draft { background: var(--fill); } .calitem.retro { background: var(--retro-bg); border-color: var(--retro-border); }
-
   /* ---- people ---- */
   .pname { font-weight: 600; }
 
@@ -330,7 +367,19 @@
   #modal .modal h2 { margin: 0 0 14px; font-size: 18px; }
   #modal .modal .field { margin-bottom: 12px; }
   #modal .modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  #modal .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .moredetails { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; }
+  .moredetails > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent);
+    list-style: none; padding: 4px 0; user-select: none; }
+  .moredetails > summary::-webkit-details-marker { display: none; }
+  .moredetails > summary::before { content: "▸ "; display: inline-block; transition: transform var(--t-fast) var(--ease); }
+  .moredetails[open] > summary::before { content: "▾ "; }
+  .moredetails[open] { padding-bottom: 4px; }
+  /* Sticky against the backdrop (the actual scroll container) so Create/Save
+     stays reachable on a short laptop screen — the new-ticket form is tall
+     enough to push it below the fold at 800px. */
+  #modal .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+    position: sticky; bottom: -22px; z-index: 1; background: var(--surface);
+    padding: 10px 0; margin-bottom: -10px; }
 
   /* ---- documents ---- */
   .doccat { margin-bottom: 8px; }
@@ -370,6 +419,18 @@
   table.tl td.wk { white-space: nowrap; font-weight: 600; color: var(--brand-ink); }
   table.tl input, table.tl select { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; max-width: 130px; }
   table.tl tr.retrorow td { background: var(--retro-bg); }
+  /* The week label pins while the 9-column grid scrolls sideways — on a phone
+     it otherwise scrolls out of view and you lose which row you're reading.
+     Needs an opaque background or cells slide under it. */
+  table.tl th:first-child, table.tl td.wk { position: sticky; left: 0; z-index: 1; }
+  table.tl th:first-child { background: var(--surface-2); }
+  table.tl td.wk { background: var(--card); }
+  table.tl tr.retrorow td.wk { background: var(--retro-bg); }
+  /* This week, on the one grid where "which row is now" is the whole question.
+     Same gold-outline language the rest of the app uses for "today". Last so it
+     beats .retrorow. */
+  table.tl tr.thisweek td { background: var(--gold-bg); }
+  table.tl tr.thisweek td.wk { background: var(--gold-bg); box-shadow: inset 3px 0 0 var(--gold); }
   /* Weekly Plan: per-person goal checklists + carpool cards. */
   .task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .task-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--ok); flex-shrink: 0; }
@@ -420,7 +481,7 @@
   .cnt .ico { opacity: .7; }
   /* rounder surfaces + hover response */
   .card { border-radius: var(--r-md); transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease); }
-  table.list, table.cal, table.tl { border-radius: var(--r-md); }
+  table.list, table.tl { border-radius: var(--r-md); }
   table.list td, .docrow, .gitem { transition: background var(--t-fast) var(--ease); }
   input, select, textarea { transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
   .grid .f input:focus, .grid .f select:focus, .field input:focus, .field select:focus,
@@ -448,7 +509,7 @@
      RESPONSIVE. Placed at the end on purpose: at equal specificity the later
      rule wins, so keeping every screen-width override here means it reliably
      beats the base rules above. Tablet (≤900) folds the sidebar into a slide-in
-     drawer; phone (≤640) also stacks tables, board and calendar and slims the
+     drawer; phone (≤640) also stacks tables and the board and slims the
      topbar. Desktop is the untouched default above these queries.
      ============================================================ */
   @media (max-width: 900px) {
@@ -473,6 +534,14 @@
        top:0, so with no inset compensation its content sits under the notch). */
     header.topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
     main { padding: 16px 14px 72px; }
+
+    /* Swap the account/admin row for the ⋯ menu at the SAME width the sidebar
+       becomes a drawer. This used to happen at 640, so between 641 and ~1000 a
+       lead got Backup + Restore + Load SN5 archive + Roster + avatar + name +
+       Sign out on one line and the topbar overflowed the page sideways. The ⋯
+       menu already contains every one of those actions. */
+    .tb-desktop { display: none; }
+    .icon-btn.tb-morebtn { display: inline-flex; }
 
     /* Wide list tables collapse into stacked cards across the whole compact
        range (matches the drawer breakpoint), so the 8-column Parts table can't
@@ -512,27 +581,11 @@
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
   @media (max-width: 640px) {
-    .tb-desktop { display: none; }
-    .tb-morebtn { display: inline-flex; }
     header.topbar h1 { font-size: 16px; }
 
-    /* Projects board: one status section per row (Backlog / Active / Blocked /
-       Done), each full width. Desktop drag isn't used here; a card tap opens it. */
-    .board { grid-template-columns: 1fr; }
-
-    /* Calendar: keep the month grid but shrink cells; events become colored dots
-       and tapping a day opens that day's list (calDay → openDayModal). */
-    table.cal th { padding: 5px 2px; font-size: 10px; }
-    table.cal td { height: auto; min-height: 46px; padding: 3px 2px; vertical-align: top; cursor: pointer; }
-    table.cal .daynum { font-size: 10px; }
-    .calitem {
-      font-size: 0; line-height: 0; display: inline-block; width: 8px; height: 8px;
-      padding: 0; margin: 1px; border-radius: 50%; pointer-events: none; vertical-align: middle;
-    }
-    .calitem.st-mid { background: #f5a623; border-color: #f5a623; }  /* Part */
-    .calitem.InWork { background: #4a90d9; border-color: #4a90d9; }  /* Project */
-    .calitem.Draft  { background: #8993a4; border-color: #8993a4; }  /* Work order */
-    .calitem.retro  { background: #8b7fd6; border-color: #8b7fd6; }  /* Milestone */
+    /* Tickets board: one status section per row, each full width. Desktop drag
+       isn't used here; a card tap opens it. */
+    .board { grid-auto-flow: row; grid-template-columns: 1fr; }
 
     /* Modals: single-column two-up rows, tighter padding on a small screen. */
     #modal .backdrop { padding: 16px 10px; }
@@ -604,9 +657,14 @@
 <div id="modal"></div>
 <div id="toasts"></div>
 <input type="file" id="importfile" accept=".json" style="display:none" onchange="importJSON(this)">
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"
-        integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"
-        crossorigin="anonymous"></script>
+<!-- Self-hosted for the same reason as the fonts: the shop wifi at RFS drops.
+     sanitizeHtml() fails closed to plain text when this isn't loaded, so a CDN
+     that can't be reached silently strips every comment and description back to
+     escaped text. This file is byte-identical to dompurify@3.2.4 on the CDN —
+     the integrity hash below is unchanged from when it was loaded remotely, so
+     it still verifies the bytes are the reviewed ones. -->
+<script src="vendor/purify.min.js"
+        integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="workorders.js"></script>
@@ -621,7 +679,6 @@
 <script src="stackview.js"></script>
 <script src="stock.js"></script>
 <script src="documents.js"></script>
-<script src="calendar.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>
 <script src="print.js"></script>

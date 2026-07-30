@@ -4,12 +4,25 @@
    first thing you see is "what's due and what's on me", not an empty list you
    have to go dig through six tabs to assemble. Everything is a light-link. */
 
+// Who to show in a "Who" column. Ticket assignees are stored as emails, so a
+// raw join printed "simon@berkeley.edu / nico@berkeley.edu" right beside a Part
+// row reading "Justin" — userName() is what every other surface already uses.
+// The SN5 import also left literal stage values ("N/A (Flat)") in 7 parts'
+// moldEngineer cells; those are not people and shouldn't read as one.
+function notAPerson(v) { return !v || /^n\/?a\b/i.test(String(v).trim()); }
+function whoLabel(vals) {
+  return (Array.isArray(vals) ? vals : [vals])
+    .filter(v => !notAPerson(v))
+    .map(v => (String(v).includes("@") ? userName(v) : v))
+    .join(" / ");
+}
+
 // Normalize every deadline-bearing record into one shape the dashboard sorts.
 function deadlineItems() {
   const items = [];
   DB.parts.forEach(p => items.push({
     coll: "parts", id: p.id, kind: "Part", label: p.partName || p.id,
-    who: [p.moldEngineer, p.manufacturingEngineer].filter(Boolean).join(" / "),
+    who: whoLabel([p.moldEngineer, p.manufacturingEngineer]),
     date: p.layupDeadline, done: partDone(p),
     mine: isMine([p.moldEngineer, p.manufacturingEngineer]),
   }));
@@ -23,13 +36,13 @@ function deadlineItems() {
     // (board/table/detail), keep showing "Project"/"Issue" — that distinction
     // is what those views are for.
     coll: "projects", id: p.id, kind: isIssue(p) ? "Issue" : "Ticket", label: p.title || p.id,
-    who: (p.assignees || []).join(" / "),
+    who: whoLabel(p.assignees || []),
     date: p.dueDate, done: projStatus(p) === "Done",
     mine: isMine(p.assignees || []),
   }));
   DB.workOrders.forEach(w => items.push({
     coll: "workOrders", id: w.id, kind: "WO", label: w.partName || w.id,
-    who: [w.moldEngineer, w.manufacturingEngineer].filter(Boolean).join(" / "),
+    who: whoLabel([w.moldEngineer, w.manufacturingEngineer]),
     date: w.dueDate, done: w.status === "Complete",
     mine: isMine([w.moldEngineer, w.manufacturingEngineer]),
   }));

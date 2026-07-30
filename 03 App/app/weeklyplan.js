@@ -34,6 +34,24 @@ function weekById(id) { return DB.schedule.find(w => w.id === id); }
 // Only dated weeks make sense on a day/date grid — undated retro weeks (see
 // timeline.js) have nothing to derive dates from, so they're not offered here.
 function weekPlanWeeks() { return DB.schedule.filter(w => w.weekOf).slice().sort((a, b) => a.weekOf.localeCompare(b.weekOf)); }
+// True when `iso` falls inside this week's Mon–Sun span.
+function weekContains(w, iso) {
+  const dates = weekDates(w.weekOf);
+  return !!dates.length && iso >= dates[0] && iso <= dates[dates.length - 1];
+}
+// Which week to show when you land on the tab. This used to be
+// `weeks[weeks.length - 1]` — the LAST week on the schedule — so on 2026-07-30
+// it opened the week of 08-03 and you were always looking at a future week.
+// Now: the week containing today, else the next one starting after today, else
+// the most recent past week.
+function defaultWeekId(weeks) {
+  if (!weeks.length) return null;
+  const t = today();
+  const cur = weeks.find(w => weekContains(w, t));
+  if (cur) return cur.id;
+  const next = weeks.find(w => w.weekOf > t);
+  return (next || weeks[weeks.length - 1]).id;
+}
 
 /* ============================= Section 1: Weekly Goals ============================= */
 
@@ -70,7 +88,7 @@ function openAddGoalModal(weekId, email) {
     .slice().sort((a, b) => (a.title || a.id).localeCompare(b.title || b.id));
   openModal(`
     <h2>Add goal — ${esc(userName(email))}</h2>
-    <div class="field"><label>Task</label><input id="wg-text" placeholder="What's the goal?"></div>
+    <div class="field"><label>Task</label><input id="wg-text" autofocus placeholder="What's the goal?"></div>
     <div class="field"><label>Due date</label><input id="wg-due" type="date"></div>
     <div class="field"><label>Linked ticket (optional)</label>
       <select id="wg-ticket"><option value="">— none —</option>
@@ -150,7 +168,7 @@ function openNewCarModal(weekId) {
     <h2>New car</h2>
     <div class="field"><label>Driver</label><select id="wc-driver">${users.map(u => `<option value="${esc(u.email)}">${esc(u.name || u.email)}</option>`).join("")}</select></div>
     <div class="field"><label>Day</label><select id="wc-day">${DOW_SHORT.map(d => `<option>${d}</option>`).join("")}</select></div>
-    <div class="field"><label>Departure time</label><input id="wc-time" placeholder="e.g. 9:00 AM"></div>
+    <div class="field"><label>Departure time</label><input id="wc-time" autofocus placeholder="e.g. 9:00 AM"></div>
     <div class="field"><label>Seats</label><input id="wc-cap" type="number" min="1" step="1" value="4"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitCar('${weekId}')">Create car</button></div>
   `);
@@ -230,23 +248,42 @@ function renderWeekPlan() {
   if (!weeks.length) {
     return `<div class="card">No dated weeks yet. Add one from <button onclick="setTab('timeline')">Timeline</button> first — Weekly Plan is a second view over the same schedule.</div>`;
   }
-  const weekId = (view.wpWeek && weekById(view.wpWeek) && weekById(view.wpWeek).weekOf) ? view.wpWeek : weeks[weeks.length - 1].id;
+  const weekId = (view.wpWeek && weekById(view.wpWeek) && weekById(view.wpWeek).weekOf) ? view.wpWeek : defaultWeekId(weeks);
   const week = weekById(weekId);
   const cars = week.cars || [];
+
+  // Ordered by what you actually came here for: you, then everyone with
+  // something on this week, then the idle tail. Alphabetical order buried the
+  // signed-in user behind however many teammates sort ahead of them, and gave a
+  // full-height "Nothing yet this week." block to each of them.
+  const hasWork = u => personTicketsThisWeek(u.email, week).length > 0
+    || (week.goals || []).some(g => g.person === u.email);
+  const all = usersSorted();
+  const me = all.filter(u => u.email === myEmail());
+  const rest = all.filter(u => u.email !== myEmail());
+  const active = rest.filter(hasWork);
+  const idle = rest.filter(u => !hasWork(u));
+  const shown = me.concat(active);
 
   return `
   <div class="toolbar no-print">
     <select onchange="view.wpWeek=this.value;render()">
-      ${weeks.map(w => `<option value="${w.id}" ${w.id === week.id ? "selected" : ""}>${esc(w.weekOf)} (${esc(w.id)})</option>`).join("")}
+      ${weeks.map(w => `<option value="${w.id}" ${w.id === week.id ? "selected" : ""}>${esc(w.weekOf)} (${esc(w.id)})${weekContains(w, today()) ? " · this week" : ""}</option>`).join("")}
     </select>
   </div>
   <div class="card">
     <h3>Weekly Goals — week of ${esc(week.weekOf)}</h3>
     <div style="display:flex;flex-direction:column;gap:16px">
-      ${usersSorted().map((u, i) => `<div ${i > 0 ? 'style="border-top:1px solid var(--line);padding-top:14px"' : ""}>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">${avatar(u.email, 22)}<b>${esc(u.name || u.email)}</b></div>
+      ${shown.map((u, i) => `<div ${i > 0 ? 'style="border-top:1px solid var(--line);padding-top:14px"' : ""}>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">${avatar(u.email, 22)}<b>${esc(u.name || u.email)}</b>${u.email === myEmail() ? ' <span class="muted tny">(you)</span>' : ""}</div>
         ${personGoalsHtml(u, week)}
       </div>`).join("")}
+      ${idle.length ? `<div ${shown.length ? 'style="border-top:1px solid var(--line);padding-top:14px"' : ""}>
+        <div class="muted tny" style="margin-bottom:8px">Nothing yet this week</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          ${idle.map(u => `<button class="btn sm no-print" title="Add a goal for ${esc(u.name || u.email)}" onclick="openAddGoalModal('${week.id}','${esc(u.email)}')">${avatar(u.email, 18)} ${esc(u.name || u.email)} +</button>`).join("")}
+        </div>
+      </div>` : ""}
     </div>
   </div>
   <div class="card">

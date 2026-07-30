@@ -192,6 +192,13 @@ function renderWODetail() {
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
   </div>
+  <!-- Buying off a step is the bench action, and it sits below Overview, Mold,
+       Layup stack and BOM — a long scroll on a phone with gloves on. Plain
+       anchors, so no state and nothing to keep in sync. -->
+  <nav class="jumpbar no-print" aria-label="Jump to section">
+    <a href="#wo-overview">Overview</a><a href="#wo-stack">Stack</a><a href="#wo-bom">BOM</a>
+    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-log">Log</a>
+  </nav>
   <div class="card">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
     <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span>${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
@@ -200,7 +207,7 @@ function renderWODetail() {
     <h3>Issues</h3>
     <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>
     ` : ""}
-    <h3>Overview</h3>
+    <h3 id="wo-overview">Overview</h3>
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
       ${fld(wo, "Process", "processType", "select-process")}${fld(wo, "Mold Engineer", "moldEngineer")}
@@ -208,17 +215,17 @@ function renderWODetail() {
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
     ${moldRows}
-    <h3>Layup stack${linkedPart ? ` <span class="muted" style="text-transform:none">· synced with part ${esc(linkedPart.id)}</span>` : ""} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
+    <h3 id="wo-stack">Layup stack${linkedPart ? ` <span class="muted" style="text-transform:none">· synced with part ${esc(linkedPart.id)}</span>` : ""} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
     ${stackViz(wo.layupStack)}
     ${E ? stackEditor("workOrders", wo.id) : ""}
-    <h3>BOM</h3>
+    <h3 id="wo-bom">BOM</h3>
     <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
       ${(wo.bom || []).map((b, i) => E
         ? `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`
         : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
-    <h3>Steps and buy-offs (blockers shaded: no sign-off, no moving on)</h3>
+    <h3 id="wo-steps">Steps and buy-offs (blockers shaded: no sign-off, no moving on)</h3>
     ${(() => {
       // The first not-done, not-failed step is the one to act on right now —
       // computed from existing state (open/done/failed), not a new status
@@ -251,14 +258,14 @@ function renderWODetail() {
       </div>`;
       }).join("");
     })()}
-    <h3>Quality checks / acceptance criteria</h3>
+    <h3 id="wo-quality">Quality checks / acceptance criteria</h3>
     <table class="sub"><thead><tr><th>Criterion</th><th>Target (set at creation!)</th><th>Actual</th><th>Pass</th></tr></thead><tbody>
       ${(wo.qualityChecks || []).map((q, i) => E
         ? `<tr><td><input value="${esc(q.criterion)}" onchange="uq(${i},'criterion',this.value)"></td><td><input value="${esc(q.target)}" onchange="uq(${i},'target',this.value)"></td><td><input value="${esc(q.actual)}" onchange="uq(${i},'actual',this.value)"></td><td><select onchange="uq(${i},'pass',this.value==='true'?true:this.value==='false'?false:null)"><option ${q.pass == null ? "selected" : ""}>—</option><option value="true" ${q.pass === true ? "selected" : ""}>pass</option><option value="false" ${q.pass === false ? "selected" : ""}>FAIL</option></select></td></tr>`
         : `<tr><td>${esc(q.criterion)}</td><td>${esc(q.target)}</td><td>${esc(q.actual)}</td><td>${q.pass === true ? '<span class="ok">pass</span>' : q.pass === false ? '<span class="warn">FAIL</span>' : "—"}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').qualityChecks.push({criterion:'',target:'',actual:'',pass:null});saveWO(woById('${wo.id}'),'qualityChecks');render()">+ check</button>` : ""}
-    <h3>Event log</h3>
+    <h3 id="wo-log">Event log</h3>
     <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
       ${(wo.timeline || []).map((t, i) => E
         ? `<tr><td><input value="${esc(t.date)}" onchange="ut(${i},'date',this.value)"></td><td><input value="${esc(t.note)}" onchange="ut(${i},'note',this.value)"></td></tr>`
@@ -304,14 +311,15 @@ function ub(i, k, v) { woById(view.id).bom[i][k] = v; saveWO(woById(view.id), "b
 function uq(i, k, v) { woById(view.id).qualityChecks[i][k] = v; saveWO(woById(view.id), "qualityChecks"); render(); }
 function ut(i, k, v) { woById(view.id).timeline[i][k] = v; saveWO(woById(view.id), "timeline"); }
 function us(i, k, v) { const w = woById(view.id); w.steps[i][k] = v; saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], [k]: v }; return steps; }); }
-function buyoff(i) {
+async function buyoff(i) {
   const w = woById(view.id);
   const blocked = blockerOpenBefore(w, i);
   if (blocked) { toast("Blocked by unfinished blocker: " + blocked.title, "error"); return; }
   // CS-013: a design review signed by whoever made the thing isn't a review.
   if (w.steps[i].title.toLowerCase().includes("design review") && myEmail() &&
       myEmail() === w.createdBy &&
-      !confirm("You created this work order. A design review should be signed off by someone else. Sign it anyway?")) return;
+      !await confirmAsync("You created this work order. A design review should be signed off by someone else. Sign it anyway?",
+        { title: "Self-review", ok: "Sign it anyway" })) return;
   const bo = {
     name: signerName(), email: fb.user.email, uid: fb.user.uid,
     date: today(), time: new Date().toISOString(),

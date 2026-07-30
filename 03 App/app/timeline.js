@@ -52,6 +52,14 @@ function cellSelect(w, key) {
   </select>`;
 }
 
+// The row you're standing in. This is the production schedule, so "which week
+// is now" is the first question anyone asks of it, and nothing used to answer
+// it. weekContains() lives in weeklyplan.js; both tabs read the same schedule
+// docs, and it only runs at render time so load order doesn't matter.
+function isThisWeek(w) {
+  return !!w.weekOf && typeof weekContains === "function" && weekContains(w, today());
+}
+
 function renderTimeline() {
   const E = view.edit;
   const weeks = DB.schedule.slice().sort((a, b) =>
@@ -68,8 +76,8 @@ function renderTimeline() {
   <div class="tlwrap"><table class="tl">
     <thead><tr><th>Week of</th>${cols}<th>Other</th><th>Notes</th>${E ? "<th></th>" : ""}</tr></thead>
     <tbody>
-      ${weeks.map(w => `<tr ${w.retro ? 'class="retrorow"' : ""}>
-        <td class="wk">${E ? `<input type="date" value="${esc(w.weekOf)}" onchange="updWeek('${w.id}','weekOf',this.value)">` : esc(w.weekOf || w.id)}</td>
+      ${weeks.map(w => `<tr class="${w.retro ? "retrorow" : ""} ${isThisWeek(w) ? "thisweek" : ""}">
+        <td class="wk">${E ? `<input type="date" value="${esc(w.weekOf)}" onchange="updWeek('${w.id}','weekOf',this.value)">` : esc(w.weekOf || w.id) + (isThisWeek(w) ? ' <span class="tny" style="color:var(--amber)">this week</span>' : "")}</td>
         ${STATIONS.map(([k]) => `<td>${E ? cellSelect(w, k) : cellView(w[k])}</td>`).join("")}
         <td>${E ? `<input value="${esc(w.other)}" onchange="updWeek('${w.id}','other',this.value)">` : esc(w.other || "")}</td>
         <td>${E ? `<input value="${esc(w.notes)}" onchange="updWeek('${w.id}','notes',this.value)">` : `<b>${esc(w.notes || "")}</b>`}</td>

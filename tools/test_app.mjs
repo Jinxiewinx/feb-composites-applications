@@ -86,14 +86,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "calendar.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -602,6 +602,44 @@ await t("subteam field round-trips through ticket creation and editing", async (
   assert(projById(p.id).subteam === "AUTO-MECH", "captured on edit: " + projById(p.id).subteam);
 });
 
+await t("weekly plan opens on the week containing today, not the last week on the schedule", () => {
+  // Was `weeks[weeks.length - 1]`, so it always landed on the furthest-out week
+  // — on 2026-07-30 with weeks of 07-20/07-27/08-03 it opened 08-03.
+  const mon = new Date(today() + "T00:00:00");
+  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));      // Monday of this week
+  const iso = d => d.toISOString().slice(0, 10);
+  const back = n => { const x = new Date(mon); x.setDate(x.getDate() + n * 7); return iso(x); };
+  DB.schedule = [
+    { id: "W-PREV", weekOf: back(-1) }, { id: "W-NOW", weekOf: back(0) }, { id: "W-NEXT", weekOf: back(1) },
+  ];
+  assert(defaultWeekId(weekPlanWeeks()) === "W-NOW", "picks the current week: " + defaultWeekId(weekPlanWeeks()));
+});
+await t("weekly plan falls back to the next upcoming week, then to the most recent past one", () => {
+  DB.schedule = [{ id: "W-FUTURE", weekOf: "2099-01-05" }, { id: "W-LATER", weekOf: "2099-01-12" }];
+  assert(defaultWeekId(weekPlanWeeks()) === "W-FUTURE", "soonest upcoming, not the furthest out");
+  DB.schedule = [{ id: "W-OLD", weekOf: "2000-01-03" }, { id: "W-NEWEST", weekOf: "2000-01-10" }];
+  assert(defaultWeekId(weekPlanWeeks()) === "W-NEWEST", "all in the past → most recent");
+  DB.schedule = [];
+  assert(defaultWeekId(weekPlanWeeks()) === null, "no weeks → null, no crash");
+});
+await t("weekly plan lists you first and collapses everyone with nothing on", () => {
+  DB.users = [
+    { email: "aaron@b.edu", name: "Aaron Idle", role: "member" },
+    { email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" },
+    { email: "zoe@b.edu", name: "Zoe Busy", role: "member" },
+  ];
+  DB.schedule = [{ id: "W-P", weekOf: today(), goals: [], doneTickets: [], cars: [] }];
+  DB.projects = [{ id: "T-Z", title: "zoe task", status: "To Do", dueDate: today(), assignees: ["zoe@b.edu"] }];
+  view = { ...view, tab: "weekplan", wpWeek: "W-P" };
+  const html = renderWeekPlan();
+  // Alphabetically Aaron sorts first and Simon third; you should still lead.
+  assert(html.indexOf("Simon Starbuck") < html.indexOf("Zoe Busy"), "you come first");
+  assert(html.indexOf("Zoe Busy") < html.indexOf("Aaron Idle"), "people with work outrank idle ones");
+  assert(html.includes("Nothing yet this week"), "idle tail is collapsed into one line");
+  // Aaron gets a compact button, not his own full block with a heading + button.
+  assert(!/Aaron Idle<\/b>/.test(html), "no full block for an idle teammate: " + html.slice(0, 400));
+});
+
 console.log("budget:");
 await t("newBuy defaults purchaser to me", async () => { setTab("budget"); await newBuy(); assert(buyById(view.id).purchaser === "Simon" && buyById(view.id).status === "Submitted"); });
 await t("num parses money strings", () => { assert(num("$41.68") === 41.68 && num("") === 0 && num("1,200") === 1200); });
@@ -766,6 +804,82 @@ await t("shouldOpenDrawerFromSwipe: short movement (tap/jitter) -> false", () =>
   assert(shouldOpenDrawerFromSwipe(10, 200, 30, 202, false, true) === false, "only 20px of horizontal movement, below the 60px threshold");
 });
 
+console.log("usability audit fixes:");
+await t("cancelling the ply form adds nothing (was: prompt()||'' appended a blank ply)", () => {
+  DB.parts = [{ id: "P-PLY", partName: "NOSE", layupStack: [] }];
+  DB.workOrders = [];
+  addPly("parts", "P-PLY");
+  closeModal();                                   // Cancel / Escape / backdrop
+  assert(recById("parts", "P-PLY").layupStack.length === 0, "no ply on cancel");
+  // Submitting with an empty material is refused rather than stored blank.
+  addPly("parts", "P-PLY");
+  document.getElementById("ply-material").value = "   ";
+  submitPly("parts", "P-PLY");
+  assert(recById("parts", "P-PLY").layupStack.length === 0, "blank material refused");
+  assert(/needs a material/i.test(lastToast), "and says why: " + lastToast);
+});
+await t("ply form keeps the fields the prompts collected, and defaults coverage", () => {
+  DB.parts = [{ id: "P-PLY2", partName: "NOSE", layupStack: [] }];
+  DB.workOrders = [];
+  addPly("parts", "P-PLY2");
+  document.getElementById("ply-material").value = "195 twill";
+  document.getElementById("ply-orientation").value = "±45";
+  document.getElementById("ply-coverage").value = "";
+  submitPly("parts", "P-PLY2");
+  const ply = recById("parts", "P-PLY2").layupStack[0];
+  assert(ply.material === "195 twill" && ply.orientation === "±45", JSON.stringify(ply));
+  assert(ply.coverage === "full", "coverage defaults to full: " + JSON.stringify(ply));
+});
+await t("openModal honors [autofocus] over the first field (new-ticket led with the Kind select)", () => {
+  assert(openNewProject.toString().includes("np-title") && /id="np-title" autofocus/.test(openNewProject.toString()),
+    "Title is the autofocus target");
+  assert(openModal.toString().includes("[autofocus]"), "openModal looks for it");
+});
+await t("deadlineItems shows display names, never raw emails", () => {
+  DB.users = [{ email: "nico@b.edu", name: "Nico Alvarez", role: "member" }];
+  DB.parts = []; DB.workOrders = [];
+  DB.projects = [{ id: "T-WHO", title: "t", status: "To Do", dueDate: today(), assignees: ["nico@b.edu"] }];
+  const it = deadlineItems().find(i => i.id === "T-WHO");
+  assert(it.who === "Nico Alvarez", "name, not email: " + it.who);
+});
+await t("deadlineItems drops 'N/A (Flat)' from Who — it's a stage value, not a person", () => {
+  // 7 of the 33 SN5 parts carry it in moldEngineer, and it rendered as a name.
+  DB.projects = []; DB.workOrders = [];
+  DB.parts = [{ id: "P-NA", partName: "DASH", moldEngineer: "N/A (Flat)", manufacturingEngineer: "Justin", layupDeadline: today() }];
+  const it = deadlineItems().find(i => i.id === "P-NA");
+  assert(it.who === "Justin", "just the real person: " + it.who);
+});
+await t("tickets board gives every status its own track (was repeat(4,1fr) for 6 statuses)", () => {
+  DB.projects = PROJ_STATUS.map((s, i) => ({ id: "TB" + i, title: "t" + i, status: s, assignees: [] }));
+  view = { ...view, tab: "projects", mode: "list", projView: "board", q: "", tkFilter: "" };
+  const html = renderProjBoard();
+  assert(html.includes('class="boardwrap"'), "scroll wrapper present");
+  PROJ_STATUS.forEach(s => assert(html.includes(`col-${STATUS_SLUG[s]}`), "column for " + s));
+  assert(!/repeat\(4/.test(html), "no hardcoded 4-track grid");
+});
+await t("parts list hides completed parts by default and says how many", () => {
+  DB.parts = [
+    { id: "P-OPEN", partName: "OPEN ONE", subteam: "AERO", layupProgress: "In Layup" },
+    { id: "P-DONE", partName: "DONE ONE", subteam: "AERO", layupProgress: "Polished" },
+  ];
+  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "", fDone: false, sortKey: null };
+  let html = renderPartList();
+  assert(html.includes("OPEN ONE") && !html.includes("DONE ONE"), "completed hidden by default");
+  assert(html.includes("Show completed (1)"), "count of what's hidden is visible: " + html.slice(0, 300));
+  view.fDone = true;
+  html = renderPartList();
+  assert(html.includes("DONE ONE"), "toggle brings them back");
+});
+await t("timeline marks the week containing today", () => {
+  DB.parts = [];
+  DB.schedule = [{ id: "W-NOW", weekOf: today() }, { id: "W-OLD", weekOf: "2000-01-03" }];
+  view = { ...view, tab: "timeline", mode: "list", edit: false };
+  const html = renderTimeline();
+  assert(/class="\s*thisweek"|thisweek/.test(html), "current row flagged");
+  assert(html.includes("this week"), "and labelled in the week column");
+  assert((html.match(/thisweek/g) || []).length <= 2, "only one row, not every row");
+});
+
 console.log("bug fixes:");
 await t("picker starts collapsed, opens on demand", () => {
   pickerInit("tt", [{ value: "a", label: "Apple" }], []);
@@ -786,7 +900,9 @@ await t("parts layup stack mirrors to linked work order (transaction-safe)", () 
   DB.parts = [{ id: "P-1", partName: "NOSECONE", workOrderId: "WO-1", layupStack: [] }];
   DB.workOrders = [{ id: "WO-1", partName: "NOSECONE", partId: "P-1", layupStack: [] }];
   calls.length = 0;
-  addPly("parts", "P-1"); // prompt stub → "stub"
+  addPly("parts", "P-1");
+  document.getElementById("ply-material").value = "195 twill";
+  submitPly("parts", "P-1");
   assert(recById("parts", "P-1").layupStack.length === 1, "ply added to part");
   assert(calls.some(c => c[0] === "mutateField" && c[1] === "parts" && c[3] === "layupStack"), "part stack via transaction");
   assert(calls.some(c => c[0] === "mutateField" && c[1] === "workOrders" && c[3] === "layupStack"), "mirrored to WO via transaction: " + JSON.stringify(calls));
@@ -798,6 +914,8 @@ await t("mirror is skipped when the link is ambiguous", () => {
   DB.workOrders = [{ id: "WO-2", partName: "STRUT", layupStack: [] }, { id: "WO-3", partName: "STRUT", layupStack: [] }];
   calls.length = 0;
   addPly("parts", "P-2");
+  document.getElementById("ply-material").value = "195 twill";
+  submitPly("parts", "P-2");
   assert(recById("parts", "P-2").layupStack.length === 1, "part still edited");
   assert(!calls.some(c => c[1] === "workOrders"), "no WO mirrored when name is ambiguous: " + JSON.stringify(calls));
 });
@@ -859,29 +977,15 @@ await t("openNotifs + gotoNotif marks read + navigates", () => {
   assert(view.tab === "projects" && view.id === "PROJ-1");
 });
 
-console.log("calendar / people / reports:");
-await t("calendar buckets items into the right month (code kept alive, cut from the nav)", () => {
-  // Calendar is deliberately absent from TABS right now, so render()'s normal
-  // tab dispatch can't reach it — call the still-intact renderer directly to
-  // prove calendar.js itself keeps working, ready to restore with one line.
-  assert(!TABS.some(t => t.id === "calendar"), "confirms it's actually cut from the nav");
-  const iso = today().slice(0, 7) + "-15";
-  DB.parts = [{ id: "P-C", partName: "CALPART", layupDeadline: iso, layupProgress: "Not Started" }];
-  DB.projects = []; DB.workOrders = []; DB.schedule = [];
-  view = { ...view, calMonth: today().slice(0, 7) };
-  const html = renderCalendar();
-  assert(html.includes("CALPART"), "part deadline shows on calendar");
-  assert(html.includes("table") && html.includes("Sun"), "month grid");
-});
-await t("calItems labels a project-kind ticket 'Ticket' and an issue 'Issue' (was hardcoded 'Project' with no isIssue check)", () => {
-  DB.parts = []; DB.workOrders = []; DB.schedule = [];
-  DB.projects = [
-    { id: "TKT-CAL1", kind: "project", title: "cal project", dueDate: today() },
-    { id: "TKT-CAL2", kind: "issue", title: "cal issue", dueDate: today() },
-  ];
-  const items = calItems();
-  assert(items.find(i => i.id === "TKT-CAL1").kind === "Ticket", "project-kind ticket: " + JSON.stringify(items));
-  assert(items.find(i => i.id === "TKT-CAL2").kind === "Issue", "issue still stands out: " + JSON.stringify(items));
+console.log("people / reports:");
+await t("calendar is gone, not just hidden — no dead renderer shipping to every browser", () => {
+  // It sat commented out of TABS while still being downloaded, parsed and
+  // styled on every page load. Deleted rather than left dormant; git has it if
+  // the tab ever comes back. This asserts the removal is complete, so a
+  // half-restore (script tag back, TABS row not) can't pass unnoticed.
+  assert(!TABS.some(t => t.id === "calendar"), "not in the nav");
+  assert(typeof globalThis.renderCalendar === "undefined", "renderCalendar is gone");
+  assert(typeof globalThis.calItems === "undefined", "calItems is gone");
 });
 await t("people shows a member's live assignments", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];

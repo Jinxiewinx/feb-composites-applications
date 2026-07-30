@@ -101,7 +101,14 @@ function sortTh(label, key) {
 
 function renderPartList() {
   const D = DB.parts;
+  // Finished parts never leave the list, and after a season most of it is
+  // finished — 21 of the 33 SN5 records are already Polished. Default to the
+  // open ones; the count line always says how many are hidden so nothing
+  // disappears silently.
+  const showDone = !!view.fDone;
+  const doneCount = D.filter(partDone).length;
   let rows = D
+    .filter(p => showDone || !partDone(p))
     .filter(p => (!view.fSub || p.subteam === view.fSub))
     .filter(p => { const q = view.q.toLowerCase(); return !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q); });
   rows = view.sortKey ? sortedPartRows(rows) : rows.sort((a, b) => (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id));
@@ -113,9 +120,14 @@ function renderPartList() {
       ${[...new Set([...SUBTEAMS, ...D.map(p => p.subteam)])].filter(Boolean).map(s => `<option ${view.fSub === s ? "selected" : ""}>${s}</option>`).join("")}
     </select>
     <input id="searchbox" placeholder="search part / id…" value="${esc(view.q)}" oninput="searchInput(this)">
+    <label class="muted" style="align-self:center;display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" ${showDone ? "checked" : ""} onchange="view.fDone=this.checked;render()">
+      Show completed${doneCount ? ` (${doneCount})` : ""}
+    </label>
     <span class="muted" style="align-self:center">${rows.length} of ${D.length} parts</span>
   </div>
   ${D.length === 0 ? `<div class="card">No parts yet. <b>New Part</b> to start${isLead() ? ", or <b>Load SN5 archive</b> for last season's tracker" : ""}.</div>` : ""}
+  ${D.length && !rows.length ? `<div class="card">No parts match. ${!showDone && doneCount ? `${doneCount} completed part${doneCount === 1 ? " is" : "s are"} hidden — tick <b>Show completed</b> to include ${doneCount === 1 ? "it" : "them"}.` : "Try clearing the filters."}</div>` : ""}
   <table class="list">
     <tr>${sortTh("Part", "partName")}${sortTh("Subteam", "subteam")}${sortTh("Type", "layupType")}${sortTh("CAD", "cadProgress")}${sortTh("Mold", "moldProgress")}${sortTh("Layup", "layupProgress")}<th>ME / RE</th>${sortTh("Deadline", "layupDeadline")}</tr>
     ${rows.map(p => {
