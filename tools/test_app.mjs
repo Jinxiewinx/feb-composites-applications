@@ -1563,6 +1563,50 @@ await t("3D view builds block geometry and bounds straight from the saved plan",
   const buf = trisToBuffers(g.tris);
   assert(buf.count === g.tris.length * 3 && buf.nrm.length === buf.pos.length, "flat-shaded, one normal per vertex");
 });
+await t("a RESTORED camera still yields a finite projection (blank-canvas regression)", () => {
+  /* The bug this pins: fitting the view and seeding the saved camera used to be
+     one function that ran only when no camera existed. Every remount — and
+     render() remounts on each Firestore snapshot — therefore left `fitted`
+     undefined, mat4Perspective got Math.max(0.1, undefined/100) = NaN, and the
+     whole projection matrix went NaN, so the canvas drew nothing until a reload
+     cleared the cache. It failed silently and passed every state-based check. */
+  const bounds = { x0: 0, y0: 0, z0: 0, x1: 900, y1: 530, z1: 62 };
+  const fresh = viewerCamera(bounds, 800, 400, null);
+  const restored = viewerCamera(bounds, 800, 400, { yaw: 1, pitch: 0.2, dist: 500 });
+  for (const [label, c] of [["fresh", fresh], ["restored", restored]]) {
+    ["fitted", "near", "far", "dist", "yaw", "pitch"].forEach(k =>
+      assert(Number.isFinite(c[k]), `${label}.${k} is ${c[k]}`));
+    assert(c.near > 0 && c.far > c.near, `${label} near/far ordering: ${c.near}..${c.far}`);
+  }
+  assert(restored.dist === 500 && restored.yaw === 1, "a saved angle survives the remount");
+  assert(restored.fitted === fresh.fitted, "but the fit is recomputed for this viewport, not inherited");
+  // A saved camera carrying a NaN distance (written by the old code) must not
+  // poison the new one — those records exist in people's browsers already.
+  const poisoned = viewerCamera(bounds, 800, 400, { yaw: 1, pitch: 0.2, dist: NaN });
+  assert(Number.isFinite(poisoned.dist), "a NaN saved distance is discarded, not propagated");
+});
+await t("mesh-load failures name themselves instead of leaving a blank legend", async () => {
+  /* All of these used to collapse into one bare catch{}, so a mold that never
+     downloaded looked exactly like a plan that never had one. The CORS case is
+     the one that actually shipped: every other Storage URL in this app is used
+     by <img src> or <a href>, which need no CORS, so this was the first fetch()
+     to hit a bucket that has no CORS policy. */
+  const realFetch = globalThis.fetch;
+  const cases = [
+    ["blocked", () => { throw new TypeError("Failed to fetch"); }, /CORS/i],
+    ["403", () => ({ ok: false, status: 403 }), /403|storage\.rules/i],
+    ["404", () => ({ ok: false, status: 404 }), /404|re-plan/i],
+    ["garbage", () => ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(9) }), /readable STL/i],
+  ];
+  for (const [label, impl, want] of cases) {
+    globalThis.fetch = async () => impl();
+    let msg = "";
+    try { await mvLoadMesh("https://example.test/" + label + ".stl"); }
+    catch (e) { msg = e.message; }
+    assert(want.test(msg), `${label}: expected ${want}, got "${msg}"`);
+  }
+  globalThis.fetch = realFetch;
+});
 await t("toggling the theme repaints the 3D canvas (CSS can't restyle WebGL)", () => {
   // toggleTheme() only re-renders the topbar, and the canvas clear colour is
   // theme-dependent — so without this hook a live viewer keeps the old

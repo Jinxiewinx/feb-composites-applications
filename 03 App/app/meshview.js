@@ -170,8 +170,9 @@ const MV_FOV = Math.PI / 4;
 // Camera per plan id, so the routine re-render that a teammate's edit triggers
 // doesn't snap the view back to the default angle mid-inspection.
 const MV_CAM = {};
-const MV_MESH = {};   // meshUrl -> triangles, fetched once
-let MV_LIVE = null;   // the mounted viewer, so a re-render can tear it down
+const MV_MESH = {};      // meshUrl -> triangles, fetched once
+const MV_MESH_ERR = {};  // planId -> why the mesh didn't load, so a remount can say so again
+let MV_LIVE = null;      // the mounted viewer, so a re-render can tear it down
 
 function mvHasWebGL() {
   if (typeof document === "undefined" || !document.createElement) return false;
@@ -200,7 +201,9 @@ function meshViewHtml(plan) {
       <span class="mv-swatch mv-stock"></span> stock
       <button class="btn sm" onclick="mvReset('${esc(plan.id)}')">Reset view</button>
     </div>
-    ${plan.meshUrl ? "" : `<div class="meshview-note muted tny">This plan has no stored mold mesh, so only the blocks are shown. Plans made before the 3D view existed, or one whose mesh upload failed, look like this — re-plan the mold to add it.</div>`}
+    ${plan.meshUrl
+      ? (MV_MESH_ERR[plan.id] ? `<div class="meshview-note muted tny">${esc(MV_MESH_ERR[plan.id])}</div>` : "")
+      : `<div class="meshview-note muted tny">This plan has no stored mold mesh, so only the blocks are shown. Plans made before the 3D view existed, or one whose mesh upload failed, look like this — re-plan the mold to add it.</div>`}
   </div>`;
 }
 
@@ -212,11 +215,37 @@ function mvReset(planId) { delete MV_CAM[planId]; if (MV_LIVE && MV_LIVE.planId 
    re-render the page. Called from core.js's toggleTheme(). */
 function mvThemeChanged() { if (MV_LIVE) mvSchedule(MV_LIVE); }
 
-function mvInitCam(v) {
-  const aspect = Math.max(0.2, v.canvas.clientWidth / Math.max(1, v.canvas.clientHeight));
-  v.fitted = fitDistance(v.bounds, MV_FOV, aspect);
-  MV_CAM[v.planId] = { yaw: -Math.PI / 4, pitch: 0.5, dist: v.fitted };
+/* Framing distance and near/far for one viewport, plus whichever camera angles
+   apply — the saved ones if this plan has been looked at before, the default
+   three-quarter view if not.
+
+   Pure, and separate from MV_CAM on purpose. These two jobs used to live in one
+   function that ran ONLY when no saved camera existed, so `fitted` was left
+   undefined on every remount — and since render() rebuilds #main on each
+   Firestore snapshot, a remount is what normally happens. mat4Perspective then
+   got Math.max(0.1, undefined/100), which is NaN (Math.max propagates it), so
+   the whole projection matrix went NaN and the canvas drew nothing until a
+   reload cleared MV_CAM. Keeping the fit unconditional is the fix; keeping it
+   pure is what lets a test pin it. */
+function viewerCamera(bounds, w, h, saved) {
+  const aspect = Math.max(0.2, (w || 1) / Math.max(1, h || 1));
+  const fitted = fitDistance(bounds, MV_FOV, aspect);
+  const base = saved && Number.isFinite(saved.dist)
+    ? saved
+    : { yaw: -Math.PI / 4, pitch: 0.5, dist: fitted };
+  return {
+    yaw: base.yaw, pitch: base.pitch, dist: base.dist, fitted,
+    near: Math.max(0.1, fitted / 100), far: fitted * 12,
+  };
 }
+// Apply the fit to a live viewer, seeding MV_CAM only the first time.
+function mvFit(v) {
+  const c = viewerCamera(v.bounds, v.canvas.clientWidth, v.canvas.clientHeight, MV_CAM[v.planId]);
+  v.fitted = c.fitted; v.near = c.near; v.far = c.far;
+  MV_CAM[v.planId] = { yaw: c.yaw, pitch: c.pitch, dist: c.dist };
+  return c;
+}
+function mvInitCam(v) { delete MV_CAM[v.planId]; return mvFit(v); }
 
 const MV_VERT = `
 attribute vec3 aPos; attribute vec3 aNormal;
@@ -292,7 +321,8 @@ async function mvMount(canvasId, planId) {
     edgePos: mvBuffer(gl, v.edges), edgeNrm: mvBuffer(gl, new Float32Array(v.edges.length)),
   };
 
-  if (!MV_CAM[planId]) mvInitCam(v);
+  // Unconditional: the fit belongs to THIS viewport, not to the saved camera.
+  mvFit(v);
   MV_LIVE = v;
   mvBindEvents(v);
   mvDraw(v);
@@ -308,14 +338,60 @@ async function mvMount(canvasId, planId) {
       v.gpu.moldPos = mvBuffer(gl, v.mold.pos);
       v.gpu.moldNrm = mvBuffer(gl, v.mold.nrm);
       mvDraw(v);
-    } catch (e) { /* blocks-only is a fine outcome; the note in the markup says so */ }
+    } catch (e) {
+      /* Blocks-only is a survivable outcome, but a SILENT one is not: the user
+         sees a stock stack with no mold in it and has no way to tell whether the
+         mold is missing, mis-planned, or just failed to download. Say which.
+         Written straight into the note element rather than via render(), which
+         would remount the viewer and start the whole fetch over. */
+      MV_MESH_ERR[planId] = e.message;
+      mvShowNote(e.message);
+      console.warn("mesh load failed for " + planId + ":", e);
+    }
   }
 }
+// The note slot already exists in the markup for the "no stored mesh" case;
+// this is one more state in it, not new furniture.
+function mvShowNote(msg) {
+  const host = document.querySelector(".meshview");
+  if (!host) return;
+  let note = host.querySelector(".meshview-note");
+  if (!note) {
+    note = document.createElement("div");
+    note.className = "meshview-note muted tny";
+    host.appendChild(note);
+  }
+  note.textContent = msg;
+}
 
+/* Fetch and parse the stored mold mesh, naming the failure instead of hiding it.
+   Every one of these used to collapse into one bare `catch {}`, so a mold that
+   never loaded looked exactly like a plan that never had one: blocks, no mold,
+   no explanation anywhere. */
 async function mvLoadMesh(url) {
   if (MV_MESH[url]) return MV_MESH[url];
-  const buf = await (await fetch(url)).arrayBuffer();
-  const tris = parseSTL(buf).tris;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    // A cross-origin fetch the browser refuses rejects here with a TypeError and
+    // no status at all — the request never left. That is the default state of a
+    // Storage bucket with no CORS policy, and it's what shipped: every other
+    // Storage URL in this app is used by <img src> or <a href>, which need no
+    // CORS, so this was the first fetch() to ever hit it.
+    throw new Error("The browser blocked the request for the 3D mesh. The storage bucket needs a CORS rule allowing GET from this site — see cors.json and the setup note in the app README.");
+  }
+  if (!res.ok) {
+    throw new Error(res.status === 403
+      ? "Storage refused the 3D mesh (403). Deploy storage.rules — the stackplans/ rule may not be live yet."
+      : res.status === 404
+        ? "The stored 3D mesh is missing (404). Re-plan the mold to regenerate it."
+        : `Couldn't download the 3D mesh (HTTP ${res.status}).`);
+  }
+  const buf = await res.arrayBuffer();
+  let tris;
+  try { tris = parseSTL(buf).tris; }
+  catch (e) { throw new Error("The stored 3D mesh isn't a readable STL: " + e.message); }
   MV_MESH[url] = tris;
   return tris;
 }
@@ -372,8 +448,8 @@ function mvSchedule(v) {
 }
 
 function mvDraw(v) {
-  const gl = v.gl, cam = MV_CAM[v.planId];
-  if (!gl || !cam) return;
+  const gl = v.gl;
+  if (!gl || !MV_CAM[v.planId]) return;
   // Canvas is sized by CSS; match the drawing buffer to it in device pixels so
   // the render isn't soft on a retina screen or a scaled Windows display.
   const dpr = Math.min(2, (typeof devicePixelRatio === "number" ? devicePixelRatio : 1) || 1);
@@ -388,8 +464,14 @@ function mvDraw(v) {
   gl.enable(gl.DEPTH_TEST);
   gl.useProgram(v.prog);
 
+  // A non-finite fit silently blanks the canvas rather than throwing, which is
+  // the worst way for a renderer to fail — it looks like "the feature is broken"
+  // with nothing in the console. Re-fit instead of drawing NaN. Read `cam` AFTER
+  // this: mvFit replaces MV_CAM[planId], so a reference taken earlier is stale.
+  if (!Number.isFinite(v.fitted) || !Number.isFinite(MV_CAM[v.planId].dist)) mvFit(v);
+  const cam = MV_CAM[v.planId];
   const aspect = w / h;
-  const proj = mat4Perspective(MV_FOV, aspect, Math.max(0.1, v.fitted / 100), v.fitted * 12);
+  const proj = mat4Perspective(MV_FOV, aspect, v.near, v.far);
   const eye = orbitEye(cam.yaw, cam.pitch, cam.dist, v.center);
   const mvp = mat4Multiply(proj, mat4LookAt(eye, v.center, [0, 0, 1]));
   gl.uniformMatrix4fv(v.loc.mvp, false, mvp);
@@ -447,6 +529,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     mat4Multiply, mat4Perspective, mat4LookAt, orbitEye, boundsCenter, boundsRadius,
     fitDistance, dragToOrbit, zoomDistance, trisToBuffers, blankEdgeVerts,
-    stockGeometry, stockBounds, MV_PITCH_LIMIT,
+    stockGeometry, stockBounds, viewerCamera, mvLoadMesh, MV_PITCH_LIMIT,
   };
 }

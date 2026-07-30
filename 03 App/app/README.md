@@ -152,6 +152,20 @@ in a graduated senior's personal account.
    overwrites with `storage.rules`. The free Storage allowance of 5 GB and 1
    GB/day egress dwarfs our usage, but the budget alert means it can never
    surprise-bill.
+3c. Give the bucket a CORS rule, once, from `03 App/`:
+
+   ```
+   gcloud storage buckets update gs://feb-composites.firebasestorage.app --cors-file=cors.json
+   ```
+
+   **`firebase deploy` does not do this** — it pushes hosting and rules, and CORS
+   is bucket configuration, so a deploy alone will not fix it. Without the rule
+   the Stock tab's 3D view shows the stock blocks with no mold inside them: the
+   browser blocks the `fetch()` of the stored mesh before it is even sent.
+   Nothing else in the app notices, because every other Storage URL here is used
+   by `<img src>` or `<a href>`, and those need no CORS at all. If you see blocks
+   and no mold, the viewer now says so underneath itself — that message is the
+   one to act on.
 4. Project settings, Your apps, the `</>` web option, register an app, then copy
    the config values into `firebase-config.js` here, replacing the demo values.
    Watch the variable name: the console hands you `const firebaseConfig = {…}`,
