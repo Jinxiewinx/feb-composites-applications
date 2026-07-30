@@ -655,7 +655,7 @@ function renderStackPlan() {
     <div class="muted">${esc(p.id)} · ${p.layers.length} layers · mold ${mmIn(h)} tall · from ${esc(p.source)}${p.triangleCount ? ` (${p.triangleCount.toLocaleString()} triangles)` : ""} · ${esc(p.by || "")} ${fmtWhen(p.ts)}</div>
     ${(p.warnings || []).map(w => `<div class="warn">${icon("warning", 14)} ${esc(w)}</div>`).join("")}
     ${(p.notes || []).map(n => `<div class="muted tny">${esc(n)}</div>`).join("")}
-    <h3>Mold in stock <span class="muted" style="text-transform:none">— drag to rotate, scroll to zoom</span></h3>
+    <h3>Mold in stock <span class="muted" style="text-transform:none">— drag to rotate, scroll or pinch to zoom</span></h3>
     ${meshViewHtml(p)}
     <h3>Stack</h3>
     ${stackSvg(p)}

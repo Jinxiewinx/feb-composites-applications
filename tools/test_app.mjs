@@ -1551,6 +1551,65 @@ await t("zoom is bounded so the model can't be lost or turned inside out", () =>
   const fitted = 500;
   assert(zoomDistance(fitted, -1e6, fitted) >= fitted * 0.15, "can't zoom through the model");
   assert(zoomDistance(fitted, 1e6, fitted) <= fitted * 6, "can't zoom to a dot");
+  // A pinch has to obey the same limits as the wheel, or the two gestures
+  // disagree about where the world ends depending on which one you used.
+  assert(pinchDistance(fitted, 1, 1e6, fitted) >= fitted * 0.15, "pinching in stops at the same wall");
+  assert(pinchDistance(fitted, 1e6, 1, fitted) <= fitted * 6, "and so does pinching out");
+});
+await t("pinch moves the camera by the ratio of the finger gap", () => {
+  /* Spread to twice the gap and the model comes twice as close. The ratio is
+     what makes a pinch feel attached to the fingers; the wheel's exponential
+     curve would slide out from under the touch. */
+  const fitted = 1000, dist = 400;
+  assert(Math.abs(pinchDistance(dist, 100, 200, fitted) - 200) < 1e-9, "fingers apart -> closer");
+  assert(Math.abs(pinchDistance(dist, 200, 100, fitted) - 800) < 1e-9, "fingers together -> further");
+  assert(pinchDistance(dist, 100, 100, fitted) === dist, "no change in span, no change in distance");
+  // Both pointers on the same coordinate is a real report from a browser, for
+  // one frame, at the start of a gesture. It must not divide by zero.
+  assert(pinchDistance(dist, 0, 120, fitted) === dist, "a zero previous span is ignored");
+  assert(pinchDistance(dist, 120, 0, fitted) === dist, "and so is a zero current span");
+  assert(pointerSpan({ x: 0, y: 0 }, { x: 3, y: 4 }) === 5, "span is the plain distance");
+});
+await t("MOBILE two fingers pinch, they don't spin the model", () => {
+  /* The bug: the viewer tracked ONE drag point, so a second finger overwrote the
+     first and a pinch came out as an orbit — the model turned under your fingers
+     and never got closer. On a phone that is the only zoom there is, because a
+     touchscreen pinch fires no wheel event and the canvas sets
+     touch-action:none, so the browser's own pinch is suppressed too. */
+  const g = mvGesture();
+  g.down(1, 100, 100);
+  assert(g.move(1, 110, 100).kind === "orbit", "one finger still orbits");
+
+  // Finger 1 is at x=110 after that orbit, so the opening gap is 90, not 100.
+  g.down(2, 200, 100);
+  const a = g.move(2, 300, 100);             // spread: gap 90 -> 190
+  assert(a && a.kind === "pinch", "two fingers zoom, they do not orbit: " + JSON.stringify(a));
+  assert(Math.abs(a.prevSpan - 90) < 1e-9 && Math.abs(a.span - 190) < 1e-9, JSON.stringify(a));
+  assert(g.move(1, 90, 100).kind === "pinch", "and either finger drives it, not just the second");
+});
+await t("MOBILE lifting one of two fingers doesn't fling the model", () => {
+  // The remaining finger has to become the orbit anchor AT ITS OWN position.
+  // Measuring the next move from the finger that left flings the model by the
+  // whole gap between them — which on a phone reads as the view exploding.
+  const g = mvGesture();
+  g.down(1, 100, 100);
+  g.down(2, 400, 100);
+  g.move(2, 420, 100);
+  g.up(2);
+  const a = g.move(1, 104, 100);
+  assert(a && a.kind === "orbit", "back to one finger, back to orbiting");
+  assert(a.dx === 4 && a.dy === 0, "measured from the finger still down, not the one lifted: " + JSON.stringify(a));
+});
+await t("MOBILE a cancelled pointer is released, not left stuck down", () => {
+  /* The browser cancels a pointer whenever it takes a gesture over. A pointer
+     that never gets cleaned up stays "down" for the life of the viewer, and the
+     model then spins on the next unrelated touch anywhere on the page. */
+  const g = mvGesture();
+  g.down(1, 10, 10);
+  g.up(1);                                    // pointercancel routes here too
+  assert(g.count() === 0, "no pointers left down");
+  assert(g.move(1, 40, 10) === null, "a released pointer moves nothing");
+  assert(/pointercancel/.test(mvBindEvents.toString()), "and the cancel event is actually bound");
 });
 await t("3D view builds block geometry and bounds straight from the saved plan", () => {
   const p = twoSectionPlan();

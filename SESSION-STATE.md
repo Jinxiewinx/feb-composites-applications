@@ -17,6 +17,37 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
 
+## 3D viewer: pinch to zoom on a phone (`meshview.js`)
+
+Reported from real use: pinch did nothing on mobile. It was never implemented —
+the viewer tracked a SINGLE drag point, so a second finger overwrote the first
+and a pinch came out as an orbit. Zoom was bound to `wheel` only, and a
+touchscreen pinch fires no wheel event (a **trackpad** pinch arrives as a
+ctrl-wheel, which is why the desktop path never noticed). The canvas already
+sets `touch-action: none`, so the browser's own pinch was suppressed as well —
+between the two, the gesture did nothing at all.
+
+Now `mvGesture()`: a pure pointer state machine, one finger orbits, two pinch,
+with the camera work left to the thin glue in `mvBindEvents`. Same split the
+rest of the file argues for, and here it earns it — the defect was in the
+gesture logic, so the gesture logic is what the node tests can now reach.
+
+Two things only a real phone shows, both pinned by tests:
+
+- Lifting one of two fingers must **re-anchor** the orbit on the finger left
+  behind. Measuring the next move from the finger that went away flings the
+  model by the whole gap between them.
+- **`pointercancel` must be handled like `pointerup`.** The browser cancels
+  whenever it takes a gesture over; a pointer never cleaned up stays "down" for
+  the life of the viewer and the model spins on the next unrelated touch.
+
+`clampDistance()` is now the single place the zoom limits live, so the wheel and
+a pinch cannot disagree about how far the camera may go.
+
+Verified with real multi-touch (CDP `Input.dispatchTouchEvent`, mobile context):
+spread 911→455 and pinch 455→1822 with yaw unchanged; on the old code the
+distance never moved and yaw span 1.2 rad instead.
+
 ## Mold Stack Planner — engineering drawing set (`drawings.js`)
 
 The plan page had two views and both answered the same question — *does the mold

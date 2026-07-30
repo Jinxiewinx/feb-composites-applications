@@ -102,10 +102,87 @@ function dragToOrbit(dx, dy, yaw, pitch) {
     pitch: Math.max(-MV_PITCH_LIMIT, Math.min(MV_PITCH_LIMIT, pitch + dy * k)),
   };
 }
-// Wheel/pinch zoom, bounded so you can't invert through the model or lose it.
-function zoomDistance(dist, deltaY, fitted) {
-  const next = dist * Math.exp(deltaY * 0.0015);
+/* The one place the zoom limits live, so the wheel and a pinch cannot disagree
+   about how far in or out the camera may go. Bounded so you can't invert through
+   the model or shrink it to a dot you then have to hunt for. */
+function clampDistance(next, fitted) {
+  if (!Number.isFinite(next)) return fitted;
   return Math.max(fitted * 0.15, Math.min(fitted * 6, next));
+}
+// Wheel zoom (and a trackpad pinch, which arrives as a ctrl-wheel).
+function zoomDistance(dist, deltaY, fitted) {
+  return clampDistance(dist * Math.exp(deltaY * 0.0015), fitted);
+}
+/* Touchscreen pinch. The camera distance tracks the INVERSE of the finger span:
+   spread your fingers to twice the gap and the model comes twice as close. That
+   ratio is what makes a pinch feel attached to the fingers rather than merely
+   responding to them — an exponential curve like the wheel's would slide out
+   from under the touch. Guards a zero span, which is what a browser reports for
+   the instant both pointers are at the same coordinate. */
+function pinchDistance(dist, prevSpan, span, fitted) {
+  if (!(prevSpan > 0) || !(span > 0)) return dist;
+  return clampDistance(dist * (prevSpan / span), fitted);
+}
+// Gap between two active pointers, in CSS px.
+function pointerSpan(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+/* ONE finger orbits, TWO pinch to zoom — as a state machine, with no DOM in it.
+
+   This is the same split the rest of the file makes: the part that can be wrong
+   is pure and tested under node, the part that touches the browser is thin. It
+   is not a theoretical distinction here. The bug this replaces was that the
+   viewer tracked a SINGLE drag point, so a second finger overwrote the first and
+   a pinch came out as a spin — the model rotated under your fingers and never
+   got closer. On a phone that is the only way to zoom at all: a touchscreen
+   pinch produces no wheel event (a trackpad pinch arrives as a ctrl-wheel, which
+   is why the desktop path never noticed), and the canvas sets touch-action:none
+   so the browser's own pinch is suppressed as well.
+
+   Two behaviours only a real phone shows, both pinned by tests:
+
+     - lifting one finger of two must RE-ANCHOR the orbit on the finger left
+       behind, or the next move is measured from the finger that went away and
+       the model jumps by the whole gap between them.
+     - a CANCELLED pointer has to be treated exactly like a lifted one. The
+       browser cancels whenever it takes a gesture over, and a pointer that is
+       never cleaned up stays "down" forever — the model then spins on the next
+       unrelated touch anywhere on the page. */
+function mvGesture() {
+  const pts = new Map();      // pointerId -> {x, y}
+  let orbitId = null;
+  let span = 0;
+  const ids = () => [...pts.keys()];
+  const rearm = () => {
+    const k = ids();
+    if (k.length >= 2) {
+      orbitId = null;                                   // two fingers: pinching, not orbiting
+      span = pointerSpan(pts.get(k[0]), pts.get(k[1]));
+    } else {
+      orbitId = k.length ? k[0] : null;
+      span = 0;
+    }
+  };
+  return {
+    count: () => pts.size,
+    down(id, x, y) { pts.set(id, { x, y }); rearm(); },
+    up(id) { pts.delete(id); rearm(); },
+    /* Returns what the camera should do, or null for a pointer that is merely
+       along for the ride: {kind:"orbit", dx, dy} or {kind:"pinch", prevSpan, span}. */
+    move(id, x, y) {
+      if (!pts.has(id)) return null;
+      const prev = pts.get(id);
+      pts.set(id, { x, y });
+      const k = ids();
+      if (k.length >= 2) {
+        const next = pointerSpan(pts.get(k[0]), pts.get(k[1]));
+        const out = { kind: "pinch", prevSpan: span, span: next };
+        span = next;
+        return out;
+      }
+      if (id !== orbitId) return null;
+      return { kind: "orbit", dx: x - prev.x, dy: y - prev.y };
+    },
+  };
 }
 
 /* Triangles -> interleaved position+normal arrays for one flat-shaded draw.
@@ -414,25 +491,37 @@ function mvTeardown(v) {
   } catch (e) { /* context already gone */ }
 }
 
+/* Thin glue over mvGesture: turn pointer events into camera changes. Pointer
+   events already cover mouse, pen and touch uniformly, so there is no separate
+   touch path to keep in step. */
 function mvBindEvents(v) {
   const on = (el, ev, fn, opts) => { el.addEventListener(ev, fn, opts); v.handlers.push([el, ev, fn]); };
-  let drag = null;
-  const pt = e => (e.touches && e.touches[0]) || e;
-  const start = e => { const p = pt(e); drag = { x: p.clientX, y: p.clientY }; };
+  const g = mvGesture();
+  const start = e => {
+    g.down(e.pointerId, e.clientX, e.clientY);
+    // Capture so a finger that slides off the canvas mid-pinch keeps reporting.
+    if (v.canvas.setPointerCapture) { try { v.canvas.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ } }
+  };
   const move = e => {
-    if (!drag) return;
-    const p = pt(e);
     const cam = MV_CAM[v.planId];
-    const next = dragToOrbit(p.clientX - drag.x, p.clientY - drag.y, cam.yaw, cam.pitch);
-    cam.yaw = next.yaw; cam.pitch = next.pitch;
-    drag = { x: p.clientX, y: p.clientY };
+    if (!cam) return;
+    const act = g.move(e.pointerId, e.clientX, e.clientY);
+    if (!act) return;
+    if (act.kind === "pinch") {
+      cam.dist = pinchDistance(cam.dist, act.prevSpan, act.span, v.fitted);
+    } else {
+      const o = dragToOrbit(act.dx, act.dy, cam.yaw, cam.pitch);
+      cam.yaw = o.yaw; cam.pitch = o.pitch;
+    }
     if (e.cancelable) e.preventDefault();
     mvSchedule(v);
   };
-  const end = () => { drag = null; };
+  const end = e => g.up(e.pointerId);
+
   on(v.canvas, "pointerdown", start);
   on(window, "pointermove", move, { passive: false });
   on(window, "pointerup", end);
+  on(window, "pointercancel", end);
   on(v.canvas, "wheel", e => {
     const cam = MV_CAM[v.planId];
     cam.dist = zoomDistance(cam.dist, e.deltaY, v.fitted);
@@ -528,7 +617,8 @@ function mvDraw(v) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     mat4Multiply, mat4Perspective, mat4LookAt, orbitEye, boundsCenter, boundsRadius,
-    fitDistance, dragToOrbit, zoomDistance, trisToBuffers, blankEdgeVerts,
+    fitDistance, dragToOrbit, zoomDistance, clampDistance, pinchDistance, pointerSpan, mvGesture,
+    trisToBuffers, blankEdgeVerts,
     stockGeometry, stockBounds, viewerCamera, mvLoadMesh, MV_PITCH_LIMIT,
   };
 }
