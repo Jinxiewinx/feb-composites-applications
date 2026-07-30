@@ -300,6 +300,17 @@ function searchInput(inp) {
   if (s) { s.focus(); const n = s.value.length; s.setSelectionRange(n, n); }
 }
 
+/* Trigger a download of an in-memory blob. One place, because three callers
+   (backup JSON, report CSVs, stock STLs) were otherwise each going to build
+   their own anchor-and-revoke dance. */
+function downloadBlob(filename, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 /* ---------- backup / restore (lead-only import) ---------- */
 function exportAll() {
   const blob = new Blob([JSON.stringify(DB, null, 1)], { type: "application/json" });
@@ -717,7 +728,12 @@ function applyTheme(t) {
   if (el && el.setAttribute) el.setAttribute("data-theme", t);
   try { localStorage.setItem("feb-theme", t); } catch (e) {}
 }
-function toggleTheme() { applyTheme(currentTheme() === "dark" ? "light" : "dark"); renderTopbar(); }
+function toggleTheme() {
+  applyTheme(currentTheme() === "dark" ? "light" : "dark");
+  renderTopbar();
+  // A WebGL canvas isn't restyled by CSS variables — it has to repaint itself.
+  if (typeof mvThemeChanged === "function") mvThemeChanged();
+}
 function themeToggleBtn() {
   const dark = currentTheme() === "dark";
   const label = dark ? "Switch to light theme" : "Switch to dark theme";

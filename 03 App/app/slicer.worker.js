@@ -11,12 +11,19 @@
    Protocol
      in : { cmd:"slice", buffer, unit, thicknesses, opts }
      out: { type:"progress", value 0..1 }
-          { type:"done", result }
+          { type:"done", result, meshStl? }
           { type:"error", message, region? }
+
+   `meshStl` is the mold itself, decimated and written back out as a binary STL
+   so the 3D viewer can show the mold inside the blocks after a reload. Built
+   HERE rather than on the page because the triangles are already in hand — the
+   alternative is re-parsing a multi-megabyte mesh on the main thread purely to
+   throw most of it away. Transferred, not cloned.
+
    Note importScripts needs a CLASSIC worker (no { type:"module" }), which
    matches how the rest of the app loads. */
 
-importScripts("slicer.js");
+importScripts("slicer.js", "stlio.js");
 
 /* Kept between messages so picking a body doesn't re-parse a 9MB mesh. */
 let cached = null;   // { key, bodies }
@@ -52,24 +59,33 @@ self.onmessage = function (e) {
     }
     if (msg.cmd !== "slice") return;
     // Either a box typed in by hand, or one body of an uploaded STL.
-    let tris, triangleCount;
+    let tris, triangleCount, displayTris;
     if (msg.box) {
       tris = boxTris(msg.box.len, msg.box.wid, msg.box.hgt);
       triangleCount = tris.length;
+      // boxTris is 4 open walls — enough to slice against Z planes, but it
+      // renders as a tube with no lid. The viewer gets a closed solid instead.
+      displayTris = blankTris({ x0: 0, y0: 0, x1: msg.box.len, y1: msg.box.wid }, 0, msg.box.hgt);
     } else {
       const bodies = bodiesFor(msg);
       const body = bodies[msg.bodyIndex || 0];
       if (!body) throw new Error("That body is not in this file any more — re-pick it.");
       tris = body.tris;
       triangleCount = body.tris.length;
+      displayTris = body.tris;
     }
     const opts = { ...(msg.opts || {}), onProgress: v => self.postMessage({ type: "progress", value: v }) };
     // thicknesses null => choose them from what the rack actually holds.
     const result = msg.thicknesses && msg.thicknesses.length
       ? sliceMold(tris, msg.thicknesses, opts)
       : planMold(tris, msg.available, opts);
+    // Best-effort: a mesh we couldn't shrink or write must never cost anyone
+    // their cut list, which is the part that actually gets cut.
+    let meshStl = null;
+    try { meshStl = meshStlForStorage(displayTris); } catch (e) { meshStl = null; }
     self.postMessage({
       type: "done",
+      meshStl,
       result: {
         layers: result.layers,
         sections: (result.sections || []).map(s => ({ index: s.index, height: s.height, count: s.layers.length })),
@@ -79,7 +95,7 @@ self.onmessage = function (e) {
         considered: result.considered || 0,
         triangleCount,
       },
-    });
+    }, meshStl ? [meshStl] : []);
   } catch (err) {
     // Structured-clone can't carry an Error, so flatten it. The region is what
     // lets the UI say WHERE an overhang is instead of just refusing the file.

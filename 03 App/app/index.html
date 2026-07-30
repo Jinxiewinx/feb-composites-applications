@@ -395,6 +395,21 @@
   .md-body blockquote { border-left: 3px solid var(--gold); margin: 8px 0; padding: 2px 12px; color: var(--muted); }
   .md-body code { background: var(--fill); padding: 1px 4px; border-radius: 3px; }
 
+  /* ---- 3D mold-in-stock viewer (meshview.js) ----
+     Screen only; the printed/signed artifact stays the exploded SVG below it. */
+  .meshview { position: relative; margin: 8px 0 4px; }
+  .meshview canvas { width: 100%; height: 380px; display: block; border: 1px solid var(--line);
+    border-radius: var(--r-md); background: var(--canvas); touch-action: none; cursor: grab; }
+  .meshview canvas:active { cursor: grabbing; }
+  .meshview-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px;
+    font-size: 12px; color: var(--muted); }
+  .mv-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 2px; }
+  .mv-swatch.mv-mold { background: #2f6be4; }
+  .mv-swatch.mv-stock { background: rgba(253,181,21,.55); border: 1px solid var(--border-2); }
+  .meshview-hint button { margin-left: auto; }
+  .meshview-note { margin-top: 6px; }
+  @media (max-width: 640px) { .meshview canvas { height: 260px; } }
+
   /* ---- stack viz + steps (work orders, carried) ---- */
   .stackviz { margin: 8px 0; }
   .stackviz .plybar { border: 1px solid var(--line); border-bottom: none; padding: 3px 10px; font-size: 12px; }
@@ -632,6 +647,9 @@
 
     /* Fallback path: other tabs, unchanged. */
     nav.sidebar, header.topbar, .filters, .toolbar, button, .no-print, .rte-toolbar { display: none !important; }
+    /* A canvas is not a dependable printed artifact, and the exploded SVG
+       already is one — it's what gets initialled for CS-003 §7.2. */
+    .meshview { display: none !important; }
     body:not(.sheet) #app { display: block; } .content { display: block; }
     main { max-width: none; padding: 0; }
     .card { border: 1px solid #000; border-radius: 0; box-shadow: none; break-inside: auto; margin-bottom: 8px; padding: 10px 14px; }
@@ -675,8 +693,10 @@
 <script src="budget.js"></script>
 <script src="dashboard.js"></script>
 <script src="slicer.js"></script>
+<script src="stlio.js"></script>
 <script src="packer.js"></script>
 <script src="stackview.js"></script>
+<script src="meshview.js"></script>
 <script src="stock.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>

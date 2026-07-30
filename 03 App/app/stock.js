@@ -212,9 +212,12 @@ const PLAN_BYTE_BUDGET = 900000;
 /* Same job, no Worker: used by the node test harness, and it keeps the two
    paths honest because slicer.js is pure either way. */
 function runSliceInline(msg) {
-  let tris;
-  if (msg.box) tris = boxTris(msg.box.len, msg.box.wid, msg.box.hgt);
-  else {
+  let tris, displayTris;
+  if (msg.box) {
+    tris = boxTris(msg.box.len, msg.box.wid, msg.box.hgt);
+    // Closed solid for the viewer; boxTris is 4 open walls (see the worker).
+    displayTris = blankTris({ x0: 0, y0: 0, x1: msg.box.len, y1: msg.box.wid }, 0, msg.box.hgt);
+  } else {
     const bodies = splitBodies(scaleTris(parseSTL(msg.buffer).tris, msg.unit));
     if (msg.cmd === "bodies") {
       return {
@@ -227,14 +230,17 @@ function runSliceInline(msg) {
     }
     tris = (bodies[msg.bodyIndex || 0] || {}).tris;
     if (!tris) throw new Error("That body is not in this file.");
+    displayTris = tris;
   }
   const r = (msg.thicknesses && msg.thicknesses.length)
     ? sliceMold(tris, msg.thicknesses, msg.opts || {})
     : planMold(tris, msg.available, msg.opts || {});
+  let meshStl = null;
+  try { meshStl = meshStlForStorage(displayTris); } catch (e) { meshStl = null; }
   return {
     layers: r.layers, sections: (r.sections || []).map(s => ({ index: s.index, height: s.height, count: s.layers.length })),
     bounds: r.bounds, warnings: r.warnings, composition: r.composition || msg.thicknesses,
-    considered: r.considered || 0, triangleCount: tris.length,
+    considered: r.considered || 0, triangleCount: tris.length, meshStl,
   };
 }
 
@@ -254,7 +260,9 @@ function runSlice(msg, onProgress) {
       const m = e.data || {};
       if (m.type === "progress") { if (onProgress) onProgress(m.value); return; }
       if (m.type === "bodies") return finish(resolve, m);
-      if (m.type === "done") return finish(resolve, m.result);
+      // meshStl rides alongside `result` (it's transferred, not cloned) — fold
+      // it in so both the Worker and inline paths hand back one shape.
+      if (m.type === "done") return finish(resolve, { ...m.result, meshStl: m.meshStl || null });
       if (m.type === "error") {
         const err = new Error(m.message);
         err.region = m.region;
@@ -443,6 +451,29 @@ async function submitMold() {
     };
     const { plan, notes } = fitPlanForStorage(raw);
     plan.notes = notes;
+    /* Park the mold mesh in Storage so the 3D view survives a reload. That
+       reload is the whole point: CS-003 §7.2 has someone who did NOT design the
+       mold sign off on the fit, and they open the plan later, on their own
+       laptop. Firestore can't hold it (1 MiB doc cap, and contours already
+       compete for that), so it goes to Storage as a binary STL — which
+       slicer.js's parseSTL reads straight back.
+
+       Deliberately non-fatal. A plan whose mesh failed to upload still has its
+       blanks, its cut list and its exploded SVG; the viewer just says it has no
+       mesh. Losing the cut list because a photo-sized upload timed out on shop
+       wifi would be a far worse trade. */
+    if (result.meshStl) {
+      try {
+        setProg("Saving the 3D view…");
+        const file = new Blob([result.meshStl], { type: "model/stl" });
+        file.name = `${id}-mesh.stl`;
+        const rec = await fb.upload(`stackplans/${id}/mesh.stl`, file);
+        plan.meshPath = rec.path;
+        plan.meshUrl = rec.url;
+      } catch (e) {
+        notes.push("The 3D view couldn't be saved, so this plan shows blocks only. The blanks and cut list are unaffected.");
+      }
+    }
     (DB.stackplans = DB.stackplans || []).push(plan);
     save("stackplans", plan);
     closeModal();
@@ -459,8 +490,12 @@ async function submitMold() {
 function planById(id) { return (DB.stackplans || []).find(p => p.id === id); }
 function delStackPlan(id) {
   confirmModal("Delete this stack plan for everyone?", () => {
+    const p = planById(id);
     del("stackplans", id);
-    DB.stackplans = (DB.stackplans || []).filter(p => p.id !== id);
+    // Take the stored mesh with it, same as delBuy/delDocument do for their
+    // uploads. Plans accumulate over a season; orphaned meshes would too.
+    if (p && p.meshPath) fb.deleteFile(p.meshPath);
+    DB.stackplans = (DB.stackplans || []).filter(x => x.id !== id);
     view = { ...view, mode: "list", id: null };
     render();
   });
@@ -542,13 +577,39 @@ function printCutList() {
   setTimeout(() => { document.body.classList.remove("sheet"); host.innerHTML = ""; }, 100);
 }
 
+/* Write the planned blocks of one section out as a binary STL, in the mold's own
+   CAD coordinates and in millimetres — so it lands on the model in CAD with
+   nothing to align, and CAM can use it as the stock body directly.
+
+   One file per SECTION, not per mold: a mold past the ShopSabre's 6in cut depth
+   is already split by sectionize() into separate machine setups, and a single
+   stock solid taller than the machine can cut is not something CAM can use. */
+function exportSectionStl(planId, sectionIndex) {
+  const p = planById(planId);
+  if (!p) { toast("That plan is gone.", "error"); return; }
+  const tris = sectionTris(p, sectionIndex);
+  if (!tris.length) { toast("That section has no blocks in it.", "error"); return; }
+  const many = sectionCount(p) > 1;
+  const header = `FEB ${p.id}${many ? ` section ${sectionIndex + 1}` : ""} stock - millimetres`;
+  const safe = String(p.name || p.id).replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || p.id;
+  downloadBlob(`${safe}-stock${many ? `-S${sectionIndex + 1}` : ""}.stl`,
+    new Blob([writeBinarySTL(tris, header)], { type: "model/stl" }));
+  toast(`${tris.length / 12} block${tris.length === 12 ? "" : "s"} exported in mm, at the mold's own origin.`);
+}
+
 function renderStackPlan() {
   const p = planById(view.id);
   if (!p) { view.mode = "list"; return renderStock(); }
   const h = p.bounds ? (p.bounds.z1 - p.bounds.z0) : 0;
+  const nSec = sectionCount(p);
   return `
   <div class="toolbar no-print">
     <button class="ib" onclick="view={...view,mode:'list',id:null};render()">${icon("chevronLeft", 16)} All stock</button>
+    ${nSec === 1
+      ? `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',0)">${icon("download", 15)} Export stock STL</button>`
+      : `<span class="muted tny" style="align-self:center">Export stock STL:</span>` +
+        Array.from({ length: nSec }, (_, i) =>
+          `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',${i})">${icon("download", 15)} Section ${i + 1}</button>`).join("")}
     ${isLead() ? `<button class="danger" onclick="delStackPlan('${esc(p.id)}')">Delete</button>` : ""}
   </div>
   <div class="card">
@@ -556,6 +617,8 @@ function renderStackPlan() {
     <div class="muted">${esc(p.id)} · ${p.layers.length} layers · mold ${mmIn(h)} tall · from ${esc(p.source)}${p.triangleCount ? ` (${p.triangleCount.toLocaleString()} triangles)` : ""} · ${esc(p.by || "")} ${fmtWhen(p.ts)}</div>
     ${(p.warnings || []).map(w => `<div class="warn">${icon("warning", 14)} ${esc(w)}</div>`).join("")}
     ${(p.notes || []).map(n => `<div class="muted tny">${esc(n)}</div>`).join("")}
+    <h3>Mold in stock <span class="muted" style="text-transform:none">— drag to rotate, scroll to zoom</span></h3>
+    ${meshViewHtml(p)}
     <h3>Stack</h3>
     ${stackSvg(p)}
     <p class="muted tny">Dashed outline is the mold at the top of each layer. Check it sits inside every block before initialling the CS-003 §7.2 review step.</p>

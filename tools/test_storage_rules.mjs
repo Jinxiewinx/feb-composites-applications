@@ -5,8 +5,8 @@
    cases (which gate on contentType) can't be asserted here without the full
    resumable protocol — those are exercised by the app's Firebase SDK in prod.
    What this proves cleanly is the security boundary that matters: sign-in is
-   required, and writes outside the four allowed path trees (avatars/, projects/,
-   documents/, budget/) are denied. Run from "03 App/":
+   required, and writes outside the five allowed path trees (avatars/, projects/,
+   documents/, budget/, stackplans/) are denied. Run from "03 App/":
      firebase emulators:exec --only auth,storage --project demo-feb-work-orders \
        "node '../tools/test_storage_rules.mjs'"                                */
 
@@ -42,6 +42,13 @@ await denied("unauthenticated write to documents/", null, "documents/x.pdf");
 await denied("unauthenticated write to projects/", null, "projects/P-1/x.pdf");
 await denied("unauthenticated write to avatars/", null, "avatars/someuid");
 await denied("unauthenticated write to budget/", null, "budget/BUY-1/receipt.jpg");
+await denied("unauthenticated write to stackplans/", null, "stackplans/STK-1/mesh.stl");
+// The mold mesh behind the Stock tab's 3D view. Its rule accepts only
+// model/stl and application/octet-stream, so this PDF-typed write must be
+// refused even though the path itself is allowed — the one contentType case
+// this endpoint CAN assert, since here the wrong type is what's being tested
+// rather than the right one (see the scope note at the top).
+await denied("authed write of a non-STL content type to stackplans/", token, "stackplans/STK-1/mesh.stl");
 await denied("authed write to an unmatched path", token, "secret/x.pdf");
 await denied("authed write to bucket root", token, "rootfile.pdf");
 

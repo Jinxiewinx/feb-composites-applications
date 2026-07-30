@@ -86,14 +86,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "packer.js", "stackview.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1352,6 +1352,200 @@ await t("CRITICAL a plan is always storable — contours thin until it fits", ()
   assert(JSON.stringify(plan).length <= 900000, "must end under the Firestore ceiling");
   assert(notes.length === 1, "and must say that detail was lost");
   assert(plan.layers.every(L => L.blanks.length === 1), "blanks are never dropped — they are what gets cut");
+});
+
+console.log("stock STL export + 3D view:");
+// A mold taller than the 6in cut depth, so it sections in two — the case the
+// per-section export exists for.
+function twoSectionPlan() {
+  const r = sliceMold(boxTris(400, 300, 220), [50.8, 50.8, 50.8, 50.8, 25.4], {});
+  return { id: "STK-T", name: "test mold", layers: r.layers, bounds: r.bounds, sections: r.sections };
+}
+
+await t("writeBinarySTL round-trips through the slicer's own parseSTL", () => {
+  // The strongest check available and it costs nothing: the reader is the same
+  // code every uploaded mold already goes through, so agreement between the two
+  // halves means the written file is one the app itself would accept.
+  const tris = blankTris({ x0: -10, y0: -20, x1: 90, y1: 130 }, 5, 55);
+  const back = parseSTL(writeBinarySTL(tris, "unit test")).tris;
+  assert(back.length === tris.length, `${back.length} vs ${tris.length} triangles`);
+  const a = meshBounds(tris), b = meshBounds(back);
+  ["x0", "y0", "z0", "x1", "y1", "z1"].forEach(k =>
+    assert(Math.abs(a[k] - b[k]) < 1e-3, `${k}: ${a[k]} vs ${b[k]}`));
+});
+await t("writeBinarySTL emits exactly 84 + 50n bytes and a non-'solid' header", () => {
+  const tris = blankTris({ x0: 0, y0: 0, x1: 10, y1: 10 }, 0, 10);
+  const buf = writeBinarySTL(tris, "FEB test");
+  assert(buf.byteLength === stlByteLength(tris.length), `${buf.byteLength} vs ${stlByteLength(tris.length)}`);
+  assert(new DataView(buf).getUint32(80, true) === tris.length, "count field");
+  // A binary file whose header starts "solid" gets mis-sniffed as ASCII STL by
+  // plenty of readers, which is why writeBinarySTL never lets that happen.
+  const head = String.fromCharCode(...new Uint8Array(buf, 0, 5)).toLowerCase();
+  assert(head !== "solid", "header must not start with 'solid': " + head);
+});
+await t("blankTris is a closed box with every normal pointing outward", () => {
+  const b = { x0: -5, y0: -7, x1: 25, y1: 33 };
+  const tris = blankTris(b, 2, 12);
+  assert(tris.length === 12, "6 faces x 2 triangles: " + tris.length);
+  const bb = meshBounds(tris);
+  assert(bb.x0 === -5 && bb.x1 === 25 && bb.y0 === -7 && bb.y1 === 33 && bb.z0 === 2 && bb.z1 === 12, JSON.stringify(bb));
+  // Verify the winding rather than trusting the hand-derived corner order:
+  // every face normal must point away from the box centre.
+  const cx = (bb.x0 + bb.x1) / 2, cy = (bb.y0 + bb.y1) / 2, cz = (bb.z0 + bb.z1) / 2;
+  tris.forEach((t, i) => {
+    const n = triNormal(t);
+    const fx = (t.ax + t.bx + t.cx) / 3 - cx, fy = (t.ay + t.by + t.cy) / 3 - cy, fz = (t.az + t.bz + t.cz) / 3 - cz;
+    assert(n.x * fx + n.y * fy + n.z * fz > 0, `triangle ${i} faces inward`);
+  });
+});
+await t("sectionTris splits by layer.section, and one export per section covers every blank", () => {
+  const p = twoSectionPlan();
+  assert(sectionCount(p) === 2, "two machine setups: " + sectionCount(p));
+  const s0 = sectionTris(p, 0), s1 = sectionTris(p, 1);
+  const totalBlanks = p.layers.reduce((n, L) => n + L.blanks.length, 0);
+  assert((s0.length + s1.length) / 12 === totalBlanks, "no blank exported twice or lost");
+  // Section 1 sits above section 0 — the split is along Z, at the cut depth.
+  assert(meshBounds(s1).z0 >= meshBounds(s0).z1 - 1e-6, "sections stack, not overlap");
+});
+await t("a plan saved before sections existed exports as one section", () => {
+  const legacy = { id: "OLD", name: "old", layers: [{ z0: 0, z1: 10, blanks: [{ x0: 0, y0: 0, x1: 10, y1: 10 }] }] };
+  assert(sectionCount(legacy) === 1, "defaults to one");
+  assert(sectionTris(legacy, 0).length === 12, "and still exports its blank");
+});
+await t("exported blocks stay in the mold's own CAD coordinates", () => {
+  // The point of exporting at all: it must drop onto the CAD model with no
+  // aligning. A blank's x0 is NEGATIVE for a mold at the origin — that's the
+  // machining margin sitting correctly outside the mold datum.
+  const p = twoSectionPlan();
+  const bb = meshBounds(sectionTris(p, 0));
+  assert(bb.x0 < 0 && bb.y0 < 0, "margin extends outside the mold origin: " + JSON.stringify(bb));
+  assert(Math.abs(bb.x0 - p.layers[0].blanks[0].x0) < 1e-6, "matches the blanks table exactly");
+});
+await t("exportSectionStl runs end to end and reports the block count", () => {
+  DB.stackplans = [twoSectionPlan()];
+  view = { ...view, tab: "stock", mode: "plan", id: "STK-T" };
+  exportSectionStl("STK-T", 0);
+  assert(/block/.test(lastToast) && /mm/.test(lastToast), "says what it wrote: " + lastToast);
+  exportSectionStl("STK-T", 99);
+  assert(/no blocks/i.test(lastToast), "an empty section is refused, not written: " + lastToast);
+});
+
+await t("decimateTris shrinks a mesh without moving its silhouette", () => {
+  const dense = sliceMold ? boxTris(200, 200, 200) : [];
+  // Build something with real triangle count: subdivide a box crudely.
+  const tris = [];
+  for (let i = 0; i < 40; i++) {
+    for (const t of dense) {
+      tris.push({ ax: t.ax + i * 0.01, ay: t.ay, az: t.az, bx: t.bx + i * 0.01, by: t.by, bz: t.bz, cx: t.cx + i * 0.01, cy: t.cy, cz: t.cz });
+    }
+  }
+  const before = meshBounds(tris);
+  const out = decimateTris(tris, 40);
+  assert(out.length <= tris.length, "never grows");
+  const after = meshBounds(out);
+  const span = Math.max(before.x1 - before.x0, before.y1 - before.y0, before.z1 - before.z0);
+  ["x0", "y0", "z0", "x1", "y1", "z1"].forEach(k =>
+    assert(Math.abs(after[k] - before[k]) <= span * 0.2, `${k} moved too far: ${before[k]} -> ${after[k]}`));
+  out.forEach(t => Object.values(t).forEach(v => assert(Number.isFinite(v), "no NaN in the output")));
+});
+await t("decimateTris is a no-op when the mesh is already small enough", () => {
+  const tris = blankTris({ x0: 0, y0: 0, x1: 10, y1: 10 }, 0, 10);
+  assert(decimateTris(tris, 500) === tris, "same array back, no needless copy");
+});
+await t("meshStlForStorage never returns a file that breaks the storage.rules size cap", () => {
+  // storage.rules caps an upload at 10 MB while the app accepts 64 MB STLs, so
+  // something has to give — display fidelity, not the upload.
+  const dense = [];
+  for (let i = 0; i < 400; i++) {
+    // One connected blob, subdivided: clustering CAN reduce this.
+    dense.push(...blankTris({ x0: i * 0.1, y0: 0, x1: i * 0.1 + 30, y1: 30 }, 0, 30));
+  }
+  const buf = meshStlForStorage(dense, 50 * 1024);
+  assert(buf && buf.byteLength <= 50 * 1024, `${buf && buf.byteLength} bytes vs a 51200 budget`);
+  assert(parseSTL(buf).tris.length > 0, "and it is still a readable STL");
+});
+await t("meshStlForStorage is within budget or null — never an oversized upload", () => {
+  /* The invariant that actually matters, checked across shapes rather than one
+     fixture. An oversized file would be rejected by storage.rules server-side
+     and surface to the user as a meaningless permission error, so the contract
+     is: a file that fits, or nothing (and then the plan keeps its blanks and
+     cut list, and the viewer shows blocks only).
+
+     Worth noting the scattered case DOES survive: 3000 disjoint boxes reduce
+     36,000 triangles to 68 because clustering merges them wholesale. That loses
+     a lot of shape, which is acceptable for something only ever displayed —
+     blanks and the cut list come from the full mesh at slice time and are never
+     recomputed from this one. */
+  const budget = 50 * 1024;
+  const scattered = [];
+  for (let i = 0; i < 3000; i++) scattered.push(...blankTris({ x0: i * 10, y0: 0, x1: i * 10 + 0.9, y1: 1 }, 0, 1));
+  const flat = [];  // a zero-height mold: one axis has no span at all
+  for (let i = 0; i < 500; i++) flat.push(...blankTris({ x0: i, y0: 0, x1: i + 1, y1: 40 }, 0, 0));
+  const shapes = [
+    ["scattered boxes", scattered],
+    ["flat plate", flat],
+    ["one block", blankTris({ x0: 0, y0: 0, x1: 10, y1: 10 }, 0, 10)],
+  ];
+  for (const [label, tris] of shapes) {
+    const buf = meshStlForStorage(tris, budget);
+    assert(buf === null || buf.byteLength <= budget, `${label}: ${buf && buf.byteLength} bytes over a ${budget} budget`);
+    if (buf) assert(parseSTL(buf).tris.length > 0, `${label}: readable STL`);
+  }
+  assert(meshStlForStorage([], budget) === null, "nothing to store -> null, not an empty file");
+});
+
+await t("camera frames the whole stack, and pitch can't flip through vertical", () => {
+  const b = { x0: 0, y0: 0, z0: 0, x1: 100, y1: 100, z1: 100 };
+  const d = fitDistance(b, Math.PI / 4, 1);
+  assert(d > boundsRadius(b), "camera sits outside the bounding sphere: " + d);
+  // A wide-but-short canvas is limited by the VERTICAL fov; a tall narrow one by
+  // the horizontal. Taking the wrong one crops the mold off the edge.
+  assert(fitDistance(b, Math.PI / 4, 0.25) > d, "narrow viewport needs to back off further");
+  const up = dragToOrbit(0, 100000, 0, 0), down = dragToOrbit(0, -100000, 0, 0);
+  assert(up.pitch <= MV_PITCH_LIMIT && down.pitch >= -MV_PITCH_LIMIT, "clamped off the poles");
+  assert(Math.abs(up.pitch) < Math.PI / 2, "never exactly vertical, which collapses lookAt");
+});
+await t("zoom is bounded so the model can't be lost or turned inside out", () => {
+  const fitted = 500;
+  assert(zoomDistance(fitted, -1e6, fitted) >= fitted * 0.15, "can't zoom through the model");
+  assert(zoomDistance(fitted, 1e6, fitted) <= fitted * 6, "can't zoom to a dot");
+});
+await t("3D view builds block geometry and bounds straight from the saved plan", () => {
+  const p = twoSectionPlan();
+  const g = stockGeometry(p);
+  const totalBlanks = p.layers.reduce((n, L) => n + L.blanks.length, 0);
+  assert(g.tris.length === totalBlanks * 12, "12 triangles per block");
+  assert(g.edges.length === totalBlanks * 12 * 2 * 3, "12 edges x 2 verts x 3 floats per block");
+  const bb = stockBounds(p);
+  assert(bb.z0 === p.layers[0].z0 && bb.z1 === p.layers[p.layers.length - 1].z1, "spans every layer");
+  const buf = trisToBuffers(g.tris);
+  assert(buf.count === g.tris.length * 3 && buf.nrm.length === buf.pos.length, "flat-shaded, one normal per vertex");
+});
+await t("toggling the theme repaints the 3D canvas (CSS can't restyle WebGL)", () => {
+  // toggleTheme() only re-renders the topbar, and the canvas clear colour is
+  // theme-dependent — so without this hook a live viewer keeps the old
+  // background until something else happens to re-render #main. Found in the
+  // browser: light->dark left the canvas on the light background.
+  assert(typeof mvThemeChanged === "function", "the repaint hook exists");
+  assert(/mvThemeChanged/.test(toggleTheme.toString()), "and toggleTheme actually calls it");
+  toggleTheme(); toggleTheme();   // no viewer mounted: must be a safe no-op
+});
+await t("mounting the 3D view twice on one canvas is a no-op, not a dead context", () => {
+  // render() runs once per Firestore snapshot and each run schedules a mount,
+  // so a burst of saves queues a burst of mounts against the single canvas now
+  // in the DOM. Found in the browser: the second mount tore down the context
+  // the first had built, then threw compiling a shader against the dead one,
+  // leaving the canvas permanently blank.
+  assert(/MV_LIVE\.canvas === canvas/.test(mvMount.toString()), "guards on the canvas element");
+  assert(/loseContext/.test(mvTeardown.toString()),
+    "and teardown hands the context back — browsers cap live WebGL contexts (~16)");
+});
+await t("meshViewHtml degrades to a message when the browser has no WebGL", () => {
+  // The DOM stub has no canvas/getContext at all, which is exactly the
+  // no-WebGL path — so this is the fallback under test, not a mock of it.
+  const html = meshViewHtml(twoSectionPlan());
+  assert(/WebGL/i.test(html) && !/<canvas/.test(html), "explains itself instead of a dead canvas: " + html);
+  assert(!/undefined|NaN/.test(html), "no leaked placeholders");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

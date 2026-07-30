@@ -57,6 +57,19 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // stackplans/{planId}/mesh.stl — the mold mesh behind the Stock tab's 3D
+    // view, decimated to fit sizeOk() before upload (see meshStlForStorage in
+    // stlio.js). Its record lands in the roster-gated `stackplans` collection.
+    // Binary STL has no registered MIME type everyone agrees on: the app sends
+    // model/stl, but a browser that doesn't know the extension falls back to
+    // application/octet-stream, so both are accepted. Neither is renderable, so
+    // neither carries the stored-XSS risk an image/* or text/html upload would.
+    match /stackplans/{planId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && sizeOk()
+        && request.resource.contentType.matches('(model/stl|application/octet-stream)');
+    }
+
     // Everything else: denied (no rule = deny).
   }
 }

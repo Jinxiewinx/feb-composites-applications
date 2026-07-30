@@ -10,9 +10,7 @@ function toCSV(rows, cols) {
     .join("\n");
 }
 function downloadCSV(name, csv) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  downloadBlob(name, new Blob([csv], { type: "text/csv" }));
 }
 const CSV_SPECS = {
   parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline]] },
