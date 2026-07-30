@@ -273,3 +273,103 @@ tr.blk td.seq {
 #printroot .pv-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
 /* Grayscale proof: verifies the B&W-laser constraint without a printer. */
 #printroot.gray .ws-page { filter: grayscale(1) contrast(1.04); }
+
+/* ==========================================================================
+   drawings.js — the mold stack drawing set
+   ==========================================================================
+   Each sheet is a .ws-page, so @page, the #app/#printroot print swap and the
+   B&W proof toggle all apply with no second set of rules to maintain. What
+   differs is that a traveler is ONE document that happens to run to two pages,
+   while this is a SET of sheets: each one breaks, and each one carries its own
+   title block rather than a repeating fixed footer.
+
+   Same B&W-laser constraint as the rest of the printed output. Nothing here
+   depends on colour; the drawings carry meaning in rule weight and dash. */
+
+.dwg {
+  --ink: #000;
+  --surface: #fff;   /* stackSvg fills top faces with var(--surface) — in dark
+                        theme that resolves to a dark navy, so the reprinted
+                        layer key would come out with black block faces. */
+  color: #000;
+  background: #fff;
+  font: 8.5pt/1.3 Arial, Helvetica, sans-serif;
+}
+.dwg, .dwg * { box-sizing: border-box; }   /* .wsheet's reset doesn't reach here */
+
+.dwg-page {
+  display: flex; flex-direction: column;
+  break-after: page; page-break-after: always;
+  border: 0.9pt solid #000;                /* the drawing frame */
+}
+.dwg-page:last-child { break-after: auto; page-break-after: auto; }
+.dwg-page > svg { display: block; }
+
+.dwg-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 6.5pt; letter-spacing: .11em; text-transform: uppercase;
+  border-bottom: 0.6pt solid #000; padding-bottom: 2pt; margin-bottom: 5pt;
+}
+
+/* The drawing itself. currentColor is what every stroke in drawings.js uses, so
+   this one declaration is what makes the geometry black on paper regardless of
+   the app theme behind it. */
+.dwg-view { width: 100%; height: auto; color: #000; }
+
+/* Takes the slack on a sheet whose drawing doesn't need the whole page, so the
+   views sit in the middle of the sheet instead of against the top rule. */
+.dwg-fill { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+.dwg-fill > svg { width: 100%; }
+
+.dwg-cols { display: flex; gap: 10pt; align-items: flex-start; margin-top: 6pt; }
+.dwg-cols > * { min-width: 0; }
+.dwg-key { flex: 0 0 2.5in; }
+/* Capped, or a tall stack's exploded key prints BIGGER than the assembled view
+   it is a key to. preserveAspectRatio letterboxes it — the drawing shrinks and
+   centres, it never squashes. */
+.dwg-key svg { width: 100%; height: auto; max-height: 2.9in; color: #000; }
+.dwg-tabwrap { flex: 1 1 auto; }
+.dwg-cap {
+  font-size: 6.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  border-bottom: 1.2pt solid #000; padding-bottom: 1.5pt; margin-bottom: 3pt;
+}
+/* A reference table, not a hand-fill one: .ws-t.rows sizes its cells for a
+   ballpoint in a cold shop, which is right for the traveler and wasteful here. */
+.dwg-t td, .dwg-t th { font-size: 7.4pt; padding: 1.6pt 4pt; }
+.dwg-t.rows td { height: auto; }
+.dwg-t td.num, .dwg-t th.num { width: 0.5in; }
+.dwg-notes {
+  margin-top: 5pt; border: 1.2pt solid #000; padding: 3pt 6pt;
+  font-size: 7.4pt; font-weight: 700;
+}
+.dwg-notes div + div { margin-top: 2pt; }
+
+/* ---------- title block ---------- */
+/* Bottom of every sheet, because a sheet separated from the set has to be able
+   to say which mold, which plan, which sheet and at what scale. margin-top:auto
+   floats it to the foot of the page rather than leaving it under the drawing. */
+.dwg-tb {
+  margin-top: auto; display: grid;
+  grid-template-columns: 0.62in repeat(3, 1fr);
+  border-top: 1.75pt solid #000; border-left: 0.75pt solid #000;
+}
+.dwg-tb .tb-brand {
+  grid-row: span 2; background: #000; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 9pt; letter-spacing: .04em;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.dwg-tb .tb-brand span { font-weight: 400; font-size: 6pt; letter-spacing: .14em; }
+.dwg-tb .tb-c {
+  border-right: 0.75pt solid #000; border-bottom: 0.75pt solid #000;
+  padding: 2pt 5pt; min-height: 0.34in;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.dwg-tb .tb-c .lab { font-size: 5.8pt; letter-spacing: .1em; text-transform: uppercase; }
+.dwg-tb .tb-c .val { font-size: 9pt; font-weight: 700; line-height: 1.15; word-break: break-word; }
+.dwg-tb .tb-c .val.sm { font-size: 7pt; }
+.dwg-tb .tb-note {
+  grid-column: 1 / -1;
+  border-right: 0.75pt solid #000; border-bottom: 0.75pt solid #000;
+  padding: 2.5pt 5pt; font-size: 6.6pt; line-height: 1.32;
+}

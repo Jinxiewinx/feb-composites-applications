@@ -258,7 +258,11 @@ function fitSheetHtml(wo, opts) {
 
 /* ---------- mounting + preview ---------- */
 
-function mountSheet(html, previewMode) {
+/* `caption` describes the document being previewed. The traveler is always two
+   pages so it used to be hardcoded; the mold drawing set is 2 + one sheet per
+   layer, and a preview bar that says "two pages" over a nine-sheet document is
+   worse than no caption at all. */
+function mountSheet(html, previewMode, caption) {
   const root = printRoot();
   if (!root) return null;
   // body.sheet is what tells @media print to print the sheet instead of the app.
@@ -267,7 +271,7 @@ function mountSheet(html, previewMode) {
   root.innerHTML = (previewMode ? `
     <div class="pv-bar no-print">
       <span class="t">Print preview</span>
-      <span>US Letter · two pages · this is exactly what prints</span>
+      <span>${esc(caption || "US Letter · two pages · this is exactly what prints")}</span>
       <span class="sp"></span>
       <label><input type="checkbox" onchange="toggleGrayProof(this.checked)"> B&amp;W proof</label>
       <button onclick="closePrintPreview()">Close</button>

@@ -642,6 +642,7 @@ function renderStackPlan() {
   return `
   <div class="toolbar no-print">
     <button class="ib" onclick="view={...view,mode:'list',id:null};render()">${icon("chevronLeft", 16)} All stock</button>
+    <button class="ib" onclick="openDrawings('${esc(p.id)}')">${icon("print", 15)} Drawings</button>
     ${nSec === 1
       ? `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',0)">${icon("download", 15)} Export stock STL</button>`
       : `<span class="muted tny" style="align-self:center">Export stock STL:</span>` +

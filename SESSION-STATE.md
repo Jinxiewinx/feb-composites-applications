@@ -17,6 +17,47 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
 
+## Mold Stack Planner — engineering drawing set (`drawings.js`)
+
+The plan page had two views and both answered the same question — *does the mold
+fit inside the blocks?* Nobody had answered the one the person GLUING has: the
+boards go on by hand, so you stand at a table with a tape and need to know how
+far in from each edge of layer 2 layer 3 lands. That number only existed as an
+absolute X/Y in the mold's CAD frame, which you cannot measure against a board.
+
+**Drawings** button on a plan → the traveler's own print-preview shell, with
+sheet 1 a general assembled isometric, sheet 2 a third-angle three-view, then one
+dimensioned placement sheet per layer (so 2 + N sheets, not three pages).
+
+Decisions worth not rediscovering:
+
+- **Dimensions are inches to the nearest 1/16 with the exact mm bracketed.** A
+  value not on a 1/16 gets a `≈` — otherwise the fraction gets read as the truth.
+  `mmIn()` in stackview.js stays as it is for the on-screen tables.
+- **Per-side insets off the board below, PLUS an absolute datum table.** A board
+  sawn oversize makes every edge-relative number wrong in the same direction, and
+  the datum is how you catch it. Datum = the near-left corner of the stack
+  footprint, marked identically on every sheet.
+- **Mold silhouette is rasterise-and-trace**, not silhouette edges and not a full
+  wireframe. Project, fill cells, walk the boundary, then stitch with slicer.js's
+  own `stitchContours` (grid segments share endpoints exactly) and thin with its
+  `simplify`. Cannot fail on a rough export, only come out coarse. No mesh (old
+  plans, failed upload) falls back to the stored layer contours and every sheet
+  says so, because a stepped profile must not pass for the real surface.
+- **All furniture is drawn in PAGE coordinates.** Views expose X()/Y(); text is
+  at a fixed pt size. Scaling labels with the geometry is the failure this avoids
+  structurally.
+- Sheets reuse `.ws-page` so `@page`, the print swap and the B&W proof toggle all
+  apply — but never `.ws-foot`, which is `position:fixed` in print and would
+  stamp every sheet's footer onto every page.
+- Long insets are left to the table rather than drawn: on a two-block layer over
+  one wide base the far-edge inset is a correct number and a dimension line
+  straight across the sheet through the other block.
+
+Proofed in headless Chromium against all three sample molds plus a synthetic
+two-tower mold (the multi-blank case), checking sheet count, no horizontal
+overflow, and no page spilling to two.
+
 ## Mold Stack Planner — phase 2 (auto boards, sections, cut list)
 
 **SN5 consumed ~20 sheets**, so the optimizer is worth building — a 20% saving

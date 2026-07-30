@@ -86,7 +86,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
@@ -1632,6 +1632,169 @@ await t("meshViewHtml degrades to a message when the browser has no WebGL", () =
   const html = meshViewHtml(twoSectionPlan());
   assert(/WebGL/i.test(html) && !/<canvas/.test(html), "explains itself instead of a dead canvas: " + html);
   assert(!/undefined|NaN/.test(html), "no leaked placeholders");
+});
+
+/* ---------- drawings.js: the printed engineering drawing set ---------- */
+
+await t("drawing dimensions read in sixteenths, and say so when they aren't exact", () => {
+  // The whole point of the format: the fraction is what you set a tape to, the
+  // bracketed millimetre is what actually governs. A value that is NOT on a
+  // sixteenth has to be marked, or the fraction gets read as the truth.
+  const exact = fmtDwg(44.45);                 // 1-3/4in exactly
+  assert(exact.primary === "1-3/4″", "1.75in: " + exact.primary);
+  assert(exact.exact && !/≈/.test(exact.primary), "exact values print bare");
+  assert(exact.secondary === "[44.5]", "millimetre in brackets: " + exact.secondary);
+
+  assert(fmtDwg(25.4).primary === "1″", "whole inches lose the fraction");
+  assert(fmtDwg(12.7).primary === "1/2″", "and sub-inch values lose the whole");
+  assert(fmtDwg(0).primary === "0″", "zero is a real answer, not a blank");
+
+  const off = fmtDwg(43.9);                    // 1.728in — between 1-11/16 and 1-3/4
+  assert(/^≈/.test(off.primary), "an off-grid value is marked: " + off.primary);
+  assert(off.secondary === "[43.9]", "but the exact millimetre still prints: " + off.secondary);
+
+  // Negative offsets are real: they are how an overhang is reported.
+  assert(/^-/.test(fmtDwg(-6.35).primary), "signed: " + fmtDwg(-6.35).primary);
+  assert(fmtDwg(NaN).primary === "—", "a missing value is a dash, never NaN");
+});
+
+await t("the mold silhouette traces the real projected outline in every view", () => {
+  /* The silhouette is rasterise-and-trace rather than a polygon boolean, so the
+     thing worth pinning is that the trace lands on the geometry: a box of known
+     size must come back as its own rectangle in all three orthographic views,
+     within the grid cell that produced it. */
+  const tris = blankTris({ x0: 0, y0: 0, x1: 100, y1: 60 }, 0, 40);
+  const tol = 1.5;   // one cell of raster, plus the pad cell
+  for (const [view, want] of [
+    ["top", { x0: 0, y0: 0, x1: 100, y1: 60 }],
+    ["front", { x0: 0, y0: 0, x1: 100, y1: 40 }],
+    ["right", { x0: 0, y0: 0, x1: 60, y1: 40 }],
+  ]) {
+    const loops = silhouetteLoops(tris, view);
+    assert(loops.length >= 1, `${view}: nothing traced`);
+    const big = loops.slice().sort((a, b) => {
+      const ba = bboxOf(a), bb = bboxOf(b);
+      return (bb.x1 - bb.x0) * (bb.y1 - bb.y0) - (ba.x1 - ba.x0) * (ba.y1 - ba.y0);
+    })[0];
+    const got = bboxOf(big);
+    ["x0", "y0", "x1", "y1"].forEach(k =>
+      assert(Math.abs(got[k] - want[k]) < tol, `${view}.${k}: ${got[k]} vs ${want[k]}`));
+    // Simplification has to survive the staircase: a traced rectangle that
+    // still carries hundreds of grid steps would print as a fuzzy edge.
+    assert(big.length < 40, `${view}: ${big.length} points for a rectangle — simplify didn't bite`);
+  }
+});
+
+await t("a mesh the raster can't use costs the drawing its picture, never its numbers", () => {
+  // Reference geometry must never be able to take the dimensions down with it.
+  assert(silhouetteLoops([], "top").length === 0, "no triangles, no loops, no throw");
+  assert(silhouetteLoops(null, "front").length === 0, "and null is the same");
+  const flat = [{ ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0, cx: 0, cy: 0, cz: 0 }];
+  assert(Array.isArray(silhouetteLoops(flat, "top")), "a degenerate triangle returns a list, not an exception");
+});
+
+await t("insets are signed off the board below, so an overhang has a side and a number", () => {
+  const lower = { x0: 0, y0: 0, x1: 100, y1: 100 };
+  const ins = insetsBetween(lower, { x0: 10, y0: 20, x1: 90, y1: 70 });
+  assert(ins.left === 10 && ins.right === 10, `left/right: ${ins.left}/${ins.right}`);
+  assert(ins.front === 20 && ins.back === 30, `front/back: ${ins.front}/${ins.back}`);
+
+  // Hanging over the front edge is the case the drawing exists to catch: the
+  // slicer already warns in words, this is what turns it into a measurement.
+  const over = insetsBetween(lower, { x0: 10, y0: -8, x1: 90, y1: 70 });
+  assert(over.front < 0, "an overhang reads negative: " + over.front);
+  assert(insetsBetween(null, lower) === null, "nothing below means no insets to give");
+
+  // Two blanks over two blanks: pairing by largest overlap, not by order, or a
+  // blank gets measured against the wrong neighbour and prints a plausible lie.
+  const belowBlanks = [{ x0: 0, y0: 0, x1: 40, y1: 100 }, { x0: 200, y0: 0, x1: 260, y1: 100 }];
+  const sup = bestSupport({ x0: 205, y0: 10, x1: 255, y1: 90 }, belowBlanks);
+  assert(sup && sup.x0 === 200, "picks the blank it actually sits on");
+  assert(bestSupport({ x0: 500, y0: 0, x1: 520, y1: 20 }, belowBlanks) === null, "and nothing when it sits on air");
+});
+
+await t("the drawing set is 2 sheets plus one per layer, numbered in order", () => {
+  const p = twoSectionPlan();
+  const html = drawingSetHtml(p, {});
+  const sheets = (html.match(/class="ws-page dwg-page"/g) || []).length;
+  assert(sheets === 2 + p.layers.length, `${sheets} sheets for ${p.layers.length} layers`);
+  const nums = [...html.matchAll(/Sheet<\/span><span class="val">(\d+) \/ (\d+)</g)].map(m => [+m[1], +m[2]]);
+  assert(nums.length === sheets, "every sheet numbers itself: " + nums.length);
+  nums.forEach(([n, of], i) => {
+    assert(n === i + 1, `sheet ${i + 1} says ${n}`);
+    assert(of === sheets, `sheet ${n} says "of ${of}", not ${sheets}`);
+  });
+  assert(/GENERAL VIEW/.test(html) && /THIRD ANGLE/.test(html), "sheets 1 and 2 are the iso and the three-view");
+  assert(/LAYER 1 OF/.test(html) && new RegExp(`LAYER ${p.layers.length} OF`).test(html), "and the layer sheets run to the top");
+  assert(!/NaN|undefined|Infinity/.test(html), "no leaked placeholders in the whole set");
+});
+
+await t("every layer sheet is drawn at the SAME scale in the same frame", () => {
+  /* Flipping between layer sheets must not also change the size of everything:
+     a small top layer has to LOOK small next to the base, because that is the
+     comparison somebody makes when checking they picked up the right board. */
+  const p = twoSectionPlan();
+  const html = drawingSetHtml(p, {});
+  const scales = [...html.matchAll(/Scale<\/span><span class="val">([^<]+)</g)].map(m => m[1]);
+  assert(scales.length === 2 + p.layers.length, "one scale per sheet");
+  const layerScales = new Set(scales.slice(2));
+  assert(layerScales.size === 1, "layer sheets share one scale, got: " + [...layerScales].join(", "));
+  assert(/^\d+(\.\d+)?:\d+(\.\d+)?$/.test(scales[0]), "and the ratio is printed as a ratio: " + scales[0]);
+});
+
+await t("a section split is called out on the drawings, not left in the table", () => {
+  const p = twoSectionPlan();
+  assert(sectionSplitsZ(p).length === 1, "this fixture splits once: " + JSON.stringify(sectionSplitsZ(p)));
+  const html = drawingSetHtml(p, {});
+  assert(/SPLIT 1/.test(html), "the elevations mark it");
+  assert(/SETUP 2/.test(html), "and the layer sheets say which machine setup they belong to");
+});
+
+await t("the layer sheets carry both the edge insets and the datum cross-check", () => {
+  const p = twoSectionPlan();
+  const html = drawingSetHtml(p, {});
+  // Sheet 3 is layer 1: no board below it, so it is positioned off the datum.
+  const sheets = html.split('class="ws-page dwg-page"');
+  assert(/FROM DATUM A/.test(sheets[3]), "layer 1 dimensions off the datum corner");
+  assert(/no board below/.test(sheets[3]), "and says why");
+  // Sheet 4 is layer 2: it lands on layer 1, so it gets the four insets.
+  assert(/INSET FROM EACH EDGE/.test(sheets[4]), "layer 2 is placed off the edges of layer 1");
+  assert(/CHECK — FROM DATUM A/.test(sheets[4]), "with the absolute datum table beside it");
+  assert(/DATUM — near-left corner/.test(sheets[4]), "and the datum corner marked on the drawing");
+});
+
+await t("a plan with no stored mesh still draws, and says the mold is only an outline", () => {
+  /* Plans made before the 3D view existed have no mesh, and neither does one
+     whose upload failed — stock.js treats that as survivable on purpose. Those
+     must still get a full drawing set; what they must NOT do is let a stepped
+     profile assembled from horizontal sections pass as the mold's real shape. */
+  const p = twoSectionPlan();
+  p.id = "STK-NOMESH";
+  const html = drawingSetHtml(p, {});
+  assert((html.match(/class="ws-page dwg-page"/g) || []).length === 2 + p.layers.length, "still a full set");
+  assert(/No stored mold mesh/.test(html), "and every sheet says so: " + html.slice(0, 200));
+
+  // With the mesh, the note flips to the silhouette wording.
+  const withMesh = drawingSetHtml({ ...p, id: "STK-MESH" }, { tris: boxTris(400, 300, 220) });
+  assert(/silhouette projected from the stored STL/.test(withMesh), "the mesh path names itself");
+  assert(!/No stored mold mesh/.test(withMesh), "and drops the fallback warning");
+});
+
+await t("a drawing sheet never inherits the traveler's repeating fixed footer", () => {
+  // .ws-foot is position:fixed in print so it repeats on every physical page —
+  // right for a two-page traveler, wrong for a set where each sheet carries its
+  // own title block. Every sheet would otherwise print every other sheet's foot.
+  const html = drawingSetHtml(twoSectionPlan(), {});
+  assert(!/ws-foot/.test(html), "no .ws-foot anywhere in the set");
+  assert(/dwg-tb/.test(html), "the per-sheet title block is what replaces it");
+});
+
+await t("Drawings is reachable from a plan, and the preview bar counts the real sheets", () => {
+  assert(/openDrawings\(/.test(renderStackPlan.toString()), "the plan page offers it");
+  // mountSheet's caption used to be the hardcoded string "two pages", which over
+  // a nine-sheet drawing set is worse than no caption at all.
+  assert(/caption/.test(mountSheet.toString()), "mountSheet takes a caption");
+  assert(/sheets/.test(openDrawings.toString()), "and openDrawings passes the sheet count");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

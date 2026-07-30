@@ -266,6 +266,7 @@ Regenerate bundled data when the sources change:
 | `stlio.js` | Writes binary STL and shrinks a mesh to fit storage. Serves both the stock export and the stored viewer mesh; the slicer's own `parseSTL` reads back what it writes |
 | `samples/*.stl` | Three sample molds offered in the "Plan a mold" modal, so the planner can be tried without exporting anything from Fusion first. Built by `tools/gen_sample_molds.mjs`; fetched on demand, not at page load |
 | `meshview.js` | The rotatable 3D mold-in-stock view. Hand-rolled WebGL, no dependency: pure camera maths tested under node, thin GL glue that only runs in a browser |
+| `drawings.js` | The printable engineering drawing set for a stack plan: general isometric, a third-angle three-view, then one dimensioned sheet per layer showing how far in from each edge of the board below it goes. The mold under the blocks is a silhouette traced off the stored STL. Pure string-building, so the whole set is asserted under node |
 | `core.js` | Shell: sidebar and topbar, tab router, auth and roster, modal system, avatars, HTML sanitizer, multi-select picker, shared store |
 | `workorders.js` `parts.js` `projects.js` `timeline.js` `budget.js` `dashboard.js` `documents.js` | One tab each; they reach Firebase only through core's `save()` and `del()` and `fb.*` |
 | `print.js` `print.css` | The printed work-order traveler. Styles are deliberately outside `@media print` so the sheet can be previewed and reviewed on screen |

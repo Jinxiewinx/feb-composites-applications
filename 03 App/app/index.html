@@ -641,6 +641,11 @@
     #printroot, body.sheet #printroot { display: block !important; background: var(--surface) !important; padding: 0 !important; }
     #printroot .no-print { display: none !important; }
     #printroot .ws-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none !important; }
+    /* A drawing sheet DOES want to fill its page: the title block floats to the
+       foot with margin-top:auto, and with min-height:0 there is no foot to float
+       to, so it would sit halfway up under the drawing. Just under the 10.1in
+       @page content height, so rounding can't spill one sheet onto two. */
+    #printroot .dwg-page { min-height: 10.02in; }
     #printroot.gray .ws-page { filter: none; }   /* proof toggle is a screen aid only */
     /* Repeats the identifying footer on every physical page. */
     #printroot .ws-foot { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); }
@@ -697,6 +702,7 @@
 <script src="packer.js"></script>
 <script src="stackview.js"></script>
 <script src="meshview.js"></script>
+<script src="drawings.js"></script>
 <script src="stock.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
