@@ -125,7 +125,7 @@ function openNewProject(parentId) {
         <option value="issue">Issue — production nonconformance, links to a work order</option>
       </select>
     </div>`}
-    <div class="field"><label>Title</label><input id="np-title" placeholder="What is this ${forSub ? "sub-task" : kindNoun("project") + "?"}"></div>
+    <div class="field"><label>Title</label><input id="np-title" autofocus placeholder="What is this ${forSub ? "sub-task" : kindNoun("project") + "?"}"></div>
     <div class="row2">
       <div class="field"><label>Status</label><select id="np-status">${PROJ_STATUS.map(s => `<option>${s}</option>`).join("")}</select></div>
       <div class="field"><label>Priority</label><select id="np-priority">${PRIORITY.map(s => `<option ${s === "Medium" ? "selected" : ""}>${s}</option>`).join("")}</select></div>
@@ -138,12 +138,21 @@ function openNewProject(parentId) {
       <div class="field"><label>Work order <span class="req">*required</span></label><select id="np-wo">${woSelectOptions("")}</select></div>
       <div class="field"><label>What happened</label><textarea id="np-whathappened" placeholder="Root cause / what went wrong… (needed before this can close)"></textarea></div>
     </div>
-    <div id="np-project-fields">
-      <div class="field"><label>Related parts</label>${pickerField("pp")}</div>
-    </div>
-    <div class="field"><label>Related tickets</label>${pickerField("rt")}</div>
-    <div class="field"><label>Related work orders</label>${pickerField("rwo")}</div>
-    <div class="field"><label>Description</label>${rteField("np-desc-editor")}</div>
+    <!-- Cross-links and a written description are almost never filled in at the
+         moment someone is logging a task, and four more fields pushed Create
+         below the fold. Collapsed by default; all of it is editable on the
+         ticket page afterwards. The fields still exist in the DOM, so
+         submitNewProject() reads them exactly as before whether or not this was
+         ever opened. -->
+    <details class="moredetails">
+      <summary>More details — links and description</summary>
+      <div id="np-project-fields">
+        <div class="field"><label>Related parts</label>${pickerField("pp")}</div>
+      </div>
+      <div class="field"><label>Related tickets</label>${pickerField("rt")}</div>
+      <div class="field"><label>Related work orders</label>${pickerField("rwo")}</div>
+      <div class="field"><label>Description</label>${rteField("np-desc-editor")}</div>
+    </details>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button id="np-submit-btn" class="primary" onclick="submitNewProject()">Create ${forSub ? "sub-ticket" : kindNoun("project")}</button></div>
   `);
 }
@@ -224,22 +233,37 @@ async function submitNewProject() {
     if (!workOrderId) { toast("An issue needs a work order.", "error"); return; }
   }
   NEW_TICKET_PARENT = null;
-  const id = await allocId("projects");
-  if (!id) return;
+  // Read the WHOLE form before the await. allocId()'s offline fallback opens a
+  // confirm modal, and openModal() replaces this form's markup — so any field
+  // still unread at that point comes back null and throws.
   const assignees = pickerValues("pa");    // honor the picker exactly (don't force creator back in)
-  const p = {
-    id, title, kind,
+  const whEl = document.getElementById("np-whathappened");
+  const form = {
     status: document.getElementById("np-status").value,
     priority: document.getElementById("np-priority").value,
     dueDate: document.getElementById("np-due").value,
     subteam: document.getElementById("np-subteam").value,
     description: sanitizeHtml(document.getElementById("np-desc-editor").innerHTML || ""),
-    assignees,
-    // assignees + creator watch by default (creator watches the ticket they made)
-    watchers: [...new Set([myEmail(), ...assignees])].filter(Boolean),
     relatedParts: kind === "issue" ? [] : pickerValues("pp"),
     relatedTickets: pickerValues("rt"),
     relatedWorkOrders: pickerValues("rwo"),
+    whatHappened: whEl ? whEl.value : "",
+  };
+  const id = await allocId("projects");
+  if (!id) return;
+  const p = {
+    id, title, kind,
+    status: form.status,
+    priority: form.priority,
+    dueDate: form.dueDate,
+    subteam: form.subteam,
+    description: form.description,
+    assignees,
+    // assignees + creator watch by default (creator watches the ticket they made)
+    watchers: [...new Set([myEmail(), ...assignees])].filter(Boolean),
+    relatedParts: form.relatedParts,
+    relatedTickets: form.relatedTickets,
+    relatedWorkOrders: form.relatedWorkOrders,
     files: [], comments: [],
     createdBy: myEmail(), retro: false,
   };
@@ -247,8 +271,7 @@ async function submitNewProject() {
   if (kind === "issue") {
     p.workOrderId = workOrderId;
     p.resolutionMethod = "";
-    const whEl = document.getElementById("np-whathappened");
-    p.whatHappened = whEl ? whEl.value : "";
+    p.whatHappened = form.whatHappened;
   }
   DB.projects.push(p); saveProj(p);
   assignees.filter(e => e !== myEmail()).forEach(e =>
@@ -302,7 +325,9 @@ function renderProjBoard() {
       ${list.map(projCard).join("")}
     </div>`;
   }).join("");
-  return `<div class="board">${cols}</div>`;
+  // .boardwrap scrolls sideways so all six statuses stay on one row at desktop
+  // width instead of wrapping Done and Cancelled under To Do.
+  return `<div class="boardwrap"><div class="board">${cols}</div></div>`;
 }
 function projCard(p) {
   const dd = daysUntil(p.dueDate), late = dd != null && dd < 0 && projStatus(p) !== "Done";

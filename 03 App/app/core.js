@@ -56,10 +56,15 @@ function saveField(coll, obj, field, mutator) {
   fb.mutateField(coll, obj.id, field, mutator).catch(() => fb.save(coll, obj, field).catch(e => toast("Save failed: " + e.message,"error")));
 }
 function del(coll, id) { return fb.del(coll, id).catch(e => toast("Delete failed: " + e.message,"error")); }
+// Every caller reads its whole form BEFORE awaiting this, because the offline
+// fallback below opens a modal, and openModal() replaces whatever modal was on
+// screen — including the create form the caller is still reading fields from.
 async function allocId(coll) {
   try { return await fb.allocId(coll); }
   catch (e) {
-    if (!confirm("Couldn't reach the shared ID counter (offline?). Assign a local ID now — it could collide with one made on another laptop. Continue?")) return null;
+    const ok = await confirmAsync("Couldn't reach the shared ID counter (offline?). Assign a local ID now — it could collide with one made on another laptop. Continue?",
+      { ok: "Use a local ID", danger: false });
+    if (!ok) return null;
     return localId(coll);
   }
 }
@@ -224,10 +229,32 @@ function stackViz(stack) {
 function stackEditor(coll, id) {
   return `<button onclick="addPly('${coll}','${id}')">+ ply</button> <button onclick="popPly('${coll}','${id}')">− last ply</button>`;
 }
+// A real form, not two chained prompt() dialogs. The old version also took
+// `prompt(...) || ""`, so cancelling out of it still appended a blank ply — and
+// then mirrored that blank ply onto the linked work order.
 function addPly(coll, id) {
   const o = recById(coll, id); if (!o) return;
-  const ply = { material: prompt("Ply material (e.g. 195 twill, Cu mesh, Rohacell 31 3mm):") || "", orientation: prompt("Orientation (0/90, ±45, n/a):") || "", coverage: "full", notes: "" };
+  openModal(`
+    <h2>Add ply</h2>
+    <div class="field"><label>Material <span class="req">*required</span></label>
+      <input id="ply-material" autofocus placeholder="e.g. 195 twill, Cu mesh, Rohacell 31 3mm"></div>
+    <div class="row2">
+      <div class="field"><label>Orientation</label><input id="ply-orientation" placeholder="0/90, ±45, n/a"></div>
+      <div class="field"><label>Coverage</label><input id="ply-coverage" value="full"></div>
+    </div>
+    <div class="field"><label>Notes</label><input id="ply-notes" placeholder="optional"></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitPly('${esc(coll)}','${esc(id)}')">Add ply</button></div>`);
+}
+function submitPly(coll, id) {
+  const o = recById(coll, id);
+  if (!o) { toast("That record is gone — someone else deleted it.", "error"); closeModal(); render(); return; }
+  const val = k => ((document.getElementById(k) || {}).value || "").trim();
+  const material = val("ply-material");
+  if (!material) { toast("A ply needs a material.", "error"); return; }
+  const ply = { material, orientation: val("ply-orientation"), coverage: val("ply-coverage") || "full", notes: val("ply-notes") };
   o.layupStack = (o.layupStack || []).concat([ply]); // optimistic
+  closeModal();
   stackEdit(coll, o, s => { s = s || []; s.push(ply); return s; });
 }
 function popPly(coll, id) {
@@ -426,13 +453,21 @@ function openModal(html) {
   m.innerHTML = `<div class="backdrop" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog">${html}</div></div>`;
   m.classList.add("open");
   document.addEventListener("keydown", escClose);
-  const first = m.querySelector("input,select,textarea,[contenteditable]");
+  // Prefer an explicit [autofocus] over "first field in the DOM". The new-ticket
+  // form leads with the Kind <select>, so the plain first-field rule parked the
+  // caret there and you had to click into Title before you could type.
+  const first = m.querySelector("[autofocus]") || m.querySelector("input,select,textarea,[contenteditable]");
   if (first && first.focus) first.focus();
 }
 function closeModal() {
   const m = document.getElementById("modal");
   m.innerHTML = ""; m.classList.remove("open");
   document.removeEventListener("keydown", escClose);
+  // Escape, the backdrop and Cancel all land here, so this is the one place that
+  // can tell confirmAsync() "the user walked away" — without it the promise
+  // would hang and its caller would never continue.
+  const d = window.__confirmDismissCb; window.__confirmDismissCb = null;
+  if (d) d();
 }
 function escClose(e) { if (e.key === "Escape") closeModal(); }
 
@@ -446,17 +481,31 @@ function toast(msg, type) {
   host.appendChild(el);
   setTimeout(() => { el.classList.add("hide"); setTimeout(() => el.remove(), 300); }, type === "error" ? 4200 : 2600);
 }
-// Styled replacement for window.confirm — calls onConfirm() if the user proceeds.
+// Styled replacement for window.confirm — calls onConfirm() if the user
+// proceeds, opts.onCancel if they dismiss it any way at all (Cancel, Escape,
+// backdrop click). The Confirm button clears BOTH callbacks before closing, so
+// closeModal()'s dismiss path can't fire on the way to a confirmation.
 function confirmModal(msg, onConfirm, opts) {
   opts = opts || {};
   window.__confirmCb = onConfirm;
+  window.__confirmDismissCb = opts.onCancel || null;
   openModal(`
     <h2>${esc(opts.title || "Please confirm")}</h2>
     <p style="margin:0 0 4px">${esc(msg)}</p>
     <div class="foot">
       <button onclick="closeModal()">Cancel</button>
-      <button class="${opts.danger === false ? "primary" : "danger"}" onclick="var cb=window.__confirmCb;window.__confirmCb=null;closeModal();if(cb)cb()">${esc(opts.ok || "Confirm")}</button>
+      <button class="${opts.danger === false ? "primary" : "danger"}" onclick="var cb=window.__confirmCb;window.__confirmCb=null;window.__confirmDismissCb=null;closeModal();if(cb)cb()">${esc(opts.ok || "Confirm")}</button>
     </div>`);
+}
+// Awaitable confirmModal, for the two places that still used the native blocking
+// confirm() — which on an iPad at the bench is a jarring system sheet, and looks
+// nothing like the rest of the app.
+function confirmAsync(msg, opts) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    confirmModal(msg, () => finish(true), { ...(opts || {}), onCancel: () => finish(false) });
+  });
 }
 
 /* ---------- HTML sanitizer (comment rich text) ----------
@@ -552,10 +601,6 @@ const TABS = [
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
   { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", render: () => renderWeekPlan() },
-  // Calendar cut from the nav for now — most of this ground is already
-  // covered by Slack (outside this app) and the Timeline tab. calendar.js is
-  // untouched; uncommenting this row restores the tab.
-  // { id: "calendar", label: "Calendar", ic: "calendar", coll: null, render: () => renderCalendar() },
   { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },

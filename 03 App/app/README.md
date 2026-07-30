@@ -29,9 +29,6 @@ text and image attachments.
 Timeline is the production schedule as a station by week grid. Assign a part to a
 station for a given week.
 
-Calendar is a month grid overlaying every part, project and work-order deadline
-plus timeline milestones. Click an item to jump to it.
-
 Budget runs purchase requests through Submitted, Ordered and Reimbursed, with the
 season total, an open-orders subtotal, and a flag on anything over $50.
 
@@ -60,13 +57,13 @@ mark, a navy sidebar, crisp line icons throughout, and the Saira display face on
 headings. Printing always comes out black-on-white regardless of theme.
 
 It works on phones and tablets. The blue sidebar folds into a slide-in drawer
-behind the ☰ button, and on a phone the account and lead actions (Backup,
+behind the ☰ button, and at that same width the account and lead actions (Backup,
 Restore, Roster, Sign out) move into a ⋯ menu next to search and the bell. The
-wide list tables (work orders, parts, budget, projects) turn into one card per
+wide list tables (work orders, parts, budget, tickets) turn into one card per
 row with labeled fields, so nothing runs off the edge; narrow detail tables
-scroll sideways instead. The projects board stacks its four status columns into
-full-width sections, and the calendar shows each deadline as a colored dot,
-tapping a day lists what's due. Form controls render at 16px so iOS doesn't zoom
+scroll sideways instead, and the timeline pins its week column while the
+stations scroll. The tickets board stacks its six status columns into full-width
+sections. Form controls render at 16px so iOS doesn't zoom
 on focus, and buttons grow to a comfortable tap size on touch screens. Above
 roughly a tablet width the layout is the unchanged desktop one.
 
@@ -249,7 +246,8 @@ Regenerate bundled data when the sources change:
 
 | File | What |
 |---|---|
-| `index.html` | Markup and all screen CSS (sidebar, board, modal, avatars, pickers, doc viewer) plus script includes; loads DOMPurify from CDN |
+| `index.html` | Markup and all screen CSS (sidebar, board, modal, avatars, pickers, doc viewer) plus script includes |
+| `vendor/purify.min.js` | DOMPurify 3.2.4, self-hosted with an SRI pin. Was a CDN load, which meant rich text silently fell back to plain text whenever the shop wifi dropped |
 | `core.js` | Shell: sidebar and topbar, tab router, auth and roster, modal system, avatars, HTML sanitizer, multi-select picker, shared store |
 | `workorders.js` `parts.js` `projects.js` `timeline.js` `budget.js` `dashboard.js` `documents.js` | One tab each; they reach Firebase only through core's `save()` and `del()` and `fb.*` |
 | `print.js` `print.css` | The printed work-order traveler. Styles are deliberately outside `@media print` so the sheet can be previewed and reviewed on screen |
