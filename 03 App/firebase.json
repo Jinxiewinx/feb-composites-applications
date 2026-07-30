@@ -9,8 +9,8 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
       },
       {
-        "//": "Fonts and icons are content-addressed by name and effectively immutable; cache them hard so the app loads instantly on repeat visits and works offline.",
-        "source": "**/*.@(woff2|png|svg|ico)",
+        "//": "Fonts, icons and the sample molds are content-addressed by name and effectively immutable; cache them hard so the app loads instantly on repeat visits and works offline. Samples are fetched on demand, never at page load, so they cost nothing until someone tries one.",
+        "source": "**/*.@(woff2|png|svg|ico|stl)",
         "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
       }
     ]

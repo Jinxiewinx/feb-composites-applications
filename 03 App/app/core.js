@@ -344,12 +344,15 @@ function importJSON(input) {
   });
 }
 
-// Lead-only: seed all SN5 retro archives (work orders, parts, timeline).
+// Lead-only: seed all SN5 retro archives (work orders, parts, timeline, and the
+// board rack SN5 left behind — the stack planner can't pick thicknesses from an
+// empty rack, so a fresh project has nothing to plan against until this runs).
 async function loadArchive() {
   const sources = [
     ["workOrders", "sn5-work-orders.json"],
     ["parts", "sn5-parts.json"],
     ["schedule", "sn5-schedule.json"],
+    ["stock", "sn5-stock.json"],
   ];
   let report = [];
   for (const [coll, fname] of sources) {

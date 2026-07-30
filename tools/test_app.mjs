@@ -93,7 +93,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1046,6 +1046,48 @@ await t("sn5-schedule.json: weeks with station fields", () => {
   assert(s.length > 5, "expected multiple weeks");
   assert(s.every(w => "mold1" in w && "waterjet" in w && "notes" in w && w.retro === true), "station fields + retro");
   assert(s.some(w => Object.values(w).some(v => String(v).startsWith("P-SN5-"))), "some cells link to parts");
+});
+
+await t("sn5-stock.json: a rack the planner can actually cut from", () => {
+  const s = JSON.parse(readFileSync(join(root, "sn5-stock.json"), "utf8"));
+  // Every field the Stock tab and the packer read, in the shape they read it —
+  // a seed that loads but renders "NaN mm" is worse than no seed.
+  for (const b of s) {
+    for (const k of ["len", "wid", "thk"]) {
+      assert(b[k] && typeof b[k].value === "number" && ["in", "mm"].includes(b[k].unit), `${b.id}.${k}: ${JSON.stringify(b[k])}`);
+      assert(Number.isFinite(toMm(b[k])) && toMm(b[k]) > 0, `${b.id}.${k} converts`);
+    }
+    assert([30, 60].includes(b.density), `${b.id} density is a stocked grade`);
+    assert(["sheet", "remnant"].includes(b.kind), `${b.id} kind`);
+    assert(Number.isInteger(b.qty) && b.qty >= 1, `${b.id} qty`);
+  }
+  // Ids sit in the SN5 namespace so they can't collide with BRD-SN6-### handed
+  // out by the shared counter — the same trick the parts and WO seeds use.
+  assert(s.every(b => /^BRD-SN5-\d+$/.test(b.id)), "ids stay out of the SN6 counter's range");
+  // The planner picks from distinct thicknesses; one thickness means it can only
+  // ever build one stack height.
+  DB.stock = s;
+  const thk = stockThicknessesMm();
+  assert(thk.length >= 3, "at least three thicknesses to choose between: " + JSON.stringify(thk));
+  assert(s.some(b => b.kind === "remnant"), "offcuts too — spending those first is the point of the cut list");
+});
+await t("every sample mold offered in the modal is actually shipped", () => {
+  // A dropdown entry pointing at a missing file fails as a silent fetch error
+  // at the moment someone is trying the feature for the first time.
+  SAMPLE_MOLDS.forEach(s => {
+    const buf = readFileSync(join(root, "samples", s.file));
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const tris = parseSTL(ab).tris;
+    assert(tris.length > 100, `${s.file} parses: ${tris.length} triangles`);
+    // The labels make promises about sections and bodies; hold them to it.
+    const bodies = splitBodies(tris);
+    const h = (meshBounds(bodies[0].tris).z1 - meshBounds(bodies[0].tris).z0) / 25.4;
+    if (/(\d+) separate bodies/.test(s.label)) {
+      assert(bodies.length === Number(RegExp.$1), `${s.file} has ${bodies.length} bodies, label says ${RegExp.$1}`);
+    }
+    if (/splits into 2 sections/.test(s.label)) assert(h > 6, `${s.file} must exceed the 6in cut depth, is ${h.toFixed(2)}in`);
+    if (/one section/.test(s.label)) assert(h <= 6, `${s.file} must fit the cut depth, is ${h.toFixed(2)}in`);
+  });
 });
 
 console.log("printed traveler:");

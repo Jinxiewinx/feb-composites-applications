@@ -1,0 +1,90 @@
+[
+ {
+  "id": "BRD-SN5-001",
+  "kind": "sheet",
+  "label": "rack A, top shelf",
+  "len": { "value": 96, "unit": "in" },
+  "wid": { "value": 48, "unit": "in" },
+  "thk": { "value": 2, "unit": "in" },
+  "density": 30,
+  "qty": 3,
+  "origin": ""
+ },
+ {
+  "id": "BRD-SN5-002",
+  "kind": "sheet",
+  "label": "rack A, middle",
+  "len": { "value": 96, "unit": "in" },
+  "wid": { "value": 48, "unit": "in" },
+  "thk": { "value": 1.5, "unit": "in" },
+  "density": 30,
+  "qty": 2,
+  "origin": ""
+ },
+ {
+  "id": "BRD-SN5-003",
+  "kind": "sheet",
+  "label": "rack A, bottom",
+  "len": { "value": 96, "unit": "in" },
+  "wid": { "value": 48, "unit": "in" },
+  "thk": { "value": 3, "unit": "in" },
+  "density": 30,
+  "qty": 2,
+  "origin": ""
+ },
+ {
+  "id": "BRD-SN5-004",
+  "kind": "sheet",
+  "label": "rack B — 60 pcf, seals better",
+  "len": { "value": 96, "unit": "in" },
+  "wid": { "value": 48, "unit": "in" },
+  "thk": { "value": 2, "unit": "in" },
+  "density": 60,
+  "qty": 1,
+  "origin": ""
+ },
+ {
+  "id": "BRD-SN5-005",
+  "kind": "remnant",
+  "label": "rack B, leaning",
+  "len": { "value": 46, "unit": "in" },
+  "wid": { "value": 30, "unit": "in" },
+  "thk": { "value": 2, "unit": "in" },
+  "density": 30,
+  "qty": 1,
+  "origin": "UT SIDE LEFT"
+ },
+ {
+  "id": "BRD-SN5-006",
+  "kind": "remnant",
+  "label": "rack B, leaning",
+  "len": { "value": 33, "unit": "in" },
+  "wid": { "value": 19, "unit": "in" },
+  "thk": { "value": 1.5, "unit": "in" },
+  "density": 30,
+  "qty": 2,
+  "origin": "NOSECONE"
+ },
+ {
+  "id": "BRD-SN5-007",
+  "kind": "remnant",
+  "label": "under the bench",
+  "len": { "value": 22, "unit": "in" },
+  "wid": { "value": 14, "unit": "in" },
+  "thk": { "value": 3, "unit": "in" },
+  "density": 30,
+  "qty": 1,
+  "origin": "CLAMSHELL"
+ },
+ {
+  "id": "BRD-SN5-008",
+  "kind": "remnant",
+  "label": "under the bench, smallest worth keeping",
+  "len": { "value": 10, "unit": "in" },
+  "wid": { "value": 4, "unit": "in" },
+  "thk": { "value": 2, "unit": "in" },
+  "density": 30,
+  "qty": 4,
+  "origin": "UT DIFFUSER"
+ }
+]

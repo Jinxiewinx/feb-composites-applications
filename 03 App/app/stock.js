@@ -96,7 +96,7 @@ function renderStock() {
     <input id="searchbox" placeholder="search label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
     <span class="muted" style="align-self:center">${rows.length} of ${D.length} boards</span>
   </div>
-  ${D.length === 0 ? `<div class="card">No board stock recorded yet. <b>Add board</b> for each sheet and offcut on the rack at RFS — that list is what the stack planner cuts from.</div>` : `
+  ${D.length === 0 ? `<div class="card">No board stock recorded yet. <b>Add board</b> for each sheet and offcut on the rack at RFS — that list is what the stack planner cuts from${isLead() ? ", or <b>Load SN5 archive</b> to start from the rack SN5 left behind" : ""}.</div>` : `
   <div class="card">
     <h3>On hand</h3>
     <div class="grid">
@@ -307,6 +307,37 @@ function stockThicknessesMm(density) {
   return [...set.keys()].sort((a, b) => a - b);
 }
 
+/* Sample molds served alongside the app (03 App/app/samples/, built by
+   tools/gen_sample_molds.mjs). Meeting the planner shouldn't require exporting
+   something from Fusion first, and these are also the fastest way to reproduce a
+   report — each one covers a different path. */
+const SAMPLE_MOLDS = [
+  { file: "nosecone-plug.stl", label: "Nosecone plug — 22 × 13 × 4.6in, one section" },
+  { file: "undertray-diffuser.stl", label: "Undertray diffuser — 9.4in tall, splits into 2 sections" },
+  { file: "clamshell-assembly.stl", label: "Clamshell assembly — 3 separate bodies in one file" },
+];
+/* Fetch a sample straight into MOLD_BUF, which is where a picked file would
+   have landed — so submitMold() needs no special case for it. */
+async function loadSampleMold(file) {
+  if (!file) { MOLD_BUF = null; MOLD_BODIES = null; return; }
+  const prog = document.getElementById("ml-progress");
+  if (prog) prog.textContent = "Loading sample…";
+  try {
+    const buf = await (await fetch("samples/" + file)).arrayBuffer();
+    MOLD_BUF = { buffer: buf, name: file, size: buf.byteLength, key: "sample:" + file };
+    MOLD_BODIES = null;
+    // Samples are written in millimetres; say so rather than leaving the 25.4x
+    // trap open on a file the user didn't export and can't check.
+    const u = document.getElementById("ml-unit");
+    if (u) u.value = "mm";
+    if (prog) prog.textContent = `${file} loaded (${Math.round(buf.byteLength / 1024)} KB) — hit Plan.`;
+  } catch (e) {
+    MOLD_BUF = null;
+    if (prog) prog.textContent = "";
+    toast("Couldn't load that sample.", "error");
+  }
+}
+
 function uploadMold() {
   const avail = stockThicknessesMm();
   openModal(`
@@ -323,6 +354,12 @@ function uploadMold() {
     </div>
     <div id="ml-stl" style="display:none">
       <div class="field"><label>Mold STL</label><input id="ml-file" type="file" accept=".stl,model/stl,application/sla"></div>
+      <div class="field"><label>…or try a sample</label>
+        <select id="ml-sample" onchange="loadSampleMold(this.value)">
+          <option value="">— none —</option>
+          ${SAMPLE_MOLDS.map(s => `<option value="${esc(s.file)}">${esc(s.label)}</option>`).join("")}
+        </select>
+        <span class="muted tny">Shipped with the app, so you can see the planner work without exporting anything first.</span></div>
       <div class="field"><label>STL units</label><select id="ml-unit">
         <option value="mm">millimetres</option><option value="in">inches</option>
       </select><span class="muted tny">An STL carries no units. Getting this wrong is a 25.4&times; mistake.</span></div>

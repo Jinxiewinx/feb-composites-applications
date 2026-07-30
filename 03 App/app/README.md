@@ -238,6 +238,7 @@ hand.
 Regenerate bundled data when the sources change:
 
 - `python3 tools/gen_sn5_seeds.py` rebuilds the SN5 parts and timeline seed JSON.
+- `node tools/gen_sample_molds.mjs` rebuilds the three sample molds in `samples/`.
 - `python3 tools/gen_docs_manifest.py` copies the datasheets, standards and
   printables into `app/docs/` and rebuilds `docs/manifest.json` for the Documents
   tab. Re-run it whenever a datasheet or CS standard changes.
@@ -249,6 +250,7 @@ Regenerate bundled data when the sources change:
 | `index.html` | Markup and all screen CSS (sidebar, board, modal, avatars, pickers, doc viewer) plus script includes |
 | `vendor/purify.min.js` | DOMPurify 3.2.4, self-hosted with an SRI pin. Was a CDN load, which meant rich text silently fell back to plain text whenever the shop wifi dropped |
 | `stlio.js` | Writes binary STL and shrinks a mesh to fit storage. Serves both the stock export and the stored viewer mesh; the slicer's own `parseSTL` reads back what it writes |
+| `samples/*.stl` | Three sample molds offered in the "Plan a mold" modal, so the planner can be tried without exporting anything from Fusion first. Built by `tools/gen_sample_molds.mjs`; fetched on demand, not at page load |
 | `meshview.js` | The rotatable 3D mold-in-stock view. Hand-rolled WebGL, no dependency: pure camera maths tested under node, thin GL glue that only runs in a browser |
 | `core.js` | Shell: sidebar and topbar, tab router, auth and roster, modal system, avatars, HTML sanitizer, multi-select picker, shared store |
 | `workorders.js` `parts.js` `projects.js` `timeline.js` `budget.js` `dashboard.js` `documents.js` | One tab each; they reach Firebase only through core's `save()` and `del()` and `fb.*` |
@@ -256,7 +258,7 @@ Regenerate bundled data when the sources change:
 | `fb.js` | The only file that imports Firebase (auth, per-collection sync, writes, file upload) |
 | `firebase-config.js` | Project config, as `window.FIREBASE_CONFIG` |
 | `docs/` | Bundled reference docs and the generated `manifest.json` |
-| `sn5-work-orders.json` `sn5-parts.json` `sn5-schedule.json` | Retro SN5 archives, the seeds for "Load SN5 archive" |
+| `sn5-work-orders.json` `sn5-parts.json` `sn5-schedule.json` `sn5-stock.json` | Retro SN5 archives, the seeds for "Load SN5 archive". The stock one is the board rack SN5 left behind — the stack planner picks thicknesses from what you own, so on a fresh project it has nothing to plan against until this is loaded |
 | `../firestore.rules` | Server-side access control, the actual security |
 | `../storage.rules` | File-upload access control |
 | `../firebase.json`, `../.firebaserc` | Hosting, rules and emulator config |
