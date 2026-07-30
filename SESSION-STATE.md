@@ -54,9 +54,44 @@ Decisions worth not rediscovering:
   one wide base the far-edge inset is a correct number and a dimension line
   straight across the sheet through the other block.
 
-Proofed in headless Chromium against all three sample molds plus a synthetic
-two-tower mold (the multi-blank case), checking sheet count, no horizontal
-overflow, and no page spilling to two.
+### Lettering and the legibility test
+
+First round shipped sheets whose labels sat on top of the lines they belonged
+to. Screenshots did not catch it — you only see what you happen to look at, on
+the fixtures you happen to render, and it stops working the moment nobody looks.
+
+**`tools/test_drawings.mjs`** is the answer and is the thing to keep. It renders
+the real sheets in headless Chromium across eight fixtures and then interrogates
+the laid-out DOM: no label crossed by a **solid** line, no two labels
+overlapping, nothing upside down, nothing under 5.5pt, nothing off the sheet.
+It found 45–122 findings per fixture on the first run and is now green.
+
+Things it taught, that are easy to reintroduce:
+
+- Text boxes must be tested as **oriented quads**, not AABBs. Half the labels on
+  a sheet are rotated, and the AABB of a 30°-rotated string covers a large empty
+  triangle — testing that reports a collision for every rule nearby, and a
+  checker people learn to ignore is worse than no checker.
+- **Solid geometry crossing a label fails; dashed does not.** That is ASME
+  Y14.5, not a threshold picked to go green: dimension and object lines are
+  never drawn through text, hidden and centre lines are broken by it.
+- Under `rotate(-90)`, `text-anchor="start"` runs the string **upward**. Hanging
+  a tight label off the high end with "start" walks it back across the feature.
+- Two constraints fight on the isometric dimensions: not upside down, and on the
+  far side of their own dimension line. Fix the writing direction for
+  readability and move the **anchor** to satisfy the other — choosing the
+  direction to fix the second breaks the first, and the "upside-down" check
+  exists because that is exactly what happened.
+- Every label carries a white halo (`paint-order="stroke"`), which is what CAD
+  does. The strict check still stands: the halo covers the layouts eight
+  fixtures cannot anticipate, it is not permission to place labels badly.
+
+**Lettering is osifont**, the ISO 3098 face (what FreeCAD uses), subset to 9 KB
+and self-hosted — see `03 App/app/fonts/osifont-LICENSE.md`. Bundled rather than
+named in a font stack because a fallback changes text metrics, and changed
+metrics is precisely how a label ends up on a line: the test can only speak for
+what the shop sees if the shop gets the same glyphs. It has **no U+2033 ″**, so
+the inch mark is a plain ASCII quote.
 
 ## Mold Stack Planner — phase 2 (auto boards, sections, cut list)
 

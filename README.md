@@ -75,9 +75,20 @@ It works because Fluent's Chromium export has a consistent layout (panel titles 
 node tools/test_app.mjs      # app logic across every tab, in a DOM stub
 node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
 node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
+node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
 cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
   "node '../tools/test_wo_rules.mjs'"                      # security rules
 ```
+
+`test_drawings.mjs` is the odd one out and worth knowing about. Everything else
+asserts on strings and numbers, and a drawing sheet passes all of that while
+printing a dimension straight through a dimension line. So it renders the real
+sheets in headless Chromium across eight mold fixtures and interrogates the
+laid-out DOM geometrically: no label crossed by a solid line, no two labels
+overlapping, nothing upside down, nothing under 5.5pt, nothing off the sheet.
+Add `--shots` to write PNGs of whatever failed. It needs Playwright
+(`npm i -g playwright && npx playwright install chromium`) and skips loudly
+without it — run it before shipping any change to `drawings.js` or `print.css`.
 
 To drive the app locally, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
 

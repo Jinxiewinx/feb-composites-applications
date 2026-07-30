@@ -286,6 +286,18 @@ tr.blk td.seq {
    Same B&W-laser constraint as the rest of the printed output. Nothing here
    depends on colour; the drawings carry meaning in rule weight and dash. */
 
+/* ISO 3098 lettering — the drawing standard: single-stroke, uniform weight,
+   vertical, no serifs. Self-hosted and subset (9 KB); see fonts/osifont-LICENSE.md
+   for why it is bundled rather than named in a stack, and for the one character
+   it does not have. Declared here but only fetched when a .dwg sheet is on
+   screen, since CSS fetches a face lazily on first use. */
+@font-face {
+  font-family: "ISO3098";
+  src: url("fonts/osifont-iso3098.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 .dwg {
   --ink: #000;
   --surface: #fff;   /* stackSvg fills top faces with var(--surface) — in dark
@@ -293,8 +305,11 @@ tr.blk td.seq {
                         layer key would come out with black block faces. */
   color: #000;
   background: #fff;
-  font: 8.5pt/1.3 Arial, Helvetica, sans-serif;
+  font: 8.5pt/1.3 "ISO3098", "ISOCPEUR", "Arial Narrow", Arial, sans-serif;
 }
+/* The geometry is drawn as SVG <text>, which inherits `font` from an HTML
+   ancestor for family but is sized per element in drawings.js. */
+.dwg svg text { font-family: "ISO3098", "ISOCPEUR", "Arial Narrow", Arial, sans-serif; }
 .dwg, .dwg * { box-sizing: border-box; }   /* .wsheet's reset doesn't reach here */
 
 .dwg-page {

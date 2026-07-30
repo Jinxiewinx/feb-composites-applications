@@ -1641,13 +1641,19 @@ await t("drawing dimensions read in sixteenths, and say so when they aren't exac
   // bracketed millimetre is what actually governs. A value that is NOT on a
   // sixteenth has to be marked, or the fraction gets read as the truth.
   const exact = fmtDwg(44.45);                 // 1-3/4in exactly
-  assert(exact.primary === "1-3/4″", "1.75in: " + exact.primary);
+  assert(exact.primary === '1-3/4"', "1.75in: " + exact.primary);
   assert(exact.exact && !/≈/.test(exact.primary), "exact values print bare");
   assert(exact.secondary === "[44.5]", "millimetre in brackets: " + exact.secondary);
 
-  assert(fmtDwg(25.4).primary === "1″", "whole inches lose the fraction");
-  assert(fmtDwg(12.7).primary === "1/2″", "and sub-inch values lose the whole");
-  assert(fmtDwg(0).primary === "0″", "zero is a real answer, not a blank");
+  assert(fmtDwg(25.4).primary === '1"', "whole inches lose the fraction");
+  assert(fmtDwg(12.7).primary === '1/2"', "and sub-inch values lose the whole");
+  assert(fmtDwg(0).primary === '0"', "zero is a real answer, not a blank");
+
+  /* The inch mark is ASCII, not U+2033 ″. osifont — the ISO 3098 face the
+     sheets are lettered in — has no double prime, so a ″ falls back to another
+     font for that one glyph, on the string that ends every dimension on every
+     sheet. Different metrics mid-label is how a dimension drifts onto a line. */
+  assert(!/\u2033/.test(fmtDwg(44.45).primary), "no double prime: " + fmtDwg(44.45).primary);
 
   const off = fmtDwg(43.9);                    // 1.728in — between 1-11/16 and 1-3/4
   assert(/^≈/.test(off.primary), "an off-grid value is marked: " + off.primary);
@@ -1760,7 +1766,10 @@ await t("the layer sheets carry both the edge insets and the datum cross-check",
   // Sheet 4 is layer 2: it lands on layer 1, so it gets the four insets.
   assert(/INSET FROM EACH EDGE/.test(sheets[4]), "layer 2 is placed off the edges of layer 1");
   assert(/CHECK — FROM DATUM A/.test(sheets[4]), "with the absolute datum table beside it");
-  assert(/DATUM — near-left corner/.test(sheets[4]), "and the datum corner marked on the drawing");
+  // The symbol is on the drawing; what it means is in the sheet note, which is
+  // where a drawing puts its legend — and the one place nothing can collide.
+  assert(/Datum A is the near-left corner/.test(sheets[4]), "the note says what datum A is");
+  assert(/L1 underneath/.test(sheets[4]), "and what the dash-dot outline is");
 });
 
 await t("a plan with no stored mesh still draws, and says the mold is only an outline", () => {

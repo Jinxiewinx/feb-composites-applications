@@ -22,3 +22,6 @@ __pycache__/
 
 # Firebase emulator log, rewritten every time tools/test_wo_rules.mjs runs.
 03 App/firestore-debug.log
+
+# Sheet images written by tools/test_drawings.mjs --shots
+.drawing-shots/

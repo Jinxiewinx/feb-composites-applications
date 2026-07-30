@@ -59,18 +59,22 @@ const DWG_ISO_H = 424;
 const DWG_3V_H = 812;
 const DWG_LAYER_H = 556;
 
-/* Dimension furniture, page px. These are legibility floors for a laser print
-   at arm's length in a shop, not typographic preferences. */
+/* Dimension furniture, page px (÷ 96 × 72 = points on paper). These are
+   legibility floors for a laser print read at arm's length in a shop, not
+   typographic preferences — ISO 3098 wants 2.5mm minimum character height, and
+   tools/test_drawings.mjs fails anything under 5.5pt. Do not shrink them to fit
+   a crowded sheet; move the label instead. */
 const DW = {
   arrow: 7, arrowW: 4.4,
   ext: 6,            // extension line overshoot past the dimension line
   extGap: 3,         // gap between the feature and the start of its extension line
-  font: 8.6,         // the inch fraction — the number you work to
-  sub: 6.4,          // the bracketed millimetre
-  tiny: 6,           // notes and callouts
-  minSpan: 34,       // below this a dimension puts its text off to the side
+  font: 10.4,        // 7.8pt — the inch fraction, the number you work to
+  sub: 8,            // 6.0pt — the bracketed millimetre
+  tiny: 7.6,         // 5.7pt — notes and callouts
+  minSpan: 44,       // below this a dimension puts its text off to the side
   thin: 0.6, med: 1.15, heavy: 2.1,
 };
+const INCH_MARK = '"';
 const DASH_MOLD = "5 3";
 const DASH_BELOW = "7 2.5 1.5 2.5";   // dash-dot: the layer underneath
 const DASH_THIN = "3 2.5";
@@ -78,6 +82,12 @@ const DASH_THIN = "3 2.5";
 function f1(n) { return (Math.round(n * 10) / 10).toFixed(1); }
 
 /* ---------------- units ----------------
+
+   The inch mark is a plain ASCII quote, NOT U+2033 ″. The sheets are lettered in
+   osifont (ISO 3098) and osifont has no double prime, so a ″ would silently fall
+   back to another face for that one glyph — different metrics mid-dimension, on
+   the string that appears on every dimension line on every sheet. A straight
+   quote is ordinary drawing notation anyway. See fonts/osifont-LICENSE.md.
 
    Inches to the nearest 1/16, because that is what the tape at the bench reads.
    `exact` is the honest part: 44.45mm IS 1-3/4in and prints bare, while 43.9mm
@@ -106,7 +116,7 @@ function fmtDwg(mm) {
   if (!Number.isFinite(mm)) return { primary: "—", secondary: "", exact: false };
   const fr = inchFraction(mm);
   return {
-    primary: (fr.exact ? "" : "≈") + fr.text + "″",
+    primary: (fr.exact ? "" : "≈") + fr.text + INCH_MARK,
     secondary: "[" + (Math.round(mm * 10) / 10) + "]",
     exact: fr.exact,
   };
@@ -165,20 +175,38 @@ function scaleBar(s, x, y) {
     const tx = x + (len * i) / 2;
     parts.push(`<line x1="${f1(tx)}" y1="${f1(y - 3.5)}" x2="${f1(tx)}" y2="${f1(y + 3.5)}" stroke="currentColor" stroke-width="${DW.thin}"/>`);
   }
-  parts.push(`<text x="${f1(x + len + 5)}" y="${f1(y + 3)}" font-size="${DW.tiny}" fill="currentColor">${pick}″</text>`);
+  parts.push(`<text x="${f1(x + len + 5)}" y="${f1(y + 3)}" font-size="${DW.tiny}" fill="currentColor">${pick}${INCH_MARK}</text>`);
   return parts.join("");
 }
 
 /* ---------------- SVG primitives ---------------- */
 
+/* Every label carries a white halo, painted UNDER its own glyphs.
+
+   This is what CAD does and what a drawn-by-hand sheet does: dimension text
+   breaks the line it sits on rather than fighting it. tools/test_drawings.mjs
+   still fails any label a rule passes through, because a label that needs its
+   halo is a label in the wrong place — but the fixtures in that test are eight
+   molds and the shop will feed this hundreds, so the halo is what covers the
+   layout nobody anticipated. Belt and braces, deliberately.
+
+   paint-order="stroke" is what makes it a halo rather than an outline: without
+   it the white stroke paints over the fill and the text comes out hollow. */
 function dwgText(x, y, str, size, opts) {
   opts = opts || {};
   const a = opts.anchor ? ` text-anchor="${opts.anchor}"` : "";
   const w = opts.bold ? ` font-weight="700"` : "";
   const t = opts.rotate ? ` transform="rotate(${opts.rotate} ${f1(x)} ${f1(y)})"` : "";
   const ls = opts.track ? ` letter-spacing="${opts.track}"` : "";
-  return `<text x="${f1(x)}" y="${f1(y)}" font-size="${size}"${a}${w}${t}${ls} fill="currentColor">${esc(str)}</text>`;
+  const halo = opts.noHalo ? "" : ` stroke="#fff" stroke-width="${(size * 0.34).toFixed(2)}" stroke-linejoin="round" paint-order="stroke"`;
+  return `<text x="${f1(x)}" y="${f1(y)}" font-size="${size}"${a}${w}${t}${ls}${halo} fill="currentColor">${esc(str)}</text>`;
 }
+/* Width of a string before it is laid out. drawings.js builds strings with no
+   DOM, so there is nothing to measure — but a gutter has to be wide enough for
+   the label going into it, and guessing low is how a callout runs off the sheet.
+   0.56em per character is measured from osifont's own advance widths across the
+   digits, capitals and punctuation these sheets actually use, rounded up. */
+function estTextW(str, size) { return String(str || "").length * size * 0.56; }
 function dwgLine(x1, y1, x2, y2, width, dash) {
   return `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="currentColor" stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
 }
@@ -221,11 +249,16 @@ function dimH(x1, x2, yLine, yFeat, mm, opts) {
     out.push(dwgLine(lo, yLine, hi, yLine, DW.thin));
     out.push(dwgArrowhead(lo, yLine, -1, 0), dwgArrowhead(hi, yLine, 1, 0));
   }
-  const tx = tight ? hi + 16 : (lo + hi) / 2;
-  const anchor = tight ? "start" : "middle";
-  out.push(dwgText(tx, yLine - 10.5, d.primary, DW.font, { anchor, bold: true }));
-  out.push(dwgText(tx, yLine - 3, d.secondary, DW.sub, { anchor }));
-  if (opts.note) out.push(dwgText(tx, yLine + 8.5, opts.note, DW.tiny, { anchor }));
+  /* Which end a tight label hangs off. Left to itself it always went right,
+     which for a left-hand inset put it INSIDE the board it was measuring to —
+     across the board's own edge rule. The caller knows which side is away from
+     the geometry; it has to say. */
+  const loSide = opts.tight === "lo";
+  const tx = tight ? (loSide ? lo - 10 : hi + 10) : (lo + hi) / 2;
+  const anchor = tight ? (loSide ? "end" : "start") : "middle";
+  out.push(dwgText(tx, yLine - 12.5, d.primary, DW.font, { anchor, bold: true }));
+  out.push(dwgText(tx, yLine - 3.5, d.secondary, DW.sub, { anchor }));
+  if (opts.note) out.push(dwgText(tx, yLine + 10, opts.note, DW.tiny, { anchor }));
   return out.join("");
 }
 /* The vertical twin. Text reads bottom-to-top (rotated -90), which is the
@@ -245,32 +278,62 @@ function dimV(y1, y2, xLine, xFeat, mm, opts) {
   if (tight) out.push(dwgLine(xLine, lo - 12, xLine, hi + 12, DW.thin));
   else out.push(dwgLine(xLine, lo, xLine, hi, DW.thin));
   out.push(dwgArrowhead(xLine, lo, 0, -1), dwgArrowhead(xLine, hi, 0, 1));
-  const ty = tight ? hi + 16 : (lo + hi) / 2;
-  const anchor = tight ? "start" : "middle";
-  out.push(dwgText(xLine - 10.5, ty, d.primary, DW.font, { anchor, bold: true, rotate: -90 }));
-  out.push(dwgText(xLine - 3, ty, d.secondary, DW.sub, { anchor, rotate: -90 }));
+  /* Same as dimH, with one extra trap: under rotate(-90) an anchor of "start"
+     runs the string UPWARD. Hanging a tight label off the high end with "start"
+     therefore walked it straight back across the feature. Anchor and side have
+     to agree, or the label points the wrong way. */
+  const loSide = opts.tight === "lo";
+  const ty = tight ? (loSide ? lo - 10 : hi + 10) : (lo + hi) / 2;
+  const anchor = tight ? (loSide ? "start" : "end") : "middle";
+  out.push(dwgText(xLine - 12.5, ty, d.primary, DW.font, { anchor, bold: true, rotate: -90 }));
+  out.push(dwgText(xLine - 3.5, ty, d.secondary, DW.sub, { anchor, rotate: -90 }));
   return out.join("");
 }
 /* An isometric dimension: parallel to the edge a→b, pushed off by (nx,ny), with
-   the label rotated to lie along it. Flipped when it would otherwise print
-   upside down, which happens on the left-hand iso axis every time. */
+   the label rotated to lie along it.
+
+   WHICH SIDE THE TEXT LANDS ON. An SVG text anchor is a BASELINE, so the glyphs
+   sit above it — and after rotate(θ) "above" becomes the left normal of the
+   text's own direction. So the direction the label is written in decides which
+   side of the dimension line it ends up on. Choosing that direction by
+   readability alone (flip when it would print upside down, which the left-hand
+   isometric axis always would) put the label on the geometry side of the line
+   half the time, and it printed across its own dimension line. Pick the
+   direction whose left normal points the way we are already offsetting, then
+   fix upside-down by reversing the offset instead. */
 function dimIso(a, b, nx, ny, mm, off) {
   const o = off == null ? 22 : off;
   const A = { x: a.x + nx * o, y: a.y + ny * o };
   const B = { x: b.x + nx * o, y: b.y + ny * o };
   const len = Math.hypot(B.x - A.x, B.y - A.y) || 1;
   const ux = (B.x - A.x) / len, uy = (B.y - A.y) / len;
-  let deg = Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI;
-  let flip = false;
-  if (deg > 90 || deg < -90) { deg += 180; flip = true; }
+  /* TWO constraints, and they fight.
+
+     (1) The label must not print upside down. That fixes the writing direction:
+         reverse it whenever the edge runs right-to-left, which the left-hand
+         isometric axis always does.
+     (2) The label must sit on the far side of its own dimension line from the
+         object, or it prints across it.
+
+     Choosing the direction to satisfy (2) breaks (1) — the first attempt at this
+     produced two perfectly placed, perfectly mirrored dimensions. The way to
+     have both is to fix the direction for readability and then move the ANCHOR:
+     rotate(θ) puts the glyphs on the side (sinθ, −cosθ) of the baseline, so if
+     that already points outward the anchor only has to clear the descender, and
+     if it points inward the anchor moves out by a whole ascender instead. */
+  let wx = ux, wy = uy;
+  if (wx < 0 || (wx === 0 && wy < 0)) { wx = -wx; wy = -wy; }
+  const deg = Math.atan2(wy, wx) * 180 / Math.PI;
+  const outward = (wy * nx - wx * ny) > 0;      // (wy,−wx)·(nx,ny)
+  const clear = (outward ? DW.font * 0.28 : DW.font * 0.92) + 3;
   const d = fmtDwg(mm);
-  const mx = (A.x + B.x) / 2 + nx * 11, my = (A.y + B.y) / 2 + ny * 11;
+  const mx = (A.x + B.x) / 2 + nx * clear, my = (A.y + B.y) / 2 + ny * clear;
   return [
     dwgLine(a.x + nx * 4, a.y + ny * 4, A.x + nx * DW.ext, A.y + ny * DW.ext, DW.thin),
     dwgLine(b.x + nx * 4, b.y + ny * 4, B.x + nx * DW.ext, B.y + ny * DW.ext, DW.thin),
     dwgLine(A.x, A.y, B.x, B.y, DW.thin),
     dwgArrowhead(A.x, A.y, -ux, -uy), dwgArrowhead(B.x, B.y, ux, uy),
-    dwgText(mx, my - (flip ? -3 : 3), `${d.primary}  ${d.secondary}`, DW.font, { anchor: "middle", bold: true, rotate: deg }),
+    dwgText(mx, my, `${d.primary}  ${d.secondary}`, DW.font, { anchor: "middle", bold: true, rotate: deg }),
   ].join("");
 }
 // Leader: an elbow from the geometry out to a label.
@@ -287,11 +350,27 @@ function leader(px, py, tx, ty, label) {
 /* The datum corner. Every sheet marks the SAME physical corner of the stack —
    the near-left one — so "38mm from the datum" means the same thing on sheet 4
    as it did on sheet 3, and it is a corner you can hook a tape on. */
+/* The datum feature symbol, drawn the way a drawing draws it: a flag on the
+   surface, a leader, and the letter in its own box. The letter used to float
+   above the flag with nothing around it, which put it in the busiest corner of
+   the sheet — the corner every dimension on the sheet also starts from. A boxed
+   letter is both the convention and a guaranteed clear space. */
 function datumMark(x, y, label) {
+  const s = DW.font;
+  const bw = Math.max(19, estTextW(label || "A", s) + 12);
+  const bh = s * 1.75;
+  /* The box goes DOWN-LEFT, off the corner. Straight above it — the obvious
+     place — is the board's own left edge, so the letter printed on a heavy
+     object line on every layer sheet. Down-left of the near-left corner is the
+     one pocket that is outside the board, outside the extension line running
+     left from the corner, and above the overall-width dimension row. */
+  const cx = x - 34, cy = y + 17 + bh / 2;
   return [
-    `<polygon points="${f1(x)},${f1(y)} ${f1(x + 9)},${f1(y - 12)} ${f1(x - 9)},${f1(y - 12)}" fill="none" stroke="currentColor" stroke-width="${DW.med}"/>`,
-    dwgLine(x - 16, y, x + 16, y, DW.med),
-    dwgText(x, y - 15, label || "A", DW.font, { anchor: "middle", bold: true }),
+    `<polygon points="${f1(x)},${f1(y)} ${f1(x + 7)},${f1(y + 11)} ${f1(x - 7)},${f1(y + 11)}" fill="currentColor" stroke="currentColor" stroke-width="${DW.thin}"/>`,
+    dwgLine(x - 13, y, x + 13, y, DW.med),
+    dwgLine(x, y + 11, cx + bw / 2, cy, DW.thin),
+    `<rect x="${f1(cx - bw / 2)}" y="${f1(cy - bh / 2)}" width="${f1(bw)}" height="${f1(bh)}" fill="#fff" stroke="currentColor" stroke-width="${DW.med}"/>`,
+    dwgText(cx, cy + bh * 0.24, label || "A", s, { anchor: "middle", bold: true, noHalo: true }),
   ].join("");
 }
 function centerline(x1, y1, x2, y2) { return dwgLine(x1, y1, x2, y2, DW.thin, DASH_BELOW); }
@@ -620,12 +699,18 @@ function spreadLabels(items, minGap, lo, hi) {
 function sheetIso(plan, ctx) {
   const proj = dwgProject("iso").fn;
   const layers = dwgLayers(plan);
+  /* The callouts hang off the RIGHT because the overall-height dimension owns
+     the left, and the two crossing each other made both unreadable. The gutter
+     is sized from the WIDEST callout rather than guessed: on a sectioned mold
+     one of them carries a "◂ SPLIT" suffix, and a fixed gutter ran it off the
+     edge of the sheet. */
+  const callouts = layers.map((L, i) =>
+    `L${i + 1} · ${fmtDwg(L.thickness).primary}${ctx.splits.some(z => Math.abs(L.z1 - z) < 1e-6) ? "  ◂ SPLIT" : ""}`);
+  const gutter = Math.ceil(Math.max(...callouts.map(c => estTextW(c, DW.font)))) + 26;
   /* t clears the overall-size box drawn at the top left: that box has a white
      fill (it has to, or the geometry behind it makes it unreadable), so the
-     drawing area must not reach under it. r is the layer-callout gutter — the
-     callouts hang off the RIGHT because the overall-height dimension owns the
-     left, and the two crossing each other made both unreadable. */
-  const M = { l: 76, r: 104, t: 84, b: 40 };
+     drawing area must not reach under it. */
+  const M = { l: 76, r: Math.max(90, gutter), t: 84, b: 40 };
   const pts = isoCornersOf(plan).concat(...ctx.art.iso.loops);
   const box = pts.length ? bboxOf(pts) : { x0: 0, y0: 0, x1: 1, y1: 1 };
   const s = dwgFit(box, DWG_SHEET_W - M.l - M.r, DWG_ISO_H - M.t - M.b);
@@ -645,12 +730,11 @@ function sheetIso(plan, ctx) {
       if (k === 0) {
         // The RIGHT vertex of the top face: on a drafted stack that is the
         // silhouette edge, so the leader leaves the block rather than crossing it.
+        // The split is named here rather than lettered onto the stack — a label
+        // dropped at the split's own corner lands on the blocks below it, and
+        // this is the line a reader is already scanning.
         const c = P(b.x1, b.y0, L.z1);
-        // The split is named in the callout column rather than lettered onto the
-        // stack: a label dropped at the split's own corner lands on top of the
-        // blocks below it, and this is the line a reader is already scanning.
-        const split = ctx.splits.some(z => Math.abs(L.z1 - z) < 1e-6) ? "  ◂ SPLIT" : "";
-        labels.push({ y: c.y, px: c.x, py: c.y, text: `L${i + 1} · ${fmtDwg(L.thickness).primary}${split}` });
+        labels.push({ y: c.y, px: c.x, py: c.y, text: callouts[i] });
       }
     });
   });
@@ -699,10 +783,16 @@ function sheetIso(plan, ctx) {
     ["BOARDS", `${layers.length} layer${layers.length === 1 ? "" : "s"}, ${layers.reduce((n2, L) => n2 + (L.blanks || []).length, 0)} block${layers.reduce((n2, L) => n2 + (L.blanks || []).length, 0) === 1 ? "" : "s"}`],
     ["MACHINE SETUPS", String(ctx.sectionCount)],
   ];
-  const nb = [`<rect x="6" y="8" width="200" height="${note.length * 13 + 12}" fill="#fff" stroke="currentColor" stroke-width="${DW.thin}"/>`];
+  /* Sized from its contents. A fixed-width box was fine until a 30in stack made
+     the overall-size string long enough to run back into its own label. */
+  const nbLab = Math.max(...note.map(r => estTextW(r[0], DW.tiny)));
+  const nbVal = Math.max(...note.map(r => estTextW(r[1], DW.font)));
+  const nbW = Math.min(DWG_SHEET_W - 12, Math.ceil(nbLab + nbVal + 26));
+  const nbRow = 15;
+  const nb = [`<rect x="6" y="8" width="${nbW}" height="${note.length * nbRow + 12}" fill="#fff" stroke="currentColor" stroke-width="${DW.thin}"/>`];
   note.forEach((row, i) => {
-    nb.push(dwgText(12, 22 + i * 13, row[0], DW.tiny, { track: "0.06em" }));
-    nb.push(dwgText(200, 22 + i * 13, row[1], DW.font, { anchor: "end", bold: true }));
+    nb.push(dwgText(13, 23 + i * nbRow, row[0], DW.tiny, { track: "0.06em" }));
+    nb.push(dwgText(nbW - 7, 23 + i * nbRow, row[1], DW.font, { anchor: "end", bold: true }));
   });
 
   const svg = `<svg class="dwg-view" viewBox="0 0 ${DWG_SHEET_W} ${DWG_ISO_H}" width="100%" role="img"
@@ -896,9 +986,11 @@ function sheetLayer(plan, ctx, i) {
   const notes = [];
   (L.blanks || []).forEach((b, k) => {
     const tag = blankLabel(i, k, nB);
-    // Outside the board, not on it: inside, the tag lands on the heavy edge rule
-    // and on whatever part of the mold outline runs near the top of the blank.
-    out.push(dwgText(v.X((b.x0 + b.x1) / 2), v.Y(b.y1) - 5, tag, DW.font, { anchor: "middle", bold: true }));
+    /* Above the board's LEFT corner. Outside, because inside it lands on the
+       heavy edge rule and on the mold outline; and off-centre, because the
+       blank's own vertical centreline runs through the middle of the top edge
+       and a tag centred there sits exactly on it. */
+    out.push(dwgText(v.X(b.x0) + 2, v.Y(b.y1) - 6, tag, DW.font, { anchor: "start", bold: true }));
     // The board's own size, always — it is the first thing checked against
     // whatever came off the saw.
     out.push(dimH(v.X(b.x0), v.X(b.x1), v.oy + v.h + 26 + k * 27, v.Y(b.y0), b.x1 - b.x0));
@@ -925,23 +1017,40 @@ function sheetLayer(plan, ctx, i) {
        — a correct number, and a dimension line straight across the sheet and
        through the other block. All four are in the table either way; what the
        drawing shows is the pair you actually measure to. */
-    const fits = (mm, span) => Math.abs(mm) * v.s <= span * 0.42;
-    if (fits(ins.left, v.w)) out.push(dimH(v.X(sup.x0), v.X(b.x0), yA, null, ins.left));
-    if (fits(ins.right, v.w)) out.push(dimH(v.X(b.x1), v.X(sup.x1), yB, null, ins.right));
-    if (fits(ins.front, v.h)) out.push(dimV(v.Y(sup.y0), v.Y(b.y0), xA, null, ins.front));
-    if (fits(ins.back, v.h)) out.push(dimV(v.Y(b.y1), v.Y(sup.y1), xB, null, ins.back));
+    /* …and an inset of zero is not drawn either: the two edges are flush, there
+       is nothing to measure, and a dimension reading 0" printed on top of the
+       coincident rule is the least readable thing on the sheet. The table still
+       carries it. */
+    const fits = (mm, span) => Math.abs(mm) > 0.5 && Math.abs(mm) * v.s <= span * 0.42;
+    // `tight` names the end AWAY from this board, so a label too short to sit
+    // between its own arrows hangs outside the board instead of over its edge.
+    if (fits(ins.left, v.w)) out.push(dimH(v.X(sup.x0), v.X(b.x0), yA, null, ins.left, { tight: "lo" }));
+    if (fits(ins.right, v.w)) out.push(dimH(v.X(b.x1), v.X(sup.x1), yB, null, ins.right, { tight: "hi" }));
+    if (fits(ins.front, v.h)) out.push(dimV(v.Y(sup.y0), v.Y(b.y0), xA, null, ins.front, { tight: "hi" }));
+    if (fits(ins.back, v.h)) out.push(dimV(v.Y(b.y1), v.Y(sup.y1), xB, null, ins.back, { tight: "lo" }));
     const over = [["left", ins.left], ["right", ins.right], ["front", ins.front], ["back", ins.back]]
       .filter(([, mm]) => mm < -0.05).map(([side]) => side);
     if (over.length) {
       notes.push(`${tag} overhangs the board below on the ${over.join(" and ")} edge${over.length > 1 ? "s" : ""} — support it during glue-up so it cannot sag or shift.`);
-      out.push(leader(v.X((b.x0 + b.x1) / 2), v.Y((b.y0 + b.y1) / 2), v.ox + v.w + 26, v.Y(b.y1) + 16, "OVERHANG"));
+      // Clamped to the sheet: the drawing area's right edge is not the paper's,
+      // and a leader aimed past it took the word off the page.
+      out.push(leader(v.X((b.x0 + b.x1) / 2), v.Y((b.y0 + b.y1) / 2),
+        Math.min(v.ox + v.w + 26, DWG_SHEET_W - M.r + 6), v.Y(b.y1) + 16, "OVERHANG"));
     }
   });
 
+  /* The datum symbol is the annotation; what it MEANS belongs in the sheet note
+     with the rest of the legend. A sentence floating next to the mark sat across
+     the extension lines of the very dimensions it was explaining. */
   out.push(datumMark(v.X(ctx.datum.x), v.Y(ctx.datum.y), "A"));
-  out.push(dwgText(v.X(ctx.datum.x) - 16, v.Y(ctx.datum.y) + 22, "DATUM — near-left corner of the stack", DW.tiny));
-  if (below) out.push(dwgText(v.ox, v.oy - 10, `— · — outline is L${i} underneath;  – – – is the mold at this height`, DW.tiny));
-  else out.push(dwgText(v.ox, v.oy - 10, `– – – is the mold at this height. This is the bottom board: it sets the datum.`, DW.tiny));
+  /* The legend goes in the title block, not on the drawing. Laid along the top
+     of the drawing area it was the one piece of text nothing could be kept away
+     from: a vertical inset label hanging off the top edge of a board reaches up
+     by its own STRING LENGTH, and where that lands depends on the mold. Notes
+     belong in the notes. */
+  const legend = below
+    ? `Datum A is the near-left corner of the stack. — · — is L${i} underneath; – – – is the mold at this height.`
+    : `Datum A is the near-left corner of the stack, set by this board. – – – is the mold at this height.`;
 
   const svg = `<svg class="dwg-view" viewBox="0 0 ${DWG_SHEET_W} ${DWG_LAYER_H}" width="100%" role="img"
     aria-label="Top view of layer ${i + 1} with its placement dimensions">
@@ -989,7 +1098,7 @@ function sheetLayer(plan, ctx, i) {
     ${notes.length ? `<div class="dwg-notes">${notes.map(n => `<div>${esc(n)}</div>`).join("")}</div>` : ""}`;
 
   const title = `LAYER ${i + 1} OF ${layers.length} — ${esc(fmtDwg(L.thickness).primary)} BOARD · SETUP ${(L.section || 0) + 1}`;
-  return dwgPage(plan, ctx, 3 + i, title, dwgRatio(s), body);
+  return dwgPage(plan, ctx, 3 + i, title, dwgRatio(s), body, legend);
 }
 
 /* ============================================================================
@@ -1002,7 +1111,7 @@ function sheetLayer(plan, ctx, i) {
    in print so it repeats on every page, which is right for a two-page traveler
    and wrong for a set where each sheet carries its own title block. */
 
-function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body) {
+function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
   return `<div class="ws-page dwg-page">
     <div class="dwg-top">
       <span>FEB COMPOSITES · MOLD STACK DRAWING</span>
@@ -1018,7 +1127,7 @@ function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body) {
       <div class="tb-c"><span class="lab">Scale</span><span class="val">${esc(scaleTxt)}</span></div>
       <div class="tb-c"><span class="lab">Planned</span><span class="val sm">${esc(plan.by || "—")}<br>${esc(String(plan.ts || "").slice(0, 10))}</span></div>
       <div class="tb-note">
-        <b>Dimensions govern — do not measure off the print.</b> Inches to the nearest 1/16″ (≈ marks a value that is not exactly on a 1/16); the figure in [brackets] is the exact millimetre. ${esc(ctx.moldNote)}${ctx.meshNote ? " " + esc(ctx.meshNote) : ""} Source: ${esc(plan.source || "—")}. Printed ${esc(ctx.printed)}.
+        <b>Dimensions govern — do not measure off the print.</b> Inches to the nearest 1/16" (≈ marks a value that is not exactly on a 1/16); the figure in [brackets] is the exact millimetre. ${sheetNote ? esc(sheetNote) + " " : ""}${esc(ctx.moldNote)}${ctx.meshNote ? " " + esc(ctx.meshNote) : ""} Source: ${esc(plan.source || "—")}. Printed ${esc(ctx.printed)}.
       </div>
     </div>
   </div>`;
