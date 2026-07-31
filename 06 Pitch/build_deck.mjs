@@ -233,27 +233,29 @@ function threeUp(s, slide) {
 function shotHero(s, slide) {
   const body = (slide.body || []).filter(Boolean);
   /* The band grows to hold the copy rather than the copy being cut to fit. */
-  const bandH = 1.25 + body.length * 0.34;
-  const bandY = H - bandH;
+  const minBandH = 1.25 + body.length * 0.34;
 
   const a = dims(join(HERE, slide.shot)).aspect;
-  const availW = W - 1.1, availH = bandY - 0.55;
+  const availW = W - 1.1, availH = H - minBandH - 0.55;
   let w = availW, h = w / a;
   if (h > availH) { h = availH; w = h * a; }
-  /* Centred vertically, but never pushed far down: a short banner centred in
-     the field left as much dead panel above it as the panel itself. */
-  const ix = (W - w) / 2, iy = Math.min((bandY - h) / 2 + 0.05, 0.55);
 
-  /* The canvas panel hugs the image rather than filling the whole area above
-     the band. A 5.9:1 cut-list banner centred in a 5in field read as a
-     rendering error — two feet of grey with a strip of table in the middle. */
   const pad = 0.38;
+  const iy = Math.min((availH - h) / 2 + 0.05, 0.55);
+  const panelBottom = iy + h + pad;
+
+  /* The ink band rises to meet the panel. A 5.9:1 cut-list banner leaves the
+     panel ending near the top of the slide, and a fixed band start left a
+     third of the slide as blank white across the full width — which reads as a
+     slide that failed to load, not as restraint. */
+  const bandY = Math.min(H - minBandH, panelBottom);
+  const bandH = H - bandY;
+
+  const ix = (W - w) / 2;
   s.addShape(pres.ShapeType.rect, {
     x: Math.max(0, ix - pad), y: 0,
-    w: Math.min(W, w + pad * 2), h: Math.min(bandY, iy + h + pad),
-    fill: { color: CANVAS },
+    w: Math.min(W, w + pad * 2), h: bandY, fill: { color: CANVAS },
   });
-
   s.addImage({
     path: prep(slide.shot, 0), x: ix, y: iy, w, h,
     shadow: { type: "outer", color: "0a1628", opacity: 0.18, blur: 14, offset: 2, angle: 90 },
@@ -261,26 +263,30 @@ function shotHero(s, slide) {
 
   s.addShape(pres.ShapeType.rect, { x: 0, y: bandY, w: W, h: bandH, fill: { color: INK } });
 
-  const label = slide.act ? `${String(actNo.get(slide.act)).padStart(2, "0")}  ${slide.act}` : meta.footer;
-  s.addText(label.toUpperCase(), {
-    x: M, y: bandY + 0.14, w: 6.0, h: 0.24, margin: 0,
-    fontFace: SANS, fontSize: 10, bold: true, charSpacing: 2.2, color: GOLD, valign: "middle",
-  });
-
+  /* Copy sits at a constant offset from the TOP of the band on a normal slide,
+     and is centred once the band is unusually deep, so a tall band does not
+     strand its text against the seam. */
   const tw = 11.8;
   let pt = shrink(slide.title, tw, [26, 23, 20], 2);
   const lines = linesAt(slide.title, pt, tw, true);
   if (lines > 1) pt = Math.min(pt, 23);
-  const titleY = bandY + 0.42;
   const titleH = lines * pt * 1.13 / 72;
+  const blockH = 0.28 + titleH + (body.length ? 0.10 + body.length * 0.28 : 0);
+  const top = bandY + Math.max(0.14, (bandH - blockH) / 2);
+
+  const label = slide.act ? `${String(actNo.get(slide.act)).padStart(2, "0")}  ${slide.act}` : meta.footer;
+  s.addText(label.toUpperCase(), {
+    x: M, y: top, w: 6.0, h: 0.24, margin: 0,
+    fontFace: SANS, fontSize: 10, bold: true, charSpacing: 2.2, color: GOLD, valign: "middle",
+  });
+  const titleY = top + 0.28;
   s.addText(slide.title, {
     x: M, y: titleY, w: tw, h: titleH + 0.1, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: WHITE, lineSpacing: pt * 1.13,
   });
   if (body.length) s.addText(
     body.map((t, i) => ({ text: t, options: { breakLine: i < body.length - 1 } })), {
-    x: M, y: titleY + titleH + 0.10, w: tw, h: bandH - (titleY + titleH + 0.10 - bandY) - 0.30,
-    margin: 0, valign: "top",
+    x: M, y: titleY + titleH + 0.10, w: tw, h: body.length * 0.30 + 0.1, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 12.5, color: ON_DARK, lineSpacing: 18,
   });
   s.addNotes(notesFor(slide));
@@ -421,8 +427,10 @@ function stats(s, slide) {
       fontFace: SANS, fontSize: 13, color: MUTED, lineSpacing: 18,
     });
   });
+  /* Was 6.65, which wrapped to two lines and finished 0.39in off the bottom —
+     the only copy in the deck inside the 0.5in floor. */
   (slide.body || []).forEach((t, i) => s.addText(t, {
-    x: M, y: 6.65 + i * 0.4, w: 11.8, h: 0.5, margin: 0, valign: "top",
+    x: M, y: 6.25 + i * 0.4, w: 11.8, h: 0.7, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 13, italic: true, color: BLUE, lineSpacing: 18,
   }));
   s.addNotes(notesFor(slide));

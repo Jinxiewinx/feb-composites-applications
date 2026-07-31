@@ -186,7 +186,7 @@ export const acts = [
           "Tall molds split at the ShopSabre's ~6in cut depth, into one machine setup per section.",
         ],
         shot: S("11-plan"),
-        notes: "This is the centrepiece — switch to the live app here if the room is with you. The 3D view is the mold sitting inside the translucent blocks. Before this existed the reviewer only ever saw a dashed outline traced on each layer, and signing that off was an act of faith. Drag to rotate; pinch works on a phone at the bench.",
+        notes: "This is the centrepiece — switch to the live app here if the room is with you. What is on the slide is the exploded stack: the dashed outline on each layer is the mold, traced from the stored STL. What is NOT on the slide, and is worth clicking to, is the 3D view above it on the same page — the actual mold sitting inside the translucent blocks. Before that existed the reviewer only ever had the dashed outline, and signing off the CS-003 §7.2 fit review was an act of faith. Drag to rotate; pinch works on a phone at the bench, which is where the sign-off usually happens.",
         demo: true,
       },
       {
