@@ -25,3 +25,6 @@ __pycache__/
 
 # Sheet images written by tools/test_drawings.mjs --shots
 .drawing-shots/
+
+# Screenshots written by tools/shoot_ui.mjs --out .ui-shots
+.ui-shots/
