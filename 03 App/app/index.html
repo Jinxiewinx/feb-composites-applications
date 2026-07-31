@@ -640,7 +640,10 @@
     body:not(.sheet) #printroot { display: none !important; }
     #printroot, body.sheet #printroot { display: block !important; background: var(--surface) !important; padding: 0 !important; }
     #printroot .no-print { display: none !important; }
-    #printroot .ws-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none !important; }
+    /* zoom:1 undoes the fit-to-screen shrink print.css applies while previewing
+       on a phone. Without it the sheet prints at whatever fraction the screen
+       needed — a Letter traveler landing at half size in the corner of the page. */
+    #printroot .ws-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none !important; zoom: 1 !important; }
     /* A drawing sheet DOES want to fill its page: the title block floats to the
        foot with margin-top:auto, and with min-height:0 there is no foot to float
        to, so it would sit halfway up under the drawing. Just under the 10.1in

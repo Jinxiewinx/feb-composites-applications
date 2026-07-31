@@ -1184,7 +1184,7 @@ async function openDrawings(planId) {
   }
   const html = drawingSetHtml(plan, { tris, meshNote });
   const n = 2 + dwgLayers(plan).length;
-  mountSheet(html, true, `US Letter · ${n} sheets · this is exactly what prints`);
+  mountSheet(html, true, `US Letter · ${n} sheets · this is exactly what prints`, `${plan.name || plan.id} drawings`);
   document.body.classList.add("previewing");
   if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
 }

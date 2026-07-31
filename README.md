@@ -76,19 +76,25 @@ node tools/test_app.mjs      # app logic across every tab, in a DOM stub
 node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
 node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
 node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
+node tools/test_print_mobile.mjs  # the printed sheets on a phone: fit, controls, save
 cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
   "node '../tools/test_wo_rules.mjs'"                      # security rules
 ```
 
-`test_drawings.mjs` is the odd one out and worth knowing about. Everything else
-asserts on strings and numbers, and a drawing sheet passes all of that while
-printing a dimension straight through a dimension line. So it renders the real
-sheets in headless Chromium across eight mold fixtures and interrogates the
-laid-out DOM geometrically: no label crossed by a solid line, no two labels
-overlapping, nothing upside down, nothing under 5.5pt, nothing off the sheet.
-Add `--shots` to write PNGs of whatever failed. It needs Playwright
-(`npm i -g playwright && npx playwright install chromium`) and skips loudly
-without it — run it before shipping any change to `drawings.js` or `print.css`.
+The last two are the odd ones out and worth knowing about. Everything else
+asserts on strings and numbers — and a sheet passes all of that while printing a
+dimension straight through a dimension line, or running off the side of a phone.
+Both render the real thing in headless Chromium and measure what the browser
+actually laid out. `test_drawings.mjs` checks eight mold fixtures for legibility:
+no label crossed by a solid line, no two labels overlapping, nothing upside down,
+nothing under 5.5pt, nothing off the sheet. `test_print_mobile.mjs` boots the
+whole app (with `fb.js` stubbed at the route, so no Firebase and no auth) at four
+device widths and checks every printable document fits, its controls stay
+reachable and thumb-sized, closing gives the app back, and the screen fit never
+reaches the paper. Add `--shots` to either for PNGs of whatever failed. Both need
+Playwright (`npm i -g playwright && npx playwright install chromium`) and skip
+loudly without it — run them before shipping a change to `drawings.js`,
+`print.js` or `print.css`.
 
 To drive the app locally, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
 

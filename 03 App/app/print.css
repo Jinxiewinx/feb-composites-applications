@@ -261,16 +261,57 @@ tr.blk td.seq {
    print via index.html's @media print block. */
 #printroot.preview { background: #6b7079; padding: 22px 0 40px; }
 #printroot.preview .ws-page { box-shadow: 0 3px 14px rgba(0,0,0,.4); }
+
+/* ---------- fitting a Letter sheet onto a phone ----------
+
+   A sheet is 8.5in — 816 CSS px — and always will be, because "this is exactly
+   what prints" is the entire promise of the preview. On a 390px phone that
+   overflowed by more than double: the browser blew the layout viewport out to
+   816px to contain it, so the traveler's Initial and Date columns sat off the
+   right-hand edge with no way to reach them, and the app around it went with it.
+
+   So the sheet is ZOOMED to fit, never reflowed. Reflowing would make the
+   preview a different document from the paper, which is worse than not having
+   one. `zoom` rather than `transform: scale()` on purpose: zoom shrinks the
+   element's LAYOUT box, so the page stops overflowing and the scroll height
+   comes out right, where a transform leaves an 816px-wide box behind it and a
+   tall gap underneath. print.js sets --pv-zoom; it is 1 on any screen with room. */
+#printroot.preview .ws-page { zoom: var(--pv-zoom, 1); }
+
 #printroot .pv-bar {
   position: sticky; top: 0; z-index: 3;
-  display: flex; gap: 8px; align-items: center;
-  padding: 9px 14px; background: #22262c; color: #fff; font: 13px/1 Arial, sans-serif;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 9px 14px; background: #22262c; color: #fff; font: 13px/1.25 Arial, sans-serif;
+  /* Clear of the home indicator / notch when the preview is full-bleed. */
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
 }
 #printroot .pv-bar .t { font-weight: 700; }
 #printroot .pv-bar .sp { margin-left: auto; }
 #printroot .pv-bar button { font: inherit; padding: 6px 11px; border-radius: 4px; border: 1px solid #4a515b; background: #333941; color: #fff; cursor: pointer; }
 #printroot .pv-bar button.primary { background: #FDB515; border-color: #FDB515; color: #1c2733; font-weight: 700; }
 #printroot .pv-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+/* Narrow: strip the toolbar back to the three things you can DO with the sheet.
+   The title and the caption describe a document that is right there on screen,
+   and the B&W proof is a desk task — it verifies the grayscale constraint while
+   the sheet is being designed, which is not what anyone is doing on a phone at
+   the bench. Left in, they wrapped the bar onto three rows and took a tenth of
+   the screen; part of "printing breaks the UI" was just this. */
+@media (max-width: 640px) {
+  #printroot.preview { padding: 10px 0 24px; }
+  #printroot .pv-bar { gap: 6px; padding-top: 7px; padding-bottom: 7px; }
+  #printroot .pv-bar .cap,
+  #printroot .pv-bar .t,
+  #printroot .pv-bar label { display: none; }
+}
+/* Touch: tap targets, keyed on the INPUT and not on the width. An iPad in
+   portrait is 768px wide and every bit as much a finger as a phone is; sizing
+   these by a width breakpoint left its controls 19px tall. */
+@media (pointer: coarse) {
+  #printroot .pv-bar button { padding: 9px 13px; min-height: 40px; }
+  #printroot .pv-bar label { min-height: 40px; }
+}
 /* Grayscale proof: verifies the B&W-laser constraint without a printer. */
 #printroot.gray .ws-page { filter: grayscale(1) contrast(1.04); }
 

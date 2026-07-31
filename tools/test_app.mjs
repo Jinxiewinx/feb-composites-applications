@@ -1865,5 +1865,53 @@ await t("Drawings is reachable from a plan, and the preview bar counts the real 
   assert(/sheets/.test(openDrawings.toString()), "and openDrawings passes the sheet count");
 });
 
+/* ---------- printing on a phone ---------- */
+
+await t("MOBILE a Letter sheet is zoomed to fit the screen, never enlarged", () => {
+  /* A sheet is 8.5in = 816 CSS px and stays that way — "this is exactly what
+     prints" is the whole promise. On a 390px phone the browser blew the layout
+     viewport out to 816px to contain it, so the traveler's Initial and Date
+     columns sat off the right edge with no way to reach them. */
+  assert(previewZoom(816) === 1, "a screen with room is left alone");
+  assert(previewZoom(1400) === 1, "and a big one is never magnified");
+  const phone = previewZoom(381);            // 393px device less the 12px gutter
+  assert(phone > 0.4 && phone < 0.5, "a phone shrinks to roughly half: " + phone);
+  assert(Math.abs(816 * phone - 381) < 2, "and the fitted sheet lands on the available width");
+  assert(previewZoom(0) === 1 && previewZoom(-5) === 1, "a nonsense width is ignored, not applied");
+});
+
+await t("MOBILE the saved sheet is a standalone document, without the app's chrome", () => {
+  /* The other half of the fix: Save writes the sheet to the device. HTML rather
+     than PDF because a PDF needs a library and this app ships no external
+     scripts — but it has to be SELF-CONTAINED, or the file is unreadable on the
+     device it was saved to, which is the whole point of saving it. */
+  const mounted = `<div class="pv-bar no-print"><span class="t">Print preview</span><button>Close</button><button class="primary">Print</button></div>` +
+    `<div class="wsheet"><div class="ws-page">TRAVELER BODY</div></div>`;
+  const out = sheetFileHtml(mounted, ".ws-page { width: 8.5in; }", "WO-1 traveler");
+  assert(/^<!doctype html>/i.test(out), "a real document, not a fragment");
+  assert(/TRAVELER BODY/.test(out), "the sheet itself is in it");
+  assert(/width: 8\.5in/.test(out), "with the stylesheet inlined");
+  assert(/@page/.test(out), "and a page rule, so it prints right from the file");
+  assert(!/<div class="pv-bar/.test(out), "but not the preview toolbar: " + out.slice(0, 160));
+  assert(!/>Print</.test(out) && !/>Close</.test(out), "nor its buttons");
+  assert(/<title>WO-1 traveler<\/title>/.test(out), "titled so it is findable in Files");
+
+  assert(sheetFileName("WO-SN5-001 traveler") === "WO-SN5-001 traveler.html", "readable filename");
+  assert(!/[/\\]/.test(sheetFileName("a/b\\c")), "path separators can't escape the filename");
+  assert(sheetFileName("") === "sheet.html", "an unnamed sheet still gets a name");
+});
+
+await t("MOBILE the screen fit is reset for paper, and torn down on close", () => {
+  // The zoom is a screen aid for a small display. Left applied it would print a
+  // Letter traveler at half size in the corner of the page.
+  const printCss = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  assert(/#printroot \.ws-page \{[^}]*zoom: 1 !important/.test(printCss),
+    "@media print forces zoom back to 1");
+  assert(/removeProperty\("--pv-zoom"\)/.test(closePrintPreview.toString()),
+    "and closing the preview drops the variable rather than leaving it set");
+  assert(/orientationchange/.test(readFileSync(join(root, "print.js"), "utf8")),
+    "turning the phone re-fits, instead of wasting half a landscape screen");
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

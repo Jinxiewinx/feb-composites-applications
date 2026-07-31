@@ -258,27 +258,106 @@ function fitSheetHtml(wo, opts) {
 
 /* ---------- mounting + preview ---------- */
 
+/* Width of a Letter sheet in CSS px — 8.5in at the spec's 96px/in. The one
+   number the fit is computed against. */
+const SHEET_PX = 8.5 * PX_PER_IN;
+
+/* Shrink the sheet until it fits the screen, and never enlarge it. Called on
+   mount and on resize/orientation change; see the note in print.css for why this
+   is a zoom rather than a reflow, and why it is a zoom rather than a transform.
+   The 12px is breathing room either side so the sheet reads as paper on a
+   background rather than as the page itself. */
+function fitPreview() {
+  const root = printRoot();
+  if (!root || !root.classList || !root.classList.contains("preview")) return 1;
+  const avail = Math.max(1, (document.documentElement || {}).clientWidth || SHEET_PX) - 12;
+  const z = previewZoom(avail);
+  root.style.setProperty("--pv-zoom", String(z));
+  return z;
+}
+// Pure, so the fit is testable without a browser.
+function previewZoom(availPx) {
+  if (!(availPx > 0)) return 1;
+  return Math.min(1, Math.round((availPx / SHEET_PX) * 1000) / 1000);
+}
+
 /* `caption` describes the document being previewed. The traveler is always two
    pages so it used to be hardcoded; the mold drawing set is 2 + one sheet per
    layer, and a preview bar that says "two pages" over a nine-sheet document is
-   worse than no caption at all. */
-function mountSheet(html, previewMode, caption) {
+   worse than no caption at all. `save` is the filename stem for the download —
+   omitted, the Save button is left off.
+
+   Save exists because on a phone the print dialog is the OS's, not ours, and
+   what people actually wanted was the sheet ON THE DEVICE: to keep, to send, to
+   open at the bench with no signal. It writes a self-contained HTML file rather
+   than a PDF because a PDF needs a library, and this app ships no external
+   scripts — see sheetFileHtml. Print still works, and on both iOS and Android
+   its dialog offers Save as PDF, which is the shortest route to a real PDF. */
+function mountSheet(html, previewMode, caption, save) {
   const root = printRoot();
   if (!root) return null;
   // body.sheet is what tells @media print to print the sheet instead of the app.
   // Without it every other tab (status board, documents) would print blank.
   document.body.classList.add("sheet");
+  PRINT_SAVE_NAME = save || "";
   root.innerHTML = (previewMode ? `
     <div class="pv-bar no-print">
       <span class="t">Print preview</span>
-      <span>${esc(caption || "US Letter · two pages · this is exactly what prints")}</span>
+      <span class="cap">${esc(caption || "US Letter · two pages · this is exactly what prints")}</span>
       <span class="sp"></span>
       <label><input type="checkbox" onchange="toggleGrayProof(this.checked)"> B&amp;W proof</label>
       <button onclick="closePrintPreview()">Close</button>
+      ${save ? `<button onclick="downloadSheet()">Save</button>` : ""}
       <button class="primary" onclick="window.print()">Print</button>
     </div>` : "") + html;
   root.className = previewMode ? "preview" : "";
+  fitPreview();
   return root;
+}
+
+/* ---------- saving the sheet to the device ---------- */
+
+let PRINT_SAVE_NAME = "";
+
+/* The mounted sheet as a standalone document: the same markup, with the same
+   stylesheet inlined, so the file on the phone prints identically to the file in
+   the app. The preview furniture is dropped — it is app chrome, not the sheet —
+   and so is the zoom, which is a screen aid for a small display and would
+   otherwise be baked into the saved copy.
+
+   Pure, so the assembly is testable without a browser. */
+function sheetFileHtml(bodyHtml, css, title) {
+  const clean = String(bodyHtml || "").replace(/<div class="pv-bar no-print">[\s\S]*?<\/div>\s*(?=<div)/, "");
+  return `<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title || "FEB Composites")}</title>
+<style>
+@page { size: letter; margin: 0.45in; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.ws-page, .dwg-page { margin: 0 auto 14px; }
+@media print { .ws-page, .dwg-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none; } }
+${css || ""}
+</style></head>
+<body>${clean}</body></html>`;
+}
+function sheetFileName(stem) {
+  const safe = String(stem || "sheet").replace(/[^\w.\- ]+/g, "-").replace(/\s+/g, " ").trim() || "sheet";
+  return `${safe}.html`;
+}
+
+/* Fetch the stylesheet rather than reading document.styleSheets: a cross-origin
+   or not-yet-loaded sheet throws on .cssRules, and print.css is served from the
+   same origin as the app, so a plain fetch is both simpler and can't half-work. */
+async function downloadSheet() {
+  const root = printRoot();
+  if (!root) return;
+  let css = "";
+  try { css = await (await fetch("print.css")).text(); }
+  catch (e) { toast("Couldn't read the sheet styles, so the saved file may look plain.", "error"); }
+  const name = PRINT_SAVE_NAME || "sheet";
+  downloadBlob(sheetFileName(name), new Blob([sheetFileHtml(root.innerHTML, css, name)], { type: "text/html" }));
+  toast(`Saved ${sheetFileName(name)} to your device.`);
 }
 function toggleGrayProof(on) {
   const root = printRoot(); if (!root) return;
@@ -287,6 +366,8 @@ function toggleGrayProof(on) {
 function closePrintPreview() {
   const root = printRoot(); if (!root) return;
   root.innerHTML = ""; root.className = "";
+  root.style.removeProperty("--pv-zoom");
+  PRINT_SAVE_NAME = "";
   document.body.classList.remove("previewing", "sheet");
 }
 
@@ -300,7 +381,7 @@ function woForPrint(id) {
    and a bad pagination is only obvious once you can see the page. */
 function openPrintPreview(id) {
   const wo = woForPrint(id); if (!wo) return;
-  mountSheet(fitSheetHtml(wo, {}), true);
+  mountSheet(fitSheetHtml(wo, {}), true, null, `${pv(wo.id) || "work order"} traveler`);
   document.body.classList.add("previewing");
   window.scrollTo(0, 0);
 }
@@ -313,7 +394,7 @@ function printWO(id) {
 function printBlankWO(process) {
   const p = process || "MoldInfusion";
   const empty = { processType: p, steps: [], layupStack: [], bom: [], qualityChecks: [], timeline: [] };
-  mountSheet(fitSheetHtml(empty, { blank: true }), true);
+  mountSheet(fitSheetHtml(empty, { blank: true }), true, null, `blank ${humanProcess(p).toLowerCase()} traveler`);
   document.body.classList.add("previewing");
   window.scrollTo(0, 0);
 }
@@ -329,6 +410,12 @@ function autoMountForPrint() {
 }
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("beforeprint", autoMountForPrint);
+  /* Re-fit on rotate and on resize. A phone turned to landscape gains 400px of
+     width, and a preview stuck at the portrait zoom wastes half the screen —
+     which on the one device where the sheet is hardest to read is the wrong
+     half. No-ops when nothing is mounted. */
+  window.addEventListener("resize", fitPreview);
+  window.addEventListener("orientationchange", fitPreview);
   // Tear the sheet down after a direct (non-preview) print so the app isn't
   // left with a hidden document mounted behind it.
   window.addEventListener("afterprint", () => {

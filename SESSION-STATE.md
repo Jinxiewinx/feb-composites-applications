@@ -17,6 +17,41 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
 
+## Printing on a phone (`print.js`, `print.css`)
+
+Reported from real use: printing a work order "kind of breaks the UI" on mobile.
+It did. A sheet is 8.5in — **816 CSS px** — because *this is exactly what prints*
+is the whole promise of the preview. On a 390px phone the browser blew the layout
+viewport out to 816px to contain it, so the traveler's Initial and Date columns
+sat off the right edge with no way to reach them, and the app went with it.
+
+Two halves:
+
+- **Fit, don't reflow.** `--pv-zoom` shrinks the sheet to the screen (never
+  enlarges it). Reflowing would make the preview a different document from the
+  paper, which is worse than not having a preview. It is `zoom` and not
+  `transform: scale()` on purpose — zoom shrinks the element's LAYOUT box, so the
+  overflow actually goes away and the scroll height comes out right; a transform
+  leaves an 816px box behind it and a tall gap underneath. **`@media print`
+  forces `zoom: 1`**, or the sheet prints at whatever fraction the screen needed.
+- **Save to the device.** A "Save" button writes the mounted sheet as a
+  self-contained HTML file — markup plus the stylesheet inlined, preview chrome
+  stripped. Not a PDF: a PDF needs a library and this app ships no external
+  scripts. Print still reaches a real PDF, because both iOS and Android offer
+  *Save as PDF* in their own print dialog.
+
+Smaller things that were also part of "breaks the UI": the toolbar wrapped onto
+three rows and ate a tenth of the screen (phones now show Close / Save / Print
+and nothing else — the title, caption and B&W proof are desk furniture), and tap
+targets were sized by a **width** breakpoint, which left an iPad's controls 19px
+tall. They key on `(pointer: coarse)` now.
+
+`tools/test_print_mobile.mjs` is the guard: it boots the real app at four device
+widths, opens all three printable documents, and checks fit, reachability, tap
+size, close-restores-the-app, and that the screen fit never reaches the paper —
+plus that the saved file is genuinely self-contained. Shared Playwright plumbing
+for it and the drawings test lives in `tools/lib/browser.mjs`.
+
 ## 3D viewer: pinch to zoom on a phone (`meshview.js`)
 
 Reported from real use: pinch did nothing on mobile. It was never implemented —

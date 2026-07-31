@@ -44,15 +44,10 @@
    repo can catch a drawing that overprints itself, so run it before touching
    drawings.js or print.css. */
 
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { writeFile, mkdir } from "node:fs/promises";
-import { dirname, join, extname } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
-import { execSync } from "node:child_process";
-
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
+import { serveApp, loadChromium, skipMessage } from "./lib/browser.mjs";
 const SHOTS = process.argv.includes("--shots") || process.argv.includes("--shots-all");
 const SHOTS_ALL = process.argv.includes("--shots-all");
 const SHOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".drawing-shots");
@@ -298,52 +293,13 @@ window.auditSheets = function (minPt, inset) {
 };
 </script></body></html>`;
 
-/* ---------------- static server ---------------- */
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".stl": "model/stl", ".woff2": "font/woff2", ".svg": "image/svg+xml" };
-function serve() {
-  return new Promise(resolve => {
-    const s = createServer(async (req, res) => {
-      const path = decodeURIComponent((req.url || "/").split("?")[0]);
-      if (path === "/__harness.html") {
-        res.writeHead(200, { "content-type": "text/html" });
-        return res.end(HARNESS);
-      }
-      try {
-        const buf = await readFile(join(root, path.replace(/^\/+/, "")));
-        res.writeHead(200, { "content-type": MIME[extname(path)] || "application/octet-stream" });
-        res.end(buf);
-      } catch { res.writeHead(404); res.end("no"); }
-    });
-    s.listen(0, "127.0.0.1", () => resolve({ server: s, port: s.address().port }));
-  });
-}
-
-/* Playwright is not a dependency of this repo — it is a dependency of THIS test.
-   Look where it plausibly is, and say plainly what to do if it is nowhere. */
-async function loadChromium() {
-  const require_ = createRequire(import.meta.url);
-  const tries = [];
-  try { tries.push(require_.resolve("playwright")); } catch { /* not local */ }
-  try {
-    const g = execSync("npm root -g", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    tries.push(join(g, "playwright", "index.mjs"));
-  } catch { /* no npm */ }
-  for (const p of tries) {
-    try { return (await import(p.startsWith("/") ? "file://" + p : p)).chromium; } catch { /* next */ }
-  }
-  return null;
-}
-
 /* ---------------- run ---------------- */
 const chromium = await loadChromium();
-if (!chromium) {
-  console.log("SKIPPED — Playwright is not installed, so the drawing sheets were not rendered.");
-  console.log("  npm i -g playwright && npx playwright install chromium");
-  console.log("  Nothing else in this repo can catch a drawing that overprints itself; run this before shipping a drawings.js change.");
-  process.exit(0);
-}
+if (!chromium) { console.log(skipMessage("the drawing sheets")); process.exit(0); }
 
-const { server, port } = await serve();
+// The harness page is served from the app's own origin, on a virtual route, so
+// it loads the real files and the real samples without leaving a file behind.
+const { server, port } = await serveApp({ "/__harness.html": HARNESS });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 980, height: 1300 }, deviceScaleFactor: 2 });
 const pageErrors = [];
