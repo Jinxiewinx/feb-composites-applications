@@ -58,6 +58,18 @@ const oneW = arg("width", ""), oneT = arg("theme", "");
 const widths = oneW ? WIDTHS.filter(v => v.id === oneW) : WIDTHS;
 const themes = oneT ? THEMES.filter(t => t === oneT) : THEMES;
 
+/* --inset draws the shots as though the device had a notch. env() is always 0
+   in headless Chromium, but the app reads --sa-* rather than env() directly
+   (see the :root block in index.html), so overriding those four is enough to
+   photograph what an iPhone actually shows. Real iPhone 15 Pro values.
+   tools/test_safearea.mjs measures the same thing; this is for looking at it. */
+const INSETS = {
+  none: { t: 0, r: 0, b: 0, l: 0 },
+  portrait: { t: 59, r: 0, b: 34, l: 0 },
+  landscape: { t: 0, r: 59, b: 21, l: 59 },
+};
+const INSET = INSETS[arg("inset", "none")] || INSETS.none;
+
 /* ---------- the states worth a photograph ----------
    A tab is not one picture. The list with the default filter is what you see
    99% of the time; the list with everything shown is where density actually
@@ -157,6 +169,23 @@ for (const vp of widths) {
        afterwards would work too, but it wouldn't photograph the first paint,
        which is the one a user sees. */
     await ctx.addInitScript(`try { localStorage.setItem("feb-theme", ${JSON.stringify(theme)}); } catch (e) {}`);
+    if (arg("inset", "none") !== "none") {
+      await ctx.addInitScript(`
+        addEventListener("DOMContentLoaded", () => {
+          const s = document.createElement("style");
+          s.textContent = ":root { --sa-t: ${INSET.t}px; --sa-r: ${INSET.r}px; --sa-b: ${INSET.b}px; --sa-l: ${INSET.l}px; }";
+          document.head.appendChild(s);
+          /* A faint overlay of the keep-out bands, so a screenshot shows WHERE
+             the island is rather than leaving the reviewer to guess why there
+             is extra padding. Chrome only — never shipped to the app. */
+          const o = document.createElement("div");
+          o.style.cssText = "position:fixed;inset:0;z-index:99999;pointer-events:none;"
+            + "border-top:${INSET.t}px solid rgba(255,0,80,.22);border-right:${INSET.r}px solid rgba(255,0,80,.22);"
+            + "border-bottom:${INSET.b}px solid rgba(255,0,80,.22);border-left:${INSET.l}px solid rgba(255,0,80,.22);";
+          document.body.appendChild(o);
+        });
+      `);
+    }
 
     const page = await ctx.newPage();
     page.on("pageerror", e => problems.push(`${vp.id}/${theme}: page error — ${String(e).slice(0, 200)}`));

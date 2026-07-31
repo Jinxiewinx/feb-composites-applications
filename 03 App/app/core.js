@@ -817,6 +817,50 @@ function render() {
   const tab = TABS.find(t => t.id === view.tab) || TABS[0];
   el.innerHTML = tab.render();
   labelListTables();
+  syncChromeMetrics();
+}
+
+/* Publish the topbar's real height as --topbar-h.
+
+   Everything sticky below the topbar has to clear it, and its height is not a
+   constant anyone can write down: it grows by env(safe-area-inset-top) on a
+   notched phone, and its content wraps differently by width and by role. The
+   old hardcoded `top: 52px` / `top: 62px` were right for a MacBook and wrong
+   for an iPhone, where the jumpbar, the parts rail and the undo bar all pinned
+   underneath the bar they were supposed to sit below.
+
+   Measured rather than computed, because the only honest source for "how tall
+   did that actually come out" is the box the browser laid out. Guarded at every
+   step: tools/test_app.mjs runs the whole app against a DOM stub that has no
+   documentElement and no getBoundingClientRect, and a missing guard here is the
+   same omission that once broke 19 tests in toggleDrawer(). */
+function syncChromeMetrics() {
+  const root = document.documentElement;
+  if (!root || !root.style) return;
+  const tb = document.getElementById("topbar");
+  const box = tb && tb.getBoundingClientRect ? tb.getBoundingClientRect() : null;
+  // An empty topbar is display:none and measures 0; leaving the previous value
+  // in place beats pinning things to the top of the window on the login screen.
+  if (!box || !(box.height > 0)) return;
+  root.style.setProperty("--topbar-h", Math.round(box.height) + "px");
+
+  /* Fold the account row into the ⋯ menu when it genuinely doesn't fit, rather
+     than at a width someone guessed.
+
+     A lead's topbar carries Backup + Restore + Load SN5 archive + Roster +
+     avatar + name + Sign out. Whether that fits depends on the width, on the
+     role, on the name's length AND on the safe-area inset — a landscape iPhone
+     spends 59px of its right edge on the island, which is enough to push Sign
+     out off the screen at 932px even though the breakpoint says "desktop".
+     A media query can read the width but not the inset, so no threshold can be
+     correct here; measuring can.
+
+     Measured in the EXPANDED state and only then collapsed, so this settles in
+     one pass instead of oscillating: with the class on, the bar always fits. */
+  const body = document.body;
+  if (!body || !body.classList || tb.scrollWidth == null) return;
+  body.classList.remove("tb-overflow");
+  if (tb.scrollWidth > tb.clientWidth + 1) body.classList.add("tb-overflow");
 }
 
 // Copy each `table.list` header cell's text onto every body cell's data-label.
@@ -848,3 +892,12 @@ document.addEventListener("keydown", (e) => {
   // modal is open, so this only fires for the drawer).
   if (e.key === "Escape" && document.body.classList.contains("drawer-open")) closeDrawer();
 });
+
+/* Re-measure the chrome when its height can have changed. Rotating a phone is
+   the case that matters: portrait and landscape have different safe-area insets
+   (the island moves from the top edge to a side one), so the topbar's height
+   changes without a single re-render. */
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("resize", syncChromeMetrics);
+  window.addEventListener("orientationchange", syncChromeMetrics);
+}

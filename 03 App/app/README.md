@@ -250,7 +250,9 @@ Tests, from `SN6 Resources/`:
 
 ```
 node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake backend)
+node tools/test_safearea.mjs      # notch / Dynamic Island / home indicator
 node tools/shoot_ui.mjs --out .ui-shots   # PNGs of a tab at 3 widths x 2 themes
+node tools/shoot_ui.mjs --out .ui-shots --inset portrait   # ...with a simulated island
 cd "03 App" && firebase emulators:exec --only firestore \
   --project demo-feb-work-orders "node '../tools/test_wo_rules.mjs'"
 ```
@@ -262,6 +264,19 @@ detail-in-edit at 1440, 900 and 393 in both themes. It resolves the app relative
 to itself rather than the cwd, so running it inside a git worktree photographs
 that worktree — which is how four competing Parts designs were shot under
 identical conditions and compared frame for frame.
+
+**Two rules for anything new that touches a screen edge**, because the app draws
+under the status bar deliberately (`viewport-fit=cover`, standalone PWA,
+translucent status bar — that is what lets the topbar meet the Dynamic Island
+instead of sitting under a white letterbox):
+
+1. Use the `--sa-t` / `--sa-r` / `--sa-b` / `--sa-l` tokens, never `env()`
+   directly. The indirection is what lets `test_safearea.mjs` simulate a phone.
+   Insets belong on the base rule, not inside a `max-width` block: a landscape
+   Pro Max is 932px, so it takes the desktop rules and still has an island.
+2. Anything sticky under the topbar offsets from `--topbar-h`, never a pixel
+   count. The topbar's height depends on the top inset, so `top: 62px` is right
+   on a laptop and puts the element *behind* the bar on a phone.
 
 Read the images with `.claude/agents/ui-reviewer.md`, a read-only reviewer that
 scores a screen 0–5 on eight axes (scan speed, signal-to-ink, colour semantics,

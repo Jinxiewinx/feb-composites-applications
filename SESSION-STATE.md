@@ -10,10 +10,9 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-07-31
-Status: **Parts tab revamped and committed on `claude/parts-tab-revamp`, not
-pushed.** 228 app tests, plus slicer 34 / packer 11 / drawings 8 / print mobile
-13. Four worktree variants were built, scored and removed; the winner is merged.
-See the Parts section directly below.
+Status: **Safe-area work on `claude/mobile-safe-areas`; Parts revamp already on
+main.** 228 app / 34 slicer / 11 packer / 8 drawings / 13 print mobile / 27
+safe-area. See the two sections directly below.
 
 Earlier: **Mold Stack Planner phase 1 built, not yet committed.** Branch
 `mold-sheet-stacking-app`. Board inventory + STL slicer + exploded stack view.
@@ -21,6 +20,51 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 `~/.gstack/projects/Jinxiewinx-feb-composites-applications/simonstarbuck-chisinau-design-20260724-190934.md`.
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
+
+## Safe areas — the notch, the Island, the home indicator (`index.html`, `print.css`, `core.js`)
+
+Reported: opening the engineering drawings on a phone put the print toolbar
+under the Dynamic Island.
+
+**The cause is a deliberate choice, not an oversight.** `viewport-fit=cover` +
+`display: standalone` + `black-translucent` mean the app draws edge to edge, so
+the navy topbar meets the island like a native app. Simon confirmed he wants
+that. The price: **every element at a screen edge owns its own inset**, and only
+two did.
+
+**Two rules, and they are the whole of it:**
+
+1. **Use `--sa-t/-r/-b/-l`, never `env()` directly.** The tokens are declared in
+   `:root` from `env()`. The indirection exists because `env()` cannot be faked
+   in headless Chromium but a custom property holding it *can be overridden* —
+   which is the only reason `tools/test_safearea.mjs` can measure a simulated
+   iPhone instead of grepping the stylesheet for the string `env(`.
+2. **Anything sticky under the topbar offsets from `--topbar-h`**, measured by
+   `syncChromeMetrics()` in core.js. The topbar's height depends on `--sa-t`, so
+   `top: 62px` is correct on a laptop and puts the element *behind* the bar on a
+   phone. That is exactly how the Parts undo bar shipped, and it is invisible to
+   both screenshots and geometry checks — the element is on screen and perfectly
+   laid out, just underneath something opaque.
+
+**Insets go on the BASE rule, not inside a `max-width` block.** A landscape
+iPhone 15 Pro Max is 932 CSS px — wider than the 900px breakpoint — so it takes
+the desktop rules while still having a 59px island down one edge. That profile
+is in the test for exactly this reason and it caught two real bugs the two
+obvious profiles missed.
+
+**The topbar's ⋯ swap is measured, not a breakpoint.** Whether the account row
+fits depends on width, on role, on name length *and* on the side inset; a media
+query can read the first and not the last. `syncChromeMetrics()` measures in the
+expanded state, then sets `body.tb-overflow` — one pass, no oscillation.
+
+The print toolbar's own background grows up into the inset rather than being
+pushed below it, so the island sits on solid `#22262c`. `#printroot.preview`
+therefore has no top padding; that gap is `.pv-bar`'s `margin-bottom`. print.css
+spells the fallback `var(--sa-t, 0px)` because `sheetFileHtml()` inlines it into
+a standalone saved file with no `:root`.
+
+Beware: `test_safearea.mjs` is one big template literal — **no backticks in its
+comments**, same trap that bit `test_drawings.mjs`.
 
 ## Parts tab revamp — and a way to review UI (`parts.js`, `tools/shoot_ui.mjs`)
 

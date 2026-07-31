@@ -60,6 +60,27 @@
     --t: .17s; --t-fast: .12s; --ease: cubic-bezier(.2,.6,.2,1);
     --font: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-display: 'Saira', 'Inter', system-ui, sans-serif;
+    /* safe areas — the notch, the Dynamic Island, the home indicator.
+       The meta viewport sets `viewport-fit=cover` and the PWA runs standalone
+       with a translucent status bar, all three on purpose: that is what lets
+       the navy topbar meet the island like a native app instead of sitting
+       below a white letterbox. The price is that EVERY element at a screen
+       edge owns its own inset, and for a long time only two did.
+
+       Wrapping env() in a custom property is not decoration. env() cannot be
+       faked in a headless browser, but a variable holding it CAN be overridden
+       by an injected stylesheet — which is the whole reason
+       tools/test_safearea.mjs can measure a simulated iPhone instead of
+       grepping this file for the string "env(". Use these, not env() directly. */
+    --sa-t: env(safe-area-inset-top, 0px);
+    --sa-r: env(safe-area-inset-right, 0px);
+    --sa-b: env(safe-area-inset-bottom, 0px);
+    --sa-l: env(safe-area-inset-left, 0px);
+    /* Measured from the real topbar by syncChromeMetrics() in core.js: its
+       height depends on --sa-t, and everything sticky below it has to clear
+       whatever that came out as. The fallback is the old hardcoded number, so
+       a render before the JS runs is no worse than it used to be. */
+    --topbar-h: 52px;
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
@@ -112,6 +133,7 @@
   /* ---- app shell: sidebar + content ---- */
   #app { display: flex; min-height: 100vh; }
   nav.sidebar { width: 216px; flex: 0 0 216px; color: var(--sb-text); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+    padding-left: var(--sa-l);
     background-color: var(--sb-bg);
     background-image: repeating-linear-gradient(45deg, var(--carbon) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, var(--carbon) 0 1px, transparent 1px 7px); }
   nav.sidebar:empty { display: none; }
@@ -134,7 +156,14 @@
   .sb-item .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
   .sb-item .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
   .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  header.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  /* The insets live on the BASE rule, not in the ≤900 block where they started:
+     a landscape iPhone 15 Pro Max is 932px wide, so it takes the desktop rule —
+     and in landscape the island moves to the LEFT, which is why the horizontal
+     insets are here too and not just the top one. Additive: a device with no
+     island still gets its normal 10px. */
+  header.topbar { display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + var(--sa-t)) max(20px, var(--sa-r)) 10px max(20px, var(--sa-l));
+    background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
   header.topbar:empty { display: none; }
   header.topbar h1 { font-family: var(--font-display); font-size: 19px; margin: 0 auto 0 0; color: var(--ink); font-weight: 600; letter-spacing: .01em; }
   .topbar .actions { display: flex; align-items: center; gap: 8px; }
@@ -148,12 +177,19 @@
      showing on desktop *as well as* the full action row it exists to replace,
      and pushed the topbar past the viewport around 950px. */
   .icon-btn.tb-morebtn { display: none; }
+  /* Set by syncChromeMetrics() when the account row measures wider than the bar
+     it lives in — which happens at widths above the ≤900 breakpoint once a
+     landscape safe-area inset eats into the edge, and for a lead whose row is
+     longest. Same swap the breakpoint does, driven by fit instead of by guess. */
+  body.tb-overflow .tb-desktop { display: none; }
+  body.tb-overflow .icon-btn.tb-morebtn { display: inline-flex; }
   .menu-actions { display: flex; flex-direction: column; gap: 6px; }
   .menu-actions button { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 11px 12px; }
   .menu-actions button .ico { color: var(--muted); }
   .menu-actions button.danger .ico { color: var(--bad); }
   #drawer-backdrop { display: none; }
-  main { max-width: 1180px; width: 100%; margin: 0 auto; padding: 18px 20px 60px; }
+  main { max-width: 1180px; width: 100%; margin: 0 auto;
+    padding: 18px max(20px, var(--sa-r)) calc(60px + var(--sa-b)) max(20px, var(--sa-l)); }
   /* All responsive rules live in one block at the end of this stylesheet, so
      they reliably override the base rules above regardless of specificity. */
 
@@ -257,13 +293,13 @@
   /* Work-order section jumps. Sticky under the topbar (which is 5) so it stays
      reachable through a long traveler. */
   .jumpbar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
-    position: sticky; top: 52px; z-index: 4; background: var(--canvas);
+    position: sticky; top: var(--topbar-h); z-index: 4; background: var(--canvas);
     padding: 6px 0; border-bottom: 1px solid var(--line); }
   .jumpbar a { font-size: 12.5px; padding: 4px 9px; border-radius: 5px; text-decoration: none;
     color: var(--muted); border: 1px solid transparent; }
   .jumpbar a:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
   /* Anchored headings clear the sticky topbar + jumpbar instead of hiding under them. */
-  #main [id^="wo-"], #main [id^="pt-"] { scroll-margin-top: 108px; }
+  #main [id^="wo-"], #main [id^="pt-"] { scroll-margin-top: calc(var(--topbar-h) + 56px); }
   .muted { color: var(--muted); }
   .warn { color: var(--bad); font-weight: 600; }
   .ok { color: var(--ok); font-weight: 600; }
@@ -354,7 +390,9 @@
   .pname { font-weight: 600; }
 
   /* ---- toasts ---- */
-  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
+  /* max(), not addition: 16px is already clear of most edges, and a toast
+     floating 50px up from the bottom of a phone looks broken. Take the larger. */
+  #toasts { position: fixed; right: max(16px, var(--sa-r)); bottom: max(16px, var(--sa-b)); z-index: 60; display: flex; flex-direction: column; gap: 8px; }
   .toast { padding: 10px 14px; border-radius: 6px; color: #fff; font-size: 13.5px; box-shadow: 0 4px 14px rgba(9,30,66,.3); max-width: 340px; opacity: 1; transition: opacity .3s, transform .3s; }
   .toast.hide { opacity: 0; transform: translateY(6px); }
   .toast.ok { background: var(--ok); } .toast.err { background: var(--bad); } .toast.info { background: var(--blue); }
@@ -362,7 +400,12 @@
   /* ---- modal ---- */
   #modal { position: fixed; inset: 0; display: none; z-index: 50; }
   #modal.open { display: block; }
-  #modal .backdrop { position: absolute; inset: 0; background: rgba(9,30,66,.54); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+  /* The backdrop is the scroll container, so its padding is what holds every
+     modal card clear of the edges — and that means this one rule also covers
+     the ⋯ menu, global search and the notifications panel, since core.js builds
+     all three through openModal(). */
+  #modal .backdrop { position: absolute; inset: 0; background: rgba(9,30,66,.54); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
+    padding: max(40px, calc(var(--sa-t) + 12px)) max(16px, var(--sa-r)) max(40px, calc(var(--sa-b) + 12px)) max(16px, var(--sa-l)); }
   #modal .modal { background: var(--surface); border-radius: 8px; width: 100%; max-width: 640px; box-shadow: 0 8px 24px rgba(9,30,66,.28); padding: 22px 24px; }
   #modal .modal h2 { margin: 0 0 14px; font-size: 18px; }
   #modal .modal .field { margin-bottom: 12px; }
@@ -437,7 +480,7 @@
   .mddetail { min-width: 0; }
   /* The index outlives the detail, so it gets the card chrome and its own
      scroll: walking 33 parts must never scroll the part you're reading. */
-  .mdindex { position: sticky; top: 62px; max-height: calc(100vh - 84px); display: flex; flex-direction: column;
+  .mdindex { position: sticky; top: calc(var(--topbar-h) + 10px); max-height: calc(100dvh - var(--topbar-h) - 32px); display: flex; flex-direction: column;
     background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); overflow: hidden; }
   .pindex-head { padding: 10px 11px 9px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
   .pindex-head .toolbar { margin-bottom: 8px; }
@@ -530,7 +573,11 @@
   .pstage .ps-steps { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
   .pstage .ps-cap { grid-column: 2; margin-top: -2px; }
   .pstep { font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.1; min-height: 30px; padding: 6px 13px;
-    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    /* Wraps rather than overflows: in a narrow split pane "Mold CAD/CAM Done"
+       is wider than the column, and nowrap made it hang off the edge (and,
+       in landscape, under the island) instead of taking a second line. */
+    white-space: normal; text-align: center; max-width: 100%;
     border: 1px solid var(--border-2); border-radius: 999px; background: var(--card); color: var(--muted);
     transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .pstep:hover { background: var(--hover); color: var(--ink); border-color: var(--accent); }
@@ -555,7 +602,7 @@
      the moment it is wanted. Below the topbar's z-index, above the panes. */
   .undobar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 12px; font-size: 13px;
     border: 1px solid var(--ok-border); border-radius: var(--r-md); background: var(--ok-bg); color: var(--ink);
-    position: sticky; top: 62px; z-index: 4; box-shadow: var(--shadow-md); }
+    position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 4; box-shadow: var(--shadow-md); }
   .undobar .ub-i { display: inline-flex; color: var(--ok); }
   .undobar .ub-t { flex: 1; min-width: 0; }
   .pgrid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
@@ -702,7 +749,11 @@
       width: 264px; max-width: 84vw; z-index: 40;
       transform: translateX(-100%); transition: transform .22s ease;
       box-shadow: 2px 0 18px rgba(9,30,66,.32); overflow-y: auto;
-      padding-top: env(safe-area-inset-top);
+      /* All three, not just the top. Pinned to left:0, so in landscape the FEB
+         mark and every nav label sit under a left-hand island without --sa-l;
+         and it is 100dvh with its own scroll, so without --sa-b there is
+         nothing left to scroll the last nav item clear of the home indicator. */
+      padding-top: var(--sa-t); padding-left: var(--sa-l); padding-bottom: var(--sa-b);
     }
     body.drawer-open nav.sidebar { transform: translateX(0); }
     #drawer-backdrop {
@@ -711,12 +762,10 @@
       transition: opacity .22s;
     }
     body.drawer-open #drawer-backdrop { opacity: 1; pointer-events: auto; }
-    /* Additive, not a replacement: a device with no notch still gets the
-       normal 10px; a notched/dynamic-island device gets 10px of breathing
-       room BELOW the inset, not instead of it (the topbar is sticky at
-       top:0, so with no inset compensation its content sits under the notch). */
-    header.topbar { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
-    main { padding: 16px 14px 72px; }
+    /* Narrower horizontal padding only — the safe-area insets are on the base
+       rule now, and a shorthand here would reset them. */
+    header.topbar { padding-left: max(14px, var(--sa-l)); padding-right: max(14px, var(--sa-r)); }
+    main { padding: 16px max(14px, var(--sa-r)) calc(72px + var(--sa-b)) max(14px, var(--sa-l)); }
 
     /* Swap the account/admin row for the ⋯ menu at the SAME width the sidebar
        becomes a drawer. This used to happen at 640, so between 641 and ~1000 a
@@ -818,7 +867,9 @@
     .board { grid-auto-flow: row; grid-template-columns: 1fr; }
 
     /* Modals: single-column two-up rows, tighter padding on a small screen. */
-    #modal .backdrop { padding: 16px 10px; }
+    /* Tighter, but never at the cost of the insets — this shorthand used to
+       reset them and put the search field under the island. */
+    #modal .backdrop { padding: max(16px, calc(var(--sa-t) + 10px)) max(10px, var(--sa-r)) max(16px, calc(var(--sa-b) + 10px)) max(10px, var(--sa-l)); }
     #modal .modal { padding: 18px 16px; }
     #modal .modal .row2 { grid-template-columns: 1fr; }
 
@@ -842,7 +893,7 @@
     .pstage .ps-steps { gap: 7px; }
     .pstep { min-height: 38px; flex: 1 0 auto; min-width: calc(33.333% - 5px); padding: 8px 12px;
       white-space: normal; text-align: center; }
-    .undobar { flex-wrap: wrap; top: 0; }
+    .undobar { flex-wrap: wrap; }
     /* The pinned season tiles are worth their space on a wide screen, where the
        index and the part share it. On a phone the index IS the other screen and
        already carries them, so here they only push the record down 110px. */

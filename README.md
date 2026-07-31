@@ -79,6 +79,7 @@ node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
 node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
 node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
 node tools/test_print_mobile.mjs  # the printed sheets on a phone: fit, controls, save
+node tools/test_safearea.mjs # the notch, the Dynamic Island, the home indicator
 cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
   "node '../tools/test_wo_rules.mjs'"                      # security rules
 ```
@@ -97,6 +98,18 @@ reaches the paper. Add `--shots` to either for PNGs of whatever failed. Both nee
 Playwright (`npm i -g playwright && npx playwright install chromium`) and skip
 loudly without it — run them before shipping a change to `drawings.js`,
 `print.js` or `print.css`.
+
+`test_safearea.mjs` is the third of that family and the least obvious. The app
+sets `viewport-fit=cover` and runs standalone with a translucent status bar on
+purpose, so it draws edge to edge and the navy topbar meets the Dynamic Island
+like a native app — which means **every element at a screen edge owns its own
+inset**, and getting one wrong hides a button under the island. `env()` can't be
+faked in a headless browser, so the app reads `--sa-t/-r/-b/-l` instead, and the
+test overrides those four to real iPhone 15 Pro values and measures what the
+browser laid out: portrait, landscape, and landscape-on-a-Pro-Max (932px — wider
+than the 900px breakpoint, which is the combination that catches insets left
+inside a media query). It also checks the island lands on *chrome* rather than on
+a table row, and that nothing sticky pins itself behind the topbar.
 
 There's a third thing in that family which is deliberately **not** a test:
 

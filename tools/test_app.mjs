@@ -399,15 +399,22 @@ await t("one person holding both roles is one chip, not two identical faces", ()
     "a stage value is not a person");
 });
 /* The undo bar is only worth having if it is where you can see it. On a phone
-   you set a stage most of a page down the detail pane; pinned to the top of the
-   tab, the bar would be offscreen at exactly the moment it is wanted. Asserted
-   against the stylesheet because the DOM stub computes no styles. */
-await t("the undo bar is sticky, so it is on screen when the mis-tap was not", () => {
+   you set a stage most of a page down the detail pane; left in the page flow the
+   bar would be offscreen at exactly the moment it is wanted.
+
+   It first shipped as `top: 0`, which was wrong in a way nothing caught: the
+   topbar is also sticky at 0 and carries z-index 5 against this bar's 4, so on a
+   phone the undo pinned BEHIND the topbar and was invisible. It has to clear the
+   topbar's real height, which is what --topbar-h is for. Geometry lives in
+   tools/test_safearea.mjs, which can measure; this asserts the wiring, because
+   the DOM stub computes no styles. */
+await t("the undo bar is sticky, and clears the topbar rather than hiding under it", () => {
   const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
   const rule = (css.match(/\.undobar \{[^}]*\}/) || [""])[0];
   assert(/position: sticky/.test(rule), "sticky: " + rule);
   assert(/z-index: 4/.test(rule), "under the topbar (5), over the panes: " + rule);
-  assert(/\.undobar \{ flex-wrap: wrap; top: 0; \}/.test(css), "and flush to the top once the topbar is the only chrome above it");
+  assert(/top: calc\(var\(--topbar-h\)[^)]*\)/.test(rule), "offset from the measured topbar: " + rule);
+  assert(!/\.undobar \{[^}]*top: 0/.test(css), "and never pinned at 0, which put it behind the topbar");
 });
 await t("the season tiles are pinned above an open part, but not on a phone", () => {
   const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");

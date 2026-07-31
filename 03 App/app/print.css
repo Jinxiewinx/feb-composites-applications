@@ -259,7 +259,10 @@ tr.blk td.seq {
 /* ---------- screen-only preview furniture ---------- */
 /* Wraps the sheet on screen so it reads as paper. All of this disappears in
    print via index.html's @media print block. */
-#printroot.preview { background: #6b7079; padding: 22px 0 40px; }
+/* No TOP padding: the toolbar must start flush at y=0 so its background
+   fills the safe-area inset. The 22px gap it used to create now lives on
+   .pv-bar's margin-bottom. */
+#printroot.preview { background: #6b7079; padding: 0 0 calc(40px + var(--sa-b, 0px)); }
 #printroot.preview .ws-page { box-shadow: 0 3px 14px rgba(0,0,0,.4); }
 
 /* ---------- fitting a Letter sheet onto a phone ----------
@@ -278,13 +281,29 @@ tr.blk td.seq {
    tall gap underneath. print.js sets --pv-zoom; it is 1 on any screen with room. */
 #printroot.preview .ws-page { zoom: var(--pv-zoom, 1); }
 
+/* Reported from a phone: the Close / Save / Print row sat under the Dynamic
+   Island. `body.previewing #app { display: none }` hands the whole viewport to
+   #printroot, so this bar is the only chrome on screen and it is sticky at
+   top:0 — there is nothing above it to have absorbed the inset.
+
+   The bar's own BACKGROUND grows up into the inset rather than the bar being
+   pushed below it: the island then sits on solid #22262c and reads as
+   deliberate, where a bar starting below it leaves a strip of the grey paper
+   backdrop above that looks like a rendering fault. The gap that used to come
+   from #printroot.preview's top padding moves to this bar's margin-bottom, or
+   the bar would start 22px down the page and the island would cover that strip.
+
+   var(--sa-t, 0px) with the fallback spelled out, because print.js's
+   sheetFileHtml() inlines this stylesheet into a standalone saved file that has
+   no :root token block from index.html. */
 #printroot .pv-bar {
   position: sticky; top: 0; z-index: 3;
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-  padding: 9px 14px; background: #22262c; color: #fff; font: 13px/1.25 Arial, sans-serif;
-  /* Clear of the home indicator / notch when the preview is full-bleed. */
-  padding-left: max(14px, env(safe-area-inset-left));
-  padding-right: max(14px, env(safe-area-inset-right));
+  padding: calc(9px + var(--sa-t, 0px)) 14px 9px;
+  margin-bottom: 22px;
+  background: #22262c; color: #fff; font: 13px/1.25 Arial, sans-serif;
+  padding-left: max(14px, var(--sa-l, 0px));
+  padding-right: max(14px, var(--sa-r, 0px));
 }
 #printroot .pv-bar .t { font-weight: 700; }
 #printroot .pv-bar .sp { margin-left: auto; }
@@ -299,8 +318,8 @@ tr.blk td.seq {
    the bench. Left in, they wrapped the bar onto three rows and took a tenth of
    the screen; part of "printing breaks the UI" was just this. */
 @media (max-width: 640px) {
-  #printroot.preview { padding: 10px 0 24px; }
-  #printroot .pv-bar { gap: 6px; padding-top: 7px; padding-bottom: 7px; }
+  #printroot.preview { padding: 0 0 calc(24px + var(--sa-b, 0px)); }
+  #printroot .pv-bar { gap: 6px; padding-top: calc(7px + var(--sa-t, 0px)); padding-bottom: 7px; margin-bottom: 10px; }
   #printroot .pv-bar .cap,
   #printroot .pv-bar .t,
   #printroot .pv-bar label { display: none; }
