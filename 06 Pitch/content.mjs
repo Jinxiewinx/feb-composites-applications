@@ -90,7 +90,7 @@ export const acts = [
            for is now the kicker here, and the rest is said out loud. */
         kind: "three-up",
         kicker: "Three from the SN5 review",
-        title: "Three that cost us time, and one reason they were hard to catch",
+        title: "Three from the SN5 review",
         items: [
           { tag: "PP-01", head: "Duratec", body: "Days of mold time per incident, re-coating after sand-through." },
           { tag: "PP-02", head: "Customs", body: "A ~109 lb Easy Composites order sat with no ETA. Rush replacements elsewhere: $120 of ACP rods, ~$400 to expedite." },
@@ -117,8 +117,11 @@ export const acts = [
     slides: [
       {
         kind: "shot-hero",
-        title: "One shared workspace for the season, live for everyone at once",
-        body: ["Runs in a browser, on a laptop or a phone at the bench.", "Free to run: Firebase Blaze with a $1–5 billing cap as the backstop."],
+        title: "One shared workspace, live for everyone at once",
+        body: [
+          "Free to run: Firebase Blaze with a $1–5 billing cap as the backstop.",
+          "Figures on these screens are seeded demo data, not real spend.",
+        ],
         shot: S("05-dashboard"),
         notes: "Say once, here, that the figures on these screens are seeded demo data — the $2,054 tile and the purchase amounts later are not real spend. It costs a sentence and it protects every sourced number in the rest of the deck. Dashboard is read-only on purpose — every row is a link into the tab it came from. Say the URL out loud. If someone opens it on their phone right now, they will hit the login and see nothing, which is the next slide.",
       },
@@ -188,7 +191,7 @@ export const acts = [
       },
       {
         kind: "shot-hero",
-        title: "A numbered cut list, and blocks exported back out as CAM stock",
+        title: "The blocks come back out as CAM stock",
         body: [
           "Export stock STL writes one file per machine setup, in millimetres, at the mold's own CAD origin.",
           "It drops onto the model in CAD with nothing to align, so CAM uses it as the stock body directly. Marked beta.",
@@ -222,13 +225,13 @@ export const acts = [
       },
       {
         kind: "shot-hero",
-        title: "Every buy-off carries the name of the person who signed it, and blockers hold the line",
+        title: "Buy-offs carry a name, and blockers hold the line",
         body: [
           "Stack freeze, mold design review and drop test are blockers: later steps stay locked until they're signed.",
-          "The enforcement is the point. Documentation that doesn't stop anything doesn't change anything.",
+          "It records who was signed in. It does not prove who held the part, and a roster member can still edit the record afterwards.",
         ],
         shot: S("16b-buyoffs"),
-        notes: "Be straight about the boundary here rather than waiting to be asked — it records who was signed in, it does not prove they were the one holding the part, and any roster member can still edit the record afterwards. It closes 'nobody knows who did this', not 'somebody falsified this'. That distinction is on the limits slide too.",
+        notes: "The boundary is on the slide on purpose — it is the lead's first real question and it should not wait until the limits slide. Say what it closes: 'nobody knows who did this', not 'somebody falsified this'. If pressed on why it isn't tamper-proof, the honest answer is that version history and per-record locking are real work nobody has done yet, and the monthly JSON export to Drive is the audit trail in the meantime.",
       },
       {
         kind: "shot-hero",
@@ -263,17 +266,17 @@ export const acts = [
       },
       {
         kind: "shot-left",
-        title: "Purchases run Submitted, Ordered, Reimbursed — with a receipt attached from the phone",
+        title: "Purchases run Submitted, Ordered, Reimbursed",
         body: [
           "Anything over $50 is flagged for approval, per CS-012.",
-          "SN5 ran about $5.3k through one person's personal card. This is the record that makes reimbursement someone else's job too.",
+          "SN5 ran about $5.3k through one person's personal card — the totals on this screen are demo data.",
         ],
         shot: S("19-budget"),
         notes: "The scan-receipt button opens the phone camera directly and attaches the photo to the purchase — no OCR, nothing clever, just the photo taken where the receipt is. This slide usually gets the most nodding from whoever has been fronting the money.",
       },
       {
         kind: "two-up",
-        title: "42 reference docs in the app, and a status board that prints in one click",
+        title: "Every reference doc in the app",
         left: { head: "Documents", body: "25 manufacturer datasheets, the CS standards rendered from source, and the shop printables. Filterable. Anyone can upload.", shot: S("20-documents") },
         right: { head: "Reports", body: "CSV export per dataset, plus the Monday-meeting status board as a single printable page.", shot: S("20b-reports") },
         notes: "The datasheets being in the app rather than a Drive folder is the difference between checking a mix ratio and guessing it. Reports exists so the Monday meeting stops being someone rebuilding a summary by hand every week.",
@@ -287,7 +290,7 @@ export const acts = [
     slides: [
       {
         kind: "stats",
-        title: "Built so it still runs in two years, and tested where it actually breaks",
+        title: "Built to still run in two years",
         stats: [
           { n: "0", label: "build steps", sub: "No framework, no bundler — 24 plain script tags. Open the file and it runs." },
           { n: "1", label: "dependency", sub: "DOMPurify, SRI-pinned and self-hosted after shop wifi silently degraded it from a CDN." },
@@ -311,7 +314,7 @@ export const acts = [
         items: [
           { head: "Buy-offs are not tamper-proof", body: "They record who was signed in. Any roster member can still edit any record, and there is no in-app version history. Monthly JSON exports to Drive are the audit trail." },
           { head: "Notifications are in-app only", body: "Watcher unread state lives in one browser. It does not sync between devices and it does not email." },
-          { head: "Four standards are outlined, not drafted", body: "CS-001, CS-007, CS-008 and CS-009. We shouldn't lean on those the way we'd lean on the other ten." },
+          { head: "Four standards are outlined, not drafted", body: "CS-001, CS-007, CS-008 and CS-009. Outlined means the structure is there and the content isn't." },
           { head: "STL export is beta", body: "Real exports still turn up surprises. Check the stack view before anyone cuts." },
         ],
         notes: "Say this slide slowly and do not soften it. A lead who finds a limitation themselves after adopting it stops trusting everything else you said. Every one of these is written in the repo's own README already — you are reading it out, not confessing.",

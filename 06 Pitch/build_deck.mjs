@@ -143,9 +143,11 @@ function title(s, slide) {
     x: M, y: 4.35, w: 6.9, h: 1.0, margin: 0,
     fontFace: SANS, fontSize: 16, color: ON_DARK, lineSpacing: 23,
   });
+  /* Was MUTED on INK — 2.6:1, below AA, and these are the two lines a projector
+     in a lit room most needs to carry. */
   s.addText(`${meta.presenter}   ·   ${meta.date}`, {
     x: M, y: 6.15, w: 6.0, h: 0.3, margin: 0,
-    fontFace: SANS, fontSize: 12, color: MUTED,
+    fontFace: SANS, fontSize: 12, color: WHITE,
   });
   s.addText(slide.footnote, {
     x: M, y: 6.5, w: 6.0, h: 0.32, margin: 0,
@@ -234,14 +236,26 @@ function shotHero(s, slide) {
   const bandH = 1.25 + body.length * 0.34;
   const bandY = H - bandH;
 
-  s.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: W, h: bandY, fill: { color: CANVAS } });
-
   const a = dims(join(HERE, slide.shot)).aspect;
   const availW = W - 1.1, availH = bandY - 0.55;
   let w = availW, h = w / a;
   if (h > availH) { h = availH; w = h * a; }
+  /* Centred vertically, but never pushed far down: a short banner centred in
+     the field left as much dead panel above it as the panel itself. */
+  const ix = (W - w) / 2, iy = Math.min((bandY - h) / 2 + 0.05, 0.55);
+
+  /* The canvas panel hugs the image rather than filling the whole area above
+     the band. A 5.9:1 cut-list banner centred in a 5in field read as a
+     rendering error — two feet of grey with a strip of table in the middle. */
+  const pad = 0.38;
+  s.addShape(pres.ShapeType.rect, {
+    x: Math.max(0, ix - pad), y: 0,
+    w: Math.min(W, w + pad * 2), h: Math.min(bandY, iy + h + pad),
+    fill: { color: CANVAS },
+  });
+
   s.addImage({
-    path: prep(slide.shot, 0), x: (W - w) / 2, y: (bandY - h) / 2 + 0.05, w, h,
+    path: prep(slide.shot, 0), x: ix, y: iy, w, h,
     shadow: { type: "outer", color: "0a1628", opacity: 0.18, blur: 14, offset: 2, angle: 90 },
   });
 
@@ -263,7 +277,8 @@ function shotHero(s, slide) {
     x: M, y: titleY, w: tw, h: titleH + 0.1, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: WHITE, lineSpacing: pt * 1.13,
   });
-  if (body.length) s.addText(body.join("  "), {
+  if (body.length) s.addText(
+    body.map((t, i) => ({ text: t, options: { breakLine: i < body.length - 1 } })), {
     x: M, y: titleY + titleH + 0.10, w: tw, h: bandH - (titleY + titleH + 0.10 - bandY) - 0.30,
     margin: 0, valign: "top",
     fontFace: SANS, fontSize: 12.5, color: ON_DARK, lineSpacing: 18,
@@ -272,40 +287,51 @@ function shotHero(s, slide) {
 }
 
 /* Claim across the top; the screenshot bleeds into the bottom-right corner,
-   uncropped — aspect ratios here vary too much to force a common frame. */
+   uncropped — aspect ratios here vary too much to force a common frame.
+
+   The caption is laid out AFTER the image, against the image's real box, and
+   the image is shrunk until a caption column fits. The previous version chose
+   between a side column and a full-width band on a float comparison
+   (gutter >= 3.0), and pinned the band at a fixed y with a fixed height — so a
+   0.06in difference in aspect ratio decided whether a slide was legible, and
+   any caption over one line ran underneath the screenshot. Three slides
+   shipped with text buried under the app's nav bar. */
 function shotCorner(s, slide) {
   kicker(s, slide, false);
+
+  const cap = (slide.body || []).filter(Boolean);
+  const BLEED = 0.5, GUTTER = 3.35, GAP = 0.5;
+  const a = dims(join(HERE, slide.shot)).aspect;
+
   const pt = shrink(slide.title, 11.8, [30, 27, 24, 21], 2);
+  const titleY = 0.9;
+  const titleH = linesAt(slide.title, pt, 11.8, true) * pt * 1.14 / 72;
   s.addText(slide.title, {
-    x: M, y: 0.9, w: 11.8, h: 1.15, margin: 0, valign: "top",
+    x: M, y: titleY, w: 11.8, h: titleH + 0.12, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: INK, lineSpacing: pt * 1.14,
   });
 
-  /* A wide screenshot has to sit taller on the slide, which eats the left
-     gutter — so the caption moves up under the title instead of beside it. */
-  const a = dims(join(HERE, slide.shot)).aspect;
-  let h, w;
-  if (a <= 1.75) { h = 5.2; w = h * a; if (w > 9.3) { w = 9.3; h = w / a; } }
-  else { h = 4.5; w = h * a; if (w > 10.4) { w = 10.4; h = w / a; } }
-  /* 0.5in floor on both bled edges. The old build reached 0.04in from the
-     right and 0.00in from the bottom, which cost the last row of four tables. */
-  const BLEED = 0.5;
-  if (w > W - BLEED) { w = W - BLEED; h = w / a; }
-  if (h > H - BLEED) { h = H - BLEED; w = h * a; }
+  /* The image starts below the title, always — no more guessing whether a
+     two-line title clears a 5.2in-tall picture. */
+  const imgTop = titleY + titleH + GAP;
+  let h = Math.min(H - BLEED - imgTop, a <= 1.75 ? 5.2 : 4.5);
+  let w = h * a;
+  const maxW = W - BLEED - M - (cap.length ? GUTTER + 0.45 : 0);
+  if (w > maxW) { w = maxW; h = w / a; }
   const x = W - w - BLEED, y = H - h - BLEED;
   s.addImage({ path: prep(slide.shot, 0), x, y, w, h });
   s.addShape(pres.ShapeType.rect, { x, y, w: 0.012, h, fill: { color: LINE } });
 
-  const cap = (slide.body || []).filter(Boolean).join("  ");
-  const gutter = x - M - 0.45;
-  if (cap && gutter >= 3.0) s.addText(cap, {
-    x: M, y: y + 0.15, w: Math.min(gutter, 4.6), h: h - 0.3, margin: 0, valign: "top",
-    fontFace: SANS, fontSize: 14, color: MUTED, lineSpacing: 21,
-  });
-  else if (cap) s.addText(cap, {
-    x: M, y: 2.15, w: 11.0, h: 0.65, margin: 0, valign: "top",
-    fontFace: SANS, fontSize: 14, color: MUTED, lineSpacing: 21,
-  });
+  if (cap.length) {
+    /* The caption starts under the title, not level with the image. Aligning
+       it to the image top left a band of white across the whole slide whenever
+       the image was short enough to sit low. */
+    const colW = x - M - 0.45;
+    s.addText(cap.map((t, i) => ({ text: t, options: { breakLine: i < cap.length - 1, paraSpaceAfter: 9 } })), {
+      x: M, y: imgTop, w: colW, h: H - BLEED - imgTop, margin: 0, valign: "top",
+      fontFace: SANS, fontSize: 14, color: MUTED, lineSpacing: 21,
+    });
+  }
   s.addNotes(notesFor(slide));
 }
 
@@ -328,9 +354,10 @@ function shotSheet(s, slide) {
     x: M, y: titleY, w: tw, h: titleH + 0.12, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: INK, lineSpacing: pt * 1.15,
   });
-  const cap = (slide.body || []).filter(Boolean).join("  ");
+  const capLines = (slide.body || []).filter(Boolean);
   /* Follows the title. Pinned to a fixed y it orphaned by up to 1.8in. */
-  if (cap) s.addText(cap, {
+  if (capLines.length) s.addText(
+    capLines.map((t, i) => ({ text: t, options: { breakLine: i < capLines.length - 1, paraSpaceAfter: 8 } })), {
     x: M, y: titleY + titleH + 0.45, w: tw, h: 2.4, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 13.5, color: MUTED, lineSpacing: 20,
   });
@@ -454,6 +481,10 @@ function ask(s, slide) {
     x: M, y: 0.95, w: 6.0, h: 0.9, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 44, bold: true, color: WHITE, charSpacing: -0.5,
   });
+  s.addText("WHO", {
+    x: 10.85, y: 1.72, w: 1.7, h: 0.26, margin: 0, align: "center",
+    fontFace: SANS, fontSize: 9.5, bold: true, charSpacing: 2, color: GOLD,
+  });
   const top = 2.15, rowH = 1.18;
   slide.asks.forEach((a, i) => {
     const y = top + i * rowH;
@@ -470,9 +501,19 @@ function ask(s, slide) {
       x: 5.25, y: y - 0.04, w: 5.55, h: 1.0, margin: 0, valign: "top",
       fontFace: SANS, fontSize: 12.5, color: ON_DARK, lineSpacing: 17,
     });
-    s.addText(`${a.owner}\n${a.when}`, {
-      x: 11.0, y: y - 0.04, w: 1.55, h: 0.8, margin: 0, valign: "top", align: "right",
-      fontFace: SANS, fontSize: 12, bold: true, color: WHITE, lineSpacing: 17,
+    /* Owner is blank by design — a name gets said out loud and written in.
+       Blank alone rendered as nothing at all, so the column read as dates. A
+       rule under the empty cell is the thing that asks the question. */
+    s.addText(a.owner || "", {
+      x: 10.85, y: y - 0.06, w: 1.7, h: 0.3, margin: 0, valign: "middle", align: "center",
+      fontFace: SANS, fontSize: 12, bold: true, color: WHITE,
+    });
+    if (!a.owner) s.addShape(pres.ShapeType.rect, {
+      x: 10.9, y: y + 0.26, w: 1.6, h: 0.012, fill: { color: GOLD },
+    });
+    s.addText(a.when, {
+      x: 10.85, y: y + 0.34, w: 1.7, h: 0.3, margin: 0, valign: "top", align: "center",
+      fontFace: SANS, fontSize: 11, color: ON_DARK,
     });
   });
   s.addText(slide.footnote, {

@@ -223,16 +223,18 @@ const SHOTS = [
     device: { width: 1440, height: 1700, dsf: 2 },
     wait: 3500,
     clipTo: `(() => {
-      /* Plan title down through the legend under the canvas: the slide has to
-         carry which plan this is, not just a floating render. +56px reaches
-         past the canvas for the mold/stock key and the Reset view button. */
-      const h2 = document.querySelector('#main .card h2');
-      const c = document.querySelector('#main canvas');
-      if (!h2 || !c) return null;
-      const a = h2.getBoundingClientRect(), b = c.getBoundingClientRect();
+      /* The exploded stack drawing, which is what the planner actually
+         produces. Framing on the 3D canvas left the stack out of the deck's
+         centrepiece; framing on both dragged in half a screen of empty
+         viewport and came out 0.6:1. The 3D view has its own slide. */
+      const stack = [...document.querySelectorAll('#main h3')]
+        .find(x => /^\s*Stack\s*$/i.test(x.textContent));
+      const svg = stack && stack.nextElementSibling;
+      if (!stack || !svg) return null;
+      const a = stack.getBoundingClientRect(), b = svg.getBoundingClientRect();
       return { getBoundingClientRect: () => ({
         x: Math.min(a.x, b.x), y: a.y,
-        width: Math.max(a.width, b.width), height: (b.bottom + 56) - a.y }) };
+        width: Math.max(a.width, b.width), height: b.bottom - a.y }) };
     })()`,
     clipPad: 16,
     run: `PLAN_NOSECONE`,
