@@ -25,3 +25,7 @@ __pycache__/
 
 # Sheet images written by tools/test_drawings.mjs --shots
 .drawing-shots/
+
+# Pitch deck build intermediates
+06 Pitch/render/
+06 Pitch/*.pdf
