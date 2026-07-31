@@ -28,3 +28,6 @@ __pycache__/
 
 # Screenshots written by tools/shoot_ui.mjs --out .ui-shots
 .ui-shots/
+
+# Transient git worktrees created for parallel subagents
+.claude/worktrees/
