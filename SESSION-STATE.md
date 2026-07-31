@@ -9,13 +9,69 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-07-25
-Status: **Mold Stack Planner phase 1 built, not yet committed.** Branch
+Last updated: 2026-07-31
+Status: **Parts tab revamped and committed on `claude/parts-tab-revamp`, not
+pushed.** 228 app tests, plus slicer 34 / packer 11 / drawings 8 / print mobile
+13. Four worktree variants were built, scored and removed; the winner is merged.
+See the Parts section directly below.
+
+Earlier: **Mold Stack Planner phase 1 built, not yet committed.** Branch
 `mold-sheet-stacking-app`. Board inventory + STL slicer + exploded stack view.
 Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 `~/.gstack/projects/Jinxiewinx-feb-composites-applications/simonstarbuck-chisinau-design-20260724-190934.md`.
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
+
+## Parts tab revamp — and a way to review UI (`parts.js`, `tools/shoot_ui.mjs`)
+
+Reported: "I like the progress bars, but it's a little cluttered, and when you
+click into a part, the interface kinda sucks."
+
+**The clutter was duplication, not density.** Each of the three stages was drawn
+twice — a coloured pill *and* a bar under it, same value. 12 rows × 3 stages = 36
+saturated badges, so nothing was emphasised and nothing read. On a phone that
+became ~7000px of scroll for 12 parts.
+
+**There was also a real bug nobody had seen.** `STAGE_MOLD` starts with
+`"N/A (Flat)"`, so `"Not Started"` sat at index 1 and `stageClass` returned
+`st-mid` → amber. Every un-started mold rendered as in-progress while every
+un-started CAD rendered grey — in the one column a lead scans for "what hasn't
+been touched". **Progress colour is now derived from what a value means, never
+from where it sits in an array.** If you add a stage enum, do the same.
+
+**Process, worth repeating.** Four complete redesigns were built in parallel git
+worktrees from one shared contract, then scored by `.claude/agents/ui-reviewer.md`
+against rendered screenshots: a tightened table (3.63), a pipeline board (3.00), a
+grouped list with inline steppers (3.25), a master–detail split (4.63 — the only
+pass). The split won and shipped, but the decisive move was **transplanting the
+board variant's stage stepper into it** — the winner's one weak axis was
+interaction cost, and a loser had solved exactly that. Build several, score them,
+then merge the best ideas across; do not just pick one and discard the rest.
+
+**What shipped.** Above 900px, an index of every part beside the selected one —
+`view.mode` stays authoritative, so `openRecord()` from a chip, ⌘K, Dashboard or
+Timeline needs no special case, and the ≤900 collapse is one CSS rule. `↑↓`/`jk`
+walk the index, `1`/`2`/`3` advance the three stages. Each stage is a row of
+clickable steps with no edit mode (5 interactions → 1). Forward one step writes
+and leaves a sticky undo; backwards, →`N/A (Flat)`, or skipping steps confirms
+first and names what it would skip — this is a live shared database, so the
+*surprising* directions are the gated ones. Touch targets clear 34px at 393px by
+moving the stage label above the steps, not by shrinking them.
+
+**`tools/shoot_ui.mjs` is a camera, not a test — leave it that way.** It asserts
+nothing. Everything else in `tools/` asserts on strings, numbers or laid-out
+geometry, and the Parts tab passed all of it while drawing every fact twice and
+lying about colour. Some failures are only visible by looking. It resolves the
+app relative to itself, not the cwd, so it photographs whichever worktree it runs
+in — that is what made the four-way comparison possible, and it's why it must not
+be "tidied" into using `process.cwd()`.
+
+Things the reviewer caught that a human reading the diff would not: the losing
+board variant painted `"Not Started"` green with a checkmark (a fresh instance of
+the very bug being fixed); the grouped-list variant's one-click stage segments
+were ~10 CSS px wide at phone size *and were live writes to shared data*; and the
+winner's undo bar was rendered at the top of the tab, so on a phone it appeared
+off-screen at exactly the moment it was wanted.
 
 ## Printing on a phone (`print.js`, `print.css`)
 

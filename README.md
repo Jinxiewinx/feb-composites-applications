@@ -27,7 +27,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 - **Dashboard** — your open items, team deadlines in the next two weeks, anything behind schedule, watched tickets with new activity, and the budget at a glance. Read-only; every row links into the tab it came from.
 - **Work Orders** — the manufacturing traveler: layup stack, BOM, step buy-offs stamped with who signed them, blocker enforcement, and a printable hand-fillable sheet. Every printed sheet is exactly two pages — the app measures the content and picks the most generous layout that still fits, so nothing spills onto a third page.
-- **Parts** — the season's Part Tracker: CAD/Mold/Layup progress, subteam, engineers, target weight, layup deadline.
+- **Parts** — the season's Part Tracker: CAD/Mold/Layup progress, subteam, engineers, target weight, layup deadline. On a wide screen it's a split — every part indexed down the left, the selected one beside it — so opening a part doesn't destroy the list and going back doesn't destroy the part. Arrow keys walk the index and `1`/`2`/`3` advance the three stages, so you can work down your own parts without touching the mouse. Each stage is a row of steps you click directly; going forward writes and leaves an undo, while going backwards or skipping steps asks first and says what it would skip. With nothing selected the right pane shows the season instead: how the open parts spread across the three stages, and who owns what's behind.
 - **Stock** — a live tooling-board inventory (a full 4×8 sheet and an offcut are the same kind of record, so remnants come back into stock instead of piling up), plus the **mold stack planner**: hand it a mold STL (or just type a rectangular block) and it works out which boards to glue and how to saw them — picks thicknesses that waste the least board, splits tall molds at the ShopSabre's ~6″ cut-depth limit, prints a numbered cut list, and draws the stack exploded so a reviewer can check the fit before signing off. A real Fusion export is often 30+ separate bodies, so it splits them and asks which one you mean. Two things make the sign-off less of an act of faith: a **rotatable 3D view** of the actual mold sitting inside the translucent blocks (the exploded drawing only ever showed it as a dashed outline traced on each layer) — drag to turn it, scroll or pinch to zoom, and the pinch works on a phone at the bench, and **Export stock STL**, which writes the planned blocks back out — one file per machine setup, in millimetres, at the mold's own CAD origin, so it drops onto the model in CAD and CAM can use it as the stock body without anyone re-modelling it by hand. The stack also prints as a proper **engineering drawing set** — a general isometric, a third-angle three-view, and then one dimensioned sheet per layer, because the boards get glued by hand and whoever is holding layer 3 needs to know how far in from each edge of layer 2 it goes. Dimensions read in inches to the nearest 1/16″ with the exact millimetre bracketed beside them, the mold is drawn under the blocks as a silhouette traced off the stored STL, and every sheet marks the same datum corner. Three sample molds ship with the app, so the planner can be tried without exporting anything from Fusion first, and **Load SN5 archive** now also brings in the board rack SN5 left behind — the planner picks thicknesses from what you actually own, so a fresh project has nothing to plan against until that runs.
 - **Tickets** — a jira-style tracker merging what used to be separate Projects and Issues: R&D, process fixes, bugs, outreach, anything that isn't a part. Board or list view, assignees, watchers, due dates, sub-tickets, cross-links to parts and work orders, a comment thread with rich text (headings, links, code, tables) and downloadable photo attachments.
 - **Timeline** — the production schedule as a station-by-week grid.
@@ -38,6 +38,8 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 - **People** — the roster with photos, roles, and each person's live assignments across parts, tickets and work orders.
 
 ![Mold stack planner: an STL turns into an exploded board stack and a numbered cut list](03%20App/design/stock-mockup-20260728.png)
+
+![Parts tab: the index of every part beside the selected one, with each stage a row of steps you click](03%20App/design/parts-detail-mockup-20260731.png)
 
 Cross-links are everywhere — click a chip to jump to the related record. Press ⌘K (Ctrl-K) for global search. It has a light and dark theme (follows system setting, remembered after that), and printing always comes out black-on-white regardless of theme.
 
@@ -95,6 +97,24 @@ reaches the paper. Add `--shots` to either for PNGs of whatever failed. Both nee
 Playwright (`npm i -g playwright && npx playwright install chromium`) and skip
 loudly without it — run them before shipping a change to `drawings.js`,
 `print.js` or `print.css`.
+
+There's a third thing in that family which is deliberately **not** a test:
+
+```bash
+node tools/shoot_ui.mjs --out .ui-shots    # PNGs of a tab, 3 widths x 2 themes
+```
+
+It renders the real app with real SN5 data and writes images. It asserts nothing,
+because the failure it exists for can't be written down as a number — the Parts
+tab passed every string assertion in `test_app.mjs` while drawing each of its
+three progress stages twice, and colouring un-started molds as if they were
+half-finished. Nobody had looked at it. Pair it with
+`.claude/agents/ui-reviewer.md`, a read-only reviewer that scores a screen on
+eight axes and only passes at no-axis-below-3, average ≥4 — the same bar
+`00 Agent/simon.md` applies to documents. Because `shoot_ui.mjs` resolves the app
+relative to itself rather than the cwd, running it inside a git worktree
+photographs that worktree, which is how four competing designs for the Parts tab
+were shot under identical conditions and judged frame for frame.
 
 To drive the app locally, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
 

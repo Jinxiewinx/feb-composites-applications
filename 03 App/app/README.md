@@ -19,6 +19,28 @@ Parts is last season's Part Tracker reborn. Each part carries three parallel
 progress stages (CAD, Mold, Layup) plus subteam, layup type and schedule,
 engineers, target weight, and a layup deadline.
 
+Above 900px it is a split: an index of every part down the left, the selected
+part beside it. Opening a part no longer destroys the list and going back no
+longer destroys the part, so you can work down your own parts without the page
+swapping under you — `↑`/`↓` or `j`/`k` walk the index, `1`/`2`/`3` advance CAD,
+Mold and Layup on whatever is open, `/` searches and `esc` clears. With nothing
+selected the right pane is the season instead: how the open parts are spread
+across the three stages, and who owns what is behind. Below 900px it collapses to
+the older shape — the index is the page, tapping opens the part, back returns.
+
+Each stage is a row of its own enum, and you set it by clicking the step you
+want. There is no edit mode for progress, because advancing a stage is the thing
+people do most and it used to cost five interactions. Moving forward one step
+writes immediately and leaves an undo; moving backwards, declaring a part flat,
+or skipping steps asks first and names what it would skip — this is a live shared
+database, so the surprising directions are the ones that get a confirmation.
+
+A stage that hasn't started reads grey, never amber. That sounds obvious, but it
+was wrong for the whole of SN5: `"N/A (Flat)"` occupies slot 0 of the mold enum,
+so `"Not Started"` sat at index 1 and coloured itself as in-progress. Progress
+colour is derived from what a value *means* now, never from where it sits in an
+array.
+
 Projects is a jira-style tracker for non-part work such as R&D, process fixes and
 outreach. Create from a modal with assignee and related-part pickers and a due
 date, then drag cards across a Backlog/Active/Blocked/Done board or use list
@@ -228,9 +250,26 @@ Tests, from `SN6 Resources/`:
 
 ```
 node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake backend)
+node tools/shoot_ui.mjs --out .ui-shots   # PNGs of a tab at 3 widths x 2 themes
 cd "03 App" && firebase emulators:exec --only firestore \
   --project demo-feb-work-orders "node '../tools/test_wo_rules.mjs'"
 ```
+
+`shoot_ui.mjs` is a camera, not a test — it asserts nothing. It boots the real
+app with `fb.js` stubbed at the route and the SN5 archives seeded, then writes
+`<label>-<state>-<width>-<theme>.png` for list, list-with-completed, detail and
+detail-in-edit at 1440, 900 and 393 in both themes. It resolves the app relative
+to itself rather than the cwd, so running it inside a git worktree photographs
+that worktree — which is how four competing Parts designs were shot under
+identical conditions and compared frame for frame.
+
+Read the images with `.claude/agents/ui-reviewer.md`, a read-only reviewer that
+scores a screen 0–5 on eight axes (scan speed, signal-to-ink, colour semantics,
+interaction cost, wayfinding, hierarchy, responsive integrity, house fidelity)
+and passes only at no-axis-below-3 and average ≥4 — the same bar as the `simon`
+reviewer in `00 Agent/`. Worth running before any UI change lands: the string
+assertions in `test_app.mjs` will happily pass a screen that draws every fact
+twice, and did.
 
 The second proves the rules actually enforce access: non-roster users are
 rejected, members can CRUD every collection but can't delete or touch the roster,
