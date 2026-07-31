@@ -339,17 +339,113 @@ await t("keyboard nav keeps its hands off text fields and other tabs", () => {
   setTab("workorders");
   assert(partsKeydown({ key: "ArrowDown", target: { tagName: "BODY" } }) === null, "and nothing at all on another tab");
 });
-await t("progress is rendered once, and stays visible in edit mode", () => {
+await t("progress is rendered once, as a stepper — no edit mode, no dropdown", () => {
   partsFixture(); openRecord("parts", "P-N1");
   let html = main.innerHTML;
   assert((html.match(/class="pstage"/g) || []).length === 3, "one row per stage, not a read-only grid AND a pill row: " + (html.match(/class="pstage"/g) || []).length);
-  assert(html.includes('class="stage st-done"') && html.includes('class="stage st-0"'), "named pills on the detail pane");
-  assert(!html.includes("ps-edit"), "no selects while reading");
+  // Every value of every enum is on screen as its own button: 3 + 6 + 4.
+  assert((html.match(/class="pstep/g) || []).length === STAGE_CAD.length + STAGE_MOLD.length + STAGE_LAYUP.length, "the whole enum is laid out: " + (html.match(/class="pstep/g) || []).length);
+  assert(html.includes(`setPartStage('P-N1','layupProgress','Layup Complete',event)`), "one click writes the step you pointed at");
+  assert(html.includes('class="pstep cur st-done"'), "current step carries the stage colour");
+  assert(!html.includes("ps-edit"), "no select anywhere — the display IS the control");
   view.edit = true; render();
   html = main.innerHTML;
-  assert((html.match(/class="pstage"/g) || []).length === 3, "still exactly one row per stage in edit mode");
-  assert(html.includes('class="stage st-done"'), "the at-a-glance read survives editing (it used to vanish)");
-  assert((html.match(/class="ps-edit"/g) || []).length === 3, "with a select beside each");
+  assert((html.match(/class="pstage"/g) || []).length === 3, "still exactly one row per stage with the record in edit mode");
+  assert((html.match(/class="pstep/g) || []).length === STAGE_CAD.length + STAGE_MOLD.length + STAGE_LAYUP.length, "and the stepper is the same control in both modes");
+  view.edit = false;
+});
+await t("a passed step is muted, never green and never ticked", () => {
+  partsFixture(); openRecord("parts", "P-N1");   // layup is "In Layup": "Not Started" is behind it
+  const html = main.innerHTML;
+  const steps = [...html.matchAll(/<button type="button" class="([^"]*)"[\s\S]*?>([^<]*)<\/button>/g)].map(m => ({ cls: m[1], txt: m[2] }));
+  const notStarted = steps.filter(s => s.txt === "Not Started");
+  assert(notStarted.length === 3, "one per stage: " + notStarted.length);
+  const passed = steps.filter(s => s.cls.includes("past"));
+  assert(passed.length, "P-N1 has passed steps to check");
+  passed.forEach(s => {
+    assert(!s.cls.includes("st-done"), "a passed step must not borrow the done colour: " + s.cls);
+    assert(!/[✓✔]/.test(s.txt), "and must not be ticked: " + s.txt);
+  });
+  // The specific bug transplanted FROM (variant B painted "Not Started" green
+  // with a checkmark, which means "finished" everywhere else in this app).
+  notStarted.forEach(s => assert(!s.cls.includes("st-done") && !/[✓✔]/.test(s.txt), "unstarted stays grey: " + s.cls + " / " + s.txt));
+});
+await t("one step forward writes straight away, with a toast and an undo bar", () => {
+  partsFixture(); openRecord("parts", "P-N2");
+  calls.length = 0; lastToast = ""; globalThis.__confirmCb = null;
+  const r = setPartStage("P-N2", "cadProgress", "Part CAD Done");   // Not Started → next
+  assert(r === "applied", "no confirmation for the ordinary move: " + r);
+  assert(partById("P-N2").cadProgress === "Part CAD Done");
+  assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "cadProgress"), "single named field: " + JSON.stringify(calls));
+  assert(lastToast.includes("Part CAD Done"), "said what it did: " + lastToast);
+  assert(main.innerHTML.includes("undobar") && main.innerHTML.includes("undoPartStage()"), "and left an undo that outlives the toast");
+  calls.length = 0;
+  undoPartStage();
+  assert(partById("P-N2").cadProgress === "Not Started", "undo puts it back: " + partById("P-N2").cadProgress);
+  assert(calls.some(c => c[0] === "save" && c[3] === "cadProgress"), "as its own write");
+  assert(!main.innerHTML.includes("undobar"), "and the bar goes away once used");
+});
+await t("clicking the step you are already on does nothing at all", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  calls.length = 0;
+  assert(setPartStage("P-N1", "layupProgress", "In Layup") === null, "no write");
+  assert(!calls.length, "nothing saved: " + JSON.stringify(calls));
+});
+await t("stepping BACKWARDS asks first — it erases recorded work for everyone", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  calls.length = 0; globalThis.__confirmCb = null;
+  const r = setPartStage("P-N1", "layupProgress", "Not Started");
+  assert(r === "confirm-back", "confirmed, not applied: " + r);
+  assert(partById("P-N1").layupProgress === "In Layup", "and nothing written until it is answered");
+  assert(!calls.length, "no save before the answer");
+  confirmProceed();
+  assert(partById("P-N1").layupProgress === "Not Started", "answering yes applies it");
+  assert(calls.some(c => c[0] === "save" && c[3] === "layupProgress"));
+});
+await t("a MULTI-STEP forward jump asks too, and names the steps it would skip", () => {
+  // The hole the reviewer found in variant C: one click could jump several
+  // steps with nothing but a toast to mention it.
+  partsFixture(); openRecord("parts", "P-N2");   // mold: "Machining"
+  calls.length = 0; globalThis.__confirmCb = null;
+  const r = setPartStage("P-N2", "moldProgress", "Ready For Layup");   // skips Machine Complete + Sealed
+  assert(r === "confirm-jump", "a jump is not an ordinary advance: " + r);
+  assert(partById("P-N2").moldProgress === "Machining", "unwritten until answered");
+  assert(el("modal").innerHTML.includes("Machine Complete") && el("modal").innerHTML.includes("Sealed"), "the question names what it skips: " + el("modal").innerHTML);
+  confirmProceed();
+  assert(partById("P-N2").moldProgress === "Ready For Layup");
+  // ...while the very next step is still a single unprompted click.
+  partsFixture(); openRecord("parts", "P-N2");
+  assert(setPartStage("P-N2", "moldProgress", "Machine Complete") === "applied", "one step is still one click");
+});
+await t("marking a part flat (N/A) asks first, and says so on the detail page", () => {
+  partsFixture(); openRecord("parts", "P-N2");
+  globalThis.__confirmCb = null;
+  const r = setPartStage("P-N2", "moldProgress", "N/A (Flat)");
+  assert(r === "confirm-na", "never a silent write: " + r);
+  assert(el("modal").innerHTML.toLowerCase().includes("flat"), "asked in the part's language: " + el("modal").innerHTML);
+  confirmProceed();
+  assert(partById("P-N2").moldProgress === "N/A (Flat)");
+  assert(main.innerHTML.includes("flat — no mold"), "and the detail page spells out what the violet pill means");
+  // Leaving N/A joins the track at its first step, which is one move, not a jump.
+  assert(setPartStage("P-N2", "moldProgress", "Not Started") === "applied", "coming back off N/A is an ordinary move");
+});
+await t("1 / 2 / 3 advance CAD / Mold / Layup on the open part by exactly one step", () => {
+  partsFixture(); render();
+  assert(partsKeydown({ key: "1", target: { tagName: "BODY" } }) === null, "nothing to advance with no part open");
+  selectPart("P-N2");                                  // CAD "Not Started", mold "Machining"
+  partsKeydown({ key: "1", target: { tagName: "BODY" } });
+  assert(partById("P-N2").cadProgress === "Part CAD Done", "1 = CAD: " + partById("P-N2").cadProgress);
+  globalThis.__confirmCb = null;
+  partsKeydown({ key: "2", target: { tagName: "BODY" } });
+  assert(partById("P-N2").moldProgress === "Machine Complete", "2 = Mold, one step: " + partById("P-N2").moldProgress);
+  assert(!globalThis.__confirmCb, "one step never asks");
+  partsKeydown({ key: "3", target: { tagName: "BODY" } });
+  assert(partById("P-N2").layupProgress === "In Layup", "3 = Layup: " + partById("P-N2").layupProgress);
+  // Already at the end: says so rather than wrapping round to Not Started.
+  DB.parts[1].layupProgress = "Polished"; lastToast = "";
+  partsKeydown({ key: "3", target: { tagName: "BODY" } });
+  assert(partById("P-N2").layupProgress === "Polished" && lastToast.includes("already"), "end of the track: " + lastToast);
+  assert(partsKeydown({ key: "1", target: { tagName: "INPUT" } }) === null, "and never while someone is typing");
 });
 await t("edit mode gives workOrderId a picker and layupDeadline a real date input", () => {
   partsFixture(); openRecord("parts", "P-N1"); view.edit = true; render();
@@ -429,8 +525,9 @@ await t("every SN5 record renders in both panes with no migration", () => {
   seed.forEach(p => {
     openRecord("parts", p.id);
     assert(main.innerHTML.includes("pt-progress") && main.innerHTML.includes("pt-links"), p.id + " detail failed to render");
+    assert(main.innerHTML.includes("ps-steps"), p.id + " stage stepper failed to render");
     view.edit = true; render();
-    assert(main.innerHTML.includes("ps-edit"), p.id + " edit mode failed to render");
+    assert(main.innerHTML.includes("pgrid"), p.id + " edit mode failed to render");
     view.edit = false;
   });
 });
@@ -444,6 +541,73 @@ await t("the ≤900 collapse is a stylesheet rule, in the one responsive block, 
   assert(css.slice(respAt).indexOf(".pitem { grid-template-columns: minmax(0, 1fr) 168px") > 0, "as does the one-line row for the tablet band");
   // Above the breakpoint both panes are shown, so neither rule may exist outside a media query.
   assert(css.slice(0, respAt).indexOf("has-sel") === -1, "no has-sel rule above the responsive block");
+  // The tablet band is an intersection of the two house breakpoints, not a new
+  // one — and it has to say what it buys.
+  const band = css.indexOf("@media (min-width: 641px) and (max-width: 900px)");
+  assert(band > respAt, "the tablet band is inside the responsive block");
+  assert(/what it buys/i.test(css.slice(band - 700, band)), "and is commented with what it buys");
+});
+await t("the stage stepper clears a 34px touch target on a phone, and never shrinks to fit", () => {
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  const phone = css.lastIndexOf("@media (max-width: 640px)");
+  const coarse = css.lastIndexOf("@media (pointer: coarse) {");
+  assert(phone > 0 && coarse > phone, "both blocks present, coarse last");
+  const phoneRules = css.slice(phone, coarse);
+  const m = /\.pstep \{[^}]*min-height:\s*(\d+)px/.exec(phoneRules);
+  assert(m, "the phone block sizes the step: " + phoneRules.slice(phoneRules.indexOf(".pstep"), phoneRules.indexOf(".pstep") + 200));
+  assert(+m[1] >= 34, "a 393px step must clear 34px, got " + m[1] + "px");
+  assert(/min-width:\s*calc\(33/.test(phoneRules), "and stays a third of the row wide rather than shrinking: " + m[0]);
+  const c = /\.pstep \{[^}]*min-height:\s*(\d+)px/.exec(css.slice(coarse));
+  assert(c && +c[1] >= 34, "a touchscreen at any width gets it too: " + (c && c[1]));
+});
+await t("the C/M/L marks in the rail are labelled once, where a column header would be", () => {
+  partsFixture(); render();
+  const head = main.innerHTML.slice(0, main.innerHTML.indexOf('class="plist"'));
+  assert(head.includes("plegend"), "a key in the index header");
+  PART_STAGES.forEach(st => assert(head.includes(`<b>${st.short}</b></span></span>${st.label}`), st.short + " is spelled out as " + st.label + ": " + head.slice(head.indexOf("plegend"), head.indexOf("plegend") + 400)));
+  // Once, not on every row: the rows still carry the bare letters.
+  assert((main.innerHTML.match(/plegend/g) || []).length === 1, "exactly one key on the page");
+});
+await t("the late parts are not printed twice on one screen", () => {
+  partsFixture(); render();
+  const html = main.innerHTML;
+  const split = html.indexOf('class="mddetail"');
+  const rail = html.slice(0, split), pane = html.slice(split);
+  assert(rail.includes("NOSECONE"), "the late part is at the top of the rail (deadline sort)");
+  // The overview's Behind-deadline card used to repeat those same rows.
+  const card = pane.slice(pane.indexOf("<h3>Behind deadline</h3>"), pane.indexOf("Due in the next three weeks"));
+  assert(card, "the card is still there");
+  assert(!card.includes("NOSECONE"), "and does NOT list the same parts a second time: " + card);
+  assert(card.includes("Show only these"), "it is a count plus a filter instead: " + card);
+  assert(pane.includes("fLate:true"), "which filters the rail to them");
+});
+await t("the season stats stay pinned when a part is opened", () => {
+  partsFixture(); render();
+  assert(main.innerHTML.includes('class="stat-row pstats'), "four tiles with nothing selected");
+  selectPart("P-N1");
+  const html = main.innerHTML;
+  assert(html.includes("pstats compact"), "and still there, slimmer, above the open part");
+  ["Open parts", "Behind deadline", "On you", "Finished"].forEach(l => assert(html.includes(l), l + " survived opening a part"));
+});
+await t("the rail admits that it scrolls", () => {
+  partsFixture(); render();
+  assert(main.innerHTML.includes("plistfade"), "a fade at the foot of the scroller");
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  assert(/\.plistfade \{[^}]*position: sticky/.test(css), "which rides the bottom of the visible area");
+  assert(/\.plist::-webkit-scrollbar-thumb/.test(css), "and a scrollbar you can see");
+});
+await t("Group: subteam heads each run without disturbing keyboard navigation", () => {
+  partsFixture();
+  sortPartsBy("group");
+  const html = main.innerHTML;
+  const heads = [...html.matchAll(/class="pg-name">([^<]*)</g)].map(m => m[1]);
+  assert(heads.join(",") === "AERO,BERGO", "one header per subteam, in order: " + heads.join(","));
+  assert(/AERO[\s\S]{0,300}shown/.test(html.slice(html.indexOf("pgrouphd"))), "carrying the group's numbers");
+  assert(html.indexOf('id="pi-P-N1"') > html.indexOf("AERO<"), "rows sit under their header");
+  // The headers are drawn at render time only — nav still walks parts.
+  assert(partNeighborId(1) === "P-N1", "first ↓ lands on a part, not a header: " + partNeighborId(1));
+  view.sortKey = null; view.sortDir = null;
+  DB.schedule = [];        // leave the collections as the tab found them (the timeline tests seed their own)
 });
 
 console.log("tickets (modal, board, comments):");

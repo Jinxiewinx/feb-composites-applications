@@ -58,10 +58,11 @@ function stagePct(val, enumArr) {
   if (i <= 0) return 0;
   return Math.round((i / (real.length - 1)) * 100);
 }
-function stagePill(val, enumArr) {
-  val = val || enumArr[0];
-  return `<span class="stage ${stageClass(val, enumArr)}">${esc(val)}</span>`;
-}
+// The values that represent real work, in order. "N/A (Flat)" is a statement
+// about the part, not a step along the mold, so it is never on the track — it
+// is how you leave the track altogether.
+function stageTrack(enumArr) { return enumArr.filter(v => !stageIsNA(v)); }
+function partStageByKey(key) { return PART_STAGES.find(s => s.key === key); }
 /* The index rail: all three stages in one 3-segment mark, ~92px wide.
    The old list drew every stage TWICE (a saturated pill AND a 64px bar), 6
    marks per row, 36 on screen — nothing emphasised, so nothing read. Here the
@@ -79,6 +80,101 @@ function stageRail(p) {
 // A part counts as "done" (not behind-schedule) once layup is complete.
 function partDone(p) { return ["Layup Complete", "Polished"].includes(p.layupProgress); }
 function partLate(p) { const d = daysUntil(p.layupDeadline); return d != null && d < 0 && !partDone(p); }
+
+/* ---------- moving a stage ----------
+   Advancing a stage is the commonest thing anyone does in this tab, and it used
+   to cost four interactions: select, press Edit, open a <select>, pick. The
+   stepper below makes it one click on the step you want — but a click is now a
+   write to a database the whole team shares, so the writes are graded:
+
+     forward by one   → applies immediately, with a toast and an undo bar
+     forward by more  → asks first, naming the steps it would skip
+     backwards        → asks first (it erases recorded work)
+     → N/A (Flat)     → asks first (it says the part has no mold at all)
+
+   The undo bar is not the toast: the toast disappears on its own, the bar stays
+   until you undo it or dismiss it, because "I fat-fingered that a minute ago"
+   is the real failure mode on a shop floor. */
+let PART_UNDO = null;
+function setPartStage(id, key, val, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const p = partById(id), st = partStageByKey(key);
+  if (!p || !st) return null;
+  const cur = p[key] || st.vals[0];
+  if (cur === val) return null;                       // clicking where you already are does nothing
+  const name = p.partName || p.id;
+  const track = stageTrack(st.vals);
+  const wasNA = stageIsNA(cur);
+  // From N/A the track hasn't been joined yet, so the first real step is one
+  // move away, not two: -1 makes track[0] adjacent, exactly like any other step.
+  const from = wasNA ? -1 : track.indexOf(cur);
+  const to = track.indexOf(val);
+  const apply = () => applyPartStage(p, st, val);
+  if (stageIsNA(val)) {
+    confirmModal(`Mark ${name} as flat — no ${st.label.toLowerCase()} at all? Its recorded “${cur}” is dropped for everyone.`,
+      apply, { ok: "Mark flat" });
+    return "confirm-na";
+  }
+  if (!wasNA && to < from) {
+    confirmModal(`Move ${name} ${st.label} back from “${cur}” to “${val}”? Everyone on the team sees this.`,
+      apply, { ok: "Move back", danger: false });
+    return "confirm-back";
+  }
+  // The hole the reviewer found in C: one forward click could jump several
+  // steps with nothing but a toast to mention it. Say which steps it skips.
+  if (to - from > 1) {
+    const skipped = track.slice(Math.max(0, from + 1), to).map(s => `“${s}”`);
+    confirmModal(`Move ${name} ${st.label} straight to “${val}”? That marks ${skipped.join(" and ")} done without anyone recording ${skipped.length === 1 ? "it" : "them"}.`,
+      apply, { ok: "Skip ahead", danger: false });
+    return "confirm-jump";
+  }
+  apply();
+  return "applied";
+}
+function applyPartStage(p, st, val) {
+  const from = p[st.key];
+  p[st.key] = val;
+  savePart(p, st.key);                                 // single field, named
+  PART_UNDO = { id: p.id, key: st.key, from, to: val, label: st.label, name: p.partName || p.id };
+  toast(`${p.partName || p.id} · ${st.label} → ${val}`);
+  render();
+}
+function undoPartStage() {
+  const u = PART_UNDO; PART_UNDO = null;
+  if (!u) { render(); return; }
+  const p = partById(u.id);
+  if (!p) { toast("That part is gone — nothing to undo.", "error"); render(); return; }
+  p[u.key] = u.from;
+  savePart(p, u.key);
+  toast(`Undone — ${u.name} ${u.label} back to ${u.from || "not set"}`);
+  render();
+}
+function dismissPartUndo() { PART_UNDO = null; render(); }
+function partUndoBar() {
+  const u = PART_UNDO;
+  if (!u) return "";
+  return `<div class="undobar no-print">
+    <span class="ub-i">${icon("check", 15)}</span>
+    <span class="ub-t"><b>${esc(u.name)}</b> ${esc(u.label)} → <b>${esc(u.to)}</b>${u.from ? ` (was ${esc(u.from)})` : ""} — saved for everyone.</span>
+    <button class="sm" onclick="undoPartStage()">Undo</button>
+    <button class="sm ub-x" title="Dismiss" aria-label="Dismiss" onclick="dismissPartUndo()">${icon("x", 14)}</button>
+  </div>`;
+}
+// Keyboard: advance one stage of the selected part by exactly one step. Routed
+// through setPartStage so the same rules apply — from N/A the first press joins
+// the track at "Not Started" rather than jumping into the middle of it.
+function advancePartStage(n) {
+  const p = selectedPart();
+  if (!p) { toast("Open a part first — ↑/↓ to pick one.", "error"); return null; }
+  const st = PART_STAGES[n];
+  if (!st) return null;
+  const track = stageTrack(st.vals);
+  const cur = p[st.key] || st.vals[0];
+  const i = stageIsNA(cur) ? -1 : track.indexOf(cur);
+  const next = track[i + 1];
+  if (!next) { toast(`${p.partName || p.id} · ${st.label} is already “${cur}”.`, "info"); return null; }
+  return setPartStage(p.id, st.key, next);
+}
 
 /* ---------- people on a part ----------
    moldEngineer / manufacturingEngineer are free text and stay authoritative.
@@ -163,8 +259,11 @@ const PART_SORT_COLS = {
   moldProgress: p => STAGE_MOLD.indexOf(p.moldProgress || STAGE_MOLD[0]),
   layupProgress: p => STAGE_LAYUP.indexOf(p.layupProgress || STAGE_LAYUP[0]),
   layupDeadline: p => p.layupDeadline || "9999",
+  // Same key as "subteam", but the rail draws a header per run of it — a
+  // subteam lead reading their own block wants the block totals, not a column.
+  group: p => (p.subteam || "~").toLowerCase(),
 };
-const PART_SORT_LABELS = { layupDeadline: "Deadline", partName: "Part", subteam: "Subteam", layupType: "Type", cadProgress: "CAD", moldProgress: "Mold", layupProgress: "Layup" };
+const PART_SORT_LABELS = { layupDeadline: "Sort: Deadline", partName: "Sort: Part", subteam: "Sort: Subteam", layupType: "Sort: Type", cadProgress: "Sort: CAD", moldProgress: "Sort: Mold", layupProgress: "Sort: Layup", group: "Group: subteam" };
 function sortPartsBy(key) {
   if (view.sortKey === key) view.sortDir = view.sortDir === "desc" ? "asc" : "desc";
   else { view.sortKey = key; view.sortDir = "asc"; }
@@ -175,7 +274,15 @@ function sortedPartRows(rows) {
   const get = PART_SORT_COLS[view.sortKey];
   if (!get) return rows;
   const mul = view.sortDir === "desc" ? -1 : 1;
-  return rows.slice().sort((a, b) => { const av = get(a), bv = get(b); return av < bv ? -mul : av > bv ? mul : 0; });
+  // Ties break on deadline then id, always ascending: inside a subteam group
+  // (or a run of equal progress) the useful order is "what's due first", and a
+  // stable one keeps rows from shuffling between renders.
+  return rows.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    if (av < bv) return -mul;
+    if (av > bv) return mul;
+    return (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id);
+  });
 }
 
 /* ---------- the index rows ---------- */
@@ -222,6 +329,38 @@ function partIndexItem(p, mixedRetro) {
   </div>`;
 }
 
+/* The rail body. Normally just rows; with "Group: subteam" chosen it puts one
+   header before each run, carrying the numbers a subteam lead actually asks for
+   (how many of ours are laid up, how many am I looking at, how many are late).
+   The headers are drawn here and nowhere else, so keyboard navigation — which
+   walks partIndexRows() — never has to step over one. */
+function partGroupHead(name, rows) {
+  const all = DB.parts.filter(p => (p.subteam || "") === name);
+  const done = all.filter(partDone).length;
+  const late = rows.filter(partLate).length;
+  return `<div class="pgrouphd">
+    <span class="pg-name">${esc(name || "No subteam")}</span>
+    <span class="pg-n">${done}/${all.length} laid up</span>
+    <span class="pg-n">${rows.length} shown</span>
+    ${late ? `<span class="pg-n pg-late">${icon("warning", 12)} ${late} late</span>` : ""}
+  </div>`;
+}
+function partIndexBody(rows, mixedRetro) {
+  const grouped = view.sortKey === "group";
+  let out = "", run = null;
+  rows.forEach(p => {
+    if (grouped) {
+      const g = p.subteam || "";
+      if (g !== run) {
+        run = g;
+        out += partGroupHead(g, rows.filter(r => (r.subteam || "") === g));
+      }
+    }
+    out += partIndexItem(p, mixedRetro);
+  });
+  return out;
+}
+
 /* ---------- season-level read ----------
    Finding 5: the old list had no counts and nothing surfaced what was late.
    These two live in the index header (every width) and, in more detail, in the
@@ -246,6 +385,17 @@ function stageBreakdown(key, vals) {
 }
 function summaryChip(label, n, on, onclick, cls) {
   return `<button class="psum-chip ${on ? "on" : ""} ${cls || ""}" onclick="${onclick}"><b>${n}</b> ${esc(label)}</button>`;
+}
+/* The four season numbers. They used to live only in the overview pane, so
+   opening a part threw the season away and a lead had to press Esc to get it
+   back. Now they are pinned above BOTH panes: same four tiles, same order,
+   slimmer when a part is open. */
+function partStatRow(compact) {
+  const s = partSummary();
+  const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
+  return `<div class="stat-row pstats${compact ? " compact" : ""}">
+    ${tile(s.open, "Open parts")}${tile(s.late, "Behind deadline", s.late ? "warn" : "")}${tile(s.mine, "On you")}${tile(s.done, "Finished")}
+  </div>`;
 }
 
 function renderPartIndex() {
@@ -274,17 +424,27 @@ function renderPartIndex() {
           ${[...new Set([...SUBTEAMS, ...D.map(p => p.subteam)])].filter(Boolean).map(s2 => `<option ${view.fSub === s2 ? "selected" : ""}>${esc(s2)}</option>`).join("")}
         </select>
         <select title="Sort by" onchange="sortPartsBy(this.value)">
-          ${Object.keys(PART_SORT_LABELS).map(k => `<option value="${k}" ${sortKey === k ? "selected" : ""}>Sort: ${PART_SORT_LABELS[k]}</option>`).join("")}
+          ${Object.keys(PART_SORT_LABELS).map(k => `<option value="${k}" ${sortKey === k ? "selected" : ""}>${esc(PART_SORT_LABELS[k])}</option>`).join("")}
         </select>
         <button class="sm sortdir" title="Reverse sort order" onclick="togglePartSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
       </div>
       ${view.fEng ? `<div class="pfilternote">Showing <b>${esc(view.fEng)}</b>'s parts <button class="sm" onclick="filterByEngineer('${esc(view.fEng)}')">clear</button></div>` : ""}
+      ${/* Finding 3: C/M/L were three unlabelled letters on every row. Say what
+            they stand for ONCE, at the top of the column they head, the way a
+            table header does — this team turns over every year, and learnable
+            is not the same as guessable. */""}
+      <div class="plegend tny muted">Progress ${PART_STAGES.map(st =>
+        `<span class="pl-k"><span class="prog3"><span class="sg"><b>${st.short}</b></span></span>${esc(st.label)}</span>`).join("")}</div>
     </div>
     <div class="plist" role="listbox" aria-label="Parts">
-      ${rows.map(p => partIndexItem(p, mixedRetro)).join("") || `<div class="pempty muted">${
+      ${rows.length ? partIndexBody(rows, mixedRetro) : `<div class="pempty muted">${
         D.length ? "No parts match these filters." : "No parts yet — <b>New Part</b> to start."}</div>`}
+      ${/* Finding 6: at 33 parts the rail cut a row in half at the container
+            edge with nothing to say it scrolled. A sticky fade at the foot of
+            the scroller says "there is more" without costing a row. */""}
+      <div class="plistfade" aria-hidden="true"></div>
     </div>
-    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
+    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> advance C/M/L</span><span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
   </aside>`;
 }
 
@@ -303,15 +463,10 @@ function renderPartOverview() {
     <span class="pm-due ${partLate(p) ? "warn" : ""}">${p.layupDeadline ? shortDate(p.layupDeadline) : "no date"}</span></div>`;
   return `
   <section class="mddetail" aria-label="Parts overview">
+    ${partStatRow()}
     <div class="card">
       <h2>Parts this season</h2>
       <div class="muted">${s.open} open · ${s.done} finished · ${s.total} tracked. Pick a part to open it.</div>
-      <div class="stat-row" style="margin-top:14px">
-        <div class="stat-tile"><div class="bignum">${s.open}</div><div class="stat-label">Open parts</div></div>
-        <div class="stat-tile"><div class="bignum ${s.late ? "warn" : ""}">${s.late}</div><div class="stat-label">Behind deadline</div></div>
-        <div class="stat-tile"><div class="bignum">${s.mine}</div><div class="stat-label">On you</div></div>
-        <div class="stat-tile"><div class="bignum">${s.done}</div><div class="stat-label">Finished</div></div>
-      </div>
       <h3>Where the open parts stand</h3>
       ${PART_STAGES.map(st => {
         const b = stageBreakdown(st.key, st.vals);
@@ -325,8 +480,16 @@ function renderPartOverview() {
       }).join("")}
     </div>
     <div class="card">
-      <h3>Behind deadline${late.length ? ` <span class="muted" style="text-transform:none">— ${late.length}</span>` : ""}</h3>
-      ${late.length ? late.slice(0, 8).map(miniRow).join("") : '<span class="muted">Nothing overdue.</span>'}
+      <h3>Behind deadline</h3>
+      ${/* The index already sorts late-first, so listing the same four parts
+            again here printed them twice on one screen. A count and a filter
+            says the same thing once. */
+        late.length ? `<div class="pbehind">
+          <b class="bignum warn">${late.length}</b>
+          <span>part${late.length === 1 ? " is" : "s are"} past ${late.length === 1 ? "its" : "their"} layup deadline${
+            late[0].layupDeadline ? `, the oldest since ${esc(late[0].layupDeadline)}` : ""}. They sort to the top of the index.</span>
+          <button class="sm" onclick="view={...view,fLate:true,fMine:false,fDone:false};render()">Show only these</button>
+        </div>` : '<span class="muted">Nothing overdue.</span>'}
       <h3>Due in the next three weeks</h3>
       ${soon.length ? soon.slice(0, 8).map(miniRow).join("") : '<span class="muted">Nothing coming up.</span>'}
       <h3>On you</h3>
@@ -352,20 +515,35 @@ function pfld(p, label, key, opts, type) {
   return `<div class="f"><label>${label}</label><input ${type ? `type="${type}"` : ""} value="${esc(v)}" onchange="updPart('${key}',this.value)"></div>`;
 }
 
-/* Progress, rendered ONCE, and still rendered in edit mode — the old page drew
-   it read-only in the grid and again as pills+bars below, then hid the bars the
-   moment you started editing, i.e. removed the at-a-glance read exactly when
-   you were changing it. Here the pill and the bar are the display and the
-   select sits beside them, so the two can't drift. */
+/* Progress, rendered ONCE, as the control itself — the whole enum laid out as
+   tappable steps, current filled and the rest outlined. There is no edit mode
+   here and no <select> to open: the display IS the control, so the two can't
+   drift, and the state is legible while you change it.
+
+   The colour of the current step is stageClass()'s, unchanged: grey for not
+   started, amber under way, green done, violet not applicable. A step you have
+   already passed is a muted fill and NOTHING else — no green, no tick. Green +
+   a tick means "finished" everywhere else in this app, and a ticked green "Not
+   Started" would be a fresh instance of exactly the colour bug this project set
+   out to remove. */
 function partStageRow(p, st) {
-  const v = p[st.key] || st.vals[0];
-  const cls = stageClass(v, st.vals);
+  const cur = p[st.key] || st.vals[0];
+  const curCls = stageClass(cur, st.vals);
+  const track = stageTrack(st.vals);
+  const at = stageIsNA(cur) ? -1 : track.indexOf(cur);
+  const step = v => {
+    const isCur = v === cur;
+    const na = stageIsNA(v);
+    const past = !isCur && !na && at >= 0 && track.indexOf(v) < at;
+    const cls = ["pstep", isCur ? "cur " + stageClass(v, st.vals) : "", past ? "past" : "", na ? "na" : ""].filter(Boolean).join(" ");
+    return `<button type="button" class="${cls}"${isCur ? ' aria-current="step"' : ""}
+      title="${isCur ? esc(st.label) + " is " + esc(v) : "Set " + esc(st.label) + " to " + esc(v)}"
+      onclick="setPartStage('${esc(p.id)}','${st.key}','${esc(v)}',event)">${esc(v)}</button>`;
+  };
   return `<div class="pstage">
     <div class="ps-label">${st.label}</div>
-    <div class="ps-val">${stagePill(v, st.vals)}
-      ${cls === "st-na" ? "" : `<span class="ps-bar"><i class="${cls}" style="width:${stagePct(v, st.vals)}%"></i></span>`}</div>
-    ${view.edit ? `<div class="ps-edit"><select onchange="updPart('${st.key}',this.value)">${
-      st.vals.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>` : ""}
+    <div class="ps-steps" role="group" aria-label="${esc(st.label)} progress">${st.vals.map(step).join("")}</div>
+    ${curCls === "st-na" ? `<div class="ps-cap tny muted">flat — no mold</div>` : ""}
   </div>`;
 }
 
@@ -428,6 +606,9 @@ function renderPartDetail() {
       <a href="#pt-progress"><b>Progress</b></a><a href="#pt-details">Details</a><a href="#pt-stack">Stack</a>
       <a href="#pt-links">Links</a><a href="#pt-notes">Notes</a>
     </nav>
+    ${/* Finding 5: the season used to vanish the moment a part was opened, so a
+          lead had to press Esc to see it and Enter to get back. Pinned. */""}
+    ${partStatRow(true)}
     <div class="card">
       <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
       <div class="muted">${esc(p.id)}${p.subteam ? " · " + esc(p.subteam) : ""}${p.layupType ? " · " + esc(p.layupType) : ""}${
@@ -505,7 +686,7 @@ function renderPartDetail() {
    detail hides and the index is the page. Above 900 both are always visible. */
 function renderParts() {
   const sel = selectedPart();
-  return `<div class="mdsplit ${sel ? "has-sel" : ""}">
+  return `${partUndoBar()}<div class="mdsplit ${sel ? "has-sel" : ""}">
     ${renderPartIndex()}
     ${sel ? renderPartDetail() : renderPartOverview()}
   </div>`;
@@ -554,6 +735,15 @@ function partsKeydown(e) {
     return "search";
   }
   if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
+  // 1/2/3 advance CAD/Mold/Layup on the open part by exactly one step. With
+  // j/k to walk the rail, working through a morning's parts is two keystrokes
+  // each and never leaves the keyboard. Same rules as clicking the stepper: a
+  // one-step move writes, anything else asks first.
+  if ((k === "1" || k === "2" || k === "3") && view.mode === "detail") {
+    if (e.preventDefault) e.preventDefault();
+    advancePartStage(+k - 1);
+    return "stage";
+  }
   return null;
 }
 document.addEventListener("keydown", partsKeydown);
