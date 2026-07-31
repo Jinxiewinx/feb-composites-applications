@@ -29,4 +29,8 @@ __pycache__/
 # Pitch deck build intermediates
 06 Pitch/node_modules/
 06 Pitch/render*/
+06 Pitch/.img-*/
 06 Pitch/*.pdf
+# The three design variants are build products of build_deck_[abc].mjs. Only the
+# converged deck (sn6-app-deck.pptx) is tracked.
+06 Pitch/sn6-app-deck-[abc].pptx
