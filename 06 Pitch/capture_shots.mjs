@@ -177,7 +177,12 @@ const SHOTS = [
   { id: "16b-buyoffs", wait: 1200,
     run: `view = {...view, tab:'workorders', mode:'detail', id:'WO-SN6-004'}; render();`,
     after: `document.getElementById('wo-steps')?.scrollIntoView({block:'start'})` },
-  { id: "17-print-traveler", device: { width: 1400, height: 1500, dsf: 2 }, crop: false, wait: 2500,
+  /* One whole sheet, framed on the sheet itself. The preview shows two pages
+     stacked, and a slide that trails off halfway down page 2 reads as a
+     cropping accident rather than as "this is exactly what prints". */
+  { id: "17-print-traveler", device: { width: 1400, height: 2100, dsf: 2 }, wait: 2500,
+    clipTo: `document.querySelector('#printroot .ws-page')`,
+    clipPad: 16,
     run: `view = {...view, tab:'workorders', mode:'detail', id:'WO-SN6-004'}; render(); openPrintPreview('WO-SN6-004');` },
   { id: "18-tickets-board", run: `view = {...view, tab:'projects', mode:'list', id:null, board:true}; render();` },
   { id: "18b-weeklyplan", run: `view = {...view, tab:'weekplan', mode:'list', id:null}; render();` },
@@ -207,8 +212,24 @@ const SHOTS = [
     })()`,
   },
   {
+    /* Framed on the card, not the viewport: at viewport height the shot ends
+       partway down the exploded stack drawing, which projects as a mistake. */
     id: "11-plan",
+    device: { width: 1440, height: 1700, dsf: 2 },
     wait: 3500,
+    clipTo: `(() => {
+      /* Plan title down through the legend under the canvas: the slide has to
+         carry which plan this is, not just a floating render. +56px reaches
+         past the canvas for the mold/stock key and the Reset view button. */
+      const h2 = document.querySelector('#main .card h2');
+      const c = document.querySelector('#main canvas');
+      if (!h2 || !c) return null;
+      const a = h2.getBoundingClientRect(), b = c.getBoundingClientRect();
+      return { getBoundingClientRect: () => ({
+        x: Math.min(a.x, b.x), y: a.y,
+        width: Math.max(a.width, b.width), height: (b.bottom + 56) - a.y }) };
+    })()`,
+    clipPad: 16,
     run: `PLAN_NOSECONE`,
   },
   {
@@ -218,19 +239,31 @@ const SHOTS = [
     after: `document.querySelector('canvas')?.scrollIntoView({block:'center'})`,
   },
   {
+    /* The blanks table whole, heading included — it is the deliverable a
+       person carries to the saw, so a half-visible table misses the point. */
     id: "11b-cutlist",
+    device: { width: 1440, height: 1700, dsf: 2 },
     wait: 3500,
+    clipTo: `(() => {
+      const h = [...document.querySelectorAll('h3')].find(x => /Blanks to cut/i.test(x.textContent));
+      if (!h) return null;
+      let tbl = h.nextElementSibling;
+      while (tbl && tbl.tagName !== 'TABLE' && !tbl.querySelector('table')) tbl = tbl.nextElementSibling;
+      if (!tbl) return null;
+      const a = h.getBoundingClientRect(), b = tbl.getBoundingClientRect();
+      return { getBoundingClientRect: () => ({ x: Math.min(a.x, b.x), y: a.y, width: Math.max(a.width, b.width), height: b.bottom - a.y }) };
+    })()`,
+    clipPad: 4,
     run: `PLAN_NOSECONE`,
-    after: `[...document.querySelectorAll('h3')].find(h=>/Blanks to cut/i.test(h.textContent))?.scrollIntoView({block:'start'})`,
   },
   {
-    /* Taller frame and no crop: the print preview is a fixed overlay, so the
-       content-height measurement below sees the toolbar and nothing else, and
-       a sheet is 11in of paper that has to be readable on a slide. */
+    /* Sheet 1 only, framed on the sheet. The drawing set is five sheets; at
+       slide size, one readable sheet beats one and a half unreadable ones. */
     id: "13-drawings",
-    device: { width: 1400, height: 1500, dsf: 2 },
-    crop: false,
+    device: { width: 1400, height: 2100, dsf: 2 },
     wait: 4500,
+    clipTo: `document.querySelector('#printroot .dwg-page')`,
+    clipPad: 16,
     run: `PLAN_NOSECONE`,
     after: `openDrawings('STK-001')`,
   },
@@ -400,7 +433,28 @@ async function main() {
          so its viewport is already the frame — cropping it against page
          coordinates would photograph the top of the document instead. */
       const shotOpts = { path: join(OUT, shot.id + ".png") };
-      if (shot.crop !== false && !m.scrolled) {
+      /* `clipTo` frames the shot on one element instead of the viewport. A slide
+         is about a third of a 13in screen, so a capture that trails off mid-way
+         down a table — or shows one and a half sheets of paper — projects as
+         detail nobody can read. Better to photograph one whole thing. */
+      if (shot.clipTo) {
+        const r = await page.evaluate(`(() => {
+          const el = ${shot.clipTo};
+          if (!el) return null;
+          const b = el.getBoundingClientRect();
+          return { x: b.x + window.scrollX, y: b.y + window.scrollY, width: b.width, height: b.height };
+        })()`);
+        if (!r) throw new Error(`clipTo matched nothing: ${shot.clipTo}`);
+        const pad = shot.clipPad ?? 0;
+        /* fullPage, so the clip is measured against the whole document. A tall
+           card runs past the viewport, and a viewport-bounded clip of a region
+           below the fold is simply "outside the resulting image". */
+        shotOpts.fullPage = true;
+        shotOpts.clip = {
+          x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad),
+          width: r.width + pad * 2, height: r.height + pad * 2,
+        };
+      } else if (shot.crop !== false && !m.scrolled) {
         shotOpts.clip = { x: 0, y: 0, width: dev.width, height: Math.min(dev.height, Math.max(360, m.bottom + 24)) };
       }
       await page.screenshot(shotOpts);
