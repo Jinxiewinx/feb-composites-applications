@@ -27,5 +27,6 @@ __pycache__/
 .drawing-shots/
 
 # Pitch deck build intermediates
-06 Pitch/render/
+06 Pitch/node_modules/
+06 Pitch/render*/
 06 Pitch/*.pdf
