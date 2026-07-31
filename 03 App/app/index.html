@@ -549,8 +549,13 @@
   /* The undo bar. A stepper click writes for the whole team, so every write
      leaves one of these until it is undone or dismissed — a toast fades before
      you have finished noticing you mis-tapped. */
+  /* Sticky under the topbar, because the tap that needs undoing can be most of
+     a page down — on a phone you set a stage near the foot of the detail pane,
+     and an undo bar pinned to the top of the tab would be offscreen at exactly
+     the moment it is wanted. Below the topbar's z-index, above the panes. */
   .undobar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 12px; font-size: 13px;
-    border: 1px solid var(--ok-border); border-radius: var(--r-md); background: var(--ok-bg); color: var(--ink); }
+    border: 1px solid var(--ok-border); border-radius: var(--r-md); background: var(--ok-bg); color: var(--ink);
+    position: sticky; top: 62px; z-index: 4; box-shadow: var(--shadow-md); }
   .undobar .ub-i { display: inline-flex; color: var(--ok); }
   .undobar .ub-t { flex: 1; min-width: 0; }
   .pgrid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
@@ -837,7 +842,11 @@
     .pstage .ps-steps { gap: 7px; }
     .pstep { min-height: 38px; flex: 1 0 auto; min-width: calc(33.333% - 5px); padding: 8px 12px;
       white-space: normal; text-align: center; }
-    .undobar { flex-wrap: wrap; }
+    .undobar { flex-wrap: wrap; top: 0; }
+    /* The pinned season tiles are worth their space on a wide screen, where the
+       index and the part share it. On a phone the index IS the other screen and
+       already carries them, so here they only push the record down 110px. */
+    .pstats.compact { display: none; }
   }
 
   /* Touch devices get larger tap targets regardless of width. */

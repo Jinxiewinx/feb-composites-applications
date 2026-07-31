@@ -192,10 +192,21 @@ function partEngineerEmail(p, key) {
   });
   return u ? u.email : "";
 }
+/* One person often holds both roles — "Justin / Justin" was half the SN5
+   tracker. Two identical faces in a row reads as two people at a glance, which
+   is worse than saying nothing, so the same name collapses to one chip that
+   carries both roles ("ME+RE"). Matched case-insensitively: the tracker has
+   "Justin" and "justin" for the same person. */
 function partEngineers(p) {
-  return [["moldEngineer", "ME"], ["manufacturingEngineer", "RE"]]
-    .map(([key, role]) => ({ role, key, name: String(p[key] || "").trim(), email: partEngineerEmail(p, key) }))
-    .filter(e => e.name && !(typeof notAPerson === "function" && notAPerson(e.name)));
+  const out = [];
+  for (const [key, role] of [["moldEngineer", "ME"], ["manufacturingEngineer", "RE"]]) {
+    const name = String(p[key] || "").trim();
+    if (!name || (typeof notAPerson === "function" && notAPerson(name))) continue;
+    const same = out.find(e => e.name.toLowerCase() === name.toLowerCase());
+    if (same) { same.role += "+" + role; continue; }
+    out.push({ role, key, name, email: partEngineerEmail(p, key) });
+  }
+  return out;
 }
 // Avatar + name, and clicking it filters the index to that person's parts —
 // "ME/RE" stops being dead text and becomes the fastest way to see your work.
@@ -444,7 +455,12 @@ function renderPartIndex() {
             the scroller says "there is more" without costing a row. */""}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
-    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> advance C/M/L</span><span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
+    ${/* 1/2/3 only do anything with a part open — advertising them while the
+          right pane is the season overview just earns you an error toast. The
+          hint appears when the key works. */""}
+    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
+      selectedPart() ? "<span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> advance C/M/L</span>" : ""
+    }<span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
   </aside>`;
 }
 

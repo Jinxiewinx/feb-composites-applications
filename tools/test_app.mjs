@@ -385,6 +385,43 @@ await t("one step forward writes straight away, with a toast and an undo bar", (
   assert(calls.some(c => c[0] === "save" && c[3] === "cadProgress"), "as its own write");
   assert(!main.innerHTML.includes("undobar"), "and the bar goes away once used");
 });
+/* Half the SN5 tracker has one person in both engineer columns. Rendered as two
+   chips it reads as two people; UT SIDE RIGHT showed "Justin, Justin". */
+await t("one person holding both roles is one chip, not two identical faces", () => {
+  DB.users = [{ email: "justin@berkeley.edu", name: "Justin Lee", role: "member" }];
+  const both = partEngineers({ moldEngineer: "Justin", manufacturingEngineer: "justin" });
+  assert(both.length === 1, "collapsed, case-insensitively: " + JSON.stringify(both));
+  assert(both[0].role === "ME+RE", "and carries both roles: " + both[0].role);
+  const two = partEngineers({ moldEngineer: "Nico", manufacturingEngineer: "Chuning" });
+  assert(two.length === 2 && two[0].role === "ME" && two[1].role === "RE", "two people stay two: " + JSON.stringify(two));
+  // "N/A (Flat)" is a stage value that leaked into the engineer column in the archive.
+  assert(partEngineers({ moldEngineer: "N/A (Flat)", manufacturingEngineer: "Justin" }).length === 1,
+    "a stage value is not a person");
+});
+/* The undo bar is only worth having if it is where you can see it. On a phone
+   you set a stage most of a page down the detail pane; pinned to the top of the
+   tab, the bar would be offscreen at exactly the moment it is wanted. Asserted
+   against the stylesheet because the DOM stub computes no styles. */
+await t("the undo bar is sticky, so it is on screen when the mis-tap was not", () => {
+  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const rule = (css.match(/\.undobar \{[^}]*\}/) || [""])[0];
+  assert(/position: sticky/.test(rule), "sticky: " + rule);
+  assert(/z-index: 4/.test(rule), "under the topbar (5), over the panes: " + rule);
+  assert(/\.undobar \{ flex-wrap: wrap; top: 0; \}/.test(css), "and flush to the top once the topbar is the only chrome above it");
+});
+await t("the season tiles are pinned above an open part, but not on a phone", () => {
+  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const resp = css.slice(css.indexOf("@media (max-width: 640px)"));
+  assert(/\.pstats\.compact \{ display: none; \}/.test(resp),
+    "≤640 drops them — the index is one tap away and already carries them");
+});
+await t("the 1/2/3 hint only shows when 1/2/3 would do something", () => {
+  partsFixture();
+  view = { ...view, tab: "parts", mode: "list", id: null }; render();
+  assert(!main.innerHTML.includes("advance C/M/L"), "not advertised over the season overview");
+  openRecord("parts", "P-N1");
+  assert(main.innerHTML.includes("advance C/M/L"), "advertised once a part is open");
+});
 await t("clicking the step you are already on does nothing at all", () => {
   partsFixture(); openRecord("parts", "P-N1");
   calls.length = 0;
