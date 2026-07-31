@@ -93,7 +93,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -189,44 +189,73 @@ await t("createIssueFromWO pre-fills the work order in the new-ticket modal", ()
 
 console.log("parts:");
 await t("newPart creates with three stages", async () => { setTab("parts"); calls.length = 0; await newPart(); const p = partById(view.id); assert(p.cadProgress === "Not Started" && p.moldProgress === "Not Started" && p.layupProgress === "Not Started"); assert(calls.some(c => c[0] === "save" && c[1] === "parts")); });
-await t("stage pills colored by progress", () => {
-  DB.parts = [{ id: "P-SN6-009", partName: "STG", cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" }];
-  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "" }; render();
-  assert(main.innerHTML.includes("stage st-done"), "CAD done → st-done");
-  assert(main.innerHTML.includes("stage st-na"), "N/A mold → st-na");
-  assert(main.innerHTML.includes("stage st-0"), "layup not started → st-0");
+// Was "stage pills colored by progress" against the old list markup (a pill AND
+// a 64px bar per stage, 6 marks a row). The index now carries one 3-segment
+// rail per part and the exact stage names live on the detail pane, so the same
+// behaviour is asserted against where each thing now lives.
+await t("stage colour is derived from the value's meaning, not its position in the enum", () => {
+  // The real bug: STAGE_MOLD starts with "N/A (Flat)", so "Not Started" is at
+  // index 1 and a position-based rule painted every unstarted mold amber —
+  // i.e. reported work in progress that nobody had begun.
+  assert(stageClass("Not Started", STAGE_MOLD) === "st-0", "unstarted mold must be st-0, not amber: " + stageClass("Not Started", STAGE_MOLD));
+  assert(stageClass("Not Started", STAGE_CAD) === "st-0", "unstarted CAD is st-0");
+  assert(stageClass("Not Started", STAGE_LAYUP) === "st-0", "unstarted layup is st-0");
+  assert(stageClass("N/A (Flat)", STAGE_MOLD) === "st-na", "N/A is its own state");
+  assert(stageClass("Machining", STAGE_MOLD) === "st-mid", "mid-enum is amber");
+  assert(stageClass("Ready For Layup", STAGE_MOLD) === "st-done", "last value is done");
+  assert(stageClass("Mold CAD/CAM Done", STAGE_CAD) === "st-done");
+  assert(stageClass("Wat", STAGE_CAD) === "st-0", "unknown legacy string must not claim progress");
 });
-await t("stage bar sits alongside the pill and skips N/A (a bar would imply progress toward a stage that doesn't apply)", () => {
+await t("index draws one 3-segment stage rail per part (not a pill + a bar for each stage)", () => {
   DB.parts = [{ id: "P-SN6-009", partName: "STG", cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" }];
-  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "" }; render();
-  assert(main.innerHTML.includes('stage-bar-fill st-done" style="width:100%'), "CAD fully done (last of 3) → 100% bar");
-  assert(main.innerHTML.includes('stage-bar-fill st-0" style="width:0%'), "layup not started (first of 4) → 0% bar");
-  assert((main.innerHTML.match(/class="stage-bar"/g) || []).length === 2, "only CAD + Layup get a bar; N/A mold gets none");
+  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "", fLate: false, fMine: false, fEng: "", fDone: false, sortKey: null }; render();
+  const item = /<div class="pitem[\s\S]*?<\/div>/.exec(main.innerHTML)[0];
+  assert((item.match(/class="sg /g) || []).length === 3, "exactly three marks for three stages: " + item);
+  assert(item.includes('class="sg st-done"') && item.includes('class="sg st-na"') && item.includes('class="sg st-0"'), "one per state: " + item);
+  assert(!item.includes('class="stage '), "no full-text stage pills in the index — they live on the detail pane");
+  assert(item.includes("Mold: N/A (Flat)"), "the exact stage name is still reachable as a tooltip: " + item);
+});
+await t("stage rail fill is measured over the values that mean work, and N/A gets no fill", () => {
+  assert(stagePct("Mold CAD/CAM Done", STAGE_CAD) === 100, "last of three → 100%");
+  assert(stagePct("Not Started", STAGE_CAD) === 0);
+  // STAGE_MOLD's first entry is N/A, so measuring across the raw array would put
+  // an unstarted mold at 20% instead of 0.
+  assert(stagePct("Not Started", STAGE_MOLD) === 0, "unstarted mold is 0%, not 1/5: " + stagePct("Not Started", STAGE_MOLD));
+  assert(stagePct("Ready For Layup", STAGE_MOLD) === 100);
+  const rail = stageRail({ cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" });
+  assert(rail.includes('<i style="width:100%">'), "CAD fully done → full underline: " + rail);
+  assert((rail.match(/<i style=/g) || []).length === 2, "only CAD + Layup get a fill; N/A mold gets none: " + rail);
 });
 await t("partDone true only when layup complete/polished", () => { assert(!partDone({ layupProgress: "In Layup" })); assert(partDone({ layupProgress: "Polished" })); assert(partDone({ layupProgress: "Layup Complete" })); });
-await t("parts list columns sort on header click, with real progress order (not text order) for stage columns", () => {
+// Same behaviour as the old header-click sort; the control moved from a set of
+// <th>s (there is no wide table any more) to the index header's Sort select
+// plus a direction toggle, so the assertions read the rendered row order and
+// the state of those two controls.
+await t("index sorts on the sort control, with real progress order (not text order) for stage keys", () => {
   DB.parts = DB.parts.concat([ // append — later tests need existing fixture parts (e.g. P-SN6-009) to stay put
     { id: "P-A", partName: "Zeta Part", moldProgress: "Sealed", layupDeadline: "2026-08-01" },
     { id: "P-B", partName: "Alpha Part", moldProgress: "Machining", layupDeadline: "2026-07-01" },
     { id: "P-C", partName: "Mid Part", moldProgress: "Ready For Layup", layupDeadline: "2026-07-15" },
   ]);
-  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "", sortKey: null, sortDir: null };
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fEng: "", fDone: false, sortKey: null, sortDir: null };
   render();
-  let order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  const rowOrder = () => [...main.innerHTML.matchAll(/id="pi-(P-[ABC])"/g)].map(m => m[1]);
+  let order = rowOrder();
   assert(order[0] === "P-B" && order[2] === "P-A", "default (unsorted) is by deadline: " + order.join(","));
 
   sortPartsBy("partName");
-  assert(main.innerHTML.includes("Part ▲"), "ascending arrow shows on the clicked column: " + main.innerHTML);
-  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  assert(main.innerHTML.includes('value="partName" selected'), "the sort control shows the active key: " + main.innerHTML.slice(0, 400));
+  assert(main.innerHTML.includes(">▲<"), "ascending direction shown");
+  order = rowOrder();
   assert(order[0] === "P-B" && order[1] === "P-C" && order[2] === "P-A", "alphabetical: Alpha, Mid, Zeta: " + order.join(","));
 
-  sortPartsBy("partName");
-  assert(main.innerHTML.includes("Part ▼"), "clicking the same column again reverses it: " + main.innerHTML);
-  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  togglePartSortDir();
+  assert(main.innerHTML.includes(">▼<"), "toggling reverses it");
+  order = rowOrder();
   assert(order[0] === "P-A", "now descending, Zeta first: " + order.join(","));
 
   sortPartsBy("moldProgress"); // STAGE_MOLD order is Machining < Sealed < Ready For Layup — alphabetically "Ready" would sort first, which would be wrong
-  order = [...main.innerHTML.matchAll(/P-[ABC]/g)].map(m => m[0]);
+  order = rowOrder();
   assert(order[0] === "P-B" && order[1] === "P-A" && order[2] === "P-C", "real stage progression (Machining, Sealed, Ready For Layup), not alphabetical: " + order.join(","));
 });
 await t("Stock and Parts don't share a sidebar icon (regression: Stock used to reuse ic:'parts')", () => {
@@ -234,6 +263,188 @@ await t("Stock and Parts don't share a sidebar icon (regression: Stock used to r
   assert(stockTab.ic !== partsTab.ic, "icons must differ: " + stockTab.ic + " vs " + partsTab.ic);
 });
 await t("part field edit saves only that field", () => { view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-009", edit: true }; calls.length = 0; updPart("subteam", "AERO"); assert(partById("P-SN6-009").subteam === "AERO"); assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "subteam")); });
+
+console.log("parts: master–detail split");
+// A small fixture the split tests share. Deliberately includes a completed part
+// (so the default filter hides it) and a late one.
+function partsFixture() {
+  DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  DB.workOrders = [{ id: "WO-SN6-042", partName: "NOSECONE", partId: "P-N1", status: "InWork", steps: [] }];
+  DB.projects = [{ id: "PROJ-7", title: "Nose fit-up", status: "In Progress", relatedParts: ["P-N1"], assignees: [] }];
+  DB.schedule = [{ id: "W12", weekOf: "2026-03-02", mold1: "P-N1", waterjet: "", notes: "" }];
+  DB.parts = [
+    { id: "P-N1", partName: "NOSECONE", subteam: "AERO", layupType: "MOLD INFUSION", moldEngineer: "Nick", manufacturingEngineer: "Simon",
+      cadProgress: "Mold CAD/CAM Done", moldProgress: "Not Started", layupProgress: "In Layup",
+      layupDeadline: "2000-01-01", weightG: "500", weightActualG: "540", comments: "line one\nline two", workOrderId: "WO-SN6-042", layupStack: [] },
+    { id: "P-N2", partName: "SIDEPOD", subteam: "BERGO", cadProgress: "Not Started", moldProgress: "Machining", layupProgress: "Not Started", layupDeadline: "2030-01-01" },
+    { id: "P-N3", partName: "OLD WING", subteam: "AERO", cadProgress: "Mold CAD/CAM Done", moldProgress: "Ready For Layup", layupProgress: "Polished", layupDeadline: "2026-01-01" },
+  ];
+  view = { ...view, tab: "parts", mode: "list", id: null, edit: false, q: "", fSub: "", fDone: false, fLate: false, fMine: false, fEng: "", sortKey: null, sortDir: null };
+}
+await t("the tab renders both panes at once — the index is never destroyed by opening a part", () => {
+  partsFixture(); render();
+  assert(main.innerHTML.includes('class="mdsplit'), "split container");
+  assert(main.innerHTML.includes('class="mdindex"'), "index pane");
+  assert(main.innerHTML.includes('class="mddetail"'), "right pane");
+  assert(!main.innerHTML.includes("has-sel"), "nothing selected yet");
+  assert(main.innerHTML.includes("Parts this season"), "with nothing selected the right pane is the season read, not dead space");
+  selectPart("P-N1");
+  assert(main.innerHTML.includes("mdsplit has-sel"), "selection flagged for the ≤900 collapse");
+  assert(main.innerHTML.includes('class="mdindex"'), "the index is STILL rendered beside the part");
+  assert(main.innerHTML.includes('id="pi-P-N2"'), "and still lists the other parts");
+  assert(/id="pi-P-N1"[\s\S]{0,80}sel/.test(main.innerHTML) || main.innerHTML.includes('class="pitem sel'), "the open part is marked selected in the index");
+});
+await t("openRecord('parts', id) from another tab lands on the right part with the right pane showing it", () => {
+  partsFixture();
+  setTab("dashboard");                       // start somewhere else, as a chip / ⌘K / People jump does
+  openRecord("parts", "P-N2");
+  assert(view.tab === "parts" && view.mode === "detail" && view.id === "P-N2", "view state: " + JSON.stringify({ t: view.tab, m: view.mode, i: view.id }));
+  assert(main.innerHTML.includes("mdsplit has-sel"), "arrives selected, so ≤900 shows the detail page");
+  assert(main.innerHTML.includes("SIDEPOD"), "the named part is what's rendered");
+  assert(main.innerHTML.includes('id="pi-P-N1"'), "and the index came with it");
+  assert(!main.innerHTML.includes("Parts this season"), "the overview pane is replaced, not stacked");
+});
+await t("a jump to a completed (filtered-out) part still shows it, in both panes", () => {
+  partsFixture();
+  openRecord("parts", "P-N3");               // Polished → hidden by the default filter
+  assert(main.innerHTML.includes("OLD WING"), "the detail renders it");
+  assert(main.innerHTML.includes('id="pi-P-N3"'), "and the index keeps it visible rather than hiding what you're reading");
+});
+await t("a jump to a part that no longer exists falls back to the index, it doesn't blow up", () => {
+  partsFixture();
+  openRecord("parts", "P-GONE");
+  assert(main.innerHTML.includes('class="mdindex"') && main.innerHTML.includes("Parts this season"), "overview, no crash");
+});
+await t("↑/↓ (and j/k) walk the index without the mouse", () => {
+  partsFixture(); render();
+  const order = [...main.innerHTML.matchAll(/id="pi-(P-N\d)"/g)].map(m => m[1]);
+  assert(order.join(",") === "P-N1,P-N2", "fixture order (by deadline), completed hidden: " + order.join(","));
+  partsKeydown({ key: "ArrowDown", target: { tagName: "BODY" } });
+  assert(view.id === "P-N1" && view.mode === "detail", "first press selects the top row: " + view.id);
+  partsKeydown({ key: "j", target: { tagName: "BODY" } });
+  assert(view.id === "P-N2", "j moves down: " + view.id);
+  partsKeydown({ key: "j", target: { tagName: "BODY" } });
+  assert(view.id === "P-N2", "and stops at the end rather than wrapping");
+  partsKeydown({ key: "k", target: { tagName: "BODY" } });
+  assert(view.id === "P-N1", "k moves up: " + view.id);
+  partsKeydown({ key: "Escape", target: { tagName: "BODY" } });
+  assert(view.mode === "list", "escape clears the selection (and, at ≤900, goes back)");
+});
+await t("keyboard nav keeps its hands off text fields and other tabs", () => {
+  partsFixture(); selectPart("P-N1");
+  assert(partsKeydown({ key: "j", target: { tagName: "INPUT" } }) === null, "typing 'j' in the search box must not move the selection");
+  assert(view.id === "P-N1");
+  assert(partsKeydown({ key: "ArrowDown", target: { tagName: "TEXTAREA" } }) === null, "nor in a comment box");
+  assert(partsKeydown({ key: "ArrowDown", metaKey: true, target: { tagName: "BODY" } }) === null, "nor with a modifier held");
+  setTab("workorders");
+  assert(partsKeydown({ key: "ArrowDown", target: { tagName: "BODY" } }) === null, "and nothing at all on another tab");
+});
+await t("progress is rendered once, and stays visible in edit mode", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  let html = main.innerHTML;
+  assert((html.match(/class="pstage"/g) || []).length === 3, "one row per stage, not a read-only grid AND a pill row: " + (html.match(/class="pstage"/g) || []).length);
+  assert(html.includes('class="stage st-done"') && html.includes('class="stage st-0"'), "named pills on the detail pane");
+  assert(!html.includes("ps-edit"), "no selects while reading");
+  view.edit = true; render();
+  html = main.innerHTML;
+  assert((html.match(/class="pstage"/g) || []).length === 3, "still exactly one row per stage in edit mode");
+  assert(html.includes('class="stage st-done"'), "the at-a-glance read survives editing (it used to vanish)");
+  assert((html.match(/class="ps-edit"/g) || []).length === 3, "with a select beside each");
+});
+await t("edit mode gives workOrderId a picker and layupDeadline a real date input", () => {
+  partsFixture(); openRecord("parts", "P-N1"); view.edit = true; render();
+  const html = main.innerHTML;
+  assert(html.includes('<option value="WO-SN6-042" selected>WO-SN6-042 — NOSECONE</option>'), "work orders are chosen from the list, not typed from memory: " + html.slice(html.indexOf("Linked work order"), html.indexOf("Linked work order") + 400));
+  assert(/<input type="date" value="2000-01-01"/.test(html), "deadline is a date field: " + html);
+});
+await t("renaming a part updates the heading immediately (the write used to leave a stale h2)", () => {
+  partsFixture(); openRecord("parts", "P-N1"); view.edit = true; render();
+  calls.length = 0;
+  updPart("partName", "NOSE MK2");
+  assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "partName"), "single-field write");
+  assert(main.innerHTML.includes("NOSE MK2"), "and the page shows the new name");
+  assert(!main.innerHTML.includes(">NOSECONE<"), "with no stale copy of the old one");
+});
+await t("the part page surfaces what points at it: work orders, tickets, schedule weeks, people", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  const html = main.innerHTML;
+  assert(html.includes("WO-SN6-042"), "linked work order");
+  assert(html.includes("Nose fit-up"), "ticket that lists this part");
+  assert(html.includes("week of 2026-03-02"), "the week it's scheduled on a station");
+  assert(html.includes("filterByEngineer('Nick')"), "ME/RE are people you can filter by, not plain text");
+  assert(html.includes("avatar"), "with a face");
+});
+await t("clicking an engineer filters the index to their parts", () => {
+  partsFixture(); render();
+  filterByEngineer("Nick");
+  assert(view.fEng === "Nick");
+  assert(main.innerHTML.includes('id="pi-P-N1"') && !main.innerHTML.includes('id="pi-P-N2"'), "only Nick's parts");
+  filterByEngineer("Nick");
+  assert(!view.fEng && main.innerHTML.includes('id="pi-P-N2"'), "clicking again clears it");
+});
+await t("the index summarises the season and the late chip filters to it", () => {
+  partsFixture(); render();
+  const html = main.innerHTML;
+  assert(/<b>2<\/b> open/.test(html) && /<b>1<\/b> late/.test(html) && /<b>1<\/b> done/.test(html), "counts by state: " + html.slice(html.indexOf("psum"), html.indexOf("psum") + 500));
+  view.fLate = true; render();
+  assert(main.innerHTML.includes('id="pi-P-N1"') && !main.innerHTML.includes('id="pi-P-N2"'), "late-only");
+});
+await t("the retro badge only appears when the visible set is actually mixed", () => {
+  partsFixture();
+  DB.parts.forEach(p => { p.retro = true; });
+  render();
+  assert(!/pill retro/.test(main.innerHTML.slice(0, main.innerHTML.indexOf("mddetail"))), "a flag true for every row carries no information, so it isn't drawn");
+  DB.parts[1].retro = false; render();
+  assert(/pill retro/.test(main.innerHTML), "once the set is mixed it means something again");
+  DB.parts.forEach(p => { p.retro = false; });
+});
+await t("comments get an author and a timestamp, and the old free-text note keeps its newlines", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  assert(main.innerHTML.includes("line one<br>line two"), "the legacy blob stays authoritative and readable");
+  calls.length = 0;
+  el("pcomment").value = "  ";
+  lastToast = ""; postPartComment("P-N1");
+  assert(lastToast.includes("Write a comment"), "empty comment refused");
+  el("pcomment").value = "mold is sealed";
+  postPartComment("P-N1");
+  const c = partById("P-N1").commentLog[0];
+  assert(c.text === "mold is sealed" && c.author === "Simon" && c.email === "simon@berkeley.edu" && c.ts, "structured entry: " + JSON.stringify(c));
+  assert(calls.some(x => x[0] === "mutateField" && x[1] === "parts" && x[3] === "commentLog"), "appended concurrency-safely: " + JSON.stringify(calls));
+  assert(main.innerHTML.includes("mold is sealed") && main.innerHTML.includes("Simon"), "and shows up with its author");
+  assert(partById("P-N1").comments === "line one\nline two", "the original comments field is untouched");
+});
+await t("actual weight is additive and reads against the target", () => {
+  partsFixture(); openRecord("parts", "P-N1");
+  assert(main.innerHTML.includes("+40 g"), "540g against a 500g target: " + main.innerHTML.slice(main.innerHTML.indexOf("Mass vs target"), main.innerHTML.indexOf("Mass vs target") + 200));
+  delete DB.parts[0].weightActualG; render();
+  assert(main.innerHTML.includes("Mass vs target"), "and an empty new field renders fine on an unmigrated record");
+});
+await t("every SN5 record renders in both panes with no migration", () => {
+  const seed = JSON.parse(readFileSync(join(root, "sn5-parts.json"), "utf8"));
+  DB.parts = seed.map(p => ({ ...p }));
+  DB.workOrders = []; DB.projects = []; DB.schedule = []; DB.users = [];
+  view = { ...view, tab: "parts", mode: "list", id: null, edit: false, q: "", fSub: "", fDone: true, fLate: false, fMine: false, fEng: "", sortKey: null };
+  render();
+  seed.forEach(p => assert(main.innerHTML.includes(`id="pi-${p.id}"`), p.id + " missing from the index"));
+  seed.forEach(p => {
+    openRecord("parts", p.id);
+    assert(main.innerHTML.includes("pt-progress") && main.innerHTML.includes("pt-links"), p.id + " detail failed to render");
+    view.edit = true; render();
+    assert(main.innerHTML.includes("ps-edit"), p.id + " edit mode failed to render");
+    view.edit = false;
+  });
+});
+await t("the ≤900 collapse is a stylesheet rule, in the one responsive block, keyed off the same has-sel state", () => {
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  const respAt = css.indexOf("RESPONSIVE. Placed at the end on purpose");
+  assert(respAt > 0, "the responsive block marker is still there");
+  const collapse = css.indexOf(".mdsplit.has-sel > .mdindex { display: none; }");
+  assert(collapse > respAt, "the collapse rule lives in the responsive block at the end, not beside the component: " + collapse + " vs " + respAt);
+  assert(css.slice(respAt).indexOf(".mdsplit { grid-template-columns: 1fr;") > 0, "and the single-column stack it belongs to");
+  assert(css.slice(respAt).indexOf(".pitem { grid-template-columns: minmax(0, 1fr) 168px") > 0, "as does the one-line row for the tablet band");
+  // Above the breakpoint both panes are shown, so neither rule may exist outside a media query.
+  assert(css.slice(0, respAt).indexOf("has-sel") === -1, "no has-sel rule above the responsive block");
+});
 
 console.log("tickets (modal, board, comments):");
 // give the picker some real users + parts to choose from
@@ -857,18 +1068,22 @@ await t("tickets board gives every status its own track (was repeat(4,1fr) for 6
   PROJ_STATUS.forEach(s => assert(html.includes(`col-${STATUS_SLUG[s]}`), "column for " + s));
   assert(!/repeat\(4/.test(html), "no hardcoded 4-track grid");
 });
-await t("parts list hides completed parts by default and says how many", () => {
+await t("parts index hides completed parts by default and says how many", () => {
   DB.parts = [
     { id: "P-OPEN", partName: "OPEN ONE", subteam: "AERO", layupProgress: "In Layup" },
     { id: "P-DONE", partName: "DONE ONE", subteam: "AERO", layupProgress: "Polished" },
   ];
-  view = { ...view, tab: "parts", mode: "list", q: "", fSub: "", fDone: false, sortKey: null };
-  let html = renderPartList();
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fEng: "", fDone: false, sortKey: null };
+  let html = renderPartIndex();
   assert(html.includes("OPEN ONE") && !html.includes("DONE ONE"), "completed hidden by default");
-  assert(html.includes("Show completed (1)"), "count of what's hidden is visible: " + html.slice(0, 300));
+  // The old checkbox said how many were hidden; the summary chip row says it as
+  // a count you can also click to unhide, alongside open / late / mine.
+  assert(/<b>1<\/b> done/.test(html), "count of what's hidden is visible: " + html.slice(0, 400));
+  assert(/<b>1<\/b> open/.test(html), "and how many are open");
+  assert(html.includes("1 of 2 parts"), "and how much of the archive is showing");
   view.fDone = true;
-  html = renderPartList();
-  assert(html.includes("DONE ONE"), "toggle brings them back");
+  html = renderPartIndex();
+  assert(html.includes("DONE ONE"), "the chip brings them back");
 });
 await t("timeline marks the week containing today", () => {
   DB.parts = [];
