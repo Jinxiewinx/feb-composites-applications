@@ -183,6 +183,8 @@ def build(src: Path, out: Path):
 KNOWN = [
     ("01 Pain Points and Improvements/src/pain-points.md",
      "01 Pain Points and Improvements/SN5 Pain Points and Improvements.docx"),
+    ("06 Prepreg Feasibility/src/prepreg-feasibility-study.md",
+     "06 Prepreg Feasibility/PFS-001 Prepreg Feasibility Study - SN6 Wing Endplates.docx"),
 ]
 
 

@@ -20,7 +20,13 @@ TDS = technical datasheet (how to use it, numbers to design to). SDS = safety da
 ## Not yet collected (add when convenient)
 
 - Sigmatex carbon cloth specs (88 spread-tow / 195 / 220 / 670 gsm) — sponsor-supplied; ask Curtis Small for mill certs/datasheets.
-- ACP Composites Nomex honeycomb + CF rod/tube specs — quote Q04397 in #purchasing has SKUs; product pages have PDFs behind a login.
+- ACP Composites Nomex honeycomb + CF rod/tube specs — quote Q04397 in #purchasing has SKUs; product pages have PDFs behind a login. The prepreg-pilot ask (PFS-001) rides this same outreach: also request the 5.8 oz RTS prepreg TDS while asking about the expired-roll donation.
+- **Prepreg pilot set (cited by PFS-001, `06 Prepreg Feasibility/`)** — downloads blocked from the build environment, URLs are the citation of record until collected:
+  - XPREG XC110 OOA prepreg TDS: `media.easycomposites.co.uk/datasheets/EC-TDS-XC110-Out-of-Autoclave-Component-Prepreg.pdf`
+  - XPREG XC110 Complete Processing Guide: `media.easycomposites.eu/datasheets/XPREG XC110 Complete Processing Guide.pdf`
+  - XA120 prepreg adhesive film TDS: EC pattern `EC-TDS-XA120-*.pdf` via easycomposites.us product page
+  - ACP 5.8 oz RTS prepreg spec: product page behind login, ask with the sponsorship email
+  - Toray TC275-1 / TC275-1E PDS (benchmark only): toraytac.com data sheet library
 - General Sealants tacky tape (contact them directly per their rep).
 - Easy Composites 3D-core infusion foam, 2-in-1 mesh/peel-ply, spiral wrap — EC datasheet URLs follow the `media.easycomposites.co.uk/datasheets/EC-TDS-*.pdf` pattern.
 - The **SN5 Stock Order Google Sheet** (Ansh, 2025-10-20, Slack file F09MGLVKQBX) holds the itemized Easy Composites baskets — the single best source for exact SKUs bought; open in Drive.

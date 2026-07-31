@@ -14,6 +14,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013), markdown source with built .docx outputs | `CS-INDEX` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
+| `06 Prepreg Feasibility/` | SN6 prepreg pilot for the wing endplates (SN5's were 2272 g): feasibility study with BOM, sponsor plan and test deadlines, plus the team-meeting deck | the .docx |
 | `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE | print it |
 | `tools/` | Scripts that build and check the rest: the markdown-to-docx builder, the retro work-order generator, the link auditor, and the app's test suites | |
 
