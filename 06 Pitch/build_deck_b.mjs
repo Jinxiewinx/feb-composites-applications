@@ -55,7 +55,7 @@ function fit(file, box) {
 }
 
 // Arial width estimate in inches (bold runs a touch wider than regular).
-const textW = (s, pt, bold) => s.length * (pt / 72) * (bold ? 0.545 : 0.505);
+const textW = (s, pt, bold) => s.length * (pt / 72) * (bold ? 0.512 : 0.492);
 const lineCount = (s, pt, wIn, bold) => Math.max(1, Math.ceil(textW(s, pt, bold) / wIn));
 
 /* ---- chrome ---- */
@@ -180,8 +180,8 @@ K.statement = (slide, s) => {
   const num = actIndex.get(s.act) || "";
   if (num) {
     slide.addText(num, {
-      x: 9.9, y: 3.9, w: 2.78, h: 2.4, margin: 0, align: "right", valign: "bottom",
-      fontFace: F, fontSize: 150, bold: true, color: C.ghost, charSpacing: -6,
+      x: 8.4, y: 3.3, w: 4.2, h: 2.9, margin: 0, align: "right", valign: "bottom",
+      fontFace: F, fontSize: 124, bold: true, color: C.ghost,
     });
   }
   const y = head(slide, s, { dark: true, w: 11.4, size: s.title.length > 70 ? 30 : 34 });
@@ -199,7 +199,8 @@ K["three-up"] = (slide, s) => {
   slide.background = { color: C.canvas };
   const y = head(slide, s);
   const gap = 0.34, cw = (COLW - 2 * gap) / 3;
-  const top = Math.max(y, 2.25), ch = BOTTOM - top;
+  const top = Math.max(y + 0.15, 2.05);
+  const ch = Math.min(3.45, BOTTOM - top);
   s.items.forEach((it, i) => {
     const x = M + i * (cw + gap);
     slide.addShape("roundRect", {
@@ -211,13 +212,16 @@ K["three-up"] = (slide, s) => {
       x: x + 0.34, y: top + 0.3, w: 1.3, h: 0.3, margin: 0, fontFace: F, fontSize: 11.5,
       bold: true, color: "9A6E00", charSpacing: 1.6,
     });
+    const headLines = lineCount(it.head, 20, cw - 0.68, true);
+    const headH = headLines * 0.34;
     slide.addText(it.head, {
-      x: x + 0.34, y: top + 0.72, w: cw - 0.68, h: 0.96, margin: 0, valign: "top",
+      x: x + 0.34, y: top + 0.66, w: cw - 0.68, h: headH + 0.06, margin: 0, valign: "top",
       fontFace: F, fontSize: 20, bold: true, color: C.blue, charSpacing: -0.4,
       lineSpacingMultiple: 0.98,
     });
+    const bodyY = top + 0.66 + Math.max(headH, 0.68) + 0.24;
     slide.addText(it.body, {
-      x: x + 0.34, y: top + 1.78, w: cw - 0.68, h: ch - 2.1, margin: 0, valign: "top",
+      x: x + 0.34, y: bodyY, w: cw - 0.68, h: top + ch - bodyY - 0.25, margin: 0, valign: "top",
       fontFace: F, fontSize: 13, color: C.muted, lineSpacingMultiple: 1.1,
     });
   });
@@ -227,14 +231,15 @@ K["shot-hero"] = (slide, s) => {
   slide.background = { color: C.canvas };
   const { w: iw, h: ih } = pngSize(path.join(DIR, s.shot));
   const tall = iw / ih < 1.25;
+  const y = head(slide, s);
   if (tall) {
-    const y = head(slide, s, { w: 7.4 });
-    body(slide, s.body, M, y, 6.6, { fontSize: 14.5 });
-    shot(slide, s.shot, { x: 7.9, y: 1.0, w: 4.78, h: 5.5 });
+    // Title stays full width; body left, portrait screenshot right.
+    const top = Math.max(y + 0.1, 2.0);
+    body(slide, s.body, M, top, 6.3, { fontSize: 14.5 });
+    shot(slide, s.shot, { x: 7.35, y: top - 0.1, w: 5.33, h: BOTTOM - top + 0.1 });
   } else {
-    const y = head(slide, s);
     const by = body(slide, s.body, M, y, 11.6, { fontSize: 14.5 });
-    shot(slide, s.shot, { x: M + 0.2, y: by + 0.3, w: COLW - 0.4, h: BOTTOM - by - 0.35 });
+    shot(slide, s.shot, { x: M + 0.2, y: by + 0.22, w: COLW - 0.4, h: BOTTOM - by - 0.25 });
   }
 };
 
@@ -244,7 +249,7 @@ K["shot-left"] = (slide, s) => {
   const wide = iw / ih > 1.2;
   const shotW = wide ? 7.3 : 4.4;
   const y = head(slide, s);
-  const top = Math.max(y, 2.1);
+  const top = Math.max(y + 0.1, 1.9);
   shot(slide, s.shot, { x: M + 0.15, y: top, w: shotW - 0.3, h: BOTTOM - top });
   const tx = M + shotW + 0.45;
   body(slide, s.body, tx, top + 0.05, W - M - tx, { fontSize: 14.5 });
@@ -277,8 +282,8 @@ K["tabs-map"] = (slide, s) => {
 K.stats = (slide, s) => {
   slide.background = { color: C.canvas };
   const y = head(slide, s);
-  const top = Math.max(y, 1.95);
-  const rowH = 1.22;
+  const top = Math.max(y + 0.1, 1.9);
+  const rowH = 1.18;
   s.stats.forEach((st, i) => {
     const yy = top + i * rowH;
     slide.addText(st.n, {
@@ -300,9 +305,9 @@ K.stats = (slide, s) => {
     }
   });
   if (s.body) {
-    const yy = top + s.stats.length * rowH + 0.1;
+    const yy = Math.min(top + s.stats.length * rowH + 0.12, 5.85);
     slide.addText(s.body[0], {
-      x: M, y: yy, w: COLW, h: 0.6, margin: 0, valign: "top",
+      x: M, y: yy, w: COLW, h: 0.62, margin: 0, valign: "top",
       fontFace: F, fontSize: 14, italic: true, color: C.ink, lineSpacingMultiple: 1.1,
     });
   }
@@ -324,11 +329,13 @@ K["two-up"] = (slide, s) => {
       x: x + 0.34, y: top + 0.26, w: cw - 0.68, h: 0.34, margin: 0,
       fontFace: F, fontSize: 17, bold: true, color: C.blue, charSpacing: 1.4,
     });
+    const bl = lineCount(col.body, 12.5, cw - 0.68, false);
     slide.addText(col.body, {
-      x: x + 0.34, y: top + 0.68, w: cw - 0.68, h: 0.95, margin: 0, valign: "top",
+      x: x + 0.34, y: top + 0.68, w: cw - 0.68, h: bl * 0.22 + 0.1, margin: 0, valign: "top",
       fontFace: F, fontSize: 12.5, color: C.muted, lineSpacingMultiple: 1.08,
     });
-    const r = fit(col.shot, { x: x + 0.34, y: top + 1.75, w: cw - 0.68, h: ch - 2.1 });
+    const imgTop = top + 0.68 + bl * 0.22 + 0.32;
+    const r = fit(col.shot, { x: x + 0.34, y: imgTop, w: cw - 0.68, h: top + ch - imgTop - 0.3 });
     slide.addImage({ path: path.join(DIR, col.shot), x: r.x, y: r.y, w: r.w, h: r.h });
     slide.addShape("rect", {
       x: r.x, y: r.y, w: r.w, h: r.h, fill: { type: "none" },
@@ -345,7 +352,7 @@ K.limits = (slide, s) => {
   s.items.forEach((it, i) => {
     const yy = top + i * rowH;
     slide.addShape("rect", {
-      x: M, y: yy + 0.12, w: 0.18, h: 0.18, fill: { color: C.gold }, line: { width: 0 },
+      x: M, y: yy + 0.13, w: 0.13, h: 0.13, fill: { color: C.gold }, line: { width: 0 },
     });
     slide.addText(it.head, {
       x: M + 0.42, y: yy, w: 3.55, h: rowH - 0.2, margin: 0, valign: "top",
@@ -404,8 +411,8 @@ K.ask = (slide, s) => {
     }
   });
   slide.addText(s.footnote, {
-    x: M, y: 6.55, w: 6, h: 0.32, margin: 0, fontFace: F, fontSize: 15, bold: true,
-    color: C.gold, charSpacing: 0.6,
+    x: M, y: 6.72, w: 6, h: 0.34, margin: 0, valign: "middle", fontFace: F, fontSize: 15,
+    bold: true, color: C.gold, charSpacing: 0.6,
   });
 };
 
@@ -416,7 +423,15 @@ slides.forEach((s, i) => {
   const fn = K[s.kind];
   if (!fn) throw new Error(`no layout for kind "${s.kind}"`);
   fn(slide, s);
-  if (s.kind !== "title") footer(slide, i + 1, DARK_KINDS.has(s.kind));
+  if (s.kind === "ask") {
+    // the ask slide carries the live URL where the footer would sit
+    slide.addText(String(i + 1), {
+      x: W - M - 1.2, y: FOOT_Y, w: 1.2, h: 0.28, margin: 0, align: "right",
+      fontFace: F, fontSize: 9.5, color: "6E8AAA",
+    });
+  } else if (s.kind !== "title") {
+    footer(slide, i + 1, DARK_KINDS.has(s.kind));
+  }
   slide.addNotes(s.notes || "");
 });
 

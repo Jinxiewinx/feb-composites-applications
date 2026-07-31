@@ -46,7 +46,13 @@ difference is known:
 - **Tickets, purchases, roster, weekly goals and carpools.** No archive carries
   them. The names are the real roster; the records are plausible, not historical.
 
-No number on a slide comes from any of that seeded data.
+No *claim* the presenter makes comes from that seeded data. But some of it is
+legible in the screenshots — the `$2054` season-spend tile on the Dashboard, the
+purchase amounts in the Budget table, the roster count, the behind-schedule
+count. A lead who reads `$2054` off the wall and asks "we spent that?" deserves a
+straight answer, so **say once, on the Dashboard slide, that the figures on these
+screens are seeded demo data.** It costs a sentence and it protects every
+sourced number in the rest of the deck.
 
 ## Every number in the deck, and the file that proves it
 
@@ -71,6 +77,12 @@ No number on a slide comes from any of that seeded data.
 | $120 of ACP rods, ~$400 to expedite | `pain-points.md` PP-02 |
 | CS-001/007/008/009 outlined, not drafted | `02 CS Standards/CS-INDEX.md` |
 | Firebase Blaze, effectively $0, $1–5 cap | `03 App/app/README.md` |
+| 3 sample molds ship with the app | `03 App/app/samples/` |
+| 11 tabs | `03 App/app/core.js:610` (`TABS`) |
+| 0 build steps — 24 plain script tags, no bundler | `03 App/app/index.html` |
+| 5.5pt legibility floor on a drawing sheet | `tools/test_drawings.mjs` (`MIN_PT`) |
+| Dimensions to nearest 1/16in, exact mm bracketed | `03 App/app/drawings.js` |
+| Traveler steps down layouts to hold 2 pages | `03 App/app/print.js` |
 
 If you change a number on a slide, add its row here. A claim with no row is a
 claim nobody can check in a year.

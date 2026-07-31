@@ -197,7 +197,12 @@ const SHOTS = [
      is a state a user can actually reach. The cut list, the 3D view and the
      drawing sheets are all computed by the real code, not drawn for the deck. */
   {
+    /* Framed on the modal, and tall enough to hold it: the default viewport cut
+       the Cancel/Plan buttons in half, which projects as a broken screenshot. */
     id: "10-body-picker",
+    device: { width: 1440, height: 1600, dsf: 2 },
+    clipTo: `document.querySelector("#modal .modal")`,
+    clipPad: 24,
     wait: 3000,
     /* A real Fusion export is an assembly. clamshell-assembly.stl holds three
        bodies, so Plan stops and asks which one — the slide's whole point. */

@@ -228,7 +228,7 @@ kinds["shot-hero"] = (slide, s) => {
     }
     addShot(slide, s.shot, { x: ML + CW * 0.53, y: y0, w: CW * 0.47, h: BOT - y0 }, true);
   } else {
-    const y0 = title(slide, s.title, { gap: 0.22 });
+    const y0 = title(slide, s.title, { gap: 0.34 });
     const body = s.body.join("   ·   ");
     const bh = lineCount(body, 13, CW * 0.92, 1.0) * 0.27 + 0.12;
     slide.addText(body, {
@@ -307,7 +307,8 @@ kinds.stats = (slide, s) => {
       fontFace: SANS, fontSize: 11.5, color: MUTED, lineSpacing: 17,
     });
   });
-  const yb = y0 + blockH + 0.10;
+  /* Never nearer than 0.30in to the captions, never so low it leaves a hole. */
+  const yb = Math.max(y0 + blockH + 0.30, 5.00);
   rule(slide, ML, yb, CW);
   slide.addText(s.body.join(" "), {
     x: ML, y: yb + 0.16, w: CW * 0.86, h: 0.52, margin: 0, valign: "top",
@@ -318,19 +319,21 @@ kinds.stats = (slide, s) => {
 kinds["two-up"] = (slide, s) => {
   const y0 = title(slide, s.title, { gap: 0.34 });
   const gap = 0.55, colW = (CW - gap) / 2;
+  /* One shared prose height so both plates start on the same line. */
+  const bh = Math.max(...[s.left, s.right].map(
+    (c) => lineCount(c.body, 12.5, colW, 1.0) * 0.26 + 0.14));
   [s.left, s.right].forEach((col, i) => {
     const x = ML + i * (colW + gap);
     slide.addText(col.head, {
       x, y: y0, w: colW, h: 0.32, margin: 0,
       fontFace: SERIF, fontSize: 17, bold: true, color: BLUE,
     });
-    const bh = lineCount(col.body, 12.5, colW, 1.0) * 0.26 + 0.14;
     slide.addText(col.body, {
       x, y: y0 + 0.36, w: colW, h: bh, margin: 0, valign: "top",
       fontFace: SANS, fontSize: 12.5, color: INK, lineSpacing: 18,
     });
     const top = y0 + 0.36 + bh + 0.18;
-    addShot(slide, col.shot, { x, y: top, w: colW, h: BOT - top });
+    addShot(slide, col.shot, { x, y: top, w: colW, h: BOT - top }, true);
   });
 };
 

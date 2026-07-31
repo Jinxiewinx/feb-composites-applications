@@ -45,15 +45,21 @@ export const sources = {
   expedite: ["ACP rods: $120 of parts, ~$400 expedited shipping", "pain-points.md PP-02"],
   outlinedStandards: ["CS-001, CS-007, CS-008, CS-009 are Outlined, not Drafted", "02 CS Standards/CS-INDEX.md"],
   hostingCost: ["Firebase Blaze, effectively $0, with a $1-5 billing cap", "03 App/app/README.md"],
+  sampleMolds3: ["3 sample molds ship with the app", "03 App/app/samples/"],
+  tabs11: ["11 tabs", "03 App/app/core.js:610 TABS"],
+  buildSteps0: ["No build step: 24 plain script tags, no bundler", "03 App/app/index.html"],
+  minType: ["Legibility floor of 5.5pt on a drawing sheet", "tools/test_drawings.mjs MIN_PT"],
+  sixteenth: ["Dimensions to the nearest 1/16in, exact mm bracketed", "03 App/app/drawings.js"],
+  twoPageLadder: ["Traveler steps down layouts until it fits a 2-page cap", "03 App/app/print.js"],
 };
 
 /* The ask. Owners are blank on purpose — they get filled in live, in the room,
    which is the only reason the meeting is happening. */
 export const asks = [
-  { what: "Adopt it for SN6", detail: "Roster everyone in week 1. It is the system of record or it is a side project.", owner: "Lead", when: "Week 1" },
-  { what: "Move the Firebase project", detail: "feb-composites sits on a personal Google account. It has to move to a team account, or it is one graduation away from gone.", owner: "Lead", when: "Before SN6 kickoff" },
-  { what: "Sign the CS approval tables", detail: "All 14 standards ship “Draft, pending Lead signature”. Unsigned, they are suggestions.", owner: "Lead", when: "Sept" },
-  { what: "Field-verify CS-011 at RFS", detail: "The storage map was written from records, not from standing in the room.", owner: "A member", when: "Sept" },
+  { what: "Adopt it for SN6", detail: "Roster everyone in week 1, so it is the one place the season is written down.", owner: "", when: "Week 1" },
+  { what: "Move the Firebase project", detail: "feb-composites sits on a personal Google account. It has to move to a team account, or it is one graduation away from gone.", owner: "", when: "Before SN6 kickoff" },
+  { what: "Sign the CS approval tables", detail: "All 14 standards ship “Draft, pending Lead signature”.", owner: "", when: "Sept" },
+  { what: "Field-verify CS-011 at RFS", detail: "The storage map was written from records, not from standing in the room.", owner: "", when: "Sept" },
 ];
 
 const S = (n) => `shots/${n}.png`;
@@ -79,33 +85,28 @@ export const acts = [
     label: "What SN5 cost",
     slides: [
       {
-        kind: "statement",
-        title: "The roster turns over every year. The knowledge doesn't transfer with it.",
-        body: [
-          "Most of what we know how to do is taught by standing next to someone.",
-          "When they graduate it goes with them, and the next person re-derives it — usually by repeating the mistake.",
-        ],
-        notes: "Do not belabour this. One sentence out loud: they have lived it. The point of the slide is to name the mechanism — verbal training plus annual turnover — so the next slide's three failures read as one root cause rather than three unlucky incidents.",
-      },
-      {
+        /* Was two slides. The first stated that the roster turns over and that
+           training is verbal — to the person who ran both. Cut; what it was
+           for is now the kicker here, and the rest is said out loud. */
         kind: "three-up",
-        title: "Three things that cost us a season, all the same root cause",
+        kicker: "Three from the SN5 review",
+        title: "Three that cost us time, and one reason they were hard to catch",
         items: [
-          { tag: "PP-01", head: "Duratec", body: "Days of mold time per incident, re-coating after sand-through. Nobody owned the sealer choice, so it was inherited rather than decided." },
-          { tag: "PP-02", head: "Customs", body: "A ~109 lb Easy Composites order sat with no ETA and blocked the early layup calendar. Rush replacements elsewhere: $120 of ACP rods, ~$400 to expedite." },
-          { tag: "PP-09", head: "“What stack did we use?”", body: "Asked in March about last year's seat. Answerable only by whoever remembered. The tracker recorded intent, not what was actually laid." },
+          { tag: "PP-01", head: "Duratec", body: "Days of mold time per incident, re-coating after sand-through." },
+          { tag: "PP-02", head: "Customs", body: "A ~109 lb Easy Composites order sat with no ETA. Rush replacements elsewhere: $120 of ACP rods, ~$400 to expedite." },
+          { tag: "PP-09", head: "“What stack did we use?”", body: "Asked in March about last year's seat. The tracker recorded intent, not what was actually laid." },
         ],
-        notes: "PP-09 is the one to land on. The first two cost time and money; the third is why they recurred. Slack is write-only memory. If they push back that PP-02 was bad luck — the 5-why in pain-points.md gets to 'a UK supplier with multi-week customs lead time treated like a next-day vendor', which is a process gap, not luck.",
+        notes: "You were not here for these — say so, and say you are reading them off the SN5 review rather than diagnosing anyone's season. The facts are the credibility; the interpretation is not yours to offer. Land on PP-09: the first two cost time, the third is why they were hard to catch, because Slack is write-only memory. If someone says PP-02 was bad luck, the 5-why in pain-points.md gets to a UK supplier with multi-week customs lead time being treated like a next-day vendor — a process gap, not luck. The mechanism behind all three is turnover plus verbal training; they know that better than you do, so say it in one sentence and move on.",
       },
       {
         kind: "statement",
         title: "10 pain points, root-caused, each mapped to a standard that fixes it",
         body: [
           "14 numbered standards, CS-000 through CS-013. CS-INDEX is the lookup.",
-          "tools/check_traceability.py audits that every pain point still points at a live standard, so the mapping can't quietly rot.",
-          "The app is where those standards stop being a document and start being a step somebody has to sign.",
+          "tools/check_traceability.py audits that every pain point still points at a live standard.",
+          "Each one lands in the app as a step on a work order.",
         ],
-        notes: "This is the only standards slide before the ask. Do not tour them. The sentence that matters is the last one: a standard nobody reads is a PDF; a standard wired into a buy-off step is a gate. That is the bridge into the rest of the deck.",
+        notes: "The only standards slide before the ask — do not tour them. The bridge into the rest of the deck is the last line, and it is worth saying in full out loud: a standard sitting in a folder is a document, and the same standard wired into a buy-off step is a gate somebody has to pass. That is the whole argument for the app existing rather than just the standards.",
       },
     ],
   },
@@ -119,7 +120,7 @@ export const acts = [
         title: "One shared workspace for the season, live for everyone at once",
         body: ["Runs in a browser, on a laptop or a phone at the bench.", "Free to run: Firebase Blaze with a $1–5 billing cap as the backstop."],
         shot: S("05-dashboard"),
-        notes: "Dashboard is read-only on purpose — every row is a link into the tab it came from. Say the URL out loud. If someone opens it on their phone right now, they will hit the login and see nothing, which is the next slide.",
+        notes: "Say once, here, that the figures on these screens are seeded demo data — the $2,054 tile and the purchase amounts later are not real spend. It costs a sentence and it protects every sourced number in the rest of the deck. Dashboard is read-only on purpose — every row is a link into the tab it came from. Say the URL out loud. If someone opens it on their phone right now, they will hit the login and see nothing, which is the next slide.",
       },
       {
         kind: "shot-left",
@@ -231,9 +232,9 @@ export const acts = [
       },
       {
         kind: "shot-hero",
-        title: "It prints on exactly two pages, every time",
+        title: "It measures the sheet before it prints it, to hold a two-page traveler",
         body: [
-          "The app renders the sheet, measures it, and walks down a ladder of tighter layouts until it fits.",
+          "The app renders the sheet, measures what the browser actually laid out, and steps down through tighter layouts until it fits.",
           "Blank travelers for the bench. Always black-on-white, whatever theme you're in.",
         ],
         shot: S("17-print-traveler"),
@@ -286,25 +287,16 @@ export const acts = [
     slides: [
       {
         kind: "stats",
-        title: "Built so it still runs in two years without anyone maintaining it",
+        title: "Built so it still runs in two years, and tested where it actually breaks",
         stats: [
-          { n: "0", label: "build steps", sub: "No framework, no bundler. Open the file, it runs." },
+          { n: "0", label: "build steps", sub: "No framework, no bundler — 24 plain script tags. Open the file and it runs." },
           { n: "1", label: "dependency", sub: "DOMPurify, SRI-pinned and self-hosted after shop wifi silently degraded it from a CDN." },
-          { n: "8,900", label: "lines of app source", sub: "Small enough that the next lead can read it." },
+          { n: "8,900", label: "lines of app source", sub: "Small enough that the next lead can read it. The 3D viewer is hand-rolled WebGL with nothing behind it." },
         ],
-        body: ["The 3D viewer is hand-rolled WebGL with nothing behind it. Fonts are self-hosted. Nothing phones out."],
-        notes: "The argument is not that vanilla JS is better. It is that a student team cannot carry a dependency tree that rots — a framework upgrade nobody is around to do is how these tools die two seasons later. The old single-file work-orders.html is still in the repo as an offline archive viewer: it opens any exported JSON with no server at all.",
-      },
-      {
-        kind: "stats",
-        title: "The two tests worth knowing about render the real thing and measure it",
-        stats: [
-          { n: "8", label: "mold fixtures", sub: "Every drawing sheet rendered in headless Chromium and checked for legibility: no label crossed by a line, nothing under 5.5pt, nothing off the sheet." },
-          { n: "4", label: "device widths", sub: "The whole app booted at each, every printable opened, fit and tap targets measured." },
-          { n: "1,917", label: "lines of app test", sub: "Across every tab, plus the Firestore rules under the emulator." },
+        body: [
+          "Two of the test suites render the real thing in a browser and measure it: every drawing sheet across 8 mold fixtures, checked for legibility down to a 5.5pt floor, and the whole app booted at 4 device widths with every printable opened.",
         ],
-        body: ["Everything else asserts on strings and numbers — and a sheet passes all of that while printing a dimension straight through a dimension line."],
-        notes: "That last line is the justification. String assertions cannot catch a drawing that is unreadable or a sheet that runs off a phone, and both of those shipped once. These two render in a real browser and measure what the layout actually did.",
+        notes: "Two arguments, and they are the same argument. First, the build: not that vanilla JS is better, but that a student team cannot carry a dependency tree that rots — a framework upgrade nobody is around to do is how these tools die two seasons later. The old single-file work-orders.html is still in the repo and opens any exported JSON with no server at all. Second, the tests: everything else in the repo asserts on strings and numbers, and a sheet passes all of that while printing a dimension straight through a dimension line, or running off the side of a phone. Both of those shipped once. That is why two suites render in headless Chromium and measure what the layout actually did. Plus the Firestore rules run under the emulator, and the app test is 1,917 lines across every tab.",
       },
     ],
   },
@@ -319,7 +311,7 @@ export const acts = [
         items: [
           { head: "Buy-offs are not tamper-proof", body: "They record who was signed in. Any roster member can still edit any record, and there is no in-app version history. Monthly JSON exports to Drive are the audit trail." },
           { head: "Notifications are in-app only", body: "Watcher unread state lives in one browser. It does not sync between devices and it does not email." },
-          { head: "Four standards are outlined, not drafted", body: "CS-001, CS-007, CS-008 and CS-009. Don't lean on those the way you'd lean on the other ten." },
+          { head: "Four standards are outlined, not drafted", body: "CS-001, CS-007, CS-008 and CS-009. We shouldn't lean on those the way we'd lean on the other ten." },
           { head: "STL export is beta", body: "Real exports still turn up surprises. Check the stack view before anyone cuts." },
         ],
         notes: "Say this slide slowly and do not soften it. A lead who finds a limitation themselves after adopting it stops trusting everything else you said. Every one of these is written in the repo's own README already — you are reading it out, not confessing.",

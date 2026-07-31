@@ -1,2 +1,1 @@
-11-plan.png
-11b-cutlist.png
+10-body-picker.png

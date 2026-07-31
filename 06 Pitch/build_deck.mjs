@@ -1,12 +1,24 @@
-/* Direction C — "screenshot-led".
-   The product is the argument: on any slide with a `shot`, the image is the
-   slide and the type reduces to the claim plus one caption line. Dropped body
-   lines are appended to the speaker notes, so the presenter still has them.
+/* The deck.
+
+   Screenshot-led: on any slide with a `shot`, the image is the slide and the
+   type reduces to the claim plus its caption. The product is the argument.
+
+   Converged from three design directions after review. What the review changed:
+
+     - Hero shots CONTAIN, they do not crop. Cropping to a fixed 2.42:1 band
+       was throwing away a third of every screenshot — including the STACK
+       section of the mold planner, which is the technical heart of the talk.
+       A screenshot missing its payload is worse than a smaller screenshot.
+     - Body lines stay ON the slide. The old build showed `body[0]` and pushed
+       the rest into the notes, which silently dropped sourced claims: the
+       ShopSabre cut depth, "marked beta", the $5.3k on the personal card.
+     - Bleed never goes closer than 0.5in to an edge; the old build reached
+       0.04in and lost the last row of four tables.
 
    Copy comes from content.mjs and is never rewritten here. Colours come from
    03 App/app/index.html (--blue, --gold, --ink, --muted, --line, --canvas).
 
-   node build_deck_c.mjs   ->   sn6-app-deck-c.pptx
+   node build_deck.mjs   ->   sn6-app-deck.pptx
 */
 
 import pptxgen from "pptxgenjs";
@@ -17,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { acts, slides, meta } from "./content.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CACHE = join(HERE, ".img-c");
+const CACHE = join(HERE, ".img");
 mkdirSync(CACHE, { recursive: true });
 
 /* ---------------------------------------------------------------- palette */
@@ -178,9 +190,21 @@ function threeUp(s, slide) {
     x: M, y: 1.0, w: 11.6, h: 1.0, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: WHITE, lineSpacing: pt * 1.16,
   });
-  const top = 2.45, rowH = 1.5;
+  /* Row heights follow their own copy. A fixed pitch sized for the longest
+     item leaves the short ones floating and the slide bottom-heavy with air. */
+  const BODY_W = 7.05, BODY_PT = 13.5;
+  const rowHs = slide.items.map(it =>
+    Math.max(0.86, linesAt(it.body, BODY_PT, BODY_W, false) * 0.265 + 0.52));
+  /* Then the leftover height is shared equally between the rows, so three
+     short items breathe across the slide instead of huddling under the title
+     over an empty lower third. */
+  const top = 2.35, bottom = H - 0.95;
+  const total = rowHs.reduce((a, b) => a + b, 0);
+  const slack = Math.max(0, (bottom - top - total) / rowHs.length);
+  const grown = rowHs.map(h => h + slack);
+  const offs = grown.map((_, i) => grown.slice(0, i).reduce((a, b) => a + b, 0));
   slide.items.forEach((it, i) => {
-    const y = top + i * rowH;
+    const y = top + offs[i];
     if (i > 0) s.addShape(pres.ShapeType.rect, { x: M, y: y - 0.26, w: W - 2 * M, h: 0.012, fill: { color: RULE_DARK } });
     s.addText(it.tag, {
       x: M, y, w: 1.3, h: 0.32, margin: 0,
@@ -198,20 +222,34 @@ function threeUp(s, slide) {
   s.addNotes(notesFor(slide));
 }
 
-/* Screenshot bleeds the full width; the claim sits in a quiet band beneath it. */
-/* Some screenshots put the payload low in the frame; crop from there instead. */
-const HERO_ANCHOR = { "11b-cutlist": 1.0, "16b-buyoffs": 0.12 };
+/* Screenshot above, claim in a quiet band beneath it.
 
+   The image is CONTAINED, never cropped. These captures are already framed on
+   the thing they are about (capture_shots.mjs clips to the element), so any
+   further crop here removes payload — it was cutting the exploded stack off
+   the planner slide, which is the one screen the talk is built around. */
 function shotHero(s, slide) {
-  const bandY = 5.5;
-  const key = basename(slide.shot, ".png");
-  const img = prep(slide.shot, W / bandY, 0.5, HERO_ANCHOR[key] ?? 0);
-  s.addImage({ path: img, x: 0, y: 0, w: W, h: bandY });
-  s.addShape(pres.ShapeType.rect, { x: 0, y: bandY, w: W, h: H - bandY, fill: { color: INK } });
+  const body = (slide.body || []).filter(Boolean);
+  /* The band grows to hold the copy rather than the copy being cut to fit. */
+  const bandH = 1.25 + body.length * 0.34;
+  const bandY = H - bandH;
+
+  s.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: W, h: bandY, fill: { color: CANVAS } });
+
+  const a = dims(join(HERE, slide.shot)).aspect;
+  const availW = W - 1.1, availH = bandY - 0.55;
+  let w = availW, h = w / a;
+  if (h > availH) { h = availH; w = h * a; }
+  s.addImage({
+    path: prep(slide.shot, 0), x: (W - w) / 2, y: (bandY - h) / 2 + 0.05, w, h,
+    shadow: { type: "outer", color: "0a1628", opacity: 0.18, blur: 14, offset: 2, angle: 90 },
+  });
+
+  s.addShape(pres.ShapeType.rect, { x: 0, y: bandY, w: W, h: bandH, fill: { color: INK } });
 
   const label = slide.act ? `${String(actNo.get(slide.act)).padStart(2, "0")}  ${slide.act}` : meta.footer;
   s.addText(label.toUpperCase(), {
-    x: M, y: bandY + 0.16, w: 6.0, h: 0.24, margin: 0,
+    x: M, y: bandY + 0.14, w: 6.0, h: 0.24, margin: 0,
     fontFace: SANS, fontSize: 10, bold: true, charSpacing: 2.2, color: GOLD, valign: "middle",
   });
 
@@ -219,18 +257,18 @@ function shotHero(s, slide) {
   let pt = shrink(slide.title, tw, [26, 23, 20], 2);
   const lines = linesAt(slide.title, pt, tw, true);
   if (lines > 1) pt = Math.min(pt, 23);
-  const titleY = bandY + 0.44;
+  const titleY = bandY + 0.42;
   const titleH = lines * pt * 1.13 / 72;
   s.addText(slide.title, {
     x: M, y: titleY, w: tw, h: titleH + 0.1, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: WHITE, lineSpacing: pt * 1.13,
   });
-  const cap = (slide.body || [])[0];
-  if (cap) s.addText(cap, {
-    x: M, y: titleY + titleH + 0.09, w: tw, h: 0.32, margin: 0, valign: "top",
-    fontFace: SANS, fontSize: 12.5, color: ON_DARK,
+  if (body.length) s.addText(body.join("  "), {
+    x: M, y: titleY + titleH + 0.10, w: tw, h: bandH - (titleY + titleH + 0.10 - bandY) - 0.30,
+    margin: 0, valign: "top",
+    fontFace: SANS, fontSize: 12.5, color: ON_DARK, lineSpacing: 18,
   });
-  s.addNotes(notesFor(slide, (slide.body || []).slice(1)));
+  s.addNotes(notesFor(slide));
 }
 
 /* Claim across the top; the screenshot bleeds into the bottom-right corner,
@@ -249,11 +287,16 @@ function shotCorner(s, slide) {
   let h, w;
   if (a <= 1.75) { h = 5.2; w = h * a; if (w > 9.3) { w = 9.3; h = w / a; } }
   else { h = 4.5; w = h * a; if (w > 10.4) { w = 10.4; h = w / a; } }
-  const x = W - w, y = H - h;
+  /* 0.5in floor on both bled edges. The old build reached 0.04in from the
+     right and 0.00in from the bottom, which cost the last row of four tables. */
+  const BLEED = 0.5;
+  if (w > W - BLEED) { w = W - BLEED; h = w / a; }
+  if (h > H - BLEED) { h = H - BLEED; w = h * a; }
+  const x = W - w - BLEED, y = H - h - BLEED;
   s.addImage({ path: prep(slide.shot, 0), x, y, w, h });
   s.addShape(pres.ShapeType.rect, { x, y, w: 0.012, h, fill: { color: LINE } });
 
-  const cap = (slide.body || [])[0];
+  const cap = (slide.body || []).filter(Boolean).join("  ");
   const gutter = x - M - 0.45;
   if (cap && gutter >= 3.0) s.addText(cap, {
     x: M, y: y + 0.15, w: Math.min(gutter, 4.6), h: h - 0.3, margin: 0, valign: "top",
@@ -263,7 +306,7 @@ function shotCorner(s, slide) {
     x: M, y: 2.15, w: 11.0, h: 0.65, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 14, color: MUTED, lineSpacing: 21,
   });
-  s.addNotes(notesFor(slide, (slide.body || []).slice(1)));
+  s.addNotes(notesFor(slide));
 }
 
 /* A tall print sheet is not a landscape screenshot: show it whole, at height. */
@@ -279,16 +322,19 @@ function shotSheet(s, slide) {
 
   const tw = x - M - 0.6;
   const pt = shrink(slide.title, tw, [28, 25, 22], 3);
+  const titleY = 1.5;
+  const titleH = linesAt(slide.title, pt, tw, true) * pt * 1.15 / 72;
   s.addText(slide.title, {
-    x: M, y: 1.5, w: tw, h: 2.6, margin: 0, valign: "top",
+    x: M, y: titleY, w: tw, h: titleH + 0.12, margin: 0, valign: "top",
     fontFace: SANS, fontSize: pt, bold: true, color: INK, lineSpacing: pt * 1.15,
   });
-  const cap = (slide.body || [])[0];
+  const cap = (slide.body || []).filter(Boolean).join("  ");
+  /* Follows the title. Pinned to a fixed y it orphaned by up to 1.8in. */
   if (cap) s.addText(cap, {
-    x: M, y: 4.35, w: tw, h: 2.0, margin: 0, valign: "top",
+    x: M, y: titleY + titleH + 0.45, w: tw, h: 2.4, margin: 0, valign: "top",
     fontFace: SANS, fontSize: 13.5, color: MUTED, lineSpacing: 20,
   });
-  s.addNotes(notesFor(slide, (slide.body || []).slice(1)));
+  s.addNotes(notesFor(slide));
 }
 
 function tabsMap(s, slide) {
@@ -460,5 +506,5 @@ for (const slide of slides) {
   fn(s, slide);
 }
 
-await pres.writeFile({ fileName: join(HERE, "sn6-app-deck-c.pptx") });
-console.log(`wrote sn6-app-deck-c.pptx — ${slides.length} slides`);
+await pres.writeFile({ fileName: join(HERE, "sn6-app-deck.pptx") });
+console.log(`wrote sn6-app-deck.pptx — ${slides.length} slides`);
