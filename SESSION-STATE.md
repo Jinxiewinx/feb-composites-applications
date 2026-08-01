@@ -45,6 +45,16 @@ footer, which is accurate but leans warmer on that machine than current
 practice does. Left alone: it tracks CS-005 Rev B, so changing it means a
 revision bump. Simon's call.
 
+Deployed to https://feb-composites.web.app, `--only hosting` (the rules files
+were untouched). Verified live by curling `timeline.js` off the host rather
+than trusting the CLI. No Firestore field keys changed, so nothing migrated and
+a rollback is redeploying an earlier commit. The team has not been told.
+
+**New standing rule, working rule 4 in `CLAUDE.md`:** deploy hosting whenever a
+section of app work is complete. Simon made it standard on 2026-08-01 rather
+than something to offer each time. It overrides rule 3's confirm-before-
+outward-facing for that one target and nothing else.
+
 See "App UI/UX audit" directly below for the previous session.
 
 Earlier: **Mold Stack Planner phase 1 built, not yet committed.** Branch
