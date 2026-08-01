@@ -81,6 +81,8 @@ It works because Fluent's Chromium export has a consistent layout (panel titles 
 
 ```bash
 node tools/test_app.mjs      # app logic across every tab, in a DOM stub
+node tools/test_designsystem.mjs  # the app's CSS against 06 Design System, no browser
+node tools/test_appui.mjs    # layout: 11 tabs x 4 widths x 2 themes, measured
 node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
 node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
 node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
@@ -106,6 +108,21 @@ Playwright (`npm i -g playwright && npx playwright install chromium`) and skip
 loudly without it — run them before shipping a change to `drawings.js`,
 `print.js` or `print.css`.
 
+`test_designsystem.mjs` and `test_appui.mjs` are the newest pair, and they exist
+because `06 Design System/` was extracted from the app rather than imported by
+it. Two copies of one design, with nothing holding them together, rot quietly:
+the app's kanban column and modal had drifted a pixel off the radius token,
+`.stage` had lost its background and `.avatar` its fill, and none of that shows
+up in a screenshot. The first is the diff, run as a test, and it also checks the
+CSS actually parses — which sounds pointless until an unterminated comment eats
+the next rule and a fix you just made silently does nothing. The second renders
+all eleven tabs at 1920, 1440, 900 and 393 in both themes and measures the
+things a picture can only show you: nothing off the side, no tap target under
+40px where there is a thumb, no text under 11px, nothing sticky hiding behind
+the topbar, every surface actually changing colour in dark mode, and `main`
+using the window it was given. That last one is how the wasted 27% of a 1920
+monitor got found.
+
 `test_safearea.mjs` is the third of that family and the least obvious. The app
 sets `viewport-fit=cover` and runs standalone with a translucent status bar on
 purpose, so it draws edge to edge and the navy topbar meets the Dynamic Island
@@ -121,7 +138,7 @@ a table row, and that nothing sticky pins itself behind the topbar.
 There's a third thing in that family which is deliberately **not** a test:
 
 ```bash
-node tools/shoot_ui.mjs --out .ui-shots    # PNGs of a tab, 3 widths x 2 themes
+node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab, 4 widths x 2 themes
 ```
 
 It renders the real app with real SN5 data and writes images. It asserts nothing,

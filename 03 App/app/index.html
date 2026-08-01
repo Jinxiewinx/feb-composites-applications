@@ -169,7 +169,7 @@
   .topbar .actions { display: flex; align-items: center; gap: 8px; }
   .tb-desktop { display: flex; align-items: center; gap: 8px; }
   /* Hamburger + overflow "⋯" appear only on small screens (see media queries). */
-  .hamburger { display: none; border: none; background: none; font-size: 20px; line-height: 1; padding: 6px 8px; cursor: pointer; color: var(--ink); border-radius: 6px; }
+  .hamburger { display: none; border: none; background: none; font-size: 20px; line-height: 1; padding: 6px 8px; cursor: pointer; color: var(--ink); border-radius: var(--radius); }
   .hamburger:hover { background: var(--hover); }
   /* Two classes deep on purpose. The button is `class="icon-btn tb-morebtn"`,
      and a plain `.tb-morebtn { display: none }` ties with `.icon-btn { display:
@@ -188,13 +188,19 @@
   .menu-actions button .ico { color: var(--muted); }
   .menu-actions button.danger .ico { color: var(--bad); }
   #drawer-backdrop { display: none; }
-  main { max-width: 1180px; width: 100%; margin: 0 auto;
+  /* 1600, not 1180. On a 1920 monitor the old cap put 1140px of content in a
+     1704px space and left 27% of the window empty on every tab; on a 2560 it
+     was 47%. Still a cap and not 100%: past about 1600 a table row gets long
+     enough that the eye loses which row it is on, which is the thing the
+     gutter is actually buying. Tabs that want more than this ask for it by
+     class rather than by moving the default. */
+  main { max-width: 1600px; width: 100%; margin: 0 auto;
     padding: 18px max(20px, var(--sa-r)) calc(60px + var(--sa-b)) max(20px, var(--sa-l)); }
   /* All responsive rules live in one block at the end of this stylesheet, so
      they reliably override the base rules above regardless of specificity. */
 
   /* ---- avatars ---- */
-  .avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; color: #fff; font-weight: 600; vertical-align: middle; flex: none; }
+  .avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; background: var(--muted); color: #fff; font-weight: 600; vertical-align: middle; flex: none; }
   .avatar img { width: 100%; height: 100%; object-fit: cover; }
   .avatar.init { background: var(--muted); }
   .avatar-btn { border: none; background: none; padding: 0; cursor: pointer; border-radius: 50%; }
@@ -205,7 +211,7 @@
   /* ---- filters / tables (carried from before, restyled) ---- */
   .filters { display: flex; gap: 8px; margin: 6px 0 14px; flex-wrap: wrap; }
   .filters select, .filters input { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-  table.list { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+  table.list { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow); }
   table.list th { background: var(--surface-2); color: var(--muted); text-align: left; padding: 8px 11px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); }
   table.list th.sortable { cursor: pointer; user-select: none; }
   table.list th.sortable:hover { color: var(--brand-ink); }
@@ -216,13 +222,14 @@
      silently did nothing. Global, since that's how it's used. */
   .tny { font-size: 12px; color: var(--muted); }
   table.list.dash td { cursor: default; }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: var(--fill); color: var(--muted); }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 5px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--line); background: var(--fill); color: var(--muted); }
   .pill.Complete { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
   .pill.InWork { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
   .pill.Draft { background: var(--fill); }
   .pill.OnHold { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad); }
   .pill.retro { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
-  .stage { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; border: 1px solid var(--line); white-space: nowrap; }
+  .stage { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 600;
+    background: var(--fill); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
   .stage.st-0 { background: var(--fill); color: var(--muted); }
   .stage.st-mid { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
   .stage.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
@@ -234,9 +241,9 @@
   .stage-bar-fill.st-mid { background: var(--amber); }
   .stage-bar-fill.st-done { background: var(--ok); }
   .stagecell { display: inline-block; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 3px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 5px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
   .chip:hover { filter: brightness(.97); }
-  .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
+  .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
 
   /* ---- tickets: kind badge, colored status, gates, sub-tickets ---- */
   .kindfilter { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
@@ -281,7 +288,7 @@
   .col.col-cancelled::before { background: var(--faint); }
 
   /* ---- cards / detail ---- */
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 0 0 14px; box-shadow: var(--shadow); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px 18px; margin: 0 0 14px; box-shadow: var(--shadow); }
   .card h2 { font-family: var(--font-display); margin: 0 0 6px; font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: .01em; }
   .card h3 { margin: 16px 0 7px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
   .card h3:first-child { margin-top: 0; }
@@ -318,17 +325,20 @@
      can't drift when a status is added. Tracks hold a 190px floor and the
      wrapper scrolls sideways rather than crushing them. */
   .boardwrap { overflow-x: auto; padding-bottom: 4px; }
-  /* 176px floor: six tracks plus five 12px gaps fit inside main's 1140px content
-     box, so a normal desktop shows the whole board with no scrollbar and the
-     tracks still stretch. Narrower windows scroll instead of crushing cards. */
+  /* 176px floor: six tracks plus five 12px gaps fit inside the content box at
+     any desktop width main allows, so a normal desktop shows the whole board
+     with no scrollbar and the tracks still stretch — at the 1600px cap they
+     reach about 250px each. Narrower windows scroll instead of crushing
+     cards. */
   .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(176px, 1fr); gap: 12px; align-items: start; }
   /* Tablet and phone keep the original stacked sections, so go back to explicit
      row flow — auto-columns would ignore grid-template-columns entirely. */
   @media (max-width: 900px) { .boardwrap { overflow-x: visible; } .board { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); } }
-  .col { background: var(--fill); border-radius: 8px; padding: 8px; min-height: 80px; }
+  .col { background: var(--fill); border-radius: var(--r-md); padding: 8px; min-height: 80px; }
   .col.dragover { background: var(--info-bg); outline: 2px dashed var(--accent); }
-  .col h4 { margin: 4px 6px 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; }
-  .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: grab; }
+  .col h4 { margin: 4px 6px 8px; font-family: var(--font-display); font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; }
+  .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: grab; }
   .pcard:hover { border-color: var(--border-2); }
   .pcard .t { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
   /* Six tracks means ~180px cards, so the meta line wraps instead of breaking a
@@ -342,7 +352,7 @@
 
   /* ---- project detail: files + comments ---- */
   .filegrid { display: flex; flex-wrap: wrap; gap: 10px; }
-  .fileitem { width: 120px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); font-size: 11.5px; }
+  .fileitem { width: 120px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); font-size: 11.5px; }
   .fileitem .thumb { height: 84px; background: var(--fill) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--faint); }
   .fileitem .fn { padding: 5px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fileitem .fn a { color: var(--ink); text-decoration: none; }
@@ -377,12 +387,12 @@
   /* ---- topbar icons + search + notifications ---- */
   .icon-btn { display: inline-flex; align-items: center; justify-content: center; border: none; background: none; padding: 7px; position: relative; cursor: pointer; color: var(--muted); border-radius: 7px; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
   .icon-btn:hover { background: var(--hover); color: var(--ink); }
-  .icon-btn .badge { position: absolute; top: 0; right: 0; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; padding: 0 4px; min-width: 15px; text-align: center; line-height: 15px; }
-  .gsearch { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }
+  .icon-btn .badge { position: absolute; top: 0; right: 0; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 0 4px; min-width: 15px; text-align: center; line-height: 15px; }
+  .gsearch { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
   .gsearch-results { margin-top: 8px; max-height: 55vh; overflow-y: auto; }
-  .gsr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .gsr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; }
   .gsr:hover { background: var(--accent-soft); }
-  .notif { padding: 9px 10px; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }
+  .notif { padding: 9px 10px; border-radius: var(--radius); cursor: pointer; border-left: 3px solid transparent; }
   .notif:hover { background: var(--fill); }
   .notif.unread { border-left-color: var(--gold); background: var(--gold-bg); }
 
@@ -393,7 +403,7 @@
   /* max(), not addition: 16px is already clear of most edges, and a toast
      floating 50px up from the bottom of a phone looks broken. Take the larger. */
   #toasts { position: fixed; right: max(16px, var(--sa-r)); bottom: max(16px, var(--sa-b)); z-index: 60; display: flex; flex-direction: column; gap: 8px; }
-  .toast { padding: 10px 14px; border-radius: 6px; color: #fff; font-size: 13.5px; box-shadow: 0 4px 14px rgba(9,30,66,.3); max-width: 340px; opacity: 1; transition: opacity .3s, transform .3s; }
+  .toast { padding: 10px 14px; border-radius: var(--radius); color: #fff; font-size: 13.5px; box-shadow: var(--shadow-md); max-width: 340px; opacity: 1; transition: opacity .3s, transform .3s; }
   .toast.hide { opacity: 0; transform: translateY(6px); }
   .toast.ok { background: var(--ok); } .toast.err { background: var(--bad); } .toast.info { background: var(--blue); }
 
@@ -406,7 +416,7 @@
      all three through openModal(). */
   #modal .backdrop { position: absolute; inset: 0; background: rgba(9,30,66,.54); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
     padding: max(40px, calc(var(--sa-t) + 12px)) max(16px, var(--sa-r)) max(40px, calc(var(--sa-b) + 12px)) max(16px, var(--sa-l)); }
-  #modal .modal { background: var(--surface); border-radius: 8px; width: 100%; max-width: 640px; box-shadow: 0 8px 24px rgba(9,30,66,.28); padding: 22px 24px; }
+  #modal .modal { background: var(--surface); border-radius: var(--r-md); width: 100%; max-width: 640px; box-shadow: var(--shadow-lg); padding: 22px 24px; }
   #modal .modal h2 { margin: 0 0 14px; font-size: 18px; }
   #modal .modal .field { margin-bottom: 12px; }
   #modal .modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -431,7 +441,7 @@
   .docrow:hover { background: var(--hover); }
   .docrow .di { font-size: 18px; width: 24px; text-align: center; }
   .docrow .dsz { margin-left: auto; font-size: 11.5px; color: var(--faint); }
-  .docview { width: 100%; height: 78vh; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .docview { width: 100%; height: 78vh; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
   .md-body h1 { font-size: 22px; } .md-body h2 { font-size: 18px; color: var(--brand-ink); } .md-body h3 { font-size: 14px; }
   .md-body table { border-collapse: collapse; margin: 8px 0; }
   .md-body th, .md-body td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; font-size: 13px; }
@@ -447,7 +457,7 @@
   .meshview-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px;
     font-size: 12px; color: var(--muted); }
   .mv-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 2px; }
-  .mv-swatch.mv-mold { background: #2f6be4; }
+  .mv-swatch.mv-mold { background: var(--brand-blue); }
   .mv-swatch.mv-stock { background: rgba(253,181,21,.55); border: 1px solid var(--border-2); }
   .meshview-hint button { margin-left: auto; }
   .meshview-note { margin-top: 6px; }
@@ -476,7 +486,11 @@
      with every other width rule in the responsive block at the end of this
      sheet, not here — the only thing the markup carries is a selected flag.
      ============================================================ */
-  .mdsplit { display: grid; grid-template-columns: 336px minmax(0, 1fr); gap: 16px; align-items: start; }
+  /* The rail was a fixed 336px, so every pixel the window gained went to the
+     detail pane and the index stayed the same width it had on a laptop. It is
+     the thing you scan, so it grows too — but slowly, and it stops at 420
+     because a wider rail just pads its two-line rows. */
+  .mdsplit { display: grid; grid-template-columns: clamp(300px, 24vw, 420px) minmax(0, 1fr); gap: 16px; align-items: start; }
   .mddetail { min-width: 0; }
   /* The index outlives the detail, so it gets the card chrome and its own
      scroll: walking 33 parts must never scroll the part you're reading. */
@@ -511,7 +525,7 @@
     background: linear-gradient(to top, var(--card) 20%, transparent); }
   /* One header per subteam, only when the rail is grouped. */
   .pgrouphd { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; position: sticky; top: -6px; z-index: 1;
-    margin: 8px 0 3px; padding: 5px 9px; border-radius: 6px; background: var(--surface-2); font-size: 11px; color: var(--muted); }
+    margin: 8px 0 3px; padding: 5px 9px; border-radius: var(--radius); background: var(--surface-2); font-size: 11px; color: var(--muted); }
   .pgrouphd:first-child { margin-top: 0; }
   .pgrouphd .pg-name { font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); }
   .pgrouphd .pg-n { white-space: nowrap; }
@@ -636,7 +650,7 @@
   .sb-nums { margin-top: 4px; }
   .sb-nums .mid { color: var(--amber); } .sb-nums .done { color: var(--ok); } .sb-nums .na { color: var(--retro); }
   .pmini { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-top: 1px solid var(--line);
-    border-radius: 6px; cursor: pointer; }
+    border-radius: var(--radius); cursor: pointer; }
   .pmini:hover { background: var(--hover); }
   .pmini .pm-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pmini .pm-due { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -703,20 +717,27 @@
   body.previewing #app { display: none; }
 
   /* ============================================================
-     REVAMP POLISH — placed after the base components so it wins on source order:
-     icon-in-button alignment, hover micro-interactions, motorsport accents.
+     REVAMP POLISH — icon-in-button alignment, hover micro-interactions,
+     motorsport accents.
+
+     This block used to also re-declare .card, table.list, .pill, .stage, .chip,
+     .kind, .col and .col h4 purely to correct a radius or a font that the base
+     rule above had hardcoded. It reached the right answer by overriding itself
+     forty lines later, which meant every one of those components had two
+     competing declarations and tools/test_designsystem.mjs could not tell which
+     was the real one. The corrections now live in the base rules; what is left
+     here is genuinely additive.
      ============================================================ */
   .ib { display: inline-flex; align-items: center; gap: 6px; }
   .cnt { display: inline-flex; align-items: center; gap: 3px; }
   .cnt .ico { opacity: .7; }
-  /* rounder surfaces + hover response */
-  .card { border-radius: var(--r-md); transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease); }
-  table.list, table.tl { border-radius: var(--r-md); }
+  /* hover response */
+  .card { transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease); }
   table.list td, .docrow, .gitem { transition: background var(--t-fast) var(--ease); }
   input, select, textarea { transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
   .grid .f input:focus, .grid .f select:focus, .field input:focus, .field select:focus,
   .filters input:focus, .filters select:focus, .login .f input:focus, textarea:focus,
-  table.sub input:focus, table.sub select:focus, table.tl input:focus, table.tl select:focus {
+  table.sub input:focus, table.sub select:focus, .tlgrid input:focus, .tlgrid select:focus {
     outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
   }
   /* project cards + stat tiles lift on hover */
@@ -729,19 +750,31 @@
      defined in the tickets block above, since they're the same 6-value enum) */
   .col { border: 1px solid var(--line); position: relative; overflow: hidden; }
   .col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border-2); }
-  .col h4 { font-family: var(--font-display); letter-spacing: .02em; }
-  /* slightly softer pill/chip corners to match the new radius language */
-  .pill, .stage { border-radius: 5px; }
-  .chip { border-radius: 5px; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
-  .kind { border-radius: 4px; }
+  .chip { transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
 
   /* ============================================================
      RESPONSIVE. Placed at the end on purpose: at equal specificity the later
      rule wins, so keeping every screen-width override here means it reliably
-     beats the base rules above. Tablet (≤900) folds the sidebar into a slide-in
-     drawer; phone (≤640) also stacks tables and the board and slims the
-     topbar. Desktop is the untouched default above these queries.
+     beats the base rules above. Wide (≥1500) lets the auto-fit grids add a
+     column; tablet (≤900) folds the sidebar into a slide-in drawer; phone
+     (≤640) also stacks tables and the board and slims the topbar. A 1440
+     laptop is the untouched default in the middle.
      ============================================================ */
+
+  /* Raising main's cap to 1600 hands every auto-fit grid roughly 460 extra
+     pixels, and auto-fit spends them by stretching the columns it already has
+     rather than adding one — a 320px floor with 1560px to fill gives four
+     tracks of 390px, which is a wider card holding the same amount of text.
+     Raising the floors here makes the extra width buy a column instead. Only
+     at 1500+, because these floors would force a scrollbar on a laptop. */
+  @media (min-width: 1500px) {
+    .dashgrid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+    .pgrid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .linkgrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .stat-row { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  }
+
   @media (max-width: 900px) {
     .hamburger { display: inline-flex; align-items: center; }
     nav.sidebar {
@@ -907,7 +940,30 @@
        touchscreen at any width gets the bigger step. */
     .pstep { min-height: 40px; padding: 9px 14px; }
     .sb-item { padding: 11px 12px; }
-    .filters select, .filters input, .toolbar select { min-height: 40px; }
+    /* Scoped to the CONTROL, not to the container it happens to sit in. This
+       used to read `.filters select, .filters input, .toolbar select`, so a
+       control earned a thumb-sized target only by being inside one of two
+       specific bars. Everything else missed: the Tickets search box measured
+       24px, the Parts one 31px, and the People role select 21px, all on a
+       phone. Which container a control lives in has nothing to do with how big
+       a finger is. */
+    input:not([type=checkbox]):not([type=radio]), select, textarea { min-height: 40px; }
+    /* A checkbox is sized by its own box, so min-height does nothing to it and
+       there is no honest way to make it 40px without it looking broken. 24px
+       plus a 44px row is the compromise: the box is two-thirds bigger than the
+       15px it was, and the row around it gives the thumb somewhere to land.
+       This is the Weekly Plan goal list, ticked off in the shop with gloves
+       on, so it is worth the two rules.
+
+       .task-row is repeated in the selector on purpose. This block is the one
+       place in the stylesheet where "later wins" is not enough: the rule up in
+       the weekly-plan section is a class plus an attribute, so it outranks a
+       bare element selector wherever that sits. Matched here rather than
+       reordered, because moving it would break the file's one organising
+       rule. */
+    input[type=checkbox], input[type=radio],
+    .task-row input[type=checkbox] { width: 24px; height: 24px; }
+    .task-row { min-height: 44px; }
     .picker .opt { padding: 9px 10px; }
   }
 
@@ -922,7 +978,9 @@
       --line: #000; --border-2: #000; --brand-ink: #003262;
     }
     @page { size: letter; margin: 0.45in; }
-    body { background: #fff; }
+    /* The token block above has just re-pointed these for paper; read them,
+       so a change to the print palette lands in one place rather than four. */
+    body { background: var(--surface); }
 
     /* A work order prints as the purpose-built traveler in #printroot, never as
        a restyled screen view — body.sheet says a sheet is mounted. Every other
@@ -957,13 +1015,13 @@
     /* Paper can't be tapped: a stage prints as the value it is, not as six
        buttons one of which is filled in. */
     .pstep:not(.cur) { display: none !important; }
-    .pstep.cur { box-shadow: none; border-color: #000; }
-    .card { border: 1px solid #000; border-radius: 0; box-shadow: none; break-inside: auto; margin-bottom: 8px; padding: 10px 14px; }
+    .pstep.cur { box-shadow: none; border-color: var(--line); }
+    .card { border: 1px solid var(--line); border-radius: 0; box-shadow: none; break-inside: auto; margin-bottom: 8px; padding: 10px 14px; }
     .card h2, .card h3 { break-after: avoid; }
     .grid, .stackviz { break-inside: avoid; }
     table.sub thead { display: table-header-group; } table.sub tr { break-inside: avoid; }
     .step { break-inside: avoid; } .step .buyoff button { display: none; }
-    a { color: #000; text-decoration: none; }
+    a { color: var(--ink); text-decoration: none; }
   }
 </style>
 <link rel="stylesheet" href="print.css">

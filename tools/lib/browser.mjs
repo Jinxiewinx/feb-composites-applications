@@ -62,6 +62,17 @@ export async function loadChromium() {
     const g = execSync("npm root -g", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     tries.push(join(g, "playwright", "index.mjs"));
   } catch { /* no npm */ }
+  /* The design-sync toolchain vendors its own playwright, and it is the only
+     copy in this repo. Node resolves node_modules by walking ANCESTORS, and
+     .ds-sync is a sibling of tools/, so require.resolve above never sees it and
+     every browser test skips with a green exit code — which is exactly what was
+     happening before this line existed. Named explicitly rather than globbed:
+     if .ds-sync goes away the skip message is right again.
+     Keep .ds-sync/package.json's playwright version matched to the chromium
+     build cached in ~/Library/Caches/ms-playwright (1.58.0 <-> 1208 today), or
+     playwright launches and immediately reports a missing executable. */
+  tries.push(join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".ds-sync",
+    "node_modules", "playwright", "index.js"));
   for (const p of tries) {
     try {
       const m = await import(p.startsWith("/") ? "file://" + p : p);

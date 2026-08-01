@@ -17,11 +17,13 @@
  *
  *   node tools/shoot_ui.mjs --out .ui-shots
  *   node tools/shoot_ui.mjs --out /tmp/shots --label B --tab parts
+ *   node tools/shoot_ui.mjs --out .ui-shots --tab all --label before
  *
  * Options
  *   --out <dir>    where the PNGs go            (default .ui-shots)
  *   --label <s>    filename prefix, e.g. the variant id   (default "ui")
- *   --tab <id>     which tab to shoot           (default parts)
+ *   --tab <id>     which tab to shoot, or "all" for every tab, list state only
+ *                                              (default parts)
  *   --id <recId>   which record for the detail states     (default first row)
  *   --width <n>    shoot one width instead of all three
  *   --theme <t>    light | dark, instead of both
@@ -32,6 +34,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { serveApp, loadChromium, skipMessage, APP_ROOT } from "./lib/browser.mjs";
+import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 
 /* ---------- args ---------- */
 function arg(name, dflt) {
@@ -43,11 +46,13 @@ const LABEL = arg("label", "ui");
 const TAB = arg("tab", "parts");
 const REC = arg("id", "");
 
-/* Three widths, each one a real decision boundary in the stylesheet rather than
-   a round number: 1440 is the design target, 900 is where the sidebar becomes a
-   drawer and list tables card-stack, 393 is an iPhone 15. A layout that works at
-   all three has no untested middle. */
+/* Four widths, each one a real decision boundary in the stylesheet rather than
+   a round number: 1920 is the common desktop monitor and the width at which
+   main's max-width leaves visible gutter, 1440 is the design target, 900 is
+   where the sidebar becomes a drawer and list tables card-stack, 393 is an
+   iPhone 15. A layout that works at all four has no untested middle. */
 const WIDTHS = [
+  { w: 1920, h: 1080, id: "1920", mobile: false },
   { w: 1440, h: 1000, id: "1440", mobile: false },
   { w: 900, h: 1100, id: "900", mobile: false },
   { w: 393, h: 852, id: "393", mobile: true },
@@ -84,6 +89,19 @@ const STATES = [
   { id: "detail", js: (tab, id) => `setTab(${JSON.stringify(tab)}); openRecord(${JSON.stringify(tab)}, ${JSON.stringify(id)});` },
   { id: "detail-edit", js: (tab, id) => `setTab(${JSON.stringify(tab)}); openRecord(${JSON.stringify(tab)}, ${JSON.stringify(id)}); view.edit = true; render();` },
 ];
+
+/* --tab all sweeps the whole app instead of one tab. Every tab in core.js's
+   TABS, list state only: the point of a sweep is "does any tab break at this
+   width", and a per-tab detail state quadruples the frame count for a question
+   the single-tab mode already answers better. Kept as a literal list rather
+   than read out of the running page, so a tab silently disappearing from TABS
+   shows up as a missing file instead of a shorter, quietly-passing run. */
+const ALL_TABS = ["dashboard", "workorders", "parts", "stock", "projects",
+  "timeline", "weekplan", "budget", "documents", "reports", "people"];
+const SWEEP = TAB === "all";
+/* The record id lookup below only knows two archives, so a sweep takes the
+   list states and leaves detail to a targeted run. */
+const states = SWEEP ? STATES.filter(s => s.id === "list") : STATES;
 
 /* ---------- the stand-in for fb.js ----------
    Same boundary the shared FB_STUB stubs (onFbData / onFbChange), but seeded
@@ -127,6 +145,14 @@ async function seed(coll, file, pick) {
 }
 await seed("parts", "sn5-parts.json");
 await seed("workOrders", "sn5-work-orders.json", j => Array.isArray(j) ? j : (j.workOrders || []));
+await seed("schedule", "sn5-schedule.json");
+await seed("stock", "sn5-stock.json");
+/* Tickets, Budget, People and the Weekly Plan have no archive to seed from —
+   loadArchive() only knows the four collections above. Without these four the
+   sweep photographs five of eleven tabs saying "nothing here yet", which is
+   the one state a density audit learns nothing from. Runs last, because the
+   schedule patch needs the archive weeks to already be in DB. */
+${APPLY_FIXTURES}
 window.onFbChange("ready");
 `;
 
@@ -196,18 +222,28 @@ for (const vp of widths) {
     const seedError = await page.evaluate("window.__seedError || null");
     if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
 
-    for (const st of STATES) {
-      const needsRec = st.id.startsWith("detail");
-      if (needsRec && !recId) continue;
-      await page.evaluate(st.js(TAB, recId));
-      /* Let webfonts settle and any post-render pass (labelListTables) run.
-         Screenshots taken mid-swap are the classic way to photograph a bug
-         that isn't there. */
-      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
-      await page.waitForTimeout(350);
-      const name = `${LABEL}-${st.id}-${vp.id}-${theme}.png`;
-      await page.screenshot({ path: join(OUT, name), fullPage: true });
-      written.push(name);
+    for (const tab of (SWEEP ? ALL_TABS : [TAB])) {
+      for (const st of states) {
+        const needsRec = st.id.startsWith("detail");
+        if (needsRec && !recId) continue;
+        await page.evaluate(st.js(tab, recId));
+        /* Let webfonts settle and any post-render pass (labelListTables) run.
+           Screenshots taken mid-swap are the classic way to photograph a bug
+           that isn't there. */
+        await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+        /* Documents fetches docs/manifest.json on first paint and renders
+           "Loading documents…" until it lands, so a fixed dwell photographs the
+           spinner. Wait for the tab to stop saying that, then fall through. */
+        await page.waitForFunction(
+          () => !/Loading documents/.test(document.getElementById("main").textContent),
+          null, { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(350);
+        const name = SWEEP
+          ? `${LABEL}-${tab}-${vp.id}-${theme}.png`
+          : `${LABEL}-${st.id}-${vp.id}-${theme}.png`;
+        await page.screenshot({ path: join(OUT, name), fullPage: true });
+        written.push(name);
+      }
     }
     await ctx.close();
   }
@@ -217,7 +253,7 @@ await browser.close();
 server.close();
 
 console.log(`${written.length} images in ${OUT}`);
-console.log(`  ${TAB}${recId ? " · detail record " + recId : ""} · widths ${widths.map(v => v.id).join(", ")} · ${themes.join(", ")}`);
+console.log(`  ${SWEEP ? ALL_TABS.length + " tabs" : TAB}${recId && !SWEEP ? " · detail record " + recId : ""} · widths ${widths.map(v => v.id).join(", ")} · ${themes.join(", ")}`);
 if (problems.length) {
   console.log(`\n${problems.length} console/page error${problems.length === 1 ? "" : "s"} while shooting:`);
   [...new Set(problems)].slice(0, 10).forEach(p => console.log("  " + p));

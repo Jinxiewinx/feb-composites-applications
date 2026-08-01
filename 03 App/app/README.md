@@ -85,9 +85,16 @@ wide list tables (work orders, parts, budget, tickets) turn into one card per
 row with labeled fields, so nothing runs off the edge; narrow detail tables
 scroll sideways instead, and the timeline pins its week column while the
 stations scroll. The tickets board stacks its six status columns into full-width
-sections. Form controls render at 16px so iOS doesn't zoom
-on focus, and buttons grow to a comfortable tap size on touch screens. Above
-roughly a tablet width the layout is the unchanged desktop one.
+sections. Form controls render at 16px so iOS doesn't zoom on focus, and every
+control grows to a 40px tap target on a touch screen, checkboxes to 24px in a
+44px row.
+
+On a wide screen the content runs to 1600px rather than the 1180px it used to,
+which on a 1920 monitor was leaving 27% of the window empty on every tab. Past
+1500px the card grids add a column instead of stretching the ones they have,
+and the Parts index rail grows with the window up to 420px. It is still a cap
+and not the full width: past about 1600 a table row gets long enough that the
+eye loses which row it is reading.
 
 The old single-file `../work-orders.html` stays as the offline backup and archive
 viewer, since it still opens any exported JSON anywhere, forever. Don't delete
@@ -250,20 +257,43 @@ Tests, from `SN6 Resources/`:
 
 ```
 node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake backend)
+node tools/test_designsystem.mjs  # app CSS vs 06 Design System, no browser
+node tools/test_appui.mjs         # layout on 11 tabs x 4 widths x 2 themes
 node tools/test_safearea.mjs      # notch / Dynamic Island / home indicator
-node tools/shoot_ui.mjs --out .ui-shots   # PNGs of a tab at 3 widths x 2 themes
+node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab
 node tools/shoot_ui.mjs --out .ui-shots --inset portrait   # ...with a simulated island
 cd "03 App" && firebase emulators:exec --only firestore \
   --project demo-feb-work-orders "node '../tools/test_wo_rules.mjs'"
 ```
 
+`test_designsystem.mjs` is the one that keeps this stylesheet honest. `06 Design
+System/` was extracted from it rather than imported by it, so there are two
+copies of the same design and nothing but this test holding them together. It
+compares every token in all three theme blocks and the look of every shared
+component rule, and it fails on a hardcoded value that a token already spells.
+It also checks the CSS parses, which sounds pointless until an unterminated
+comment silently eats the next rule and the fix you just made does nothing.
+
+`test_appui.mjs` measures what a screenshot can only show: nothing runs off the
+side, no tap target is under 40px where there is a thumb, no text drops below
+11px, nothing sticky hides behind the topbar, every surface actually changes
+colour between light and dark, and `main` is using the window it was given.
+960 checks, because eleven tabs at four widths in two themes is the only way a
+check on Parts also covers Weekly Plan.
+
 `shoot_ui.mjs` is a camera, not a test — it asserts nothing. It boots the real
-app with `fb.js` stubbed at the route and the SN5 archives seeded, then writes
-`<label>-<state>-<width>-<theme>.png` for list, list-with-completed, detail and
-detail-in-edit at 1440, 900 and 393 in both themes. It resolves the app relative
-to itself rather than the cwd, so running it inside a git worktree photographs
-that worktree — which is how four competing Parts designs were shot under
-identical conditions and compared frame for frame.
+app with `fb.js` stubbed at the route, the SN5 archives seeded and
+`tools/lib/fixtures.mjs` filling in the four collections that have no archive,
+then writes `<label>-<state>-<width>-<theme>.png` at 1920, 1440, 900 and 393 in
+both themes. `--tab all` sweeps every tab, list state only; naming one tab
+gives you list, list-with-completed, detail and detail-in-edit for it. It
+resolves the app relative to itself rather than the cwd, so running it inside a
+git worktree photographs that worktree — which is how four competing Parts
+designs were shot under identical conditions and compared frame for frame.
+
+Without `tools/lib/fixtures.mjs` five of the eleven tabs photograph as empty
+states, because `loadArchive()` only seeds work orders, parts, schedule and
+stock. An empty tab is the one state a density audit learns nothing from.
 
 **Two rules for anything new that touches a screen edge**, because the app draws
 under the status bar deliberately (`viewport-fit=cover`, standalone PWA,
