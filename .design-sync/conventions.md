@@ -32,7 +32,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Feedback | `.gate` (+ `.blocked`) for blocking notices; `.toast` + `.ok`/`.err`/`.info`; `.modal-backdrop` > `.modal` > `.foot`. |
 | Navigation | `.sidebar` > `.sb-brand`/`.sb-brand-txt`, `.sb-nav` > `.sb-item` (+ `.active`, `.ic`); `.topbar` > `h1`, `.icon-btn` (+ `.badge`). |
 | Avatars | `.avatar`, grouped in `.avatar-stack`. |
-| Text | `.muted`, `.tny`. |
+| Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip). |
 
 For your own layout glue, use the tokens rather than literal values: `var(--canvas)`, `var(--card)`, `var(--surface-2)`, `var(--line)`, `var(--ink)`, `var(--muted)`, `var(--accent)`, `var(--blue)`, `var(--gold)`, spacing via `var(--radius)`/`var(--r-md)`/`var(--r-lg)`, and motion via `var(--t)`/`var(--t-fast)`/`var(--ease)`. Status colors come as triads: `--ok`/`--ok-bg`/`--ok-border`, and the same shape for `--bad`, `--retro`, `--purple`. The warning triad is the one asymmetric case: the text color is `--amber`, but the surfaces are `--warn-bg` and `--warn-border`.
 

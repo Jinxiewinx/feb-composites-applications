@@ -131,7 +131,7 @@ function openNewProject(parentId) {
       <div class="field"><label>Priority</label><select id="np-priority">${PRIORITY.map(s => `<option ${s === "Medium" ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     </div>
     <div class="field"><label>Due date</label><input id="np-due" type="date"></div>
-    <div class="field"><label>Subteam <span class="muted" style="text-transform:none">— for Weekly Plan</span></label>
+    <div class="field"><label>Subteam <span class="muted nocaps">— for Weekly Plan</span></label>
       <select id="np-subteam"><option value="">Unassigned</option>${SUBTEAMS.map(s => `<option>${s}</option>`).join("")}</select></div>
     <div class="field"><label>Assignees</label>${pickerField("pa")}</div>
     <div id="np-issue-fields" style="display:none">
@@ -334,7 +334,7 @@ function projCard(p) {
   const av = (p.assignees || []).slice(0, 4).map(e => avatar(e, 22)).join("");
   const nComments = projComments(p).length, nFiles = (p.files || []).length;
   return `<div class="pcard" draggable="true" ondragstart="projDragStart('${p.id}')" onclick="openRecord('projects','${p.id}')">
-    <div class="t"><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${esc(p.title || p.id)}${projUnread(p) ? ' <span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>' : ""}</div>
+    <div class="t"><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${esc(p.title || p.id)}${projUnread(p) ? ' <span class="unread-dot" title="New activity"></span>' : ""}</div>
     <div class="meta">
       <span class="prio ${esc(p.priority)}">${esc(p.priority || "")}</span>
       ${p.dueDate ? `<span class="${late ? "warn" : ""}">${esc(p.dueDate)}${late ? " " + icon("warning", 13) : ""}</span>` : ""}
@@ -465,7 +465,7 @@ function renderProjDetail() {
         <div class="field"><label>Priority</label><select id="ep-priority">${PRIORITY.map(s => `<option ${p.priority === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       </div>
       <div class="field"><label>Due date</label><input id="ep-due" type="date" value="${esc(p.dueDate || "")}"></div>
-      <div class="field"><label>Subteam <span class="muted" style="text-transform:none">— for Weekly Plan</span></label>
+      <div class="field"><label>Subteam <span class="muted nocaps">— for Weekly Plan</span></label>
         <select id="ep-subteam"><option value="" ${p.subteam ? "" : "selected"}>Unassigned</option>${SUBTEAMS.map(s => `<option ${p.subteam === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
       <div class="field"><label>Assignees</label>${pickerField("ea")}</div>
       ${isIssue(p) ? `
@@ -499,9 +499,9 @@ function renderProjDetail() {
     <div class="muted">${esc(p.id)} · <span class="prio ${esc(p.priority)}">${esc(p.priority || "")} priority</span>${p.dueDate ? ` · due ${esc(p.dueDate)}${dd != null ? ` (${dd < 0 ? Math.abs(dd) + " days late" : dd + " days out"})` : ""}` : ""}</div>
 
     ${isIssue(p) ? `
-    <h3>Work order <span class="muted" style="text-transform:none">— required</span></h3>
+    <h3>Work order <span class="muted nocaps">— required</span></h3>
     <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
-    <h3>What happened <span class="muted" style="text-transform:none">— required before this can close</span></h3>
+    <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
     <div>${p.whatHappened ? esc(p.whatHappened).replace(/\n/g, "<br>") : '<span class="muted">—</span>'}</div>
     <h3>Resolution method</h3>
     <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
@@ -510,13 +510,13 @@ function renderProjDetail() {
 
     <h3>Assignees</h3>
     <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div>
-    <h3>Watchers <span class="muted" style="text-transform:none">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
+    <h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
     <div class="stagerow">${(p.watchers || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">none</span>'}</div>
     ${isIssue(p) ? "" : `<h3>Related parts</h3><div class="stagerow">${partChips}</div>`}
     ${(ticketChips || woChips) ? `<h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div>` : ""}
 
     ${!isIssue(p) && !p.parentId ? `
-    <h3>Sub-tickets <span class="muted" style="text-transform:none">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
+    <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
     ${kids.length ? kids.map(k => `<div class="subticket" onclick="openRecord('projects','${k.id}')">
       <span class="status ${projStatusClass(projStatus(k))}"><span class="dot"></span>${esc(projStatus(k))}</span>
       <span class="stt">${esc(k.title || k.id)}</span>

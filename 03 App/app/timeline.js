@@ -20,9 +20,18 @@
    weeklyplan.js writes goals / doneTickets / cars onto these same docs and
    reads only `id` and `weekOf` off them. Nothing here touches those fields. */
 
-// field key -> column label. The 7 part-schedulable stations, then two free-text rows.
+/* field key -> row label. The 7 part-schedulable stations, then two free-text
+   rows.
+
+   The field keys are the SN5 tracker's and must not change: they are the
+   Firestore field names in every existing schedule doc. The LABELS can, and
+   two of them had to. "Mold 1" and "Mold 2" read as two CNC machines, and the
+   team has one ShopSabre — the mockup this tab was designed from shows a
+   single "ShopSabre" row for exactly that reason. They are two job slots on
+   one machine, and a sophomore who reads them as two machines books neither
+   and turns up on the same day as someone else. */
 const STATIONS = [
-  ["mold1", "Mold 1"], ["mold2", "Mold 2"],
+  ["mold1", "ShopSabre slot 1"], ["mold2", "ShopSabre slot 2"],
   ["infusion1", "Infusion 1"], ["infusion2", "Infusion 2"],
   ["wetlay1", "Wet Layup 1"], ["wetlay2", "Wet Layup 2"],
   ["waterjet", "Waterjet"],
@@ -119,6 +128,7 @@ function openAssign(weekId, key) {
   openModal(`
     <h2>${esc(label)} — ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}</h2>
     ${linked ? `<p class="muted">Currently ${chip("parts", cur, linked.partName || cur)} — open it in Parts.</p>` : ""}
+    ${free ? "" : `<p class="gate"><span class="gi">!</span><span>This is the team's plan, not a machine booking. Reserve the ${esc(label)} slot yourself on the RFS system — whoever is running the job books it.</span></p>`}
     ${free ? `
       <div class="field"><label>${esc(label)}</label>
         <input id="tl-free" autofocus value="${esc(cur)}" placeholder="${key === "notes" ? "Milestone, break, anything the week needs on it" : "Anything not tied to a station"}">
@@ -252,7 +262,11 @@ function renderTimeline() {
   const past = dated.filter(w => !isThisWeek(w) && w.weekOf < today());
   const scheduled = new Set();
   all.forEach(w => STATIONS.forEach(([k]) => { if (w[k]) scheduled.add(w[k]); }));
-  const unplanned = DB.parts.filter(p => !scheduled.has(p.id)).length;
+  /* Unfinished parts only. Counting every part that Timeline has never touched
+     included the ones already off the bench, which made this a large number
+     that never went down and trained people to ignore the whole stat row. */
+  const unplanned = DB.parts.filter(p =>
+    !scheduled.has(p.id) && !(typeof partDone === "function" && partDone(p))).length;
 
   return `
   ${timelineUndoBar()}
