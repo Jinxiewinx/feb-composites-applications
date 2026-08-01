@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/feb/styles.css">
+<style>html{scroll-behavior:smooth}body{margin:0;background:var(--canvas)}a{color:var(--accent)}a:hover{color:var(--blue)}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes wheelspin{to{transform:rotate(360deg)}}
+@keyframes flash{0%,100%{opacity:0}12%{opacity:1}}</style></helmet>
+<div style="font-family:'Inter',system-ui,sans-serif">
+<div style="position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:24px;padding:13px 48px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)">
+  <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onClick="{{ spinLogo }}" title="⌀">
+    <div data-wheel style="width:28px;height:28px;border-radius:50%;border:4px solid var(--blue);background:conic-gradient(var(--blue) 0 25%,var(--gold) 0 50%,var(--blue) 0 75%,var(--gold) 0)"></div>
+    <div style="font-family:'Saira',sans-serif;font-weight:800;font-size:16px;color:var(--blue)">FORMULA ELECTRIC <span style="color:#B0851A">@ BERKELEY</span></div>
+  </div>
+  <div style="display:flex;gap:20px;margin-left:auto;font-size:13px;font-weight:600;color:var(--muted)">
+    <a href="#top" style="color:var(--blue);text-decoration:none;border-bottom:3px solid var(--gold);padding-bottom:2px">Home</a>
+    <a href="#season" style="color:inherit;text-decoration:none">Season</a>
+    <a href="#garage" style="color:inherit;text-decoration:none">Cars</a>
+    <a href="#subteams" style="color:inherit;text-decoration:none">Subteams</a>
+    <a href="#sponsors" style="color:inherit;text-decoration:none">Sponsors</a>
+    <a href="#log" style="color:inherit;text-decoration:none">Build log</a>
+    <a href="#contact" style="color:inherit;text-decoration:none">Contact</a>
+  </div>
+  <button class="gold sm" style="white-space:nowrap" onClick="{{ toJoin }}">Join</button>
+</div>
+
+<div id="top" style="position:relative;display:grid;grid-template-columns:1.1fr 1fr;background:var(--blue);overflow:hidden">
+  <div data-slash style="position:absolute;right:-60px;top:-40px;bottom:-40px;width:420px;background:linear-gradient(105deg,transparent 40%,rgba(253,181,21,.28) 40% 46%,transparent 46% 54%,rgba(253,181,21,.16) 54% 58%,transparent 58%);will-change:transform;pointer-events:none"></div>
+  <div style="padding:88px 48px 72px;color:#fff;position:relative">
+    <div data-reveal style="font:600 12px 'Inter';letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:14px">UC Berkeley · Formula SAE Electric</div>
+    <div data-reveal style="font-family:'Saira',sans-serif;font-weight:800;font-size:58px;line-height:1.03">One year. One car.<br><span style="color:var(--gold)">Zero combustion.</span></div>
+    <p data-reveal style="font-size:16px;line-height:1.65;color:#c4d0e0;max-width:46ch;margin:18px 0 28px">120 students design, build, and race a new electric car every season. SN6 is on the jigs right now — come see, or come help.</p>
+    <div data-reveal style="display:flex;gap:12px"><button class="gold" style="white-space:nowrap;font-size:15px;padding:10px 24px" onClick="{{ toSponsors }}">Sponsor SN6</button><button style="white-space:nowrap;background:transparent;color:#fff;border-color:rgba(255,255,255,.4)" onClick="{{ toJoin }}">Join the team →</button></div>
+  </div>
+  <div style="position:relative;background:repeating-linear-gradient(45deg,#02264a 0 14px,#022a52 14px 28px);display:flex;align-items:center;justify-content:center;min-height:420px">
+    <div data-reveal style="border:1.5px dashed rgba(255,255,255,.35);color:rgba(255,255,255,.6);font-size:13px;padding:14px 20px;border-radius:8px">Photo — SN6 monocoque out of the mold</div>
+    <div style="position:absolute;left:0;bottom:0;width:100%;height:10px;background:linear-gradient(105deg,var(--gold) 70%,transparent 70%)"></div>
+  </div>
+</div>
+
+<div style="background:#002b50;color:#c4d0e0;font-family:ui-monospace,monospace;font-size:12px;overflow:hidden;padding:9px 0;white-space:nowrap">
+  <div style="display:inline-flex;gap:34px;animation:ticker 28s linear infinite;padding-right:34px">
+    <span style="color:var(--gold)">SHOP FEED</span><span>WO-114 layup buy-off ✓</span><span>T–41 days to Michigan</span><span>accumulator at 87% SOC</span><span>3 boards left on the rack</span><span data-pump style="cursor:pointer" onClick="{{ pumpOff }}">vacuum pump: ON??</span>
+    <span style="color:var(--gold)">SHOP FEED</span><span>WO-114 layup buy-off ✓</span><span>T–41 days to Michigan</span><span>accumulator at 87% SOC</span><span>3 boards left on the rack</span><span style="cursor:pointer" onClick="{{ pumpOff }}">vacuum pump: ON??</span>
+  </div>
+</div>
+
+<div class="stat-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:26px 48px;margin:0">
+  <div class="stat-tile" data-reveal><div class="bignum" data-count="6">0</div><div class="stat-label">Cars since 2019</div></div>
+  <div class="stat-tile" data-reveal><div class="bignum" data-count="120" data-suffix="+">0</div><div class="stat-label">Active members</div></div>
+  <div class="stat-tile" data-reveal><div class="bignum" data-count="80" data-suffix=" kW">0</div><div class="stat-label">SN6 peak power</div></div>
+  <div class="stat-tile" data-reveal><div class="bignum" data-count="2" data-suffix=" pg">0</div><div class="stat-label">Max length of any work order, enforced by software</div></div>
+</div>
+
+<div id="season" style="padding:56px 48px 20px">
+  <div data-reveal style="font:600 11px 'Inter';letter-spacing:.14em;color:#B0851A;text-transform:uppercase;margin-bottom:10px">The season</div>
+  <div data-reveal style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue);line-height:1.1;max-width:24ch">A student team that ships a car, not a plan for one.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:24px">
+    <div class="card" data-reveal style="padding:16px"><span class="kind">Aug–Oct</span><div style="font-weight:700;margin:8px 0 4px;color:var(--ink)">Design</div><div style="font-size:12.5px;color:var(--muted);line-height:1.5">CAD, sims, design reviews. Coffee consumption: nominal.</div></div>
+    <div class="card" data-reveal style="padding:16px"><span class="kind">Nov–Mar</span><div style="font-weight:700;margin:8px 0 4px;color:var(--ink)">Build</div><div style="font-size:12.5px;color:var(--muted);line-height:1.5">Layups, machining, harness. Coffee consumption: elevated.</div></div>
+    <div class="card" data-reveal style="padding:16px"><span class="kind">Apr–May</span><div style="font-weight:700;margin:8px 0 4px;color:var(--ink)">Test</div><div style="font-size:12.5px;color:var(--muted);line-height:1.5">Shakedown, tuning, driver training. Coffee: do not ask.</div></div>
+    <div class="card" data-reveal style="padding:16px;border-color:var(--warn-border);background:var(--gold-bg)"><span class="kind">June</span><div style="font-weight:700;margin:8px 0 4px;color:var(--ink)">Compete</div><div style="font-size:12.5px;color:var(--muted);line-height:1.5">FSAE EV, Michigan. Everything else was for this.</div></div>
+  </div>
+</div>
+
+<div id="garage" style="padding:56px 48px 24px">
+  <div data-reveal style="display:flex;align-items:baseline;gap:14px"><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue)">The garage</div><span style="font-size:13px;color:var(--muted)">Six cars, one lineage.</span></div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:20px">
+    <div class="card" data-reveal style="padding:0;overflow:hidden;grid-column:span 3;display:grid;grid-template-columns:1.3fr 1fr">
+      <div style="min-height:220px;background:repeating-linear-gradient(45deg,#02264a 0 12px,#022a52 12px 24px);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);font-size:13px">Photo — SN6, studio</div>
+      <div style="padding:22px"><span class="pill warn">In build</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:32px;color:var(--blue);margin:8px 0 2px">SN6</div><div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">2026 · carbon monocoque · 80 kW</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink)"><div style="display:flex;justify-content:space-between"><span class="muted">Mass target</span><b>178 kg</b></div><div style="display:flex;justify-content:space-between"><span class="muted">Accumulator</span><b>402 V · 7.2 kWh</b></div><div style="display:flex;justify-content:space-between"><span class="muted">0–60</span><b>TBD (scared already)</b></div></div></div>
+    </div>
+    <div class="card" data-reveal style="padding:16px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="pill ok">Raced 2025</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:22px;color:var(--blue);margin:8px 0 2px">SN5</div><div style="font-size:12px;color:var(--muted)">P4 overall · 2.9 s 0–60 · taught us everything we wrote down</div></div>
+    <div class="card" data-reveal style="padding:16px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="pill ok">Raced 2024</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:22px;color:var(--blue);margin:8px 0 2px">SN4</div><div style="font-size:12px;color:var(--muted)">First carbon tub · first car to finish endurance</div></div>
+    <div class="card" data-reveal style="padding:16px;transition:transform .17s,box-shadow .17s;cursor:pointer" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)" onClick="{{ archiveMode }}"><span class="pill retro">Retired</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:22px;color:var(--blue);margin:8px 0 2px">SN1–SN3</div><div style="font-size:12px;color:var(--muted)">The ancestors. SN1 top speed: <b data-88>88 mph</b></div></div>
+  </div>
+</div>
+
+<div id="subteams" style="padding:56px 48px 24px">
+  <div data-reveal style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue)">Eight crews, one car</div>
+  <div data-reveal style="font-size:13.5px;color:var(--muted);margin-top:6px">Every part on SN6 belongs to one of these. So could you.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:20px">
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Structures</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Composites</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Monocoque, aero skins, molds. Runs its own work-order app.</div><span class="status inprogress" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Layups in progress</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Powertrain</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Battery</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Accumulator, BMS, thermal. 402 volts of respect.</div><span class="status inprogress" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Pack assembly</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Powertrain</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Drivetrain</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Motors, gearbox, cooling loops.</div><span class="status done" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Design frozen</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Electronics</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Controls</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Inverters, telemetry, firmware, CAN bus archaeology.</div><span class="status inprogress" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Harness build</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Vehicle</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Suspension</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Kinematics, uprights, dampers.</div><span class="status collecting" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Machining</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Vehicle</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Aerodynamics</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Wings, undertray, CFD report fights.</div><span class="status done" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Molds cut</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Software</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Tooling</div><div style="font-size:12px;color:var(--muted);line-height:1.5">The apps the team runs on — trackers, planners, this site.</div><span class="status inprogress" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Shipping weekly</span></div>
+    <div class="card" data-reveal style="padding:15px;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><span class="kind">Operations</span><div style="font-weight:700;margin:7px 0 3px;color:var(--ink)">Business</div><div style="font-size:12px;color:var(--muted);line-height:1.5">Sponsorships, budget, logistics, keeping us fed.</div><span class="status onhold" style="white-space:nowrap;margin-top:9px"><span class="dot"></span> Fundraising</span></div>
+  </div>
+</div>
+
+<div id="sponsors" style="padding:56px 48px 24px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:32px">
+  <div data-reveal style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue)">Put your name on the car</div>
+  <div data-reveal style="font-size:13.5px;color:var(--muted);margin-top:6px;max-width:60ch">Tiers are named like our layup stack — the deeper the ply, the more structural you are to the season.</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:20px">
+    <div class="card" data-reveal style="padding:18px;border-top:4px solid var(--gold)"><span class="kind">Tier 1</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:21px;color:var(--blue);margin:6px 0 2px">Monocoque</div><div style="font-size:12.5px;color:var(--muted);line-height:1.55">Title placement, car reveal naming, shop tour + demo day.</div><div style="font-weight:800;font-size:18px;color:var(--ink);margin-top:10px">$10k+</div></div>
+    <div class="card" data-reveal style="padding:18px;border-top:4px solid var(--navy-2)"><span class="kind">Tier 2</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:21px;color:var(--blue);margin:6px 0 2px">Structural ply</div><div style="font-size:12.5px;color:var(--muted);line-height:1.55">Sidepod logo, resume book, recruiting event slot.</div><div style="font-weight:800;font-size:18px;color:var(--ink);margin-top:10px">$5k+</div></div>
+    <div class="card" data-reveal style="padding:18px;border-top:4px solid var(--border-2)"><span class="kind">Tier 3</span><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:21px;color:var(--blue);margin:6px 0 2px">Surface veil</div><div style="font-size:12.5px;color:var(--muted);line-height:1.55">Website + livery logo, season report, our sincere gratitude.</div><div style="font-weight:800;font-size:18px;color:var(--ink);margin-top:10px">$1k+ or in-kind</div></div>
+  </div>
+  <div data-reveal style="display:flex;gap:12px;margin-top:18px;align-items:center"><button class="primary" style="white-space:nowrap">Get the sponsor deck</button><span style="font-size:12.5px;color:var(--muted)">or email <a href="#contact">sponsors@fe.berkeley.edu</a></span></div>
+</div>
+
+<div id="join" style="padding:56px 48px 24px">
+  <div data-reveal style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue)">Op 030: Recruit you</div>
+  <div data-reveal style="font-size:13.5px;color:var(--muted);margin-top:6px;max-width:60ch">No experience required. Here's the traveler for becoming one of us — steps buy themselves off as you scroll.</div>
+  <div style="margin-top:18px;max-width:900px">
+    <table class="list" style="width:100%">
+      <thead><tr><th>Step</th><th>What happens</th><th>When</th><th>Progress</th></tr></thead>
+      <tbody>
+        <tr data-reveal><td>10</td><td><b>Apply online</b> — 10 minutes, no resume needed</td><td>Week 1</td><td><div class="stage-bar"><div class="stage-bar-fill st-done" data-bar="100" style="width:0%;transition:width 1s var(--ease)"></div></div></td></tr>
+        <tr data-reveal><td>20</td><td><b>Shop tour</b> — meet the car, meet the crews</td><td>Week 2</td><td><div class="stage-bar"><div class="stage-bar-fill st-mid" data-bar="66" style="width:0%;transition:width 1s var(--ease) .15s"></div></div></td></tr>
+        <tr data-reveal><td>30</td><td><b>Trial task</b> — a real small part or a real small bug</td><td>Week 3</td><td><div class="stage-bar"><div class="stage-bar-fill st-mid" data-bar="33" style="width:0%;transition:width 1s var(--ease) .3s"></div></div></td></tr>
+        <tr data-reveal><td>40</td><td><b>You're on the roster</b> — badge, Slack, layup training</td><td>Week 4</td><td><button class="gold sm" style="white-space:nowrap">Apply now</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div data-reveal class="gate" style="margin-top:16px;max-width:900px"><span class="gi">!</span><div><b>Shortcut.</b> There is a faster way to reach the application. Old drivers know the code: ↑ ↑ ↓ ↓ ← → ← → B A</div></div>
+</div>
+
+<div id="log" style="padding:56px 48px 24px">
+  <div data-reveal style="display:flex;align-items:baseline;gap:14px"><div style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue)">Build log</div><span style="font-size:13px;color:var(--muted)">Written by whoever was holding the vacuum bag.</span></div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:20px">
+    <div class="card" data-reveal style="padding:0;overflow:hidden;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><div style="height:120px;background:repeating-linear-gradient(45deg,#e8ecf3 0 10px,#eef1f6 10px 20px);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px">Photo — comp podium</div><div style="padding:14px"><span class="kind">Race report</span><div style="font-weight:700;color:var(--ink);margin:7px 0 4px;line-height:1.35">P4 at Michigan: everything that broke, in order</div><div style="font-size:11.5px;color:var(--faint);font-family:ui-monospace,monospace">2026-06-24 · 9 min</div></div></div>
+    <div class="card" data-reveal style="padding:0;overflow:hidden;transition:transform .17s,box-shadow .17s" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)"><div style="height:120px;background:repeating-linear-gradient(45deg,#e8ecf3 0 10px,#eef1f6 10px 20px);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px">Photo — mold stack</div><div style="padding:14px"><span class="kind">Engineering</span><div style="font-weight:700;color:var(--ink);margin:7px 0 4px;line-height:1.35">We wrote a planner that turns an STL into a saw cut list</div><div style="font-size:11.5px;color:var(--faint);font-family:ui-monospace,monospace">2026-07-18 · 6 min</div></div></div>
+    <div class="card" data-reveal data-redacted style="padding:0;overflow:hidden;transition:transform .17s,box-shadow .17s;cursor:pointer" style-hover="transform:translateY(-3px);box-shadow:var(--shadow-md)" onClick="{{ unredact }}"><div style="height:120px;background:repeating-linear-gradient(45deg,#e8ecf3 0 10px,#eef1f6 10px 20px);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px">Photo — ███████</div><div style="padding:14px"><span class="kind">Classified</span><div data-redtitle style="font-weight:700;color:var(--ink);margin:7px 0 4px;line-height:1.35">SN7 concept: ████ ███ ██████</div><div style="font-size:11.5px;color:var(--faint);font-family:ui-monospace,monospace">2026-07-30 · ██ min</div></div></div>
+  </div>
+</div>
+
+<div id="contact" style="display:grid;grid-template-columns:1fr 1.2fr;gap:14px;padding:56px 48px 40px">
+  <div data-reveal>
+    <div style="font-family:'Saira',sans-serif;font-weight:800;font-size:36px;color:var(--blue);line-height:1.1">Find us</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;font-size:13.5px;color:var(--ink)">
+      <div><div style="font:600 11px 'Inter';letter-spacing:.1em;color:var(--faint);text-transform:uppercase">General</div><a href="#contact">team@fe.berkeley.edu</a></div>
+      <div><div style="font:600 11px 'Inter';letter-spacing:.1em;color:var(--faint);text-transform:uppercase">Sponsorship</div><a href="#contact">sponsors@fe.berkeley.edu</a></div>
+      <div><div style="font:600 11px 'Inter';letter-spacing:.1em;color:var(--faint);text-transform:uppercase">Shop</div><span>Richmond Field Station, Bldg 445<br>Sat–Sun build days, tours by appointment</span></div>
+      <div><div style="font:600 11px 'Inter';letter-spacing:.1em;color:var(--faint);text-transform:uppercase">Fax</div><span data-fax style="cursor:pointer" onClick="{{ faxNo }}">no</span></div>
+    </div>
+  </div>
+  <div data-reveal style="min-height:240px;border:1.5px dashed var(--border-2);border-radius:9px;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px">Map — Richmond Field Station</div>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 48px;background:#002b50;color:#c4d0e0;font-size:12px">
+  <span>© 2026 Formula Electric at Berkeley · <a href="Team Website Mockups.dc.html" style="color:#c4d0e0">design explorations</a></span>
+  <span style="display:flex;align-items:center;gap:8px" title="drains as you scroll — regen by scrolling back up">
+    <span style="width:26px;height:12px;border:1.5px solid #c4d0e0;border-radius:3px;position:relative;display:inline-block"><span data-soc-fill style="position:absolute;top:2px;bottom:2px;left:2px;width:80%;background:var(--gold);border-radius:1px;transition:width .3s"></span></span>
+    <span data-soc style="font-family:ui-monospace,monospace;font-size:10.5px">SOC 100%</span>
+  </span>
+</div>
+<div data-flash style="position:fixed;inset:0;background:var(--gold);opacity:0;pointer-events:none;z-index:99"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    console.log('%c⚡ FEB — we build electric race cars. If you can read this, you should probably join: fe.berkeley.edu/apply', 'color:#FDB515;background:#003262;padding:6px 10px;border-radius:4px;font-weight:bold');
+    // scroll reveals
+    const els = document.querySelectorAll('[data-reveal]');
+    els.forEach(el => { el.style.opacity = '0'; el.style.transform = 'translateY(22px)'; el.style.transition = 'opacity .6s cubic-bezier(.2,.6,.2,1), transform .6s cubic-bezier(.2,.6,.2,1)'; });
+    this.io = new IntersectionObserver(entries => entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      el.style.opacity = '1'; el.style.transform = 'none';
+      this.io.unobserve(el);
+      el.querySelectorAll('[data-count]').forEach(n => this.countUp(n));
+      el.querySelectorAll('[data-bar]').forEach(b => { b.style.width = b.dataset.bar + '%'; });
+      if (el.matches('[data-count]')) this.countUp(el);
+    }), { threshold: 0.18 });
+    els.forEach(el => this.io.observe(el));
+    // parallax slash + scroll battery
+    this.onScroll = () => {
+      const y = window.scrollY;
+      const slash = document.querySelector('[data-slash]');
+      if (slash) slash.style.transform = 'translateX(' + (-y * 0.18) + 'px)';
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const soc = Math.max(4, Math.round(100 - (max ? y / max : 0) * 96));
+      const socEl = document.querySelector('[data-soc]'), fill = document.querySelector('[data-soc-fill]');
+      if (socEl) socEl.textContent = 'SOC ' + soc + '%';
+      if (fill) { fill.style.width = Math.max(4, soc - 8) + '%'; fill.style.background = soc < 25 ? '#cf3430' : '#FDB515'; }
+    };
+    addEventListener('scroll', this.onScroll, { passive: true });
+    // konami
+    this.keys = []; this.seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+    this.onKey = (e) => {
+      this.keys.push(e.key); this.keys = this.keys.slice(-10);
+      if (this.seq.every((k, i) => this.keys[i] === k)) {
+        this.keys = [];
+        const f = document.querySelector('[data-flash]');
+        if (f) { f.style.animation = 'flash 1s'; setTimeout(() => f.style.animation = '', 1100); }
+        this.toast('⚡ Fast-track unlocked. Welcome, old driver — application pre-filled: "↑↑↓↓←→←→BA"');
+        const j = document.getElementById('join'); if (j) window.scrollTo({ top: j.offsetTop - 60, behavior: 'smooth' });
+      }
+    };
+    addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { removeEventListener('scroll', this.onScroll); removeEventListener('keydown', this.onKey); if (this.io) this.io.disconnect(); }
+  countUp(n) {
+    if (n.dataset.done) return; n.dataset.done = '1';
+    const target = parseFloat(n.dataset.count), suffix = n.dataset.suffix || '', t0 = performance.now();
+    const tick = (t) => { const p = Math.min(1, (t - t0) / 900), v = Math.round(target * (1 - Math.pow(1 - p, 3))); n.textContent = v + suffix; if (p < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  toast(msg) {
+    const d = document.createElement('div');
+    d.textContent = msg;
+    d.style.cssText = 'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#003262;color:#fff;padding:11px 18px;border-radius:8px;font:600 13px Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;max-width:80vw';
+    document.body.appendChild(d);
+    setTimeout(() => { d.style.transition = 'opacity .4s'; d.style.opacity = '0'; setTimeout(() => d.remove(), 450); }, 3200);
+  }
+  renderVals() {
+    return {
+      spinLogo: () => { const w = document.querySelector('[data-wheel]'); if (w) { w.style.animation = 'wheelspin .5s cubic-bezier(.2,.6,.2,1) 2'; setTimeout(() => w.style.animation = '', 1100); } },
+      toJoin: () => { const j = document.getElementById('join'); if (j) window.scrollTo({ top: j.offsetTop - 60, behavior: 'smooth' }); },
+      toSponsors: () => { const s = document.getElementById('sponsors'); if (s) window.scrollTo({ top: s.offsetTop - 60, behavior: 'smooth' }); },
+      pumpOff: () => { document.querySelectorAll('[data-pump]').length; document.querySelectorAll('.js-na').length; const els = document.querySelectorAll('[data-pump]'); els.forEach(p => p.textContent = 'vacuum pump: off. thank you.'); this.toast('🔧 Vacuum pump shut off. The composites lead thanks you.'); },
+      archiveMode: () => {
+        const on = document.documentElement.style.filter === '';
+        document.documentElement.style.filter = on ? 'sepia(.55) contrast(.95)' : '';
+        this.toast(on ? '🕰 88 mph reached — archive mode engaged. Click SN1–SN3 again to return to 2026.' : '⚡ Back to the future.');
+      },
+      unredact: () => { const t = document.querySelector('[data-redtitle]'); if (t) t.textContent = 'SN7 concept: four hub motors and torque vectoring'; this.toast('🕵️ Clearance granted. You saw nothing.'); },
+      faxNo: () => this.toast('📠 beeeee-boop-kshhhhhh… no.')
+    };
+  }
+}
+</script>
+</body>
+</html>

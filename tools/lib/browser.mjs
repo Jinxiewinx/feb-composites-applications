@@ -24,6 +24,13 @@ const MIME = {
    which is how a test injects a harness page without leaving a file behind in
    the app directory for someone to find and wonder about. */
 export function serveApp(routes) {
+  return serveDir(APP_ROOT, routes);
+}
+
+/* Same server over an arbitrary directory, for the team website in
+   "08 Website/site". A bare directory path serves its index.html so "/" works
+   the way it will on Firebase Hosting. */
+export function serveDir(root, routes) {
   return new Promise(resolve => {
     const s = createServer(async (req, res) => {
       const path = decodeURIComponent((req.url || "/").split("?")[0]);
@@ -31,11 +38,15 @@ export function serveApp(routes) {
         res.writeHead(200, { "content-type": "text/html" });
         return res.end(routes[path]);
       }
-      try {
-        const buf = await readFile(join(APP_ROOT, path.replace(/^\/+/, "")));
-        res.writeHead(200, { "content-type": MIME[extname(path)] || "application/octet-stream" });
-        res.end(buf);
-      } catch { res.writeHead(404); res.end("no"); }
+      const rel = path.replace(/^\/+/, "");
+      for (const cand of [rel, join(rel, "index.html")]) {
+        try {
+          const buf = await readFile(join(root, cand));
+          res.writeHead(200, { "content-type": MIME[extname(cand)] || "application/octet-stream" });
+          return res.end(buf);
+        } catch { /* try the next candidate */ }
+      }
+      res.writeHead(404); res.end("no");
     });
     s.listen(0, "127.0.0.1", () => resolve({ server: s, port: s.address().port }));
   });
@@ -52,7 +63,16 @@ export async function loadChromium() {
     tries.push(join(g, "playwright", "index.mjs"));
   } catch { /* no npm */ }
   for (const p of tries) {
-    try { return (await import(p.startsWith("/") ? "file://" + p : p)).chromium; } catch { /* next */ }
+    try {
+      const m = await import(p.startsWith("/") ? "file://" + p : p);
+      /* A global install resolves to index.mjs and exposes `chromium` as a
+         named export. A local one resolves to the CJS index.js, where the
+         named export is absent and everything hangs off `default` — reading
+         only `.chromium` there yields undefined and looks exactly like "not
+         installed". Check both before giving up on this candidate. */
+      const chromium = m.chromium ?? m.default?.chromium;
+      if (chromium) return chromium;
+    } catch { /* next */ }
   }
   return null;
 }

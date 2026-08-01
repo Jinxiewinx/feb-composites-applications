@@ -16,6 +16,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
 | `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE | print it |
 | `06 Design System/` | The app's visual language pulled out into a reusable system: color/type/spacing tokens, a component CSS library, and a living style guide | `styleguide.html` |
+| `08 Website/` | The public team website for sponsors and recruits, built on the design system | `README.md` |
 | `tools/` | Scripts that build and check the rest: the markdown-to-docx builder, the retro work-order generator, the link auditor, and the app's test suites | |
 
 ## The app
@@ -70,6 +71,8 @@ It works because Fluent's Chromium export has a consistent layout (panel titles 
 
 **Design System** (`06`) is the app's visual language pulled out into something reusable: the color/type/spacing tokens (`tokens.css`), the component styles built on them (`components.css`), and a living style guide (`styleguide.html`) that renders the whole system in light and dark. It was extracted from the app's stylesheet so the next FEB tool, poster, or page can start on-brand instead of reinventing Berkeley Blue and the layup-status colors. Open `styleguide.html` in a browser, or read `06 Design System/README.md` for how to link it into a page. It is also synced to claude.ai/design, so anything designed there comes out in Berkeley Blue with the right type and the right status colors; `.design-sync/` holds the inputs that sync uses and `.design-sync/NOTES.md` explains how to re-run it.
 
+**The team website** (`08`) is the public site for sponsors and recruits, built from a design handoff on the `06` design system: a scrolling home page plus seven secondary pages, plain HTML and CSS with one JS file, no framework. It links the repo's own design system rather than carrying a copy, so a token change in `06` reaches it with one build. All the photos are placeholders and the application form is not wired yet; `08 Website/README.md` has the list. Not deployed. Run it with `node "08 Website/build.mjs"` then serve `08 Website/site`.
+
 **Open items (need a human):** move the `feb-composites` Firebase project to a team Google account (or add the next lead as an owner) so it survives handoff; confirm the ShopSabre's exact model against CS-005 §5; field-verify the CS-011 storage map at RFS; sign the approval tables.
 
 **Maintenance:** edit standards in `02 CS Standards/src/`, rebuild with `tools/.venv/bin/python tools/build_docx.py --all`. Regenerate retro work orders only if the source data was wrong: `tools/.venv/bin/python tools/gen_retro_wos.py`.
@@ -83,6 +86,7 @@ node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock po
 node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
 node tools/test_print_mobile.mjs  # the printed sheets on a phone: fit, controls, save
 node tools/test_safearea.mjs # the notch, the Dynamic Island, the home indicator
+node tools/test_website.mjs  # the public site: design system, reveals, eggs, no-JS, phone
 cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
   "node '../tools/test_wo_rules.mjs'"                      # security rules
 ```

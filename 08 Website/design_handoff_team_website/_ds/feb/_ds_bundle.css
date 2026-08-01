@@ -1,0 +1,334 @@
+/* ============================================================
+   FEB Composites Design System — Components
+   ------------------------------------------------------------
+   Reusable primitives and patterns, all built on tokens.css.
+   Load tokens.css first. Nothing here hardcodes a color, radius,
+   or duration: change a token, every component follows.
+
+   Sections: base, buttons, forms, cards, tables, badges (pill /
+   stage / chip / kind / status), progress, avatars, feedback
+   (toast / modal / gate), navigation (sidebar / topbar), data
+   tiles, and misc (kbd, picker, icon-btn).
+   ============================================================ */
+
+/* ---- base ---- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font: 14px/1.5 var(--font);
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+:focus:not(:focus-visible) { outline: none; }
+::selection { background: var(--accent); color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---- buttons ----
+   Default is a quiet outlined button. `.primary` is Berkeley Blue,
+   `.gold` is the loud call-to-action, `.danger` is destructive,
+   `.link` is a text button. `.sm` shrinks any of them. */
+button, .btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-weight: 500;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink);
+  padding: 7px 12px; cursor: pointer; text-decoration: none;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+button:hover, .btn:hover { background: var(--hover); border-color: var(--border-2); }
+button:active { transform: translateY(.5px); }
+button.primary { background: var(--blue); border-color: var(--brand-ink); color: #fff; font-weight: 600; }
+button.primary:hover { background: var(--navy-2); border-color: var(--navy-2); }
+button.gold { background: var(--gold); border-color: var(--gold); color: #3a2c00; font-weight: 700; }
+button.gold:hover { background: var(--gold-2); border-color: var(--gold-2); }
+button.danger { color: var(--bad); }
+button.danger:hover { background: var(--bad-bg); border-color: var(--bad-border); }
+button.link { border: none; background: none; color: var(--accent); padding: 4px 6px; }
+button.link:hover { background: none; text-decoration: underline; }
+.sm { padding: 4px 9px; font-size: 12.5px; }
+
+/* ---- forms ---- */
+.field label, .grid .f label {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px;
+}
+input, select, textarea {
+  font: inherit; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+textarea { width: 100%; padding: 8px; min-height: 44px; }
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field input, .field select, .grid .f input, .grid .f select { width: 100%; }
+.filters { display: flex; gap: 8px; margin: 6px 0 14px; flex-wrap: wrap; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; }
+.toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+
+/* ---- cards ----
+   Card headings use the display face. h3 is a small uppercase
+   section label, not a heading in the type-scale sense. */
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 16px 18px; margin: 0 0 14px;
+  box-shadow: var(--shadow);
+  transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+.card h2 {
+  font-family: var(--font-display); margin: 0 0 6px;
+  font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: .01em;
+}
+.card h3 {
+  margin: 16px 0 7px; font-size: 12px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
+}
+.card h3:first-child { margin-top: 0; }
+
+/* ---- tables ----
+   `table.list` is the primary data table: uppercase header on an
+   inset surface, hoverable rows. Collapse it to stacked cards on
+   narrow screens by hiding the header row and setting a
+   `data-label` on each cell (see README). */
+table.list {
+  width: 100%; border-collapse: collapse;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow);
+}
+table.list th {
+  background: var(--surface-2); color: var(--muted); text-align: left;
+  padding: 8px 11px; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .04em; border-bottom: 1px solid var(--line);
+}
+table.list th.sortable { cursor: pointer; user-select: none; }
+table.list th.sortable:hover { color: var(--brand-ink); }
+table.list td {
+  padding: 9px 11px; border-top: 1px solid var(--line);
+  vertical-align: middle; transition: background var(--t-fast) var(--ease);
+}
+table.list tr:hover td { background: var(--hover); }
+table.list.dash td { cursor: default; }
+
+/* ---- badges: pill ---- */
+.pill {
+  display: inline-block; padding: 2px 9px; border-radius: 5px;
+  font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--fill); color: var(--muted);
+}
+.pill.ok       { background: var(--ok-bg);   border-color: var(--ok-border);   color: var(--ok); }
+.pill.warn     { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
+.pill.bad      { background: var(--bad-bg);  border-color: var(--bad-border);  color: var(--bad); }
+.pill.retro    { background: var(--retro-bg);border-color: var(--retro-border);color: var(--retro); }
+
+/* ---- badges: stage (compact status tag) ---- */
+.stage {
+  display: inline-block; padding: 2px 8px; border-radius: 5px;
+  font-size: 11px; font-weight: 600;
+  border: 1px solid var(--line); white-space: nowrap;
+  background: var(--fill); color: var(--muted);
+}
+.stage.st-mid  { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
+.stage.st-done { background: var(--ok-bg);   border-color: var(--ok-border);   color: var(--ok); }
+.stage.st-na   { background: var(--retro-bg);border-color: var(--retro-border);color: var(--retro); }
+
+/* ---- badges: chip / kind ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: 5px; font-size: 12px;
+  background: var(--accent-soft); border: 1px solid var(--accent-soft);
+  color: var(--accent); cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.chip:hover { filter: brightness(.97); }
+.kind {
+  display: inline-block; font-size: 10px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;
+  margin-right: 3px; vertical-align: 1px; text-transform: uppercase;
+}
+
+/* ---- badges: status (dot + label, the 6-state enum) ---- */
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 5px; font-size: 12px; font-weight: 700;
+  border: 1px solid transparent;
+}
+.status .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.status.todo       { background: var(--fill);      color: var(--muted);  border-color: var(--border-2); }
+.status.todo .dot  { background: var(--faint); }
+.status.inprogress { background: var(--accent-soft);color: var(--accent); border-color: var(--accent-soft); }
+.status.inprogress .dot { background: var(--accent); }
+.status.collecting { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+.status.collecting .dot { background: var(--purple); }
+.status.onhold     { background: var(--warn-bg);   color: var(--amber);  border-color: var(--warn-border); }
+.status.onhold .dot { background: var(--amber); }
+.status.done       { background: var(--ok-bg);     color: var(--ok);     border-color: var(--ok-border); }
+.status.done .dot  { background: var(--ok); }
+.status.cancelled  { background: var(--surface-2); color: var(--faint);  border-color: var(--line); text-decoration: line-through; }
+.status.cancelled .dot { background: var(--faint); }
+
+/* ---- gate (blocking notice) ----
+   The visible form of a requirement that isn't met. Amber warns;
+   `.blocked` (red) means work can't proceed. */
+.gate {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--warn-bg); border: 1px solid var(--warn-border);
+  border-radius: 7px; padding: 10px 12px; margin: 8px 0;
+}
+.gate .gi { color: var(--amber); font-weight: 900; font-size: 15px; line-height: 1.4; }
+.gate b { color: var(--amber); }
+.gate.blocked { background: var(--bad-bg); border-color: var(--bad-border); }
+.gate.blocked .gi, .gate.blocked b { color: var(--bad); }
+
+/* ---- progress ---- */
+.stage-bar { width: 64px; height: 5px; border-radius: 999px; background: var(--fill); overflow: hidden; }
+.stage-bar-fill { height: 100%; border-radius: 999px; }
+.stage-bar-fill.st-0    { background: var(--muted); }
+.stage-bar-fill.st-mid  { background: var(--amber); }
+.stage-bar-fill.st-done { background: var(--ok); }
+
+/* ---- avatars ---- */
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; overflow: hidden; color: #fff; font-weight: 600;
+  vertical-align: middle; flex: none; background: var(--muted);
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-stack { display: inline-flex; }
+.avatar-stack .avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--surface); }
+.avatar-stack .avatar:first-child { margin-left: 0; }
+
+/* ---- data tiles ---- */
+.stat-tile { background: var(--surface-2); border-radius: var(--r-md); padding: 12px 14px; }
+.stat-tile .bignum { font-size: 22px; }
+.stat-tile .stat-label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; font-weight: 600; margin-top: 2px;
+}
+.bignum {
+  font-family: var(--font-display); font-size: 32px; font-weight: 700;
+  color: var(--brand-ink); letter-spacing: .01em;
+}
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+/* ---- kanban ---- */
+.col {
+  background: var(--fill); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 8px; min-height: 80px;
+  position: relative; overflow: hidden;
+}
+.col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border-2); }
+.col.col-inprogress::before { background: var(--accent); }
+.col.col-collecting::before { background: var(--purple); }
+.col.col-onhold::before     { background: var(--amber); }
+.col.col-done::before       { background: var(--ok); }
+.col h4 {
+  margin: 4px 6px 8px; font-family: var(--font-display); font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+  display: flex; justify-content: space-between;
+}
+.pcard {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px;
+  box-shadow: var(--shadow); cursor: grab;
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+.pcard:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: var(--border-2); }
+.pcard .t { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
+.pcard .meta { display: flex; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+
+/* ---- feedback: toast ---- */
+.toast {
+  padding: 10px 14px; border-radius: var(--radius); color: #fff; font-size: 13.5px;
+  box-shadow: 0 4px 14px rgba(9,30,66,.3); max-width: 340px;
+}
+.toast.ok   { background: var(--ok); }
+.toast.err  { background: var(--bad); }
+.toast.info { background: var(--blue); }
+
+/* ---- feedback: modal ---- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(9,30,66,.54);
+  display: flex; align-items: flex-start; justify-content: center;
+  overflow-y: auto; padding: 40px 16px; z-index: 50;
+}
+.modal {
+  background: var(--surface); border-radius: var(--r-md); width: 100%; max-width: 640px;
+  box-shadow: 0 8px 24px rgba(9,30,66,.28); padding: 22px 24px;
+}
+.modal h2 { margin: 0 0 14px; font-size: 18px; }
+.modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* ---- navigation: sidebar ----
+   Berkeley-navy rail with a subtle carbon-fiber crosshatch. The
+   active item carries the gold "speed slash" and a gold-tinted
+   fill. This is the app's signature surface. */
+.sidebar {
+  width: 216px; color: var(--sb-text); display: flex; flex-direction: column;
+  background-color: var(--sb-bg);
+  background-image:
+    repeating-linear-gradient(45deg, var(--carbon) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, var(--carbon) 0 1px, transparent 1px 7px);
+}
+.sb-brand { display: flex; align-items: center; gap: 9px; padding: 15px 14px 12px; cursor: pointer; }
+.sb-brand-txt { font-weight: 700; font-size: 15px; color: #fff; letter-spacing: .2px; }
+.sb-brand-txt span { color: var(--gold); }
+.sb-nav { display: flex; flex-direction: column; padding: 6px 8px; gap: 2px; }
+.sb-item {
+  position: relative; display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: 7px; color: var(--sb-text);
+  cursor: pointer; font-size: 13.5px; font-weight: 500;
+  border: none; background: none; text-align: left; width: 100%;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.sb-item:hover { background: var(--sb-hover); color: #fff; }
+.sb-item.active { background: var(--sb-active); color: #fff; font-weight: 600; }
+.sb-item.active::before {
+  content: ""; position: absolute; left: 2px; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--gold); transform: skewX(-12deg);
+}
+.sb-item .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
+
+/* ---- navigation: topbar ---- */
+.topbar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.topbar h1 {
+  font-family: var(--font-display); font-size: 19px; margin: 0 auto 0 0;
+  color: var(--ink); font-weight: 600; letter-spacing: .01em;
+}
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; padding: 7px; position: relative; cursor: pointer;
+  color: var(--muted); border-radius: 7px;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.icon-btn:hover { background: var(--hover); color: var(--ink); }
+.icon-btn .badge {
+  position: absolute; top: 0; right: 0; background: var(--bad); color: #fff;
+  font-size: 10px; font-weight: 700; border-radius: 9px; padding: 0 4px;
+  min-width: 15px; text-align: center; line-height: 15px;
+}
+
+/* ---- misc ---- */
+kbd {
+  font: 600 10.5px/1.5 var(--font);
+  border: 1px solid var(--border-2); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 4px; background: var(--surface); color: var(--muted);
+}
+.muted { color: var(--muted); }
+.tny { font-size: 12px; color: var(--muted); }

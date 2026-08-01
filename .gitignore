@@ -41,3 +41,7 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# Team website: the design system copied in from "06 Design System/" by
+# "08 Website/build.mjs". Generated, one source of truth, never edited here.
+08 Website/site/_ds/

@@ -1,0 +1,124 @@
+/* ============================================================
+   FEB Composites Design System — Design Tokens
+   ------------------------------------------------------------
+   The single source of truth for color, type, spacing, radius,
+   shadow, and motion. Every component reads these variables, so
+   theming the whole system means editing this file, nothing else.
+
+   Brand: UC Berkeley — Berkeley Blue (#003262) + California Gold
+   (#FDB515), with a brighter interface blue (#2f6be4) for links
+   and selection. The register is collegiate-industrial with a
+   motorsport edge: condensed display type, carbon-fiber texture,
+   a gold "speed slash" on the active nav item.
+
+   Themes: light is the default; [data-theme="dark"] re-points the
+   shared tokens so components theme for free. A @media print block
+   forces light ink-on-paper regardless of the on-screen theme.
+
+   Load this before components.css.
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- brand ---- */
+  --blue: #003262;        /* Berkeley Blue, primary brand */
+  --navy-2: #024a86;      /* lighter navy, primary-button hover */
+  --brand-blue: #2f6be4;  /* interface blue */
+  --brand-ink: #003a75;   /* headings / emphasis on light surfaces */
+  --gold: #FDB515;        /* California Gold, the accent */
+  --gold-2: #ffc63d;      /* gold hover */
+
+  /* sidebar surface + states */
+  --sb-bg: #002b50;
+  --sb-text: #c4d0e0;
+  --sb-hover: rgba(255,255,255,.09);
+  --sb-active: rgba(253,181,21,.18);
+
+  /* ---- surfaces ---- */
+  --canvas: #eef1f6;      /* app background */
+  --card: #ffffff;        /* raised card */
+  --surface: #ffffff;     /* inputs, buttons, panels */
+  --surface-2: #f4f7fb;   /* table headers, insets */
+  --fill: #eef1f6;        /* neutral fill (pills, tracks) */
+  --hover: #f2f5fa;       /* row / control hover */
+  --line: #dde3ec;        /* hairline borders */
+  --border-2: #c6d0de;    /* stronger borders, hover edges */
+
+  /* ---- text ---- */
+  --ink: #141d2b;         /* body text */
+  --muted: #515f74;       /* secondary text, labels */
+  --faint: #616e83;       /* tertiary text, placeholders */
+
+  /* ---- interactive ---- */
+  --accent: #2f6be4;      /* links, focus, selection */
+  --accent-soft: #e8f0fd; /* accent tint (chips, selected rows) */
+
+  /* ---- status: each is a triad (text / -bg / -border) ---- */
+  --ok: #0d7a55;    --ok-bg: #e2f6ee;    --ok-border: #a8e6cc;   /* success, done */
+  --amber: #a25c00; --warn-bg: #fdf1d8;  --warn-border: #f0d081; /* warning, in-work, gate */
+  --bad: #cf3430;   --bad-bg: #fdeceb;   --bad-border: #f4bbb6;  /* error, blocked, late */
+  --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;/* retro / not-applicable */
+  --purple: #6a3fb0;--purple-bg: #efe7fb;--purple-border: #d3c0f0;/* collecting / secondary */
+  --info-bg: #e8f0fd;
+  --gold-bg: #fff7e0;     /* "today" / unread highlight */
+
+  /* ---- radius ---- */
+  --radius: 6px;  /* controls, small elements */
+  --r-md: 9px;    /* cards, panels */
+  --r-lg: 14px;   /* large containers */
+
+  /* ---- shadow ---- */
+  --shadow:    0 1px 2px rgba(10,22,40,.06), 0 1px 3px rgba(10,22,40,.09);
+  --shadow-md: 0 2px 6px rgba(10,22,40,.07), 0 8px 22px rgba(10,22,40,.10);
+  --shadow-lg: 0 18px 44px rgba(10,22,40,.20);
+
+  /* carbon-fiber crosshatch overlay (sidebar) */
+  --carbon: rgba(255,255,255,.04);
+
+  /* ---- motion ---- */
+  --t: .17s;          /* standard transition */
+  --t-fast: .12s;     /* hover / micro-interaction */
+  --ease: cubic-bezier(.2,.6,.2,1);
+
+  /* ---- type ---- */
+  --font: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Saira', 'Inter', system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --navy-2: #2a6bb5; --sb-bg: #071a30; --brand-ink: #6f9dff;
+
+  --canvas: #0b0f16; --card: #141c28; --surface: #141c28;
+  --surface-2: #1a2431; --fill: #1a2431; --hover: #212d3d;
+  --line: #26313f; --border-2: #37455c;
+
+  --ink: #e7edf5; --muted: #9aa8bd; --faint: #8794a8;
+
+  --accent: #5b8cff; --accent-soft: #182842;
+
+  --ok: #34c88f;    --ok-bg: #0f2a20;    --ok-border: #1f4d3b;
+  --amber: #e0a53a; --warn-bg: #2a2211;  --warn-border: #4a3d1c;
+  --bad: #ff6f62;   --bad-bg: #2c1613;   --bad-border: #56291f;
+  --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
+  --purple: #a385e6;--purple-bg: #241c3a;--purple-border: #3d2f5c;
+  --info-bg: #182842; --gold-bg: #2a2411;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-md: 0 4px 18px rgba(0,0,0,.55);
+  --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
+  --carbon: rgba(255,255,255,.03);
+}
+
+@media print {
+  /* Ink on paper regardless of on-screen theme. */
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --ink: #000; --muted: #333; --faint: #555;
+    --canvas: #fff; --card: #fff; --surface: #fff;
+    --surface-2: #fff; --fill: #fff; --hover: #fff;
+    --line: #000; --border-2: #000; --brand-ink: #003262;
+  }
+}
