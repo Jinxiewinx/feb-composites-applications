@@ -128,7 +128,7 @@ function openAssign(weekId, key) {
   openModal(`
     <h2>${esc(label)} — ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}</h2>
     ${linked ? `<p class="muted">Currently ${chip("parts", cur, linked.partName || cur)} — open it in Parts.</p>` : ""}
-    ${free ? "" : `<p class="gate"><span class="gi">!</span><span>This is the team's plan, not a booking.${key === "mold1" || key === "mold2" ? " Whoever runs the job still reserves the ShopSabre themselves on the RFS system." : ""}</span></p>`}
+    ${free ? "" : `<p class="gate"><span class="gi">!</span><span>This is the team's plan, not a booking. ${bookingNote(key)}</span></p>`}
     ${free ? `
       <div class="field"><label>${esc(label)}</label>
         <input id="tl-free" autofocus value="${esc(cur)}" placeholder="${key === "notes" ? "Milestone, break, anything the week needs on it" : "Anything not tied to a station"}">
@@ -148,6 +148,19 @@ function openAssign(weekId, key) {
     </div>
   `);
 }
+/* Scheduling a station here does not reserve the machine, and the two shops
+   that need reserving have different rules. Kept specific rather than generic
+   because a vague "book it yourself" is the kind of warning people stop
+   reading — and because Jacobs enforces theirs (#composites, 2026-02-23:
+   staff pulled two members aside over exactly this). */
+function bookingNote(key) {
+  if (key === "mold1" || key === "mold2") {
+    return "Whoever runs the job books the ShopSabre themselves at Jacobs. Their policy is that you may only come in for your own reservation, so booking a slot for someone else does not work.";
+  }
+  if (key === "waterjet") return "Waterjet time is booked in slots — whoever cuts reserves it.";
+  return "Check the bench is free before you count on it.";
+}
+
 function submitAssign(weekId, key) {
   const el = document.getElementById("tl-part") || document.getElementById("tl-free");
   closeModal();
