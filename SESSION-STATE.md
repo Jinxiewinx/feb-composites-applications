@@ -80,6 +80,53 @@ cached chromium build, currently 1.58.0).
 Found and fixed along the way: `06 Design System/README.md` documented a
 `--warn` token that does not exist.
 
+## Team website built in `08 Website/` (2026-07-31) — DONE
+
+Commit `77011b7`. Home page plus seven secondary pages, from the design handoff
+Simon dropped in (`08 Website/design_handoff_team_website/`, kept as delivered).
+Plain HTML + one CSS + one JS, no framework, matching `03 App/app`'s pattern.
+Not deployed: `firebase.json` points at a hosting site that does not exist yet.
+
+**It links the repo's own design system.** `08 Website/build.mjs` copies
+`06 Design System/` into `site/_ds/feb/` (generated, gitignored). Verified
+byte-identical to the handoff's bundled copy and to the claude.ai/design upload,
+so all three agree and `06 Design System/` is the one source.
+
+Two deliberate extensions in `site.css`, both token-based: `a.btn.gold` /
+`a.btn.primary` (the DS scopes variants to `button`, so anchors need them
+restated) and the `table.list` phone collapse (the DS README says that rule
+belongs to the consuming app).
+
+The nav and footer are copied into all eight pages. They carry
+`<!-- shared:nav -->` markers and `build.mjs` fails on drift, so it cannot rot.
+
+`node tools/test_website.mjs` — 88 checks, all passing.
+
+Left for a human: photos are all placeholders, the `join.html` form posts to a
+mailto, the logo is CSS not a real mark, and the copy is the handoff's rather
+than reviewed.
+
+## Open finding: `tools/test_drawings.mjs` fails, 8 of 8 molds
+
+Surfaced 2026-07-31 while building the website, **not caused by it.**
+
+`tools/lib/browser.mjs`'s `loadChromium()` only read the named `chromium`
+export. That exists on a global Playwright install (`index.mjs`) but not on a
+local one (CJS `index.js`, where it hangs off `default`), so a local install
+returned `undefined` and read as "Playwright not installed". `test_drawings`,
+`test_print_mobile` and `test_safearea` were all silently skipping. Fixed in
+`77011b7` to check both.
+
+With the tests actually running, `test_print_mobile` (13) and `test_safearea`
+(27) pass. **`test_drawings` fails all 8 molds** with `text-on-text` findings:
+dimension labels overlapping each other on sheets 2–4, 19 to 40 findings per
+mold. That is in `03 App/app/drawings.js` and predates all of today's work.
+Nobody has seen it because the test never ran.
+
+Not investigated. Next session: run `node tools/test_drawings.mjs`, and decide
+whether the overlaps are a real regression in the dimension-label layout or the
+checker being too strict about label bounding boxes.
+
 ## Safe areas — the notch, the Island, the home indicator (`index.html`, `print.css`, `core.js`)
 
 Reported: opening the engineering drawings on a phone put the print toolbar
