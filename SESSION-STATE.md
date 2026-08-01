@@ -10,7 +10,7 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-01
-Status: **Cure holds + sub-ticket parents landed.** 250 app / 23 design-system / 988 app-UI / 34
+Status: **All six cure holds signed off and enforced.** 252 app / 23 design-system / 988 app-UI / 34
 slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
@@ -50,9 +50,20 @@ and IN2 = 48 h. The datasheets say IN2 + AT30 SLOW demoulds at 18–24 h @25 °C
 publishes no demould figure at all, only "cure to a solid, thin film 10–15 h
 @72 °F" for 105+206. His numbers are *longer* than the datasheets, so they
 survive as a deliberate FEB margin. `03 App/app/resins.js` holds both per resin
-and the UI never presents one as the other. **Four of the six FEB holds are
-marked PENDING in that file** — extrapolated, needing his sign-off: IN2 FAST,
-105+205, 105+209, XCR.
+and the UI never presents one as the other.
+
+**All six holds are now signed off** (Simon, 2026-08-01): IN2 SLOW 48 h, IN2
+FAST 24 h, 105+206 24 h, 105+205 24 h, 105+209 36 h, XCR 12 h. The reasoning
+is in the file header — they are shift boundaries ("tomorrow", "after the
+weekend"), not multiples of the datasheet. The one that costs something: both
+FAST systems hold 24 h, 3x their datasheet figure, so buying FAST hardener to
+turn two infusions round in a day no longer works. That is the line to change
+if the trade stops being worth it, and it is one number.
+
+`resinTableProblems()` now refuses both a hold below its datasheet figure and a
+hold with no `febBy`, so a new resin can't ship with a placeholder. A
+lead-editable table via `fb.getConfig`/`setConfig` is the obvious next step and
+is still not built; changing a hold means editing the file and deploying.
 
 Temperature is recorded and displayed, never computed with. The team cures
 ambient with no oven, and no coefficient in this repo would justify the

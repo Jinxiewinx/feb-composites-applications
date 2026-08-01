@@ -181,6 +181,29 @@ await t("the resin table never enforces less than the datasheet says", () => {
   assert(RESINS.every(r => r.sheetSays && r.doc && r.doc.startsWith("docs/datasheets/")),
     "every hold cites a datasheet that ships with the app");
 });
+await t("every hold is signed off, and an unsigned one is caught as data", () => {
+  // These numbers lock a step and refuse a member's buy-off, so each needs a
+  // name against it. The guard is what stops a new resin shipping with a
+  // placeholder — that is exactly how the four extrapolated holds sat for a
+  // day before Simon signed them off on 2026-08-01.
+  RESINS.forEach(r => assert(r.febBy && !/pending/i.test(r.febBy), `${r.id} is unsigned: ${r.febBy}`));
+  const saved = RESINS[1].febBy;
+  RESINS[1].febBy = "PENDING — needs lead sign-off";
+  assert(resinTableProblems().some(p => /not signed off/.test(p)), "a placeholder is refused");
+  RESINS[1].febBy = "";
+  assert(resinTableProblems().some(p => /not signed off/.test(p)), "so is a missing one");
+  RESINS[1].febBy = saved;
+  assert(resinTableProblems().length === 0, "table restored clean");
+});
+await t("the why-modal shows who signed the number off, next to the number", () => {
+  openHoldWO(holdWO("WO-HOLD-SIGN", 2, "WS-105-205"));
+  openWhyHold(1);
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Why 24 hours?"), "the FEB hold, not the datasheet figure: " + m.slice(0, 200));
+  assert(m.includes("cure to a solid, thin film 6–8 h at 72 °F"), "datasheet quoted verbatim beside it");
+  assert(/Signed off by[\s\S]*Simon Starbuck, 2026-08-01/.test(m), "with the approval: " + m);
+  closeModal();
+});
 await t("a cure in progress locks the next step and says how long is left", () => {
   openHoldWO(holdWO("WO-HOLD-1", 7, "IN2-AT30-SLOW")); // 7 h into a 48 h hold
   const h = holdState(woById("WO-HOLD-1"), 1);
