@@ -16,7 +16,7 @@
 <title>FEB Composites</title>
 <script>
   /* Set the theme before first paint (no flash): saved choice, else system. */
-  (function(){try{var t=localStorage.getItem('feb-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+  (function(){try{var t=localStorage.getItem('feb-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('feb-rail')==='1'){document.documentElement.classList.add('rail');}}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
 </script>
 <style>
   /* Self-hosted so the app keeps its type offline at the field station. Both
@@ -155,6 +155,33 @@
   .sb-item.active::before { content: ""; position: absolute; left: 2px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); transform: skewX(-12deg); }
   .sb-item .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
   .sb-item .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+  /* The rail: the sidebar collapsed to icons, hands 160px back to the content.
+     A class on <body> rather than on the nav, because main's width is what
+     actually changes and the two have no ancestor in common below #app.
+     Everything here is width and visibility only — the navy, the carbon
+     crosshatch and the gold speed slash are the app's signature surface and
+     survive the collapse intact, which is the point of collapsing rather than
+     hiding. Labels move to `title`, set in renderSidebar().
+     Only above 900px: below that the sidebar is already a drawer that is not
+     on screen at all, so there is nothing to reclaim and a second collapsed
+     state would just be a way to end up with no navigation. */
+  .sb-toggle { display: flex; align-items: center; gap: 11px; margin: 0 8px 8px; padding: 9px 11px;
+    border: none; background: none; border-radius: 7px; color: var(--sb-text); cursor: pointer;
+    font: inherit; font-size: 13.5px; width: calc(100% - 16px); text-align: left;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+  .sb-toggle:hover { background: var(--sb-hover); color: #fff; }
+  .sb-toggle .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
+  html.rail nav.sidebar { width: 56px; flex-basis: 56px; }
+  html.rail .sb-brand-txt,
+  html.rail .sb-item > :not(.ic):not(.dot),
+  html.rail .sb-toggle > :not(.ic) { display: none; }
+  html.rail .sb-brand { justify-content: center; padding: 15px 0 12px; }
+  html.rail .sb-item, html.rail .sb-toggle { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
+  html.rail .sb-nav { padding: 6px 4px; }
+  html.rail .sb-toggle { margin: 0 4px 8px; width: calc(100% - 8px); }
+  /* The unread pip has no room to sit at the end of a label that isn't there,
+     so it rides the icon's top-right corner instead of disappearing. */
+  html.rail .sb-item .dot { position: absolute; margin: 0; top: 6px; right: 8px; }
   .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   /* The insets live on the BASE rule, not in the ≤900 block where they started:
      a landscape iPhone 15 Pro Max is 932px wide, so it takes the desktop rule —
@@ -985,6 +1012,11 @@
     .pitem { margin-bottom: 8px; padding: 10px 13px; border-radius: 8px;
       background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); }
     .keyhint { display: none; }             /* no hardware keyboard down here */
+    /* The rail toggle is meaningless in a drawer: the sidebar is already off
+       screen, so there is no space to reclaim and collapsing it would just be
+       a way to end up with icons and no labels in a panel you opened
+       deliberately. */
+    .sb-toggle { display: none; }
   }
   /* Tablet band — the intersection of the two breakpoints either side of it,
      not a third breakpoint of its own. What it buys: between 641 and 900 the

@@ -101,6 +101,16 @@ and the Parts index rail grows with the window up to 420px. It is still a cap
 and not the full width: past about 1600 a table row gets long enough that the
 eye loses which row it is reading.
 
+The Collapse button at the bottom of the sidebar shrinks it to a 56px icon
+rail, remembered across sessions like the theme and applied before first paint
+so it never snaps shut a moment after load. It is worth the most on a laptop,
+where it hands 160px straight to the content (1224px to 1384px at 1440); on a
+1920 monitor the 1600px cap is already binding so the gain is smaller. The
+navy, the carbon crosshatch and the gold speed slash all survive the collapse,
+because the point is to make the sidebar smaller rather than to hide it. The
+button does not appear below 900px, where the sidebar is a drawer and there is
+no space to reclaim.
+
 The old single-file `../work-orders.html` stays as the offline backup and archive
 viewer, since it still opens any exported JSON anywhere, forever. Don't delete
 it.

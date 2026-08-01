@@ -632,13 +632,18 @@ function renderSidebar() {
   if (!el) return;
   const st = window.fb ? fb.state : "loading";
   if (st !== "ready") { el.innerHTML = ""; return; }
+  const rail = railOn();
   el.innerHTML = `
     <div class="sb-brand" onclick="setTab('dashboard')" title="Home">${febMark(26)}<span class="sb-brand-txt">FEB <span>Composites</span></span></div>
     <div class="sb-nav">
-      ${TABS.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" onclick="setTab('${t.id}')">
+      ${TABS.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.label)}" onclick="setTab('${t.id}')">
         <span class="ic">${icon(t.ic, 19)}</span>${t.label}${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
       </button>`).join("")}
-    </div>`;
+    </div>
+    <button class="sb-toggle no-print" title="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}"
+      aria-label="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}" aria-pressed="${rail}" onclick="toggleRail()">
+      <span class="ic">${icon(rail ? "chevronRight" : "chevronLeft", 18)}</span>Collapse
+    </button>`;
 }
 function renderTopbar() {
   const el = document.getElementById("topbar");
@@ -741,6 +746,37 @@ function themeToggleBtn() {
   const dark = currentTheme() === "dark";
   const label = dark ? "Switch to light theme" : "Switch to dark theme";
   return `<button class="icon-btn" title="${label}" aria-label="${label}" onclick="toggleTheme()">${icon(dark ? "sun" : "moon", 18)}</button>`;
+}
+
+/* ---------- sidebar rail ----------
+   Collapse the 216px sidebar to a 56px icon rail and hand the 160px back to
+   the content. Remembered the same way and in the same place as the theme,
+   because it is the same kind of choice: a persistent preference about the
+   chrome, not app state, so it does not belong in `view`.
+
+   Applied to <body> rather than to the nav: main's width is what actually
+   changes, and the two have no common ancestor below #app. Set before first
+   paint by the same inline script in index.html that sets the theme, so the
+   sidebar does not visibly snap shut a moment after load. */
+function railOn() {
+  try { return localStorage.getItem("feb-rail") === "1"; } catch (e) { return false; }
+}
+function toggleRail() {
+  const on = !railOn();
+  try { localStorage.setItem("feb-rail", on ? "1" : "0"); } catch (e) {}
+  /* <html>, not <body>: the no-FOUC script in index.html runs inside <head>
+     where <body> does not exist yet, and the sidebar snapping shut a beat
+     after load is exactly what that script exists to prevent. Guarded because
+     tools/test_app.mjs runs against a DOM stub with no documentElement. */
+  const de = document.documentElement;
+  if (de && de.classList) de.classList.toggle("rail", on);
+  renderSidebar();
+  /* The content pane just changed width without the window changing size, so
+     anything that measured its own box is now wrong — the meshview canvas
+     (which listens for exactly this event, meshview.js:532) and the topbar
+     overflow check. Dispatching the real event rather than calling into each
+     of them keeps this from needing a list of who cares. */
+  if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("resize"));
 }
 
 /* ---------- global search (⌘K command palette) ---------- */
