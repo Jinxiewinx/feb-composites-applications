@@ -769,7 +769,15 @@
   }
   /* A 136px column is narrow enough to break "Jul 28" across two lines, which
      reads as two dates. */
-  .tl-wkdate { white-space: nowrap; }
+  /* The date is a button (it opens the date picker), so most of this undoes the
+     app's outlined button styling to leave it reading as the header text it
+     has always looked like. */
+  .tl-wkdate {
+    white-space: nowrap; font: inherit; color: inherit; background: none; border: none;
+    padding: 2px 5px; margin: -2px -5px; border-radius: var(--radius); cursor: pointer;
+    transition: background var(--t-fast) var(--ease);
+  }
+  .tl-wkdate:hover { background: var(--hover); }
   /* One trash can per week is eleven trash cans across a season. Present, and
      quiet until you are actually in that column. Touch has no hover, so there
      it just stays visible. */

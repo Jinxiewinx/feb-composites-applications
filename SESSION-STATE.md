@@ -9,11 +9,43 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-07-31
-Status: **UI/UX audit landed on main.** 230 app / 22 design-system / 988 app-UI /
-34 slicer / 11 packer / 13 print mobile / 27 safe-area, all passing.
-`test_drawings` still fails 8/8 — pre-existing, see the open finding near the
-bottom. See "App UI/UX audit" directly below.
+Last updated: 2026-08-01
+Status: **Timeline dates fixed.** 234 app / 23 design-system / 988 app-UI / 34
+slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
+`test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
+emulator on :8080 — both pre-existing.
+
+## Timeline: "+ Add week" did nothing (2026-08-01)
+
+Simon reported the button as dead. It wasn't: `newWeek()` wrote `weekOf: ""`,
+and `renderTimeline()` files undated weeks under the "SN5 archive" card, which
+is collapsed by default. The doc was saved every time; nothing on screen
+changed, stat tiles included, because all four count dated weeks. Underneath
+that, `updWeekDate()` had never been wired to anything, so a week's date could
+not be edited at all and the eleven imported SN5 weeks could never be dated
+into the grid.
+
+Now: a new week is dated to the Monday after the last scheduled week (this
+week's Monday when the schedule is empty), skipping any Monday already taken;
+the week header's date is a button that opens a date picker; any day picked
+snaps to that week's Monday, because `weekDates()` in weeklyplan.js builds its
+seven day columns by adding 0..6 days and a Thursday there silently makes the
+week run Thursday to Wednesday. Duplicate Mondays are refused.
+
+The trap worth remembering: on a wide screen `.tl-wk` is `display: contents`,
+so the section has no box and `getBoundingClientRect()` on it returns all
+zeros. Anything that measures a week column has to measure its `.tl-wkhd`, the
+way `jumpToThisWeek()` already did.
+
+Also corrected: the ShopSabre booking note said the machine is at Jacobs. The
+ShopSabre is at RFS and is booked on the RFS/RSO site; the Jacobs Shopbot is
+the older machine we would rather not use, so the note no longer names it.
+`05 Printables/printables.html` still carries a "Shopbot (Jacobs) fallback"
+footer, which is accurate but leans warmer on that machine than current
+practice does. Left alone: it tracks CS-005 Rev B, so changing it means a
+revision bump. Simon's call.
+
+See "App UI/UX audit" directly below for the previous session.
 
 Earlier: **Mold Stack Planner phase 1 built, not yet committed.** Branch
 `mold-sheet-stacking-app`. Board inventory + STL slicer + exploded stack view.

@@ -49,18 +49,95 @@ let TL_UNDO = null;
    and throws you back to the start of the season on every edit. Remembered
    here and restored after each paint by syncTimelineScroll(). */
 let TL_SCROLL = null;
+/* A week to bring on screen after the next paint, by id. Set when a week is
+   added or re-dated, because both move it somewhere the current scroll offset
+   isn't. Cleared by syncTimelineScroll() once it has been used. */
+let TL_FOCUS = null;
 
 function schedById(id) { return DB.schedule.find(w => w.id === id); }
 function saveWeek(w, field) { w = w || schedById(view.id); if (w) save("schedule", w, field); }
 
+/* ---------- week dates ----------
+   A weekOf is always the Monday. weeklyplan.js derives its seven day columns
+   from it by adding 0..6 days, so a Thursday in the field silently makes that
+   tab's "week" run Thursday to Wednesday. Everything that writes a date here
+   goes through mondayOf() first.
+
+   Local getters rather than toISOString(), which converts to UTC and hands
+   back the previous day for anyone west of Greenwich. */
+function tlIso(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function mondayOf(iso) {
+  const d = new Date(iso + "T12:00:00");
+  if (isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Sunday is 0, and it ends a week here
+  return tlIso(d);
+}
+function tlAddDays(iso, n) {
+  const d = new Date(iso + "T12:00:00");
+  if (isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + n);
+  return tlIso(d);
+}
+// The Monday a new week should land on: the one after the last week already
+// scheduled, or this week when nothing is. Skips forward over any date already
+// taken so two clicks never make two weeks of the same date.
+function nextFreeWeekOf() {
+  const dated = DB.schedule.filter(w => w.weekOf).map(w => w.weekOf).sort();
+  const taken = new Set(dated);
+  let d = dated.length ? tlAddDays(dated[dated.length - 1], 7) : mondayOf(today());
+  while (d && taken.has(d)) d = tlAddDays(d, 7);
+  return d;
+}
+
+/* Every new week gets a date. It used to be written with weekOf:"", which put
+   it in the undated bucket renderTimeline() files under the collapsed "SN5
+   archive" card — so "+ Add week" saved a doc and changed nothing you could
+   see, on a tab where the four stat tiles all count dated weeks too. */
 function newWeek() {
   let max = 0;
   DB.schedule.forEach(w => { const m = String(w.id).match(/^W(\d+)$/); if (m) max = Math.max(max, +m[1]); });
   const id = "W" + String(max + 1).padStart(2, "0");
-  const w = { id, weekOf: "", other: "", notes: "", retro: false };
+  const w = { id, weekOf: nextFreeWeekOf(), other: "", notes: "", retro: false };
   STATIONS.forEach(([k]) => (w[k] = ""));
   DB.schedule.push(w); saveWeek(w);
+  TL_FOCUS = id;
   render();
+  if (typeof toast === "function") toast(`Added the week of ${w.weekOf}. Tap the date to change it.`);
+}
+
+/* The date was display-only until now: updWeekDate() existed and nothing
+   called it, so a week could be added but never moved, and the eleven imported
+   SN5 weeks could never be dated into the grid at all. */
+function openWeekDate(weekId) {
+  const w = schedById(weekId);
+  if (!w) return;
+  openModal(`
+    <h2>${w.weekOf ? "Week of " + esc(w.weekOf) : esc(w.id)}</h2>
+    <p class="muted">Weeks run Monday to Sunday, so the date is that week's Monday. Pick any day in the week and it snaps.</p>
+    <div class="field"><label for="tl-week-date">Week of</label>
+      <input id="tl-week-date" type="date" autofocus value="${esc(w.weekOf)}">
+    </div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitWeekDate('${esc(weekId)}')">Save</button>
+    </div>
+  `);
+}
+function submitWeekDate(weekId) {
+  const el = document.getElementById("tl-week-date");
+  const val = el ? el.value : "";
+  closeModal();
+  const mon = mondayOf(val);
+  if (!mon) { toast("That is not a date the schedule can use.", "error"); return; }
+  // Two weeks on the same Monday sort arbitrarily against each other and give
+  // Weekly Plan's picker two identical-looking options.
+  const clash = DB.schedule.find(x => x.id !== weekId && x.weekOf === mon);
+  if (clash) { toast(`The week of ${mon} is already on the schedule as ${clash.id}.`, "error"); return; }
+  TL_FOCUS = weekId;
+  updWeekDate(weekId, mon);
+  if (mon !== val) toast(`Moved to the Monday of that week, ${mon}.`);
 }
 function delWeek(id) {
   /* Says what it actually deletes. The doc is shared with Weekly Plan, so this
@@ -148,14 +225,18 @@ function openAssign(weekId, key) {
     </div>
   `);
 }
-/* Scheduling a station here does not reserve the machine, and the two shops
-   that need reserving have different rules. Kept specific rather than generic
-   because a vague "book it yourself" is the kind of warning people stop
-   reading — and because Jacobs enforces theirs (#composites, 2026-02-23:
-   staff pulled two members aside over exactly this). */
+/* Scheduling a station here does not reserve the machine. Kept specific rather
+   than generic because a vague "book it yourself" is the kind of warning people
+   stop reading, and because the own-reservation rule has teeth: block-booking
+   through other members is what got members pulled aside at Jacobs
+   (#composites, 2026-02-23), and the RFS system carries the same rule.
+
+   The machine is the ShopSabre at RFS. The Jacobs Shopbot is the older machine
+   and the fallback we would rather not use (CS-005 §1), so it isn't named here
+   — a station row that mentions it invites someone to book it. */
 function bookingNote(key) {
   if (key === "mold1" || key === "mold2") {
-    return "Whoever runs the job books the ShopSabre themselves at Jacobs. Their policy is that you may only come in for your own reservation, so booking a slot for someone else does not work.";
+    return "Whoever runs the job books the ShopSabre at RFS themselves, on the RFS/RSO reservation site. You may only come in for your own reservation, so booking a slot in someone else's name does not work.";
   }
   if (key === "waterjet") return "Waterjet time is booked in slots — whoever cuts reserves it.";
   return "Check the bench is free before you count on it.";
@@ -216,9 +297,9 @@ function updWeekDate(weekId, val) { updWeek(weekId, "weekOf", val); render(); }
 function weekColumn(w, opts) {
   const now = isThisWeek(w);
   const past = !!w.weekOf && !now && w.weekOf < today();
-  return `<section class="tl-wk${w.retro ? " retro" : ""}${now ? " now" : ""}${past ? " past" : ""}">
+  return `<section class="tl-wk${w.retro ? " retro" : ""}${now ? " now" : ""}${past ? " past" : ""}" data-week="${esc(w.id)}">
     <div class="tl-wkhd${now ? " now" : ""}"${now ? ' aria-label="Week of ' + esc(w.weekOf) + ', the current week"' : ""}>
-      <span class="tl-wkdate">${weekLabel(w)}</span>
+      <button class="tl-wkdate" title="Change this week's date" aria-label="${w.weekOf ? "Week of " + esc(w.weekOf) : esc(w.id) + ", undated"}, change the date" onclick="openWeekDate('${esc(w.id)}')">${weekLabel(w)}</button>
       ${now ? '<span class="pill now">Now</span>' : ""}
       ${opts && opts.lead ? `<button class="ib sm tl-del no-print" title="Delete this week" aria-label="Delete the week of ${esc(w.weekOf || w.id)}" onclick="delWeek('${esc(w.id)}')">${icon("trash", 13)}</button>` : ""}
     </div>
@@ -327,11 +408,40 @@ function jumpToThisWeek() {
   grid.scrollLeft += e.left - g.left - railW - 8;
   TL_SCROLL = grid.scrollLeft;
 }
+/* Bring one week on screen by id. A week that was just added is at the far
+   right of a season that may be nine columns wide, and a week that was just
+   re-dated has moved; either way the remembered scrollLeft now points at the
+   wrong place. Same rail-width maths as jumpToThisWeek(). */
+function scrollWeekIntoView(id) {
+  if (typeof document.querySelector !== "function") return;
+  const grid = document.querySelector("#main .tlgrid");
+  if (!grid) return;
+  const sec = grid.querySelector(`.tl-wk[data-week="${id}"]`);
+  if (!sec) return;
+  // Below 900px the grid is a stack of cards and doesn't scroll sideways.
+  if (grid.scrollWidth <= grid.clientWidth + 2) {
+    if (typeof sec.scrollIntoView === "function") sec.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  /* Measure the HEADER, not the section. On a wide screen .tl-wk is
+     `display: contents` — its cells are the grid items and the section itself
+     has no box at all, so its rect is 0,0,0,0 and every sum below comes out as
+     "scroll to the far left". jumpToThisWeek() targets .tl-wkhd.now for the
+     same reason. */
+  const hd = sec.querySelector(".tl-wkhd");
+  if (!hd) return;
+  const rail = grid.querySelector(".tl-corner");
+  const railW = rail ? rail.getBoundingClientRect().width : 0;
+  const g = grid.getBoundingClientRect(), e = hd.getBoundingClientRect();
+  if (e.left < g.left + railW || e.right > g.right) grid.scrollLeft += e.left - g.left - railW - 8;
+  TL_SCROLL = grid.scrollLeft;
+}
 function syncTimelineScroll() {
   if (typeof document.querySelector !== "function") return;
   const grid = document.querySelector("#main .tlgrid");
   if (!grid) return;
-  if (TL_SCROLL != null) grid.scrollLeft = TL_SCROLL;
+  if (TL_FOCUS) { const id = TL_FOCUS; TL_FOCUS = null; scrollWeekIntoView(id); }
+  else if (TL_SCROLL != null) grid.scrollLeft = TL_SCROLL;
   else jumpToThisWeek();
   tlEdges(grid);
 }

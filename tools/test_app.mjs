@@ -889,6 +889,37 @@ await t("editing an issue requires a work order to stay set", () => {
 
 console.log("timeline:");
 await t("newWeek creates W01 with station fields", () => { setTab("timeline"); calls.length = 0; newWeek(); assert(DB.schedule.length === 1); const w = DB.schedule[0]; assert(w.id === "W01" && "mold1" in w && "waterjet" in w && "notes" in w); });
+await t("a new week is dated, so it lands in the grid and not the hidden archive", () => {
+  // The bug: newWeek() wrote weekOf:"", renderTimeline() files undated weeks
+  // under the collapsed "SN5 archive" card, and "+ Add week" looked dead.
+  const w = DB.schedule[0];
+  assert(/^\d{4}-\d\d-\d\d$/.test(w.weekOf), "dated on creation: " + JSON.stringify(w.weekOf));
+  assert(mondayOf(w.weekOf) === w.weekOf, "and dated to a Monday: " + w.weekOf);
+  assert(renderTimeline().includes(`data-week="W01"`), "and it renders in the grid");
+});
+await t("the second new week is the Monday after the first, never the same date", () => {
+  newWeek();
+  const [a, b] = DB.schedule;
+  assert(b.weekOf === tlAddDays(a.weekOf, 7), `${a.weekOf} then ${b.weekOf}`);
+  DB.schedule.pop();
+});
+await t("a week's date can be changed, and any day in the week snaps to its Monday", () => {
+  const w = DB.schedule[0];
+  el("tl-week-date").value = "2026-09-10"; // a Thursday
+  submitWeekDate(w.id);
+  assert(w.weekOf === "2026-09-07", w.weekOf);
+  assert(calls.some(c => c[0] === "save" && c[1] === "schedule" && c[3] === "weekOf"), "and saves just that field");
+});
+await t("two weeks can't share a Monday", () => {
+  newWeek();
+  const [a, b] = DB.schedule;
+  lastToast = "";
+  el("tl-week-date").value = a.weekOf;
+  submitWeekDate(b.id);
+  assert(b.weekOf !== a.weekOf, "the clashing date is refused");
+  assert(lastToast.includes("already on the schedule"), lastToast);
+  DB.schedule.pop();
+});
 await t("assignStation writes just that station field", () => { const w = DB.schedule[0]; DB.parts.push({ id: "P-SN6-050", partName: "TESTPART" }); calls.length = 0; assignStation(w.id, "mold1", "P-SN6-050"); assert(w.mold1 === "P-SN6-050"); assert(calls.some(c => c[0] === "save" && c[1] === "schedule" && c[3] === "mold1")); });
 await t("cellView shows a known part's name, and unmapped text as-is", () => { assert(cellView("P-SN6-050") === "TESTPART", cellView("P-SN6-050")); assert(cellView("RANDOM NAME") === "RANDOM NAME"); assert(cellView("") === ""); });
 await t("the jump to Parts survived the rebuild — it moved into the assign picker", () => {
