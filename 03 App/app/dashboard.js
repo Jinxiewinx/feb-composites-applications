@@ -35,7 +35,13 @@ function deadlineItems() {
     // visibility is the whole point of the kind. Inside the Tickets tab itself
     // (board/table/detail), keep showing "Project"/"Issue" — that distinction
     // is what those views are for.
-    coll: "projects", id: p.id, kind: isIssue(p) ? "Issue" : "Ticket", label: p.title || p.id,
+    coll: "projects", id: p.id,
+    // A sub-ticket says so. Everywhere else a ticket appears it is nested under
+    // its parent, which supplies the context; these dashboard lists are flat,
+    // so "Machine the plug" arrived with nothing saying what it belonged to.
+    kind: isIssue(p) ? "Issue" : (p.parentId ? "Sub-ticket" : "Ticket"),
+    label: p.title || p.id,
+    parent: parentOf(p),
     who: whoLabel(p.assignees || []),
     date: p.dueDate, done: projStatus(p) === "Done",
     mine: isMine(p.assignees || []),
@@ -57,7 +63,7 @@ function itemRow(it) {
   const paren = dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d";
   const when = it.date ? esc(it.date) + (dd != null ? ` <span class="muted">(${paren})</span>` : "") : '<span class="muted">no date</span>';
   return `<tr>
-    <td><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}</td>
+    <td><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${parentLine(it.parent)}</td>
     <td class="tny">${esc(it.who || "—")}</td>
     <td class="${dd != null && dd < 0 ? "warn" : ""}">${when}</td>
   </tr>`;
@@ -98,7 +104,7 @@ function renderDashboard() {
   ${watched.length ? `<div class="card" style="border-left:3px solid var(--gold)">
     <h3>Watched — new activity <span class="warn">(${watched.length})</span></h3>
     <table class="list dash"><tr><th>Ticket</th><th>Status</th><th>Last activity</th></tr>
-      ${watched.map(p => `<tr><td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${chip("projects", p.id, p.title || p.id)}</td>
+      ${watched.map(p => `<tr><td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</td>
         <td><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span></td>
         <td class="tny">${fmtWhen(p.updatedAt)} by ${esc(p.updatedBy || "?")}</td></tr>`).join("")}
     </table>

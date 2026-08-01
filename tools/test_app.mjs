@@ -1260,6 +1260,23 @@ await t("weekly plan lists you first and collapses everyone with nothing on", ()
   assert(!/Aaron Idle<\/b>/.test(html), "no full block for an idle teammate: " + html.slice(0, 400));
 });
 
+await t("the weekly rollup names a sub-ticket's parent too, inline so the row stays one line", () => {
+  // Same flat-list problem as the dashboard: this pulls tickets by assignee and
+  // due date, so a sub-ticket lands next to unrelated work with nothing saying
+  // what it belongs to.
+  DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
+  DB.schedule = [{ id: "W-SUB", weekOf: today(), goals: [], doneTickets: [], cars: [] }];
+  DB.projects = [
+    { id: "T-PARENT", title: "Undertray", status: "In Progress", assignees: [] },
+    { id: "T-KID", title: "Trim the strakes", status: "To Do", dueDate: today(), parentId: "T-PARENT", assignees: ["simon@berkeley.edu"] },
+  ];
+  view = { ...view, tab: "weekplan", wpWeek: "W-SUB" };
+  const html = renderWeekPlan();
+  assert(html.includes("Trim the strakes"), "the sub-ticket is listed");
+  assert(/<span class="tny muted">part of <span class="chip"[^>]*>Undertray<\/span><\/span>/.test(html),
+    "parent named inline (a <div> would break the flex row onto its own line): " + html.slice(html.indexOf("Trim the strakes") - 200, html.indexOf("Trim the strakes") + 300));
+});
+
 console.log("budget:");
 await t("newBuy defaults purchaser to me", async () => { setTab("budget"); await newBuy(); assert(buyById(view.id).purchaser === "Simon" && buyById(view.id).status === "Submitted"); });
 await t("num parses money strings", () => { assert(num("$41.68") === 41.68 && num("") === 0 && num("1,200") === 1200); });
@@ -1314,6 +1331,34 @@ await t("dashboard stat row shows real counts, not just the lists below it", () 
   assert(/bignum">1<\/div><div class="stat-label">Your open items/.test(main.innerHTML), "1 item is Simon's (SOON PART): " + main.innerHTML);
   assert(/bignum">1<\/div><div class="stat-label">Behind schedule/.test(main.innerHTML), "1 item is overdue (LATE PART)");
   assert(main.innerHTML.includes('bignum">$150</div><div class="stat-label">Season spend'), "spend totals $120 + $30");
+});
+await t("a sub-ticket on the dashboard says which ticket it belongs to", () => {
+  // Inside the Tickets tab a sub-ticket is always drawn nested under its
+  // parent, so the context is free. These lists are flat, and "Machine the
+  // plug" on its own says nothing about which mold.
+  const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  DB.parts = []; DB.workOrders = [];
+  DB.projects = [
+    { id: "TKT-P", title: "Nosecone mold", kind: "project", status: "In Progress", assignees: ["simon@berkeley.edu"] },
+    { id: "TKT-C", title: "Machine the plug", kind: "project", status: "In Progress", parentId: "TKT-P", dueDate: soon, assignees: ["simon@berkeley.edu"] },
+  ];
+  const kid = deadlineItems().find(i => i.id === "TKT-C");
+  assert(kid.kind === "Sub-ticket", "labelled as one, not the generic Ticket: " + kid.kind);
+  assert(kid.parent && kid.parent.label === "Nosecone mold", JSON.stringify(kid.parent));
+  const top = deadlineItems().find(i => i.id === "TKT-P");
+  assert(top.kind === "Ticket" && top.parent === null, "a top-level ticket gains nothing");
+  setTab("dashboard");
+  const html = main.innerHTML;
+  assert(html.includes("part of"), "the context line renders: " + html.slice(0, 500));
+  assert(/part of <span class="chip"[^>]*>Nosecone mold<\/span>/.test(html),
+    "and it's the parent's title, clickable, not a bare id: " + html);
+});
+await t("a sub-ticket whose parent was deleted still renders", () => {
+  DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "project", status: "To Do", parentId: "TKT-GONE", dueDate: today(), assignees: [] }];
+  assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
+  setTab("dashboard");
+  assert(main.innerHTML.includes("Orphan"), "the ticket is still listed, it just loses the context line");
+  assert(!main.innerHTML.includes("part of"), "and doesn't claim a parent it can't name");
 });
 await t("itemRow closes exactly one paren per case, future/late/today (regression: used to double-close future dates and never close late ones)", () => {
   const soonRow = itemRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });

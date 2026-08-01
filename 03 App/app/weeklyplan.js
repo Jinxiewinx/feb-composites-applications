@@ -144,6 +144,7 @@ function personGoalsHtml(u, week) {
     return `<div class="task-row ${done ? "done" : ""}">
       <input type="checkbox" ${done ? "checked" : ""} onchange="toggleTicketDoneThisWeek('${week.id}','${esc(u.email)}','${esc(t.id)}',this.checked)">
       ${chip("projects", t.id, t.title || t.id)}
+      ${parentLine(parentOf(t), true)}
       ${dueDatePill(t.dueDate)}
     </div>`;
   }).join("");

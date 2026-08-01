@@ -29,6 +29,39 @@ function projStatusClass(status) { return STATUS_SLUG[status] || "todo"; }
 function ticketKind(p) { return p.kind === "issue" ? "issue" : "project"; }
 function isIssue(p) { return ticketKind(p) === "issue"; }
 function subTickets(p) { return DB.projects.filter(t => t.parentId === p.id); }
+
+/* The ticket a sub-ticket hangs off, or null. Returns the record rather than
+   the id, because callers want its title: "part of TKT-014" is barely better
+   than nothing when what you needed to know is that it belongs to the
+   undertray.
+
+   Everywhere inside this tab a sub-ticket is drawn nested under its parent, so
+   the context is free. The flat lists elsewhere — the dashboard's deadline
+   tables, the Weekly Plan rollup — had no such thing, and "Machine the plug"
+   arrived on its own saying nothing about which mold.
+
+   Tolerates a dangling parentId: a ticket whose parent was deleted still
+   renders, it just loses the context line. */
+function parentOf(p) {
+  if (!p || !p.parentId) return null;
+  const par = (DB.projects || []).find(x => x.id === p.parentId);
+  return par ? { id: par.id, label: par.title || par.id } : null;
+}
+/* "part of <parent>", in the app's existing quiet register (.tny .muted, the
+   same one the dashboard's who-column and the Parts index use). It answers
+   "which one?" and must not compete with the thing actually being listed, so
+   it is small, grey, and second.
+
+   `inline` is for flex rows like .task-row, where a block would break the row
+   onto its own line; block is the default because in a table cell it wants to
+   sit under the title rather than trail off the end of it. */
+function parentLine(parent, inline) {
+  if (!parent) return "";
+  const body = `part of ${chip("projects", parent.id, parent.label)}`;
+  return inline
+    ? `<span class="tny muted">${body}</span>`
+    : `<div class="tny muted">${body}</div>`;
+}
 // The CS-003 enforcement point: an Issue can't be marked Done without a
 // disposition and documented root cause. Cancelled needs neither — it's the
 // escape hatch for "turned out not to be a real issue," not a disposition.

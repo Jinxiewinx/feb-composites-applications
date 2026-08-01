@@ -10,10 +10,26 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-01
-Status: **Cure holds landed.** 247 app / 23 design-system / 988 app-UI / 34
+Status: **Cure holds + sub-ticket parents landed.** 250 app / 23 design-system / 988 app-UI / 34
 slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Sub-tickets name their parent in flat lists (2026-08-01)
+
+Inside the Tickets tab a sub-ticket is always drawn nested under its parent, so
+context is free. The flat lists elsewhere had none: the dashboard's three
+deadline tables, the Watched table, and the Weekly Plan rollup all showed
+"Machine the plug" with nothing saying which mold.
+
+`parentOf(p)` and `parentLine(parent, inline)` live in `projects.js` next to
+`subTickets()`. The `.kind` tag reads "Sub-ticket" rather than "Ticket", and a
+`.tny .muted` line under the title says "part of <parent chip>", clickable
+through to the parent. `inline` exists for `.task-row` in Weekly Plan, where a
+block element breaks the flex row onto its own line.
+
+No new CSS class: `.tny` and `.muted` already existed. A dangling `parentId`
+resolves to null and the ticket still renders, just without the line.
 
 ## Cure holds on work-order steps (2026-08-01)
 
