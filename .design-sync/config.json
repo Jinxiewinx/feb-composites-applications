@@ -1,0 +1,12 @@
+{
+  "projectId": "44c1cc89-0249-4155-a305-c55aff0a7bac",
+  "shape": "package",
+  "pkg": "feb-composites-design-system",
+  "globalName": "FEBComposites",
+  "buildCmd": "node .design-sync/stage-pkg.mjs",
+  "cssEntry": "components.css",
+  "tokensPkg": "feb-composites-design-system",
+  "tokensGlob": "tokens.css",
+  "extraFonts": ["fonts.css"],
+  "readmeHeader": ".design-sync/conventions.md"
+}

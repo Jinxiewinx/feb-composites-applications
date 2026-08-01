@@ -68,8 +68,10 @@ Surfaces: `--canvas`, `--card` / `--surface`, `--surface-2`, `--fill`,
 Text: `--ink`, `--muted`, `--faint`.
 
 Status triads (`--x` text, `--x-bg` background, `--x-border` border):
-`--ok` (success), `--amber` / `--warn` (warning), `--bad` (error),
-`--purple` (collecting), `--retro` (retro / not applicable).
+`--ok` (success), `--bad` (error), `--purple` (collecting), `--retro`
+(retro / not applicable). Warning is the one asymmetric triad: the text
+color is `--amber`, but the surfaces are `--warn-bg` and `--warn-border`.
+There is no `--warn`.
 
 Radius: `--radius` 6px, `--r-md` 9px, `--r-lg` 14px. Shadow: `--shadow`,
 `--shadow-md`, `--shadow-lg`. Motion: `--t` .17s, `--t-fast` .12s, `--ease`.
@@ -82,6 +84,19 @@ app does this with a media query that hides the header row and reads a
 `data-label` attribute off each cell for the per-row labels. That collapse rule
 lives in the app; if you reuse `table.list` on a small screen, carry that rule
 across too.
+
+## Syncing to claude.ai/design
+
+This system is uploaded to a Claude Design project, so designs built there use
+these tokens, fonts, and classes instead of generic ones. Because it is CSS with
+no JavaScript, it syncs as a styling layer: no importable components, no
+component cards. The class vocabulary the design agent codes against lives in
+`../.design-sync/conventions.md`, which is prepended to the uploaded README.
+
+**If you add a class to `components.css`, add it there too.** Nothing detects an
+undocumented class, and the agent will not use one it has not been told about.
+Re-run the sync with the `/design-sync` skill from the git root;
+`../.design-sync/NOTES.md` has the details.
 
 ## Regenerating the style guide
 
