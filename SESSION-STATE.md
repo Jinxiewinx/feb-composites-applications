@@ -21,6 +21,35 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
 
+## Design System extracted into `06 Design System/` (2026-07-31)
+
+Simon asked (via `/design-sync`) to create a design system from the app's style.
+The repo has no component library or build for design-sync to consume, so instead
+of syncing to claude.ai/design I extracted the app's existing visual language
+into a reusable, documented package.
+
+New folder `06 Design System/`:
+
+- `tokens.css` — every design token (color light/dark/print, type, radius,
+  shadow, motion), lifted faithfully from the `<style>` block in
+  `03 App/app/index.html`. Single source of truth.
+- `components.css` — the reusable primitives built on the tokens (buttons, forms,
+  cards, `table.list`, pills/stages/chips/kinds, the 6-state `.status`, gates,
+  kanban, sidebar + gold speed-slash, topbar, tiles, avatars, toasts, modal).
+- `styleguide.html` — self-contained living style guide (fonts inlined as data
+  URIs), light/dark toggle, renders the whole system. `styleguide.artifact.html`
+  is the wrapper-less copy for publishing as a claude.ai Artifact.
+- `build.mjs` — regenerates both style-guide files from the canonical CSS.
+- `fonts/` — copies of Inter + Saira variable woff2.
+
+Verified in headless Chromium (both themes, no console errors). Artifact
+published: https://claude.ai/code/artifact/66ebc486-a980-4f77-a082-5a1bcb08b2d7
+
+The app is still the source of truth for anything not yet lifted into
+`components.css` (deep app-specific patterns: parts master-detail, meshview,
+timeline grid, weekly-plan carpool, drawings). If those are wanted in the system
+later, lift them from `index.html` into `components.css` and rerun `build.mjs`.
+
 ## Safe areas — the notch, the Island, the home indicator (`index.html`, `print.css`, `core.js`)
 
 Reported: opening the engineering drawings on a phone put the print toolbar

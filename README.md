@@ -15,6 +15,7 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013), markdown source with built .docx outputs | `CS-INDEX` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
 | `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE | print it |
+| `06 Design System/` | The app's visual language pulled out into a reusable system: color/type/spacing tokens, a component CSS library, and a living style guide | `styleguide.html` |
 | `tools/` | Scripts that build and check the rest: the markdown-to-docx builder, the retro work-order generator, the link auditor, and the app's test suites | |
 
 ## The app
@@ -66,6 +67,8 @@ It works because Fluent's Chromium export has a consistent layout (panel titles 
 **Pain Points and CS Standards** (`01`, `02`) are where the app's rules come from: 10 root-caused SN5 problems, each mapped to a numbered standard that fixes it (`CS-INDEX` is the lookup, `python3 tools/check_traceability.py` audits the mapping). XCR is the current mold sealer, the RFS ShopSabre is the machining path, and every quantitative claim in a standard cites a datasheet in `04 Datasheets/` or a recorded team measurement — two web-search "facts" turned out to be wrong during this build, both caught by reading the actual PDFs. Every standard ships "Draft, pending Lead signature" until someone actually signs the approval table; four (CS-001, CS-007, CS-008, CS-009) are Outlined rather than fully Drafted, so double check before leaning on those hard.
 
 **Datasheets and Printables** (`04`, `05`) are reference material — 25 manufacturer TDS/SDS PDFs chosen from actual purchase history, and shop-floor cheat sheets meant to be printed.
+
+**Design System** (`06`) is the app's visual language pulled out into something reusable: the color/type/spacing tokens (`tokens.css`), the component styles built on them (`components.css`), and a living style guide (`styleguide.html`) that renders the whole system in light and dark. It was extracted from the app's stylesheet so the next FEB tool, poster, or page can start on-brand instead of reinventing Berkeley Blue and the layup-status colors. Open `styleguide.html` in a browser, or read `06 Design System/README.md` for how to link it into a page.
 
 **Open items (need a human):** move the `feb-composites` Firebase project to a team Google account (or add the next lead as an owner) so it survives handoff; confirm the ShopSabre's exact model against CS-005 §5; field-verify the CS-011 storage map at RFS; sign the approval tables.
 
