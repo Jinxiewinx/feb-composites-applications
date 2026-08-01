@@ -26,8 +26,15 @@ Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 
 Simon asked for a UI/UX audit of `03 App/app/` against `06 Design System/`,
 flagged Timeline as needing an overhaul, and asked for the browser window and
-the phone screen to be used better. Three commits on main: `97d90ae`, `fde8757`,
-`150655a`. Plan: `~/.claude/plans/generic-percolating-tiger.md`.
+the phone screen to be used better. Seven commits on main, `97d90ae` through
+`51294c6`. Plan: `~/.claude/plans/generic-percolating-tiger.md`.
+
+**Deployed** to https://feb-composites.web.app on 2026-07-31, `--only hosting`
+(firestore.rules and storage.rules were untouched by this work, so they were
+deliberately left out of the deploy). Verified live: tokens resolve, brand font
+loads, no console errors, no horizontal overflow. The Firestore field keys did
+not change, so nothing migrated and a rollback is redeploying an earlier commit.
+The team has not been told; `#composites` has had no message about it.
 
 **Read this first if you touch the app's CSS.** `06 Design System/` was
 extracted FROM `index.html`'s `<style>` block, not imported by it. Two copies of
