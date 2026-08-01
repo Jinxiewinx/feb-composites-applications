@@ -65,7 +65,12 @@ function renderDocuments() {
   </div>
   ${all.length === 0 ? `<div class="card">No documents yet — <b>Upload document</b>, or run <code>python3 tools/gen_docs_manifest.py</code> to bundle the datasheets/standards.</div>` : ""}
   ${cats.map(cat => {
-    const list = docs.filter(d => d.category === cat);
+    /* localeCompare, not the manifest's order, which is ASCII: uppercase sorts
+       before lowercase, so "WestSystems" landed above "airtac2imp" and three
+       datasheets sat below a Z. Case- and accent-insensitive so a reader can
+       find a name where they expect it. */
+    const list = docs.filter(d => d.category === cat)
+      .sort((a, b) => (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base", numeric: true }));
     if (!list.length) return "";
     return `<div class="card">
       <h3>${esc(cat)} <span class="muted">(${list.length})</span></h3>

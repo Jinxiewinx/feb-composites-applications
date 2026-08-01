@@ -64,12 +64,51 @@ Landed:
   designed from, week cards on a phone, modal + undo instead of a global edit
   mode. See `fde8757` for the full reasoning and the three traps it surfaced.
 
-Open, low priority: `.modal-backdrop`'s scrim is the one literal colour left in
-`components.css` — there is no `--scrim` token and adding one changes the
-published vocabulary, so it wants its own decision. And `03 App/app/README.md`
-still describes Tickets as "Projects ... Backlog/Active/Blocked/Done", which is
-two names and four statuses out of date; not touched because it is outside this
-work.
+### Reviewed, and what was deliberately NOT done
+
+Two review passes ran: the `simon` persona on the Timeline design, and a
+screenshot reviewer on 22 of the 88 sweep frames against
+`.claude/agents/ui-reviewer.md`. Everything they found that was broken is
+fixed and pushed. These are the calls left open, each one somebody else's to
+make.
+
+**Needs Nick's decision (data model).** Post-process and clear coat are real,
+recurring, capacity-consuming RFS work — `sn5-schedule.json` W06, W07, W08 and
+W11 all carry it — and it currently lives in Timeline's free-text `other` row
+rather than being a bookable station. Same argument for a press row for forged
+parts. Adding either means a new field on every `schedule/{weekId}` doc, which
+is a live-database change, not a UI audit's to make. The downdraft table is
+reservable too (#composites 2026-02-26), which strengthens the case.
+
+**Needs a design call, not a bug fix.**
+- Parts prints the same four counts twice: the filter chips (12 OPEN / 4 LATE /
+  0 MINE / 21 DONE) and the KPI tiles beside them. The chips are the better
+  version because they also filter. Dashboard has a milder version of this.
+- Work Orders card-stacks below 900 where the 7-column table would still fit,
+  and a phone card spends six rows on what needs four. ~6760px for 26 records.
+- Stock spends three labelled rows on one string ("96 x 48 x 1.5"), and its
+  delete button is the most saturated thing on the page.
+- Reports wraps a ~500px text column in a 1600px card, colours the four layup
+  stages all the same pale blue where Parts colours them grey/amber/green, and
+  renders as plain text the same two deadline records Dashboard renders as
+  links.
+- Numeric columns (Budget cost, Stock dimensions) are left-aligned, so decimal
+  points do not line up.
+- Two colour collisions across tabs: purple means "retro" on Work Orders and
+  Timeline but "offcut" on Stock; amber means "under way" on Parts but "on
+  hold" on Tickets.
+
+**Timeline follow-ups.** `delWeek` is the only write in the tab with no undo. A
+Monday meeting assigning ten cells pays a full modal round trip each time
+(auto-advance, or a searchable part picker, would fix it).
+
+**Smaller open items.** `.modal-backdrop`'s scrim is the one literal colour left
+in `components.css`; there is no `--scrim` token and adding one changes the
+published vocabulary. The design system claims to cover spacing but defines only
+radii, which is why the remaining inline `style="margin-top: 8px"` glue in
+weeklyplan.js and projects.js has no class to become. And
+`03 App/app/README.md` still describes Tickets as "Projects ...
+Backlog/Active/Blocked/Done", two names and four statuses out of date.
 
 ## Design System extracted into `06 Design System/` (2026-07-31)
 

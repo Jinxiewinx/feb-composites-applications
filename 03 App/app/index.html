@@ -679,7 +679,10 @@
   .pstats.compact .bignum { font-size: 17px; }
   .pstats.compact .stat-label { margin-top: 0; }
   .pbehind { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 11px; }
-  .pbehind span { flex: 1; min-width: 180px; }
+  /* `flex: 1` let the sentence eat every spare pixel, which at the old 1180px
+     cap put its button a hand's width away and at 1600 stranded it 1130px off
+     the end of the text it belongs to. It grows to fit its words and stops. */
+  .pbehind span { flex: 0 1 auto; min-width: 180px; max-width: 70ch; }
 
   /* Right pane with nothing selected: the season read the list never had. */
   .stagebreak { margin-bottom: 11px; }
@@ -809,7 +812,10 @@
      already and the button would reveal nothing. */
   .tl-earlier { display: none; }
   /* Weekly Plan: per-person goal checklists + carpool cards. */
-  .task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* Capped for the same reason .pbehind is: the due pill is margin-left:auto,
+     so on a 1600px card it ended up most of a screen from the goal it dates.
+     A goal is a sentence, and this is about a sentence's worth of width. */
+  .task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 90ch; }
   .task-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--ok); flex-shrink: 0; }
   .task-row.done .tsk-text { text-decoration: line-through; color: var(--faint); }
   .due-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--fill); color: var(--muted); font-weight: 600; white-space: nowrap; margin-left: auto; }
