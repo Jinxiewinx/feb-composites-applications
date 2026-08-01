@@ -361,7 +361,7 @@ function renderProjTable() {
     ${rows.map(p => {
       const dd = daysUntil(p.dueDate), late = dd != null && dd < 0 && projStatus(p) !== "Done";
       const st = projStatus(p);
-      const linked = isIssue(p) ? (p.workOrderId ? `<span class="chip wo">${esc(p.workOrderId)}</span>` : "—")
+      const linked = isIssue(p) ? (p.workOrderId ? `<span class="chip">${esc(p.workOrderId)}</span>` : "—")
         : (subTickets(p).length ? `<span class="chip">${subTickets(p).length} sub-ticket${subTickets(p).length === 1 ? "" : "s"}</span>` : "—");
       return `<tr onclick="openRecord('projects','${p.id}')">
         <td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> <b>${esc(p.title || p.id)}</b>${projUnread(p) ? " 🟡" : ""}</td>

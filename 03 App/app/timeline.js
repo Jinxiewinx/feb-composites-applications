@@ -202,7 +202,7 @@ function timelineUndoBar() {
     <span class="ub-i">${icon("check", 15)}</span>
     <span class="ub-t"><b>${esc(label)}</b> · ${esc(when)} → <b>${esc(cellView(u.to) || "nothing scheduled")}</b>${u.from ? ` (was ${esc(cellView(u.from))})` : ""} — saved for everyone.</span>
     <button class="sm" onclick="undoTimelineCell()">Undo</button>
-    <button class="sm ub-x" title="Dismiss" aria-label="Dismiss" onclick="dismissTimelineUndo()">${icon("x", 14)}</button>
+    <button class="sm" title="Dismiss" aria-label="Dismiss" onclick="dismissTimelineUndo()">${icon("x", 14)}</button>
   </div>`;
 }
 
@@ -228,21 +228,21 @@ function weekColumn(w, opts) {
       return `<button class="tl-cell${val ? "" : " empty"}${now ? " now" : ""}${free ? " tl-note" : ""}"
         onclick="openAssign('${esc(w.id)}','${k}')"
         aria-label="${esc(label)}, ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}: ${val ? esc(cellView(val)) : "open"}">
-        <span class="tl-stname">${esc(label)}</span><span>${val ? cellView(val) : "open"}</span>
+        <span class="tl-stname">${esc(label)}</span><span${val ? "" : " class=\"tl-open\""}>${val ? cellView(val) : "open"}</span>
       </button>`;
     }).join("")}
   </section>`;
 }
 
 function timelineGrid(weeks, opts) {
-  return `<div class="tlgrid${opts && opts.showPast ? " showpast" : ""}" onscroll="TL_SCROLL = this.scrollLeft">
+  return `<div class="tlwrap"><div class="tlgrid${opts && opts.showPast ? " showpast" : ""}" onscroll="TL_SCROLL = this.scrollLeft; tlEdges(this)">
     <div class="tl-stations">
       <div class="tl-corner">Station</div>
       ${ALL_ROWS.map(([, label], i) =>
         `<div class="tl-strow${i === STATIONS.length ? " tl-sep" : ""}">${esc(label)}</div>`).join("")}
     </div>
     ${weeks.map(w => weekColumn(w, opts)).join("")}
-  </div>`;
+  </div></div>`;
 }
 
 function renderTimeline() {
@@ -333,4 +333,16 @@ function syncTimelineScroll() {
   if (!grid) return;
   if (TL_SCROLL != null) grid.scrollLeft = TL_SCROLL;
   else jumpToThisWeek();
+  tlEdges(grid);
+}
+/* Which edges have more behind them. Read from the element rather than from a
+   count of weeks, because "does it fit" depends on the window, the sidebar
+   rail and how long the part names happen to be. Below 900 the grid is a stack
+   of cards and never scrolls, so both come off on their own. */
+function tlEdges(grid) {
+  const wrap = grid.parentElement;
+  if (!wrap || !wrap.classList) return;
+  const max = grid.scrollWidth - grid.clientWidth;
+  wrap.classList.toggle("more-left", grid.scrollLeft > 2);
+  wrap.classList.toggle("more-right", max > 2 && grid.scrollLeft < max - 2);
 }

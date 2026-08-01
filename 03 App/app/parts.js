@@ -157,7 +157,7 @@ function partUndoBar() {
     <span class="ub-i">${icon("check", 15)}</span>
     <span class="ub-t"><b>${esc(u.name)}</b> ${esc(u.label)} → <b>${esc(u.to)}</b>${u.from ? ` (was ${esc(u.from)})` : ""} — saved for everyone.</span>
     <button class="sm" onclick="undoPartStage()">Undo</button>
-    <button class="sm ub-x" title="Dismiss" aria-label="Dismiss" onclick="dismissPartUndo()">${icon("x", 14)}</button>
+    <button class="sm" title="Dismiss" aria-label="Dismiss" onclick="dismissPartUndo()">${icon("x", 14)}</button>
   </div>`;
 }
 // Keyboard: advance one stage of the selected part by exactly one step. Routed
@@ -610,7 +610,7 @@ function renderPartDetail() {
   return `
   <section class="mddetail" aria-label="Part detail">
     <div class="toolbar no-print">
-      <button class="ib mdback" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
+      <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
       <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
       ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
       <span class="mdnav no-print">

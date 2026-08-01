@@ -113,7 +113,7 @@ function stackSvg(plan, opts) {
     });
   });
 
-  return `<svg class="stackview" viewBox="0 0 ${width} ${Math.max(120, h).toFixed(0)}" width="100%" role="img"
+  return `<svg viewBox="0 0 ${width} ${Math.max(120, h).toFixed(0)}" width="100%" role="img"
     aria-label="Exploded isometric view of the mold stack, ${layers.length} layers">
     <defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width="0.8" opacity="0.45"/>

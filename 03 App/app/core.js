@@ -637,12 +637,12 @@ function renderSidebar() {
     <div class="sb-brand" onclick="setTab('dashboard')" title="Home">${febMark(26)}<span class="sb-brand-txt">FEB <span>Composites</span></span></div>
     <div class="sb-nav">
       ${TABS.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.label)}" onclick="setTab('${t.id}')">
-        <span class="ic">${icon(t.ic, 19)}</span>${t.label}${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
+        <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
       </button>`).join("")}
     </div>
     <button class="sb-toggle no-print" title="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}"
       aria-label="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}" aria-pressed="${rail}" onclick="toggleRail()">
-      <span class="ic">${icon(rail ? "chevronRight" : "chevronLeft", 18)}</span>Collapse
+      <span class="ic">${icon(rail ? "chevronRight" : "chevronLeft", 18)}</span><span class="sb-label">Collapse</span>
     </button>`;
 }
 function renderTopbar() {
@@ -656,7 +656,7 @@ function renderTopbar() {
     <h1>${esc(view.mode === "roster" ? "Roster" : tabLabel())}</h1>
     <div class="actions">
       <button class="icon-btn" title="Search (⌘K)" aria-label="Search" onclick="openSearch()">${icon("search", 19)}</button>
-      <button class="icon-btn bell" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>
+      <button class="icon-btn" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>
       ${themeToggleBtn()}
       <span class="tb-desktop">
         <button onclick="exportAll()">Backup</button>

@@ -172,9 +172,13 @@
   .sb-toggle:hover { background: var(--sb-hover); color: #fff; }
   .sb-toggle .ic { display: inline-flex; align-items: center; justify-content: center; width: 20px; opacity: .9; }
   html.rail nav.sidebar { width: 56px; flex-basis: 56px; }
+  /* .sb-label, not `> :not(.ic)`. The nav labels used to be bare text nodes,
+     and CSS cannot select a text node — the rule matched nothing, and the rail
+     shrank to 56px with every label still painted, spilling over the content.
+     A screenshot caught it; a computed-style probe did not, because
+     getComputedStyle on a text node quietly reports the body's. */
   html.rail .sb-brand-txt,
-  html.rail .sb-item > :not(.ic):not(.dot),
-  html.rail .sb-toggle > :not(.ic) { display: none; }
+  html.rail .sb-label { display: none; }
   html.rail .sb-brand { justify-content: center; padding: 15px 0 12px; }
   html.rail .sb-item, html.rail .sb-toggle { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
   html.rail .sb-nav { padding: 6px 4px; }
@@ -715,9 +719,27 @@
     display: grid; grid-template-columns: 168px; grid-auto-columns: minmax(136px, 1fr);
     grid-auto-flow: column; grid-template-rows: auto repeat(9, minmax(40px, auto));
     overflow-x: auto; overscroll-behavior-x: contain; scroll-padding-left: 168px;
+    scrollbar-width: thin;
     background: var(--card); border: 1px solid var(--line);
     border-radius: var(--r-md); box-shadow: var(--shadow);
   }
+  /* The fade at the scrollable edge. A styled scrollbar is not enough on its
+     own: macOS hides overlay scrollbars until you actually scroll, so a season
+     wider than the window read as a grid whose last column had been cut off
+     mid-word rather than one there is more of. The .more-* classes are set
+     from the real scroll position by syncTimelineScroll(), so the fade appears
+     only on the side that has something behind it and never on a season that
+     fits. */
+  .tlwrap { position: relative; }
+  .tlwrap::before, .tlwrap::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 34px; pointer-events: none;
+    opacity: 0; transition: opacity var(--t) var(--ease); z-index: 3; border-radius: var(--r-md);
+  }
+  .tlwrap::before { left: 168px; background: linear-gradient(to right, var(--card), transparent); }
+  .tlwrap::after { right: 0; background: linear-gradient(to left, var(--card), transparent); }
+  .tlwrap.more-left::before, .tlwrap.more-right::after { opacity: 1; }
+  .tlgrid::-webkit-scrollbar { height: 10px; }
+  .tlgrid::-webkit-scrollbar-thumb { background: var(--border-2); border: 3px solid var(--card); border-radius: 999px; }
   .tl-stations, .tl-wk { display: contents; }
   /* The station rail pins while the weeks scroll past it. Needs an opaque
      background of its own or the cells slide under it. */
@@ -761,7 +783,13 @@
     cursor: pointer; transition: background var(--t-fast) var(--ease);
   }
   .tl-cell:hover { background: var(--hover); }
-  .tl-cell.empty { color: var(--faint); font-style: italic; }
+  /* An empty cell says nothing. "open" written into all 45 of them was the
+     most repeated text on the tab, and it was what set the column width. The
+     tap affordance comes back on hover instead, and the toolbar says it in
+     words once. */
+  .tl-cell.empty { color: var(--faint); }
+  .tl-cell.empty .tl-open { visibility: hidden; }
+  .tl-cell.empty:hover .tl-open, .tl-cell.empty:focus-visible .tl-open { visibility: visible; }
   .tl-note { font-style: normal; white-space: normal; font-size: 12.5px; }
   .tl-wk.retro .tl-cell, .tl-wk.retro .tl-wkhd { background: var(--retro-bg); }
   /* This week, on the one grid where "which one is now" is the whole question.
@@ -839,7 +867,21 @@
   /* hover response */
   .card { transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease); }
   table.list td, .docrow, .gitem { transition: background var(--t-fast) var(--ease); }
-  input, select, textarea { transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+  /* The BARE elements, styled — which the app was not doing. It styled
+     `.filters input`, `.field input` and `.grid .f input` and left everything
+     else to the browser, so any control outside one of those three containers
+     rendered as a UA default: the Tickets search box, the People role select,
+     the Work Orders process select, the Weekly Plan week picker. On a light
+     theme that reads as merely plain. In dark mode it is a pale grey box on a
+     near-black page, which is what a screenshot review caught.
+     Same declarations as 06 Design System/components.css, which had this right
+     all along; test_designsystem.mjs now fails when the app omits a visual
+     property the system declares, so this cannot silently come apart again. */
+  input, select, textarea {
+    font: inherit; padding: 6px 8px;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink);
+    transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
   .grid .f input:focus, .grid .f select:focus, .field input:focus, .field select:focus,
   .filters input:focus, .filters select:focus, .login .f input:focus, textarea:focus,
   table.sub input:focus, table.sub select:focus, .tlgrid input:focus, .tlgrid select:focus {
@@ -1085,6 +1127,13 @@
        index and the part share it. On a phone the index IS the other screen and
        already carries them, so here they only push the record down 110px. */
     .pstats.compact { display: none; }
+    /* Four at-a-glance tiles at a 70px floor still fit on one line at 393, so
+       they each get about 84px — and "PURCHASES" at 11px uppercase is wider
+       than that, so its last letter crossed the tile's border and "WORK
+       ORDERS" broke onto two lines while its neighbours stayed on one. Two up,
+       two down, with a floor that cannot be beaten by a long word. */
+    .gitem { min-width: calc(50% - 5px); }
+    .gitem .gl { overflow-wrap: anywhere; }
   }
 
   /* Touch devices get larger tap targets regardless of width. */

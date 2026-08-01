@@ -144,10 +144,10 @@ export const weekPlanPatch = (weekId) => ({
   doneTickets: [],
   cars: [
     {
-      id: "CAR1", driver: "arivera@berkeley.edu", day: "Sat", time: "9:00 AM", seats: 4,
+      id: "CAR1", driver: "arivera@berkeley.edu", day: "Sat", time: "9:00 AM", capacity: 4,
       passengers: ["dchen@berkeley.edu", "mokafor@berkeley.edu", "njepsen@berkeley.edu"],
     },
-    { id: "CAR2", driver: "njepsen@berkeley.edu", day: "Sun", time: "10:00 AM", seats: 3, passengers: [] },
+    { id: "CAR2", driver: "njepsen@berkeley.edu", day: "Sun", time: "10:00 AM", capacity: 3, passengers: [] },
   ],
   weekId,
 });

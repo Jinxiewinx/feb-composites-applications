@@ -25,6 +25,7 @@
  *   --tab <id>     which tab to shoot, or "all" for every tab, list state only
  *                                              (default parts)
  *   --id <recId>   which record for the detail states     (default first row)
+ *   --rail 1       shoot with the sidebar collapsed to its icon rail
  *   --width <n>    shoot one width instead of all three
  *   --theme <t>    light | dark, instead of both
  *
@@ -195,6 +196,13 @@ for (const vp of widths) {
        afterwards would work too, but it wouldn't photograph the first paint,
        which is the one a user sees. */
     await ctx.addInitScript(`try { localStorage.setItem("feb-theme", ${JSON.stringify(theme)}); } catch (e) {}`);
+    /* The collapsed sidebar is a persisted preference, so it is set the same
+       way the theme is — before the document exists, because the no-FOUC
+       script in index.html reads it inside <head>. Without this the rail is
+       the one piece of chrome no screenshot can show. */
+    if (arg("rail", "") === "1") {
+      await ctx.addInitScript(`try { localStorage.setItem("feb-rail", "1"); } catch (e) {}`);
+    }
     if (arg("inset", "none") !== "none") {
       await ctx.addInitScript(`
         addEventListener("DOMContentLoaded", () => {

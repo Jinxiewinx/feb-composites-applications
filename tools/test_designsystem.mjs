@@ -22,7 +22,7 @@
  * 06 Design System/README.md.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -189,7 +189,13 @@ function topLevelRules(css) {
       const c = d.indexOf(":");
       if (c > 0) decls[d.slice(0, c).trim()] = d.slice(c + 1).trim().replace(/\s+/g, " ");
     }
-    if (sel && Object.keys(decls).length) rules.set(sel, decls);
+    /* MERGED, not replaced. A selector can appear more than once — the app
+       declares .chip, .col and .pcard in its component block and again in the
+       polish block below it — and the cascade means the effective style is
+       the union, later properties winning. Keeping only the last occurrence
+       reported the polish block's three declarations as the whole rule and
+       claimed the app had dropped everything else. */
+    if (sel && Object.keys(decls).length) rules.set(sel, { ...(rules.get(sel) || {}), ...decls });
     i = end + 1;
   }
   return rules;
@@ -228,7 +234,20 @@ for (const [dsSel, dsDecls] of dsRules) {
   if (!appDecls) continue;         // not lifted into the app under this name
   compared++;
   for (const prop of VISUAL) {
-    if (!(prop in dsDecls) || !(prop in appDecls)) continue;
+    if (!(prop in dsDecls)) continue;
+    /* Absent in the app is drift too, and the quiet kind. When 06 styles a
+       bare `input` and the app does not, the control renders as a browser
+       default — plain in light mode, and a pale grey box on a near-black page
+       in dark. Comparing only properties present in BOTH files misses exactly
+       that, which is how it went unnoticed until someone looked at a
+       screenshot. Layout properties are exempt: `padding` on a portable
+       component is advice, not contract, and the app legitimately overrides it
+       per context. */
+    if (!(prop in appDecls)) {
+      if (prop === "padding") continue;
+      drift.push(`${appSel} { ${prop} } — 06: ${dsDecls[prop]} / app: not set`);
+      continue;
+    }
     /* The app wraps a value in max()/calc() with a --sa-* inset where 06 has
        a plain number. That is not drift: 06 has no notch to clear and says so
        by omission, and the app's four safe-area tokens are already an
@@ -292,6 +311,42 @@ if (VERBOSE) {
   }
   ok("literals: no colour duplicates a token", badColor.length === 0,
     [...new Set(badColor)].join(", "));
+}
+
+/* ------------------------------------------------------------- phantoms --
+   A class in the markup that no stylesheet defines. It is invisible in every
+   other way: no error, no warning, the element just renders unstyled and the
+   distinction it was meant to draw silently does not exist. Found because a
+   screenshot review noticed the Weekly Plan's "car is full" pill looked
+   identical to the "seats left" one — .pill-amber and .pill-slate had never
+   been defined anywhere.
+
+   Only static class attributes are scanned. A class assembled at runtime
+   (`class="${x ? "a" : "b"}"`) is skipped rather than guessed at, so this
+   under-reports and never cries wolf. */
+{
+  const appDir = join(ROOT, "03 App", "app");
+  const files = readdirSync(appDir).filter(f => f.endsWith(".js"));
+  const defined = new Set();
+  for (const css of [appCss, compCss, readFileSync(join(appDir, "print.css"), "utf8")]) {
+    for (const m of stripComments(css).matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(m[1]);
+  }
+  /* Set by JS rather than written in a class attribute, so they never appear
+     in a stylesheet's selector list by the name the code uses. */
+  const RUNTIME = new Set(["no-print"]);
+  const phantom = new Map();
+  for (const f of files) {
+    const src = readFileSync(join(appDir, f), "utf8");
+    for (const m of src.matchAll(/class="([^"$<>]*)"/g)) {
+      for (const cls of m[1].split(/\s+/).filter(Boolean)) {
+        if (!defined.has(cls) && !RUNTIME.has(cls)) {
+          if (!phantom.has(cls)) phantom.set(cls, f);
+        }
+      }
+    }
+  }
+  ok(`markup: every class is defined somewhere`, phantom.size === 0,
+    [...phantom].map(([c, f]) => `.${c} (${f})`).join(", "));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

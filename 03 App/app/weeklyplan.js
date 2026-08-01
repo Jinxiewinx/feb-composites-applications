@@ -223,14 +223,22 @@ function removePassenger(weekId, carId, email) {
 }
 
 function carCardHtml(week, car) {
-  const openSeats = car.capacity - car.passengers.length;
-  const fillCls = openSeats <= 0 ? "pill-amber" : "pill-slate";
+  /* Defend against a car written without a capacity. This is a live shared
+     database with no schema enforcement, and a partial write used to render
+     the literal string "3 of undefined spots filled" on everyone's screen. */
+  const capacity = Number.isFinite(+car.capacity) ? +car.capacity : car.passengers.length;
+  const openSeats = capacity - car.passengers.length;
+  /* .warn, not the .pill-amber / .pill-slate this used to name — neither has
+     ever been defined in any stylesheet, so a full car and a half-empty one
+     looked identical. tools/test_designsystem.mjs now fails on a class the
+     markup uses and nothing defines. */
+  const fillCls = openSeats <= 0 ? "warn" : "";
   return `<div class="carcard">
     <div class="carcard-hd">
       ${avatar(car.driver, 22)}
       <b>${esc(userName(car.driver))}'s car</b>
       <span class="chip">${esc(car.day)} · ${esc(car.time)}</span>
-      <span class="pill ${fillCls}" style="margin-left:auto">${car.passengers.length} of ${car.capacity} spot${car.capacity === 1 ? "" : "s"} filled</span>
+      <span class="pill ${fillCls}" style="margin-left:auto">${car.passengers.length} of ${capacity} spot${capacity === 1 ? "" : "s"} filled</span>
       <button class="ib no-print" title="Delete car" onclick="delCar('${week.id}','${car.id}')">${icon("trash", 12)}</button>
     </div>
     <div class="carcard-seats">
