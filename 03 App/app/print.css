@@ -153,6 +153,14 @@ tr.blk td.seq {
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 
+/* A hold prints as an instruction with blanks in it, not as a warning: by the
+   time this sheet is on the bench the wait is just part of the job. Lighter
+   than .blkflag on purpose — a blocker is someone withholding a signature, a
+   hold is the clock, and the sheet shouldn't shout the same way about both.
+   Wraps, unlike the nowrap flags above, because the resin name plus two
+   timestamps is longer than a step title. */
+.holdflag { font-size: 7pt; letter-spacing: .02em; margin-top: 1pt; }
+
 /* Recorded buy-off: printed small so a correction can be written beside it. */
 .ws-t .signed { font-size: 8pt; }
 .ws-t .signed .nm { font-weight: 700; }

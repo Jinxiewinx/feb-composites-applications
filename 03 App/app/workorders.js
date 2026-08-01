@@ -12,32 +12,53 @@ const BLOCKER_WORDS = ["frozen", "design review", "drop test", "acceptance crite
 /* Step titles are what someone reads at the bench with gloves on, so they stay
    short and plain. Standard numbers used to be baked into every title; they made
    the printed sheet dense and hard to scan, and the standards themselves live in
-   the Documents tab. Note that BLOCKER_WORDS matches on these titles, so keep the
-   words "frozen", "design review", "drop test" and "acceptance criterion". */
+   the Documents tab.
+
+   The second slot on each entry is the step's RULE — what the app enforces
+   about it. It was a vestigial one-element array left over from when the CS ref
+   lived there; the rule goes in an object instead of back into the title, and
+   tools/test_app.mjs asserts no title ever contains "CS-" again.
+
+     { kind: "blocker" }             nobody signs a later step until this is signed
+     { kind: "hold", from: "resin" } a wait, as long as the recorded resin needs
+     { kind: "hold", hours: 4 }      a wait of a fixed length (nothing uses this
+                                     yet; Ure-Bond's 4 h clamp is the next one)
+
+   BLOCKER_WORDS still matches on titles as well, and has to: the 26 retro work
+   orders and every record already in Firestore predate the rule field, so
+   title-matching is the only thing enforcing on them. New templates carry both
+   and the two agree. */
 const STD_STEPS = {
   MoldInfusion: [
-    ["Stack frozen"], ["Mold design review"],
+    ["Stack frozen", { kind: "blocker" }], ["Mold design review", { kind: "blocker" }],
     ["Glue mold stock"], ["Machine mold"],
     ["Seal and release mold"], ["Dry stack and bag"],
-    ["Drop test, 1 inHg or less over 10 min"], ["Infuse"],
-    ["Cure and demould"], ["Trim and finish"]],
+    ["Drop test, 1 inHg or less over 10 min", { kind: "blocker" }], ["Infuse", { kind: "startsHold" }],
+    ["Cure and demould", { kind: "hold", from: "resin" }], ["Trim and finish"]],
   GlassInfusion: [
-    ["Stack frozen"], ["Prepare plate and release"],
-    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min"],
-    ["Infuse"], ["Cure and demould"],
+    ["Stack frozen", { kind: "blocker" }], ["Prepare plate and release"],
+    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min", { kind: "blocker" }],
+    ["Infuse", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Cut to DXF, confirm revision"], ["Finish"]],
   MoldWetLay: [
-    ["Stack frozen"], ["Mold design review"],
+    ["Stack frozen", { kind: "blocker" }], ["Mold design review", { kind: "blocker" }],
     ["Glue and machine mold"], ["Seal and release mold"],
-    ["Wet layup and bag"], ["Cure and demould"],
+    ["Wet layup and bag", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
   FoamWrapped: [
-    ["Stack frozen"], ["Shape foam core"],
-    ["Wet layup over core"], ["Cure"],
+    ["Stack frozen", { kind: "blocker" }], ["Shape foam core"],
+    ["Wet layup over core", { kind: "startsHold" }], ["Cure", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
-  Other: [["Define acceptance criterion: target and method, set before work starts"],
+  Other: [["Define acceptance criterion: target and method, set before work starts", { kind: "blocker" }],
           ["Execute"], ["Verify against criterion"]],
 };
+// One place that turns a template row into a stored step, so newWO() and
+// resetSteps() can't drift apart on what a fresh step looks like.
+function stepFromTemplate(row, i) {
+  const s = { seq: i + 1, title: row[0], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] };
+  if (row[1]) s.rule = row[1];
+  return s;
+}
 
 /* Retro work orders and anything already saved carry standard numbers, both in
    step titles ("Stack frozen (CS-002 §7.2)") and loose in notes and event-log
@@ -66,7 +87,7 @@ async function newWO() {
     createdDate: today(), dueDate: "", partId: "",
     mold: { moldId: "", layers: "", density: "", sealingType: "XCR", location: "" },
     layupStack: [], stackNote: "", bom: [], standardsRefs: [],
-    steps: STD_STEPS.MoldInfusion.map((s, i) => ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] })),
+    steps: STD_STEPS.MoldInfusion.map(stepFromTemplate),
     qualityChecks: [{ criterion: "mass", target: "", actual: "", pass: null }],
     weightTargetG: null, weightActualG: null, timeline: [], notes: "", retro: false,
     createdBy: myEmail(),
@@ -81,8 +102,7 @@ function resetSteps(wo) {
   const signed = (wo.steps || []).filter(isSigned).length;
   confirmModal("Replace steps with the standard list for " + wo.processType + "?" +
     (signed ? " This erases " + signed + " recorded buy-off(s) from the team database. There is no undo." : ""), () => {
-    wo.steps = (STD_STEPS[wo.processType] || STD_STEPS.Other).map((s, i) =>
-      ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "", photoRefs: [] }));
+    wo.steps = (STD_STEPS[wo.processType] || STD_STEPS.Other).map(stepFromTemplate);
     saveWO(wo, "steps"); render();
   });
 }
@@ -95,7 +115,93 @@ function delWO(id) {
   });
 }
 
-function isBlocker(step) { const t = step.title.toLowerCase(); return BLOCKER_WORDS.some(g => t.includes(g)); }
+/* Two ways to be a blocker, and both have to keep working. The rule field is
+   how new templates say it. The title match is how every record already saved
+   says it, including all 26 retro work orders — those predate the field, so
+   dropping the title path would silently stop enforcing on the entire existing
+   database. */
+function stepRule(s) { return (s && s.rule) || null; }
+function isBlocker(step) {
+  if (stepRule(step) && step.rule.kind === "blocker") return true;
+  const t = String(step.title || "").toLowerCase();
+  return BLOCKER_WORDS.some(g => t.includes(g));
+}
+function isHoldStep(s) { return !!(stepRule(s) && s.rule.kind === "hold"); }
+function startsHold(s) { return !!(stepRule(s) && s.rule.kind === "startsHold"); }
+
+/* ---------- cure holds ----------
+   A hold step waits on the clock started by the step before it. That is a
+   deliberate non-generalisation: in all four templates the cure directly
+   follows the thing that starts it (Infuse, Wet layup and bag, Wet layup over
+   core), so a `dependsOn` graph would be four pointers all saying "the previous
+   one". If a template ever needs to skip a step, this is where to add it.
+
+   Returns null when there is nothing to enforce, which covers: not a hold step,
+   a retro record, and a hold whose clock was never started (nobody has signed
+   the step before it, so the existing blocker/sequence rules are what stop you
+   — not this). */
+function holdState(wo, idx) {
+  const s = (wo.steps || [])[idx];
+  if (!s || !isHoldStep(s)) return null;
+  if (wo.retro) return null; // historical records document, they don't enforce
+  const prev = (wo.steps || [])[idx - 1];
+  const cure = prev && prev.cure;
+  if (!cure || !cure.startedAt) return null;
+  const resin = resinById(cure.resin);
+  const hours = resinHoldHours(cure.resin);
+  if (!(hours > 0)) return null; // unknown resin: nothing defensible to enforce
+  const left = msLeft(cure.startedAt, hours);
+  return {
+    resin, resinId: cure.resin, hours,
+    startedAt: cure.startedAt, tempC: cure.tempC ?? null,
+    readyAt: fmtReadyAt(cure.startedAt, hours),
+    msLeft: left, ready: left == null || left <= 0,
+    overridden: !!s.holdOverride, override: s.holdOverride || null,
+  };
+}
+// Is the shop colder than the temperature this hold's number is quoted at?
+// Reported, never used to change the number — see the plan and CS-008 §7.5.
+function holdIsCold(h) {
+  return !!(h && h.tempC != null && h.resin && h.tempC < h.resin.refTempC);
+}
+
+/* The waiting notice. Amber `.gate` with ⚠, not the red `.gate.blocked`: the
+   app's glyph convention is ! advisory, ⚠ can't-yet, ✕ hard blocked, and a cure
+   that hasn't finished is the process working, not something gone wrong.
+
+   No standard reference and no datasheet figure in here on purpose. Every step
+   row carrying a citation is what made the old sheet unreadable; the numbers
+   and the PDF are one tap away behind "why". */
+function holdBanner(h, i) {
+  const cold = holdIsCold(h);
+  return `<p class="gate"><span class="gi">⚠</span><span>
+    Curing until <b>${esc(h.readyAt)}</b> · ${esc(fmtLeft(h.msLeft))}<br>
+    ${h.resin ? esc(h.resin.label) : "resin not recorded"}${h.tempC != null ? ` · ${esc(String(h.tempC))} °C` : ""}
+    ${cold ? `<br>Colder than this number assumes, so it will run long. Test the flange, not the clock.` : ""}
+    ${h.resin ? ` <button class="link no-print" onclick="openWhyHold(${i})">why ${h.resin.febHoldH} h?</button>` : ""}
+  </span></p>`;
+}
+// One line on the step that started the clock, so the record reads back without
+// opening anything: what was mixed, when, and how cold the shop was.
+function cureSummary(c) {
+  const r = resinById(c.resin);
+  return (r ? r.label : c.resin || "resin not recorded")
+    + " · finished " + fmtWhen(c.startedAt)
+    + (c.tempC != null ? " · " + c.tempC + " °C" : "");
+}
+
+/* A countdown painted once is wrong a minute later, and a work order left open
+   on the bench laptop is the normal case. One interval, armed only while a hold
+   banner is actually on screen, and it stops itself the moment one isn't.
+   Guarded for the DOM stub in tools/test_app.mjs, same idiom as core.js's
+   syncChromeMetrics(). */
+let HOLD_TICK = null;
+function syncHoldTick() {
+  if (typeof document.querySelector !== "function" || typeof setInterval !== "function") return;
+  const live = !!document.querySelector("#main .step .gate");
+  if (live && !HOLD_TICK) HOLD_TICK = setInterval(() => render(), 60000);
+  else if (!live && HOLD_TICK) { clearInterval(HOLD_TICK); HOLD_TICK = null; }
+}
 function isSigned(s) { return !!(s.buyoff && s.buyoff.name && !/not recorded/i.test(s.buyoff.name)); }
 function stepState(s) {
   const st = (s.status || "").toLowerCase();
@@ -225,7 +331,7 @@ function renderWODetail() {
         : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
-    <h3 id="wo-steps">Steps and buy-offs (blockers shaded: no sign-off, no moving on)</h3>
+    <h3 id="wo-steps">Steps and buy-offs (shaded: no sign-off, no moving on. A hold waits on the clock instead)</h3>
     ${(() => {
       // The first not-done, not-failed step is the one to act on right now —
       // computed from existing state (open/done/failed), not a new status
@@ -237,10 +343,17 @@ function renderWODetail() {
       const blocker = isBlocker(s);
       const state = stepState(s);
       const blocked = blockerOpenBefore(wo, i);
-      return `<div class="step ${blocker ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${i === nextIdx ? "upnext" : ""}">
+      const hold = holdState(wo, i);
+      // Waiting on a clock reads like waiting on a signature, because to the
+      // person standing there it is the same thing: this step is not yours yet.
+      const held = !!hold && !hold.ready && !hold.overridden && state !== "done" && state !== "failed";
+      return `<div class="step ${blocker || held ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${i === nextIdx ? "upnext" : ""}">
         <div class="num">${s.seq}</div>
         <div class="body">
-          <div>${esc(stripCS(s.title))} ${blocker ? '<span class="step-badge">blocker</span>' : ""}</div>
+          <div>${esc(stripCS(s.title))} ${blocker ? '<span class="step-badge">blocker</span>' : ""}${hold && state !== "done" ? ` <span class="step-badge">hold ${hold.hours} h</span>` : ""}</div>
+          ${held ? holdBanner(hold, i) : ""}
+          ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
+          ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
           ${E ? `<div class="meta no-print"><input style="width:90%" placeholder="notes / photo filenames" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)"></div>` : ""}
           ${(s.photoRefs || []).length ? `<div class="meta">photos: ${s.photoRefs.map(p => esc(p.filename || p)).join(", ")}</div>` : ""}
@@ -253,7 +366,9 @@ function renderWODetail() {
                 ? `<span class="ok">✔ ${esc(s.buyoff.name)} ${esc(s.buyoff.date || "")}</span>`
                 : `<span class="muted">done, buy-off not recorded (retro)</span>`)
               : (wo.retro ? `<span class="muted">${esc(s.status || "open")}</span>`
-                : `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
+                : held && !isLead()
+                  ? `<button disabled title="curing — ${esc(fmtLeft(hold.msLeft))}">buy off as ${esc(signerName())}</button>`
+                  : `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
       </div>`;
       }).join("");
@@ -311,6 +426,157 @@ function ub(i, k, v) { woById(view.id).bom[i][k] = v; saveWO(woById(view.id), "b
 function uq(i, k, v) { woById(view.id).qualityChecks[i][k] = v; saveWO(woById(view.id), "qualityChecks"); render(); }
 function ut(i, k, v) { woById(view.id).timeline[i][k] = v; saveWO(woById(view.id), "timeline"); }
 function us(i, k, v) { const w = woById(view.id); w.steps[i][k] = v; saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], [k]: v }; return steps; }); }
+/* ---------- the cure modals ----------
+   Buying off the step that starts a cure asks what went in and when, because
+   that is the one moment somebody is standing at the part with the answer. The
+   time defaults to now and is editable: people write the traveller up after the
+   fact, and a start time that lies makes the hold lie. */
+function openCureModal(i) {
+  const w = woById(view.id);
+  const s = w.steps[i];
+  const now = new Date();
+  const hhmm = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+  const prior = s.cure || {};
+  openModal(`
+    <h2>Buy off: ${esc(stripCS(s.title))}</h2>
+    <p class="muted">What went in, and when it finished. This starts the cure hold on the next step.</p>
+    <div class="field"><label for="cure-resin">Resin mixed</label>
+      <select id="cure-resin" autofocus onchange="cureModalPreview()">
+        ${RESINS.map(r => `<option value="${esc(r.id)}" ${prior.resin === r.id ? "selected" : ""}>${esc(r.label)} — ${esc(r.use)}</option>`).join("")}
+        <option value="" ${prior.resin === "" ? "selected" : ""}>Something else / not recorded</option>
+      </select>
+    </div>
+    <div class="field row2">
+      <div><label for="cure-date">Finished on</label><input id="cure-date" type="date" value="${esc((prior.startedAt || "").slice(0, 10) || today())}" onchange="cureModalPreview()"></div>
+      <div><label for="cure-time">at</label><input id="cure-time" type="time" value="${esc((prior.startedAt || "").slice(11, 16) || hhmm)}" onchange="cureModalPreview()"></div>
+    </div>
+    <div class="field"><label for="cure-temp">Shop temperature, °C (optional)</label>
+      <input id="cure-temp" type="number" inputmode="numeric" placeholder="e.g. 18" value="${prior.tempC ?? ""}" onchange="cureModalPreview()">
+    </div>
+    <div id="cure-preview"></div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitCure(${i})">Sign as ${esc(signerName())}</button>
+    </div>
+  `);
+  cureModalPreview();
+}
+/* Live line under the form. It exists so nobody discovers the length of the
+   hold they just started by coming back the next morning and finding the step
+   still locked. */
+function cureModalPreview() {
+  const box = document.getElementById("cure-preview");
+  if (!box) return;
+  const id = (document.getElementById("cure-resin") || {}).value || "";
+  const r = resinById(id);
+  const tempRaw = (document.getElementById("cure-temp") || {}).value;
+  const temp = tempRaw === "" || tempRaw == null ? null : Number(tempRaw);
+  if (!r) {
+    box.innerHTML = `<p class="gate"><span class="gi">!</span><span>No resin recorded means no cure hold on the next step. Write what you used into the step notes so the record is still honest.</span></p>`;
+    return;
+  }
+  const cold = temp != null && !isNaN(temp) && temp < r.refTempC;
+  box.innerHTML = `
+    <p class="gate"><span class="gi">${cold ? "⚠" : "!"}</span><span>
+      Sets a <b>${r.febHoldH} h</b> hold on the next step.
+      ${cold ? `At ${esc(String(temp))} °C the shop is below the ${r.refTempC} °C this number is quoted at, so the part will cure slower than the clock suggests. Fingernail-test the flange before you trust it.`
+             : `The datasheet asks for ${esc(r.sheetSays)}.`}
+    </span></p>`;
+}
+function submitCure(i) {
+  const id = (document.getElementById("cure-resin") || {}).value || "";
+  const date = (document.getElementById("cure-date") || {}).value || today();
+  const time = (document.getElementById("cure-time") || {}).value || "00:00";
+  const tempRaw = (document.getElementById("cure-temp") || {}).value;
+  const startedAt = new Date(date + "T" + time).toISOString();
+  const cure = { resin: id, startedAt };
+  if (tempRaw !== "" && tempRaw != null && !isNaN(Number(tempRaw))) cure.tempC = Number(tempRaw);
+  closeModal();
+  signStep(i, { cure });
+}
+
+/* Why this many hours. The step row deliberately carries no standard reference
+   and no datasheet figure — that was making every row a wall of citation — so
+   the traceability CS-000 §8 wants lives one tap in, next to the button that
+   opens the actual PDF. */
+function openWhyHold(i) {
+  const w = woById(view.id);
+  const h = holdState(w, i);
+  if (!h || !h.resin) return;
+  const r = h.resin;
+  openModal(`
+    <h2>Why ${r.febHoldH} hours?</h2>
+    <div class="field"><label>Resin</label><div class="ro">${esc(r.label)}</div></div>
+    <div class="field"><label>Datasheet</label><div class="ro">${esc(r.sheetSays)}</div></div>
+    <div class="field"><label>FEB holds it</label><div class="ro">${r.febHoldH} h — longer than the datasheet asks for, on purpose.</div></div>
+    ${h.tempC != null ? `<div class="field"><label>Shop temperature recorded</label><div class="ro">${esc(String(h.tempC))} °C${holdIsCold(h) ? ` — below the ${r.refTempC} °C the datasheet number is quoted at` : ""}</div></div>` : ""}
+    <div class="foot">
+      <button onclick="closeModal()">Close</button>
+      <button class="primary" onclick="closeModal();openDatasheet('${esc(r.doc)}')">Open the datasheet</button>
+    </div>
+  `);
+}
+/* Documents owns the PDF viewer, and its manifest is fetched lazily the first
+   time that tab renders. Jumping straight to openDocument() from here finds an
+   empty manifest and shows nothing, so: switch tabs first, let the load happen,
+   then open. */
+function openDatasheet(src) {
+  setTab("documents");
+  // Documents fetches its manifest lazily on first render of that tab. setTab()
+  // triggers that render, but the fetch resolves a tick later, so poll briefly
+  // rather than calling openDocument() into an empty manifest and showing
+  // nothing. Bounded, so a failed fetch gives up instead of spinning.
+  if (typeof loadManifest === "function") loadManifest();
+  const tryOpen = (n) => {
+    if (typeof DOCS_MANIFEST !== "undefined" && (DOCS_MANIFEST || []).length) { openDocument(src); return; }
+    if (n > 0) setTimeout(() => tryOpen(n - 1), 120);
+  };
+  tryOpen(12);
+}
+
+/* Overriding a hold is a lead call, and it costs a sentence. An unlogged
+   override is worth nothing to the next person reading the record, and a hold
+   nobody can ever pass just gets worked around outside the app — which is
+   worse, because then it isn't written down anywhere. */
+function openHoldOverride(i) {
+  const w = woById(view.id);
+  const h = holdState(w, i);
+  if (!h) return;
+  const short = Math.max(1, Math.ceil(h.msLeft / 3600000));
+  openModal(`
+    <h2>Demould early?</h2>
+    <p class="gate"><span class="gi">✕</span><span><b>${short} h of a ${h.hours} h hold remain.</b> ${h.resin ? esc(h.resin.label) : ""}${holdIsCold(h) ? ` — and at ${esc(String(h.tempC))} °C it is curing slower than that clock, not faster` : ""}.</span></p>
+    <div class="field"><label for="hold-why">Why are you demoulding early?</label>
+      <textarea id="hold-why" autofocus rows="3" placeholder="What you checked, and who accepted the risk"></textarea>
+    </div>
+    <p class="muted">This goes in the event log with your name, the time, and how short it was.</p>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="submitHoldOverride(${i})">Override anyway</button>
+    </div>
+  `);
+}
+function submitHoldOverride(i) {
+  const el = document.getElementById("hold-why");
+  const why = (el ? el.value : "").trim();
+  if (!why) { toast("An override needs a reason. That's the whole point of it.", "error"); return; }
+  const w = woById(view.id);
+  const h = holdState(w, i);
+  if (!h) { closeModal(); return; }
+  const short = Math.max(1, Math.ceil(h.msLeft / 3600000));
+  closeModal();
+  const ov = { by: signerName(), email: myEmail(), at: new Date().toISOString(), hoursShort: short, reason: why };
+  // The event log is where a WO records things that happened to it, so the
+  // override lands there rather than in a store invented for it.
+  w.timeline = w.timeline || [];
+  w.timeline.push({
+    date: today(),
+    note: `Cure hold overridden by ${ov.by} with ${short} h of ${h.hours} remaining. Reason: ${why}`,
+  });
+  saveWO(w, "timeline");
+  signStep(i, { holdOverride: ov });
+}
+
 async function buyoff(i) {
   const w = woById(view.id);
   const blocked = blockerOpenBefore(w, i);
@@ -320,13 +586,37 @@ async function buyoff(i) {
       myEmail() === w.createdBy &&
       !await confirmAsync("You created this work order. A design review should be signed off by someone else. Sign it anyway?",
         { title: "Self-review", ok: "Sign it anyway" })) return;
+  // Starting a cure: ask what and when before signing. signStep() does the write.
+  if (startsHold(w.steps[i]) && !w.retro) { openCureModal(i); return; }
+  /* A hold is re-checked here and not just at render, so a step that came ready
+     while the page sat open signs without a refresh. The countdown on screen
+     can be a minute stale; this cannot. */
+  const h = holdState(w, i);
+  if (h && !h.ready && !h.overridden) {
+    if (!isLead()) {
+      toast(`Still curing — ${fmtLeft(h.msLeft)}. A lead can override if it really can't wait.`, "error");
+      return;
+    }
+    openHoldOverride(i);
+    return;
+  }
+  signStep(i);
+}
+
+/* The actual write, shared by the plain path and by both modals. Extra fields
+   are merged onto the step in the same transactional re-apply as the buy-off,
+   so a teammate signing a different step at the same moment can't erase them
+   and a cure record can't land without its signature. */
+function signStep(i, extra) {
+  const w = woById(view.id);
   const bo = {
     name: signerName(), email: fb.user.email, uid: fb.user.uid,
     date: today(), time: new Date().toISOString(),
   };
-  w.steps[i].buyoff = bo; w.steps[i].status = "done"; // optimistic local
+  const patch = { buyoff: bo, status: "done", ...(extra || {}) };
+  Object.assign(w.steps[i], patch); // optimistic local
   // Concurrency-safe: re-apply just this step on fresh server data so a
   // teammate buying off a different step at the same moment can't erase it.
-  saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], buyoff: bo, status: "done" }; return steps; });
+  saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], ...patch }; return steps; });
   render();
 }

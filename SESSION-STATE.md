@@ -10,10 +10,44 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-01
-Status: **Timeline dates fixed.** 234 app / 23 design-system / 988 app-UI / 34
+Status: **Cure holds landed.** 247 app / 23 design-system / 988 app-UI / 34
 slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Cure holds on work-order steps (2026-08-01)
+
+Steps now carry a typed `rule` object: `{kind:"blocker"}`, `{kind:"startsHold"}`,
+`{kind:"hold", from:"resin"}`. A hold reads the clock off the *previous* step's
+`cure` record (resin, startedAt, tempC), captured in a modal when that step is
+bought off. Locked until it elapses; lead override needs a typed reason and
+writes one line into `wo.timeline`.
+
+`isBlocker()` deliberately keeps the old `BLOCKER_WORDS` title match alongside
+the rule field. Every record already in Firestore and all 26 retro work orders
+predate the field, so dropping the title path would stop enforcing on the whole
+existing database.
+
+**The numbers are not the ones Simon first gave.** He asked for West 105 = 24 h
+and IN2 = 48 h. The datasheets say IN2 + AT30 SLOW demoulds at 18–24 h @25 °C
+(48 h appears nowhere; ≥14 days is full mechanical properties) and West
+publishes no demould figure at all, only "cure to a solid, thin film 10–15 h
+@72 °F" for 105+206. His numbers are *longer* than the datasheets, so they
+survive as a deliberate FEB margin. `03 App/app/resins.js` holds both per resin
+and the UI never presents one as the other. **Four of the six FEB holds are
+marked PENDING in that file** — extrapolated, needing his sign-off: IN2 FAST,
+105+205, 105+209, XCR.
+
+Temperature is recorded and displayed, never computed with. The team cures
+ambient with no oven, and no coefficient in this repo would justify the
+arithmetic.
+
+Traps: `.step` is a flex row, and on a 393px phone the buy-off button took half
+the width and squeezed the notice to two words per line — fixed with a wrap in
+the 640px block. The Documents manifest is fetched lazily, so `openDocument()`
+straight from a work order finds an empty manifest; `openDatasheet()` switches
+tab, calls `loadManifest()` and polls briefly. The design system needed no
+change at all: the notice reuses `.gate` and `.step-badge`.
 
 ## Timeline: "+ Add week" did nothing (2026-08-01)
 

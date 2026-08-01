@@ -1109,6 +1109,17 @@
        isn't used here; a card tap opens it. */
     .board { grid-auto-flow: row; grid-template-columns: 1fr; }
 
+    /* A step is number | body | buy-off across a desktop row. On a phone the
+       button was taking half the 393px and leaving the body a ~110px column,
+       which is fine for "Trim and finish" and unreadable for anything with a
+       sentence in it — a cure hold notice came out two words per line, twenty
+       lines tall. Wrap the button underneath instead, indented past the number
+       so it still reads as belonging to that step. */
+    .step { flex-wrap: wrap; }
+    .step .body { flex: 1 1 100%; min-width: 0; }
+    .step .buyoff { flex: 1 1 100%; margin-left: 32px; }
+    .step .buyoff button { width: 100%; justify-content: center; }
+
     /* Modals: single-column two-up rows, tighter padding on a small screen. */
     /* Tighter, but never at the cost of the insets — this shorthand used to
        reset them and put the search field under the island. */
@@ -1273,6 +1284,7 @@
         integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
+<script src="resins.js"></script>
 <script src="workorders.js"></script>
 <script src="parts.js"></script>
 <script src="projects.js"></script>

@@ -86,14 +86,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "resins.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|RESINS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -149,6 +149,150 @@ await t("blocker gets a real badge (not bold text), and the first actionable ste
   assert(!stepDivs[0].includes("upnext"), "step 1 is already done, not up-next: " + stepDivs[0]);
   assert(stepDivs[1].includes("blocker") && stepDivs[1].includes("upnext"), "step 2 is both the blocker and the up-next step: " + stepDivs[1]);
   assert(!stepDivs[2].includes("upnext"), "step 3 isn't reached yet: " + stepDivs[2]);
+});
+/* ---- cure holds ---------------------------------------------------------
+   A work order step used to be a checkbox, so "Cure and demould" could be
+   signed ten minutes after "Infuse" and the record looked clean. These cover
+   the clock, the block, the override, and the one thing that must never
+   happen: the app enforcing a hold shorter than the manufacturer asks for. */
+function holdWO(id, hoursAgo, resin, extra) {
+  return {
+    id, partName: "HOLD TEST", subteam: "AERO", processType: "MoldInfusion",
+    revision: "A", status: "InWork", bom: [], qualityChecks: [], timeline: [],
+    steps: [
+      { seq: 1, title: "Infuse", status: "done", rule: { kind: "startsHold" },
+        buyoff: { name: "Simon", date: "2026-08-01" },
+        cure: { resin, startedAt: new Date(Date.now() - hoursAgo * 3600000).toISOString(), ...(extra || {}) } },
+      { seq: 2, title: "Cure and demould", status: "open", rule: { kind: "hold", from: "resin" }, buyoff: { name: "", date: "" } },
+    ],
+  };
+}
+function openHoldWO(wo) {
+  DB.workOrders = DB.workOrders.concat([wo]);
+  view = { ...view, tab: "workorders", mode: "detail", id: wo.id, edit: false };
+  render();
+}
+await t("the resin table never enforces less than the datasheet says", () => {
+  // A FEB hold below the datasheet figure would be the app contradicting the
+  // manufacturer, which is worse than not enforcing at all. Data, so a future
+  // edit to resins.js can't quietly introduce one.
+  const bad = resinTableProblems();
+  assert(bad.length === 0, bad.join("; "));
+  assert(RESINS.every(r => r.sheetSays && r.doc && r.doc.startsWith("docs/datasheets/")),
+    "every hold cites a datasheet that ships with the app");
+});
+await t("a cure in progress locks the next step and says how long is left", () => {
+  openHoldWO(holdWO("WO-HOLD-1", 7, "IN2-AT30-SLOW")); // 7 h into a 48 h hold
+  const h = holdState(woById("WO-HOLD-1"), 1);
+  assert(h && !h.ready, "still curing");
+  assert(h.hours === 48, "IN2 SLOW holds 48 h, got " + h.hours);
+  assert(Math.round(h.msLeft / 3600000) === 41, "41 h left, got " + (h.msLeft / 3600000));
+  const html = main.innerHTML;
+  assert(html.includes('<span class="step-badge">hold 48 h</span>'), "the step is badged: " + html.slice(0, 600));
+  assert(/class="gate"/.test(html), "amber gate, not the red blocked variant");
+  assert(!/gate blocked/.test(html), "a cure that hasn't finished is not an error state");
+  assert(html.includes("41 h left"), "countdown is on screen: " + html);
+  assert(!/CS-\d/.test(html), "no standard reference in the step row");
+});
+await t("a member can't sign through a live hold, from the button or the click", () => {
+  fb.roster = { name: "Nick", role: "member" };
+  openHoldWO(holdWO("WO-HOLD-2", 1, "IN2-AT30-SLOW"));
+  assert(/disabled title="curing/.test(main.innerHTML), "button is disabled: " + main.innerHTML);
+  lastToast = "";
+  buyoff(1);
+  assert(lastToast.includes("Still curing"), lastToast);
+  assert(!isSigned(woById("WO-HOLD-2").steps[1]), "and nothing was signed");
+  fb.roster = { name: "Simon", role: "lead" };
+});
+await t("once the hold has elapsed the step signs like any other", () => {
+  openHoldWO(holdWO("WO-HOLD-3", 60, "IN2-AT30-SLOW")); // 60 h into a 48 h hold
+  const h = holdState(woById("WO-HOLD-3"), 1);
+  assert(h.ready, "hold is done");
+  buyoff(1);
+  assert(isSigned(woById("WO-HOLD-3").steps[1]), "signed without an override");
+  assert(!(woById("WO-HOLD-3").timeline || []).length, "and nothing was logged as an override");
+});
+await t("a lead override needs a reason, and writes one event-log line", () => {
+  openHoldWO(holdWO("WO-HOLD-4", 31, "IN2-AT30-SLOW")); // 17 h short of 48
+  buyoff(1);
+  assert(document.getElementById("modal").innerHTML.includes("hold-why"), "override modal opened");
+  assert(!isSigned(woById("WO-HOLD-4").steps[1]), "nothing signed yet");
+  lastToast = "";
+  el("hold-why").value = "   ";
+  submitHoldOverride(1);
+  assert(lastToast.includes("needs a reason"), lastToast);
+  assert(!isSigned(woById("WO-HOLD-4").steps[1]), "an empty reason signs nothing");
+  el("hold-why").value = "Comp is Saturday. Tab sample snapped clean, risk accepted.";
+  submitHoldOverride(1);
+  const w = woById("WO-HOLD-4");
+  assert(isSigned(w.steps[1]), "signed after the override");
+  assert(w.steps[1].holdOverride.hoursShort === 17, "records how short it was: " + w.steps[1].holdOverride.hoursShort);
+  const log = (w.timeline || []).map(e => e.note).join(" | ");
+  assert(/overridden by Simon/.test(log) && /17 h of 48/.test(log) && /risk accepted/.test(log),
+    "the event log carries who, how short, and why: " + log);
+});
+await t("a cold shop is reported, never quietly folded into the number", () => {
+  openHoldWO(holdWO("WO-HOLD-5", 2, "IN2-AT30-SLOW", { tempC: 14 }));
+  const h = holdState(woById("WO-HOLD-5"), 1);
+  assert(h.hours === 48, "the hold is unchanged by temperature: " + h.hours);
+  assert(holdIsCold(h), "but it is flagged cold");
+  assert(main.innerHTML.includes("14 °C"), "and the temperature is on screen");
+  assert(/Test the flange, not the clock/.test(main.innerHTML), "with what to do about it");
+});
+await t("an unrecorded resin holds nothing rather than inventing a number", () => {
+  openHoldWO(holdWO("WO-HOLD-6", 1, ""));
+  assert(holdState(woById("WO-HOLD-6"), 1) === null, "no resin, no enforceable hold");
+  buyoff(1);
+  assert(isSigned(woById("WO-HOLD-6").steps[1]), "so the step signs normally");
+});
+await t("buying off a cure-starting step asks what went in, and records it", () => {
+  const wo = holdWO("WO-HOLD-7", 0, "IN2-AT30-SLOW");
+  wo.steps[0].status = "open"; wo.steps[0].buyoff = { name: "", date: "" }; delete wo.steps[0].cure;
+  openHoldWO(wo);
+  calls.length = 0;
+  buyoff(0);
+  assert(!isSigned(woById("WO-HOLD-7").steps[0]), "the modal comes first, the signature after");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("cure-resin") && m.includes("cure-date") && m.includes("cure-temp"), "resin, time and temperature: " + m.slice(0, 400));
+  el("cure-resin").value = "WS-105-206"; el("cure-date").value = "2026-08-01";
+  el("cure-time").value = "09:30"; el("cure-temp").value = "17";
+  submitCure(0);
+  const s = woById("WO-HOLD-7").steps[0];
+  assert(isSigned(s), "now it's signed");
+  assert(s.cure.resin === "WS-105-206" && s.cure.tempC === 17, JSON.stringify(s.cure));
+  assert(s.cure.startedAt.slice(0, 10) === "2026-08-01", "the recorded time is the one typed, not now: " + s.cure.startedAt);
+  assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"),
+    "the cure record goes through the same transaction as the buy-off: " + JSON.stringify(calls));
+});
+await t("retro work orders document holds, they don't enforce them", () => {
+  const wo = holdWO("WO-HOLD-8", 1, "IN2-AT30-SLOW");
+  wo.retro = true;
+  openHoldWO(wo);
+  assert(holdState(woById("WO-HOLD-8"), 1) === null, "same exemption blockers already take");
+});
+await t("fmtLeft reads like a person wrote it, at every scale", () => {
+  assert(fmtLeft(41 * 3600000) === "41 h left", fmtLeft(41 * 3600000));
+  assert(fmtLeft(5.5 * 3600000) === "5 h 30 min left", fmtLeft(5.5 * 3600000));
+  assert(fmtLeft(45 * 60000) === "45 min left", fmtLeft(45 * 60000));
+  assert(fmtLeft(0) === "ready" && fmtLeft(-9e6) === "ready", "a finished hold says so");
+  assert(fmtLeft(null) === "", "and a missing one says nothing");
+  // daysUntil() is the reason these exist: it rounds to whole days and would
+  // call a six-hour cure zero.
+  assert(msLeft(new Date(Date.now() - 3600000).toISOString(), 3) > 0, "3 h hold, 1 h in, still curing");
+  assert(msLeft("", 48) === null && msLeft("not a date", 48) === null, "no start, no clock");
+});
+await t("every standard template's hold follows the step that starts its clock", () => {
+  // holdState() reads the PREVIOUS step's cure record, so a template that puts
+  // a hold anywhere else would silently never fire.
+  Object.entries(STD_STEPS).forEach(([proc, rows]) => {
+    rows.forEach((row, i) => {
+      if (row[1] && row[1].kind === "hold") {
+        const prev = rows[i - 1];
+        assert(prev && prev[1] && prev[1].kind === "startsHold",
+          `${proc} step ${i + 1} "${row[0]}" holds, but "${prev ? prev[0] : "nothing"}" before it doesn't start a clock`);
+      }
+    });
+  });
 });
 await t("retro WO exempt from blockers, no buy-off button", () => { const r = DB.workOrders.find(w => w.retro); view = { ...view, tab: "workorders", mode: "detail", id: r.id, edit: false }; render(); assert(!main.innerHTML.includes("buy off as")); assert(blockerOpenBefore(r, r.steps.length) === null); });
 await t("reset steps lead-only + counts buy-offs", async () => { fb.roster = { name: "M", role: "member" }; const wo = woById(view.id); lastToast = ""; resetSteps(wo); assert(lastToast.includes("lead-only")); fb.roster = { name: "Simon", role: "lead" }; });
@@ -1609,6 +1753,23 @@ await t("blocker steps are flagged without relying on colour", () => {
   const h = woSheetHtml(wo);
   assert(h.includes('<tr class="blk">'), "blocker row needs the blk class");
   assert(h.includes("Blocker: no sign-off, no moving on"), "blocker must be spelled out in text");
+});
+await t("a cure hold prints as something a pen can complete", () => {
+  // The screen counts down; paper can't. What the sheet has to carry is the
+  // rule and somewhere to write when the clock actually started.
+  const wo = holdWO("WO-PRINT-HOLD", 3, "IN2-AT30-SLOW", { tempC: 19 });
+  const h = woSheetHtml(wo);
+  assert(/class="holdflag"/.test(h), "hold gets its own printed line: " + h.slice(0, 300));
+  assert(h.includes("Hold 48 h after infuse"), "says how long and after what: " + h);
+  assert(h.includes("IN2 + AT30 SLOW"), "and what it is waiting on");
+  assert(/started 20\d\d-\d\d-\d\d \d\d:\d\d/.test(h), "with the real recorded start time");
+  assert(!/CS-\d/.test(h), "still no standard reference on paper");
+});
+await t("a blank traveler asks for the hold instead of asserting one", () => {
+  const blank = woSheetHtml({ processType: "MoldInfusion", steps: [] }, { blank: true });
+  assert(/class="holdflag"/.test(blank), "the blank form carries the hold line too");
+  assert(/resin\s*__________/.test(blank), "and asks which resin, since nothing is mixed yet: " + blank.match(/class="holdflag">[^<]*/));
+  assert(!/48 h/.test(blank), "a blank form can't know the length before the resin is chosen");
 });
 await t("standard references are kept off the sheet", () => {
   woSeed.forEach(wo => {

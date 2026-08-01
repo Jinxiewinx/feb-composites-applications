@@ -118,6 +118,7 @@ const ICONS = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   archive: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-4.5-4.5L5 21"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size) {
@@ -202,6 +203,43 @@ function daysUntil(iso) {
   return Math.round((d - new Date(today() + "T00:00:00")) / 86400000);
 }
 function fmtWhen(iso) { return iso ? esc(String(iso).slice(0, 16).replace("T", " ")) : ""; }
+
+/* ---------- sub-day time ----------
+   daysUntil() rounds to whole days and midnight-anchors, so it answers 0 for a
+   six-hour cure and 1 for a cure that finishes at 00:30 tonight. A cure hold
+   needs the actual remaining time, which is what these two do. They are the
+   app's only sub-day arithmetic; everything else here is a date-only due date.
+
+   msLeft is signed: negative means the wait is over, which is what callers
+   test. Returns null rather than 0 for a missing or unparseable start, so
+   "never started" and "finished" can't be confused. */
+function msLeft(startIso, hours) {
+  if (!startIso || !(hours > 0)) return null;
+  const t = new Date(startIso).getTime();
+  if (isNaN(t)) return null;
+  return t + hours * 3600000 - Date.now();
+}
+/* Reads at the bench, so: hours down to the last hour, then minutes, and no
+   decimal anything. Matches the register the rest of the app uses for deltas
+   ("2d late", "3 days out") without inventing a fourth phrasing. */
+function fmtLeft(ms) {
+  if (ms == null) return "";
+  if (ms <= 0) return "ready";
+  const mins = Math.ceil(ms / 60000);
+  if (mins < 60) return mins + " min left";
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h >= 10 || m === 0) return Math.round(mins / 60) + " h left";
+  return h + " h " + m + " min left";
+}
+// Same clock, written as a wall time someone can plan around: "Mon 3 Aug, 14:20".
+function fmtReadyAt(startIso, hours) {
+  if (!startIso || !(hours > 0)) return "";
+  const d = new Date(new Date(startIso).getTime() + hours * 3600000);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
 // Clickable chip that jumps to another tab's detail view (light cross-links).
 function chip(coll, id, label) {
   if (!id) return "";
@@ -859,6 +897,7 @@ function render() {
      files in whatever order its FILES list gives, and because this is the only
      tab that has anything to restore. */
   if (typeof syncTimelineScroll === "function") syncTimelineScroll();
+  if (typeof syncHoldTick === "function") syncHoldTick();
   syncChromeMetrics();
 }
 

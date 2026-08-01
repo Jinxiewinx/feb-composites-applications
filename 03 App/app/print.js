@@ -69,9 +69,11 @@ function blankRows(n, cells) {
 
 /* Steps for a blank form come from the standard list for the process, so a
    printed blank is a real procedure rather than empty ruling. */
+// Goes through the same template-to-step helper the app uses, so a blank form
+// carries the step rules (and therefore prints its hold lines) rather than
+// quietly being a different shape from a real work order.
 function blankSteps(process) {
-  return (STD_STEPS[process] || STD_STEPS.Other).map((s, i) =>
-    ({ seq: i + 1, title: s[0], status: "open", buyoff: { name: "", date: "" }, notes: "" }));
+  return (STD_STEPS[process] || STD_STEPS.Other).map(stepFromTemplate);
 }
 
 function woSheetHtml(wo, opts) {
@@ -89,18 +91,40 @@ function woSheetHtml(wo, opts) {
 
   const stampTxt = blank ? "Blank form" : (wo.retro ? "Retro record" : (wo.status === "Draft" ? "Draft" : ""));
 
+  /* One printed line for a step that waits on a cure. On a blank form the
+     length isn't known yet (it depends on what gets mixed), so the form asks
+     for the resin too and every value prints as a rule. */
+  const RULE = "  __________  ";
+  function holdSheetLine(s, prev, isBlank) {
+    const rule = typeof stepRule === "function" ? stepRule(s) : (s && s.rule);
+    if (!rule || rule.kind !== "hold") return "";
+    const cure = !isBlank && prev && prev.cure;
+    const r = cure && typeof resinById === "function" ? resinById(cure.resin) : null;
+    if (!r) return `Hold before this step — resin${RULE}· hold${RULE}h · started${RULE}· ready${RULE}`;
+    const started = cure.startedAt ? String(cure.startedAt).slice(0, 16).replace("T", " ") : RULE;
+    const ready = typeof fmtReadyAt === "function" ? fmtReadyAt(cure.startedAt, r.febHoldH) : "";
+    return `Hold ${r.febHoldH} h after ${esc(strip(prev.title || "the previous step")).toLowerCase()} · ${esc(r.label)} · started ${esc(started)} · ready ${esc(ready || RULE)}`;
+  }
+
   /* ---- steps: the centerpiece ---- */
-  const stepRows = steps.map(s => {
+  const stepRows = steps.map((s, si) => {
     const isBlk = typeof isBlocker === "function" && isBlocker(s);
     const signed = !blank && typeof isSigned === "function" && isSigned(s);
     const nm = signed ? pv(s.buyoff && s.buyoff.name) : "";
     const dt = signed ? pv(s.buyoff && s.buyoff.date) : "";
     const note = blank ? "" : strip(pv(s.notes));
+    /* A hold has to print as something writable. The screen can count down; a
+       sheet on the bench can only carry the rule and two blanks for whoever is
+       standing there to fill in. Rules rather than prose so a pen has somewhere
+       to go, and the resin prints too — the hold length means nothing without
+       knowing what it was for. */
+    const holdLine = holdSheetLine(s, steps[si - 1], blank);
     return `<tr class="${isBlk ? "blk" : ""}">
       <td class="num seq">${esc(s.seq || "")}</td>
       <td>
         <div class="stitle"><span class="ws-cb"></span>${esc(strip(s.title))}</div>
         ${isBlk ? `<div class="blkflag">Blocker: no sign-off, no moving on</div>` : ""}
+        ${holdLine ? `<div class="holdflag">${holdLine}</div>` : ""}
         ${note ? `<div class="cs">${esc(note)}</div>` : ""}
       </td>
       <td class="initial">${nm ? `<span class="signed"><span class="nm">${esc(nm)}</span></span>` : ""}</td>
