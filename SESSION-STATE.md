@@ -23,6 +23,10 @@ Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 
 ## Design System extracted into `06 Design System/` (2026-07-31)
 
+**Update, later the same day: it is now actually synced.** See the section
+directly below. The rest of this section is the extraction that made that
+possible.
+
 Simon asked (via `/design-sync`) to create a design system from the app's style.
 The repo has no component library or build for design-sync to consume, so instead
 of syncing to claude.ai/design I extracted the app's existing visual language
@@ -49,6 +53,32 @@ The app is still the source of truth for anything not yet lifted into
 `components.css` (deep app-specific patterns: parts master-detail, meshview,
 timeline grid, weekly-plan carpool, drawings). If those are wanted in the system
 later, lift them from `index.html` into `components.css` and rerun `build.mjs`.
+
+## Design System synced to claude.ai/design (2026-07-31) — DONE
+
+Project `44c1cc89-0249-4155-a305-c55aff0a7bac`,
+https://claude.ai/design/p/44c1cc89-0249-4155-a305-c55aff0a7bac. Committed and
+pushed as `1e37f97`.
+
+Synced as a **styling layer, not components.** The converter wants a React
+package; this system is plain CSS, so it runs the converter's tokens-only path:
+styles.css, tokens, both fonts, empty `_ds_bundle.js`, no component cards.
+Simon chose this over authoring a React wrapper library, which would have been
+code with no consumer in a repo that has no React.
+
+Because there are no component cards, `.design-sync/conventions.md` is the only
+place the design agent learns the class vocabulary. It enumerates all 70 classes
+and the token families. **All of it was verified against the built CSS.** If a
+class is added to `components.css`, add it there too or the agent will never use
+it.
+
+Re-run: `/design-sync` from the git root. `.design-sync/NOTES.md` has the
+staging quirks (react needed despite no JS; `@font-face` must be split out of
+tokens.css or the brand fonts silently fall back; playwright must match the
+cached chromium build, currently 1.58.0).
+
+Found and fixed along the way: `06 Design System/README.md` documented a
+`--warn` token that does not exist.
 
 ## Safe areas — the notch, the Island, the home indicator (`index.html`, `print.css`, `core.js`)
 
