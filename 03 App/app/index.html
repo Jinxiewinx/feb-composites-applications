@@ -228,6 +228,10 @@
   .pill.Draft { background: var(--fill); }
   .pill.OnHold { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad); }
   .pill.retro { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
+  /* "now" — the current week, today, the thing you are standing in. Gold, the
+     app's existing language for it. NOT .pill.warn: amber means in-work here,
+     and a week being the current one is not a status. */
+  .pill.now { background: var(--gold-bg); border-color: var(--gold); color: var(--brand-ink); }
   .stage { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 600;
     background: var(--fill); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
   .stage.st-0 { background: var(--fill); color: var(--muted); }
@@ -655,26 +659,93 @@
   .pmini .pm-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pmini .pm-due { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-  /* ---- timeline grid ---- */
-  .tlwrap { overflow-x: auto; }
-  table.tl { border-collapse: collapse; font-size: 12.5px; background: var(--card); border: 1px solid var(--line); min-width: 900px; box-shadow: var(--shadow); }
-  table.tl th { background: var(--surface-2); color: var(--muted); padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
-  table.tl td { border: 1px solid var(--line); padding: 3px 5px; vertical-align: top; }
-  table.tl td.wk { white-space: nowrap; font-weight: 600; color: var(--brand-ink); }
-  table.tl input, table.tl select { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; max-width: 130px; }
-  table.tl tr.retrorow td { background: var(--retro-bg); }
-  /* The week label pins while the 9-column grid scrolls sideways — on a phone
-     it otherwise scrolls out of view and you lose which row you're reading.
-     Needs an opaque background or cells slide under it. */
-  table.tl th:first-child, table.tl td.wk { position: sticky; left: 0; z-index: 1; }
-  table.tl th:first-child { background: var(--surface-2); }
-  table.tl td.wk { background: var(--card); }
-  table.tl tr.retrorow td.wk { background: var(--retro-bg); }
-  /* This week, on the one grid where "which row is now" is the whole question.
-     Same gold-outline language the rest of the app uses for "today". Last so it
-     beats .retrorow. */
-  table.tl tr.thisweek td { background: var(--gold-bg); }
-  table.tl tr.thisweek td.wk { background: var(--gold-bg); box-shadow: inset 3px 0 0 var(--gold); }
+  /* ---- timeline grid ----
+     Stations are ROWS, weeks are COLUMNS. It used to be the other way round,
+     which put the growing axis (weeks, one per week of the season, forever) on
+     the axis that makes the page longer, and the fixed axis (seven stations,
+     set in timeline.js) on the axis that has to fit. That is what forced the
+     old `min-width: 900px` and made the tab 2.3 screens wide on a phone. It is
+     also the transpose of the mockup this tab was designed from
+     (03 App/design/timeline-weeklyplan-mockup-20260728.png), and the wrong way
+     round for the question the tab exists to answer, which is "when is Mold 1
+     free" — a single horizontal scan now, a column-hunt across eleven columns
+     before.
+
+     The DOM is week-major: one .tl-wk per week, holding a header and one cell
+     per row. `display: contents` on it means grid-auto-flow:column lays each
+     of those groups out as one column, with no computed grid coordinates and
+     no inline styles anywhere. That is also what lets the same markup fall
+     back to one card per week below 900 without reordering a thing — a
+     transposed TABLE could not, because CSS cannot regroup cells by column. */
+  .tlgrid {
+    display: grid; grid-template-columns: 168px; grid-auto-columns: minmax(136px, 1fr);
+    grid-auto-flow: column; grid-template-rows: auto repeat(9, minmax(40px, auto));
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-padding-left: 168px;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--r-md); box-shadow: var(--shadow);
+  }
+  .tl-stations, .tl-wk { display: contents; }
+  /* The station rail pins while the weeks scroll past it. Needs an opaque
+     background of its own or the cells slide under it. */
+  .tl-corner, .tl-strow {
+    position: sticky; left: 0; z-index: 2; background: var(--surface-2);
+    border-right: 1px solid var(--line); border-top: 1px solid var(--line);
+    padding: 9px 12px; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted); display: flex; align-items: center;
+  }
+  .tl-corner { border-top: none; }
+  /* Other and Notes are per-week free text, not stations. Same rows, heavier
+     rule above them so the seven real stations read as a group. */
+  .tl-strow.tl-sep { border-top: 2px solid var(--border-2); }
+  /* Deliberately NOT sticky. It is a grid item, and a vertical `position:
+     sticky` on one detaches it from the row its station label is in — the
+     header floats up to the topbar while the rail scrolls away, and the two
+     stop describing each other. The grid is ten rows tall, so there is nothing
+     to gain: it is the WEEKS that scroll here, and that is horizontal, which
+     the station rail already pins for. */
+  .tl-wkhd {
+    background: var(--surface-2); padding: 8px 11px; border-bottom: 1px solid var(--line);
+    font-family: var(--font-display); font-weight: 600; color: var(--brand-ink);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 40px;
+  }
+  /* A 136px column is narrow enough to break "Jul 28" across two lines, which
+     reads as two dates. */
+  .tl-wkdate { white-space: nowrap; }
+  /* One trash can per week is eleven trash cans across a season. Present, and
+     quiet until you are actually in that column. Touch has no hover, so there
+     it just stays visible. */
+  .tl-del { margin-left: auto; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+  .tl-wk:hover .tl-del, .tl-wk:focus-within .tl-del, .tl-del:focus-visible { opacity: 1; }
+  @media (pointer: coarse) { .tl-del { opacity: 1; } }
+  /* A cell is a button: tapping it opens the assign picker. Everything here
+     after `display` is undoing the app's own button styling, which is a full
+     outlined control and would draw 90 of them in a grid. */
+  .tl-cell {
+    display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px;
+    padding: 6px 9px; font: inherit; font-size: 13px; text-align: left; color: var(--ink);
+    background: none; border: none; border-top: 1px solid var(--line); border-radius: 0;
+    cursor: pointer; transition: background var(--t-fast) var(--ease);
+  }
+  .tl-cell:hover { background: var(--hover); }
+  .tl-cell.empty { color: var(--faint); font-style: italic; }
+  .tl-note { font-style: normal; white-space: normal; font-size: 12.5px; }
+  .tl-wk.retro .tl-cell, .tl-wk.retro .tl-wkhd { background: var(--retro-bg); }
+  /* This week, on the one grid where "which one is now" is the whole question.
+     The same gold edge the rest of the app uses for "today", rotated with the
+     grid: it was the row's left border, it is the column's top. Last so it
+     beats .retro. */
+  .tl-cell.now, .tl-wkhd.now { background: var(--gold-bg); }
+  .tl-wkhd.now { box-shadow: inset 0 3px 0 var(--gold); }
+  .tl-stname { display: none; }
+  .tl-archive { margin-top: 14px; }
+  .tl-empty { text-align: center; padding: 26px 16px; }
+  .tl-empty .tl-ei { color: var(--faint); }
+  .tl-empty p { color: var(--muted); margin: 6px 0 14px; }
+  .tl-empty .toolbar.tl-center { justify-content: center; }
+  .tl-hint { align-self: center; }
+  /* Phone-only affordance: on a wide screen the past weeks are in the grid
+     already and the button would reveal nothing. */
+  .tl-earlier { display: none; }
   /* Weekly Plan: per-person goal checklists + carpool cards. */
   .task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .task-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--ok); flex-shrink: 0; }
@@ -815,7 +886,12 @@
        border/shadow is dropped so the cards own the chrome. */
     table.list { display: block; border: none; box-shadow: none; background: none; border-radius: 0; overflow: visible; }
     table.list tbody { display: block; }
-    table.list tr:first-child { display: none; }            /* the <th> header row */
+    /* The header row. `:first-child` is scoped to the PARENT, so on a table
+       with <thead> and <tbody> this matches twice — the header row and the
+       first data row, which then vanishes. Every list table in the app emits
+       bare <tr>s with no <thead>, so it has never bitten, but it is a trap
+       sitting in wait for the next one. Pinned to the actual header instead. */
+    table.list tr:has(> th):first-child, table.list thead tr { display: none; }
     table.list tr {
       display: block; background: var(--card); border: 1px solid var(--line);
       border-radius: 8px; box-shadow: var(--shadow); padding: 10px 13px; margin-bottom: 10px;
@@ -844,6 +920,45 @@
     /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
        rather than blowing out their card. */
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* TIMELINE: the grid becomes one card per week, from the same DOM. The
+       markup is week-major, so `display: block` alone puts the weeks in
+       reading order with nothing reordered — which is the whole reason the
+       wide layout is a grid and not a table.
+
+       Not table.list's generic card collapse, on purpose. Once the tab is
+       transposed that would give one card per STATION with weeks as
+       label:value lines, and "what is on Mold 1 in every week of the season"
+       is not the question anyone asks on a phone. The question is what is on
+       this week. */
+    .tlgrid { display: block; overflow: visible; border: none; background: none; box-shadow: none; }
+    .tl-stations { display: none; }
+    .tl-wk {
+      display: block; background: var(--card); border: 1px solid var(--line);
+      border-radius: var(--r-md); box-shadow: var(--shadow); padding: 10px 13px; margin-bottom: 10px;
+    }
+    .tl-wk.now { border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold), var(--shadow); }
+    .tl-wkhd {
+      position: static; background: none; border: none; border-bottom: 1px solid var(--line);
+      padding: 0 0 8px; margin-bottom: 4px; font-size: 15px;
+    }
+    .tl-wk.retro .tl-wkhd, .tl-wk.retro .tl-cell { background: none; }
+    /* The card already carries the gold edge; the header's own bar doubles it. */
+    .tl-wkhd.now { box-shadow: none; }
+    .tl-cell { border-top: none; min-height: 42px; padding: 6px 0; }
+    /* A week card lists what is BOOKED. Seven "open" rows per week is six
+       screens of nothing; the count and the assign button below say the same
+       thing in one line. */
+    .tl-cell.empty { display: none; }
+    .tl-stname {
+      display: inline-block; min-width: 92px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    }
+    /* Finished weeks, folded. Only here: on a wide screen they are part of the
+       grid and scrolling past them costs one flick, but stacked they are eight
+       screens between you and this week. */
+    .tlgrid:not(.showpast) .tl-wk.past { display: none; }
+    .tl-earlier { display: flex; }
 
     /* PARTS: the master–detail split collapses to one pane at a time — index,
        tap, detail, back — which is exactly what the tab did before the split
@@ -1004,6 +1119,13 @@
 
     /* Fallback path: other tabs, unchanged. */
     nav.sidebar, header.topbar, .filters, .toolbar, button, .no-print, .rte-toolbar { display: none !important; }
+    /* ...except a Timeline cell, which is a button because tapping it opens
+       the assign picker. Without this the blanket rule above prints an empty
+       schedule: every assignment in the grid is inside one of these. Empty
+       cells still go, since paper has no picker to open. */
+    #main .tl-cell { display: flex !important; border: none; }
+    #main .tl-cell.empty { display: none !important; }
+    #main .tlgrid { overflow: visible; box-shadow: none; }
     /* A canvas is not a dependable printed artifact, and the exploded SVG
        already is one — it's what gets initialled for CS-003 §7.2. */
     .meshview { display: none !important; }

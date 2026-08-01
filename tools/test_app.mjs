@@ -890,13 +890,39 @@ await t("editing an issue requires a work order to stay set", () => {
 console.log("timeline:");
 await t("newWeek creates W01 with station fields", () => { setTab("timeline"); calls.length = 0; newWeek(); assert(DB.schedule.length === 1); const w = DB.schedule[0]; assert(w.id === "W01" && "mold1" in w && "waterjet" in w && "notes" in w); });
 await t("assignStation writes just that station field", () => { const w = DB.schedule[0]; DB.parts.push({ id: "P-SN6-050", partName: "TESTPART" }); calls.length = 0; assignStation(w.id, "mold1", "P-SN6-050"); assert(w.mold1 === "P-SN6-050"); assert(calls.some(c => c[0] === "save" && c[1] === "schedule" && c[3] === "mold1")); });
-await t("cellView links known part, shows text otherwise", () => { assert(cellView("P-SN6-050").includes("chip") && cellView("P-SN6-050").includes("TESTPART")); assert(cellView("RANDOM NAME") === "RANDOM NAME"); });
-await t("undated retro weeks sort BELOW dated weeks", () => {
+await t("cellView shows a known part's name, and unmapped text as-is", () => { assert(cellView("P-SN6-050") === "TESTPART", cellView("P-SN6-050")); assert(cellView("RANDOM NAME") === "RANDOM NAME"); assert(cellView("") === ""); });
+await t("the jump to Parts survived the rebuild — it moved into the assign picker", () => {
+  // A cell is a button that opens the picker, so it can't also be a chip that
+  // navigates; one control can't nest inside another. The cross-link lives in
+  // the picker now, and losing it entirely would be a real regression.
+  const w = DB.schedule[0];
+  openAssign(w.id, "mold1");
+  const html = document.getElementById("modal").innerHTML;
+  assert(/class="chip"/.test(html), "no chip in the picker: " + html.slice(0, 200));
+  assert(html.includes("openRecord(&#39;parts&#39;") || html.includes("openRecord('parts'"), "chip must still jump to Parts");
+  closeModal();
+});
+await t("undated retro weeks go into a collapsed archive, not the live schedule", () => {
+  // They used to sort to the bottom of the grid with a paragraph apologising
+  // for it — and since the SN5 seed ships EVERY week undated, that paragraph
+  // was the whole tab on a fresh load. Split out instead of explained away.
   DB.schedule = [{ id: "W00", weekOf: "", retro: true, notes: "RETRO WK" }, { id: "S1", weekOf: "2026-08-25", notes: "DATED WK" }];
-  view = { ...view, tab: "timeline", edit: false }; render();
-  const html = main.innerHTML;
-  assert(html.indexOf("DATED WK") < html.indexOf("RETRO WK"), "dated week must render above the undated retro week");
-  assert(html.includes("sort to the bottom"), "note must match the actual sort direction");
+  view = { ...view, tab: "timeline", tlArchive: false }; render();
+  let html = main.innerHTML;
+  assert(html.includes("DATED WK"), "the dated week is the schedule");
+  assert(!html.includes("RETRO WK"), "the undated one is behind the archive toggle");
+  assert(/tl-archive/.test(html), "and the archive block says how many are in there");
+  assert(!html.includes("sort to the bottom"), "the apology for the old sort order is gone");
+  view = { ...view, tlArchive: true }; render();
+  html = main.innerHTML;
+  assert(html.indexOf("DATED WK") < html.indexOf("RETRO WK"), "opened, the archive sits below the live schedule");
+});
+await t("a week with no date at all still reaches its cells", () => {
+  // W00-style ids are all the SN5 archive has to identify a week by.
+  DB.schedule = [{ id: "W00", weekOf: "", retro: true, mold1: "RAW NAME" }];
+  view = { ...view, tab: "timeline", tlArchive: true }; render();
+  assert(main.innerHTML.includes("W00"), "the id stands in for the date");
+  assert(main.innerHTML.includes("RAW NAME"), "and the assignment is still readable");
 });
 
 console.log("weekly plan:");
@@ -1298,9 +1324,10 @@ await t("timeline marks the week containing today", () => {
   DB.schedule = [{ id: "W-NOW", weekOf: today() }, { id: "W-OLD", weekOf: "2000-01-03" }];
   view = { ...view, tab: "timeline", mode: "list", edit: false };
   const html = renderTimeline();
-  assert(/class="\s*thisweek"|thisweek/.test(html), "current row flagged");
-  assert(html.includes("this week"), "and labelled in the week column");
-  assert((html.match(/thisweek/g) || []).length <= 2, "only one row, not every row");
+  // Weeks are columns now, so "now" lands on one column header plus its cells.
+  assert(/tl-wkhd[^"]*\bnow\b/.test(html), "the current week's header is flagged");
+  assert((html.match(/tl-wkhd[^"]*\bnow\b/g) || []).length === 1, "exactly one week is current, not every week");
+  assert(/<span class="pill now">Now<\/span>/.test(html), "and says so in the design system's own badge");
 });
 
 console.log("bug fixes:");

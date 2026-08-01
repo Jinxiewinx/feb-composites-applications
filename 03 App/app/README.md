@@ -48,8 +48,14 @@ view. Each project gets its own page with assignees, watchers who get flagged on
 new activity, a files section for photos and docs, and a comment thread with rich
 text and image attachments.
 
-Timeline is the production schedule as a station by week grid. Assign a part to a
-station for a given week.
+Timeline is the production schedule as a station by week grid: stations are the
+rows, weeks are the columns, and tapping a cell picks the part that runs at that
+station that week. Every write leaves an undo bar, because it changes a schedule
+the whole team reads. The current week is called out in gold, and "Jump to this
+week" finds it in a long season. On a phone the grid becomes one card per week
+listing only what is booked, with finished weeks folded behind a button so this
+week is the first thing on screen. Undated weeks from the SN5 import sit in a
+collapsed archive below the live schedule rather than at the bottom of it.
 
 Budget runs purchase requests through Submitted, Ordered and Reimbursed, with the
 season total, an open-orders subtotal, and a flag on anything over $50.
@@ -83,9 +89,8 @@ behind the ☰ button, and at that same width the account and lead actions (Back
 Restore, Roster, Sign out) move into a ⋯ menu next to search and the bell. The
 wide list tables (work orders, parts, budget, tickets) turn into one card per
 row with labeled fields, so nothing runs off the edge; narrow detail tables
-scroll sideways instead, and the timeline pins its week column while the
-stations scroll. The tickets board stacks its six status columns into full-width
-sections. Form controls render at 16px so iOS doesn't zoom on focus, and every
+scroll sideways instead, and the timeline becomes one card per week. The tickets
+board stacks its six status columns into full-width sections. Form controls render at 16px so iOS doesn't zoom on focus, and every
 control grows to a 40px tap target on a touch screen, checkboxes to 24px in a
 44px row.
 

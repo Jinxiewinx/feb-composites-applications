@@ -309,6 +309,57 @@ for (const vp of widths) {
           `${a.contentW}px of ${avail}px available (${Math.round(used * 100)}%)`);
       }
 
+      /* Timeline earns three of its own. It is the tab that was rebuilt, and
+         each of these pins a specific thing that was wrong or nearly went
+         wrong while rebuilding it. */
+      if (tab === "timeline") {
+        /* The grid places itself with grid-auto-flow:column over a week-major
+           DOM precisely so no renderer has to compute a coordinate. The moment
+           one inline style appears here, that has stopped being true. */
+        ok(`${at} no inline styles`, a.inlineStyled === 0, `${a.inlineStyled} elements carry style=""`);
+
+        if (!vp.coarse) {
+          /* The station rail has to stay put while the weeks scroll past it,
+             or you lose which row you are reading — which is the whole reason
+             the wide layout pins it. Scroll and measure rather than assert on
+             the CSS: `position: sticky` computes fine on an element whose
+             ancestor quietly clips it. */
+          const pinned = await page.evaluate(() => {
+            const g = document.querySelector("#main .tlgrid");
+            if (!g || g.scrollWidth <= g.clientWidth + 1) return "n/a";
+            const rail = g.querySelector(".tl-strow");
+            g.scrollLeft = 0;
+            const before = rail.getBoundingClientRect().left;
+            g.scrollLeft = 240;
+            const after = rail.getBoundingClientRect().left;
+            g.scrollLeft = 0;
+            return Math.abs(after - before) <= 1 ? "pinned" : `moved ${Math.round(after - before)}px`;
+          });
+          ok(`${at} station rail pins`, pinned === "pinned" || pinned === "n/a", pinned);
+        } else {
+          /* Narrow, the same DOM is a stack of week cards. If the grid is
+             still a grid down here the phone gets the 1600px layout in a
+             393px window. */
+          const shape = await page.evaluate(() => {
+            const g = document.querySelector("#main .tlgrid");
+            return g ? [getComputedStyle(g).display,
+              getComputedStyle(g.querySelector(".tl-stations")).display].join("/") : "none";
+          });
+          ok(`${at} collapses to week cards`, shape === "block/none", shape);
+        }
+
+        /* A cell is a <button>, and @media print hides every button in the
+           app. Without the counter-rule this tab prints an empty schedule —
+           every assignment in the grid is inside one of these. */
+        await page.emulateMedia({ media: "print" });
+        const printed = await page.evaluate(() => {
+          const c = document.querySelector("#main .tl-cell:not(.empty)");
+          return c ? getComputedStyle(c).display : "no-cell";
+        });
+        await page.emulateMedia({ media: "screen" });
+        ok(`${at} filled cells survive print`, printed !== "none", `display: ${printed}`);
+      }
+
       await ctx.close();
     }
 

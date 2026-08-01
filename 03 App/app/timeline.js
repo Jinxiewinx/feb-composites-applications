@@ -1,18 +1,45 @@
 "use strict";
 /* timeline.js — the Timeline tab.
-   The SN5 "Timeline" sheet reborn: a station × week production schedule. Each
-   week is one row; each manufacturing station is a column you assign a part to.
-   One Firestore doc per week, and each station is its own field, so two people
-   scheduling different stations in the same week don't clobber each other.
-   Read-only cells light-link to the part in the Parts tab. */
+   The SN5 "Timeline" sheet reborn: a station x week production schedule.
+   Stations are the rows, weeks are the columns, one Firestore doc per week and
+   each station its own field, so two people scheduling different stations in
+   the same week don't clobber each other.
 
-// field key -> column label. The 7 part-schedulable stations, then two free-text columns.
+   Weeks-as-columns is the way round the tab was designed
+   (03 App/design/timeline-weeklyplan-mockup-20260728.png) and the way round
+   the question comes: "when is Mold 1 free" is one horizontal scan. The first
+   build had it transposed, which put the unbounded axis (weeks, one per week
+   of the season) on the axis that makes the page taller and the fixed seven
+   stations on the axis that has to fit — nine columns with a 900px floor, 2.3
+   screens wide on a phone.
+
+   Below 900px the same markup becomes one card per week. That works without
+   reordering anything because the DOM is week-major and the wide layout is a
+   grid rather than a table: see the .tlgrid block in index.html.
+
+   weeklyplan.js writes goals / doneTickets / cars onto these same docs and
+   reads only `id` and `weekOf` off them. Nothing here touches those fields. */
+
+// field key -> column label. The 7 part-schedulable stations, then two free-text rows.
 const STATIONS = [
   ["mold1", "Mold 1"], ["mold2", "Mold 2"],
   ["infusion1", "Infusion 1"], ["infusion2", "Infusion 2"],
   ["wetlay1", "Wet Layup 1"], ["wetlay2", "Wet Layup 2"],
   ["waterjet", "Waterjet"],
 ];
+// The two free-text rows, kept separate so the grid can rule a line above them
+// and so "how many stations are booked" never counts a note.
+const EXTRA_ROWS = [["other", "Other"], ["notes", "Notes"]];
+const ALL_ROWS = STATIONS.concat(EXTRA_ROWS);
+
+/* Undo, same shape and same reasoning as PART_UNDO in parts.js: this writes to
+   a schedule the whole team reads, and "I fat-fingered that a minute ago" is
+   the real failure mode. Module-level so it survives a render. */
+let TL_UNDO = null;
+/* render() replaces main's innerHTML, which resets the grid's scrollLeft to 0
+   and throws you back to the start of the season on every edit. Remembered
+   here and restored after each paint by syncTimelineScroll(). */
+let TL_SCROLL = null;
 
 function schedById(id) { return DB.schedule.find(w => w.id === id); }
 function saveWeek(w, field) { w = w || schedById(view.id); if (w) save("schedule", w, field); }
@@ -27,11 +54,22 @@ function newWeek() {
   render();
 }
 function delWeek(id) {
-  confirmModal("Delete this week from the schedule for everyone?", () => {
-    del("schedule", id);
-    DB.schedule = DB.schedule.filter(w => w.id !== id);
-    render();
-  });
+  /* Says what it actually deletes. The doc is shared with Weekly Plan, so this
+     takes that week's goals and carpools with it — which the old wording
+     ("Delete this week from the schedule") did not tell you. Lead-only in the
+     rules as well as here, so the blast radius is bounded either way. */
+  const w = schedById(id);
+  const extra = [];
+  if (w && (w.goals || []).length) extra.push(`${w.goals.length} weekly goal${w.goals.length === 1 ? "" : "s"}`);
+  if (w && (w.cars || []).length) extra.push(`${w.cars.length} carpool${w.cars.length === 1 ? "" : "s"}`);
+  confirmModal(
+    `Delete ${w && w.weekOf ? "the week of " + w.weekOf : id} for everyone?` +
+    (extra.length ? ` This also deletes its ${extra.join(" and ")} from the Weekly Plan.` : ""),
+    () => {
+      del("schedule", id);
+      DB.schedule = DB.schedule.filter(w => w.id !== id);
+      render();
+    });
 }
 
 // A cell value is a part id when it matches a known part; otherwise it's free
@@ -39,53 +77,233 @@ function delWeek(id) {
 function cellView(val) {
   if (!val) return "";
   const p = recById("parts", val);
-  return p ? chip("parts", p.id, p.partName || p.id) : esc(val);
-}
-function cellSelect(w, key) {
-  const val = w[key] || "";
-  const parts = DB.parts.slice().sort((a, b) => (a.partName || a.id).localeCompare(b.partName || b.id));
-  const known = !val || recById("parts", val);
-  return `<select onchange="assignStation('${w.id}','${key}',this.value)">
-    <option value="">—</option>
-    ${!known ? `<option value="${esc(val)}" selected>${esc(val)} (text)</option>` : ""}
-    ${parts.map(p => `<option value="${esc(p.id)}" ${val === p.id ? "selected" : ""}>${esc(p.partName || p.id)}</option>`).join("")}
-  </select>`;
+  return p ? esc(p.partName || p.id) : esc(val);
 }
 
 // The row you're standing in. This is the production schedule, so "which week
-// is now" is the first question anyone asks of it, and nothing used to answer
-// it. weekContains() lives in weeklyplan.js; both tabs read the same schedule
-// docs, and it only runs at render time so load order doesn't matter.
+// is now" is the first question anyone asks of it. weekContains() lives in
+// weeklyplan.js; both tabs read the same schedule docs, and it only runs at
+// render time so load order doesn't matter.
 function isThisWeek(w) {
   return !!w.weekOf && typeof weekContains === "function" && weekContains(w, today());
 }
+function weekLabel(w) {
+  if (!w.weekOf) return esc(w.id);
+  const d = new Date(w.weekOf + "T12:00:00");
+  return isNaN(d) ? esc(w.weekOf)
+    : esc(d.toLocaleDateString(undefined, { month: "short", day: "numeric" }));
+}
+function bookedCount(w) { return STATIONS.filter(([k]) => w[k]).length; }
 
-function renderTimeline() {
-  const E = view.edit;
-  const weeks = DB.schedule.slice().sort((a, b) =>
-    (a.weekOf || "9999").localeCompare(b.weekOf || "9999") || a.id.localeCompare(b.id));
-  const cols = STATIONS.map(([, label]) => `<th>${label}</th>`).join("");
-  return `
-  <div class="toolbar no-print">
-    <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit schedule"}</button>
-    ${E ? `<button onclick="newWeek()">+ Add week</button>` : ""}
-    <span class="muted" style="align-self:center">${weeks.length} weeks · assign parts to stations per week</span>
-  </div>
-  ${weeks.some(w => w.retro && !w.weekOf) ? `<p class="muted" style="margin:0 0 8px">Undated SN5 retro weeks (W00, W01…) sort to the bottom, below any dated SN6 week — that's expected; give a week a date to place it in order.</p>` : ""}
-  ${weeks.length === 0 ? `<div class="card">No weeks scheduled yet. <b>Edit schedule</b> → <b>Add week</b>${isLead() ? ", or <b>Load SN5 archive</b> for last season's plan" : ""}.</div>` : `
-  <div class="tlwrap"><table class="tl">
-    <thead><tr><th>Week of</th>${cols}<th>Other</th><th>Notes</th>${E ? "<th></th>" : ""}</tr></thead>
-    <tbody>
-      ${weeks.map(w => `<tr class="${w.retro ? "retrorow" : ""} ${isThisWeek(w) ? "thisweek" : ""}">
-        <td class="wk">${E ? `<input type="date" value="${esc(w.weekOf)}" onchange="updWeek('${w.id}','weekOf',this.value)">` : esc(w.weekOf || w.id) + (isThisWeek(w) ? ' <span class="tny" style="color:var(--amber)">this week</span>' : "")}</td>
-        ${STATIONS.map(([k]) => `<td>${E ? cellSelect(w, k) : cellView(w[k])}</td>`).join("")}
-        <td>${E ? `<input value="${esc(w.other)}" onchange="updWeek('${w.id}','other',this.value)">` : esc(w.other || "")}</td>
-        <td>${E ? `<input value="${esc(w.notes)}" onchange="updWeek('${w.id}','notes',this.value)">` : `<b>${esc(w.notes || "")}</b>`}</td>
-        ${E ? `<td>${isLead() ? `<button class="danger" onclick="delWeek('${w.id}')">✕</button>` : ""}</td>` : ""}
-      </tr>`).join("")}
-    </tbody>
-  </table></div>`}`;
+/* ---------- assigning ----------
+   A cell holds one of ~33 parts, so it can't be a one-tap write the way a
+   Parts stage stepper can — it needs a picker, and the picker is what stops an
+   accidental touch from changing a shared schedule. Same idiom weeklyplan.js
+   uses for carpools. */
+function openAssign(weekId, key) {
+  const w = schedById(weekId);
+  if (!w) return;
+  const label = (ALL_ROWS.find(([k]) => k === key) || [key, key])[1];
+  const cur = w[key] || "";
+  const free = EXTRA_ROWS.some(([k]) => k === key);
+  const parts = DB.parts.slice().sort((a, b) => (a.partName || a.id).localeCompare(b.partName || b.id));
+  // An imported SN5 name that never mapped to a part record. Keep it selectable
+  // rather than silently dropping it the first time someone opens the picker.
+  const known = !cur || !!recById("parts", cur);
+  /* The cell used to BE a chip that jumped to the part, and a cell that opens a
+     picker cannot also be that link without nesting one control inside
+     another. The jump moves here instead, so the cross-link the tab has always
+     had still exists — one tap further away, and now next to the thing it
+     describes. */
+  const linked = !free && cur && recById("parts", cur);
+  openModal(`
+    <h2>${esc(label)} — ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}</h2>
+    ${linked ? `<p class="muted">Currently ${chip("parts", cur, linked.partName || cur)} — open it in Parts.</p>` : ""}
+    ${free ? `
+      <div class="field"><label>${esc(label)}</label>
+        <input id="tl-free" autofocus value="${esc(cur)}" placeholder="${key === "notes" ? "Milestone, break, anything the week needs on it" : "Anything not tied to a station"}">
+      </div>`
+    : `
+      <div class="field"><label>Part</label>
+        <select id="tl-part" autofocus>
+          <option value="">— nothing scheduled —</option>
+          ${!known ? `<option value="${esc(cur)}" selected>${esc(cur)} (text, not a part record)</option>` : ""}
+          ${parts.map(p => `<option value="${esc(p.id)}" ${cur === p.id ? "selected" : ""}>${esc(p.partName || p.id)}</option>`).join("")}
+        </select>
+      </div>`}
+    <div class="foot">
+      ${cur ? `<button class="danger" onclick="clearStation('${esc(weekId)}','${esc(key)}')">Clear</button>` : ""}
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitAssign('${esc(weekId)}','${esc(key)}')">${cur ? "Save" : "Assign"}</button>
+    </div>
+  `);
+}
+function submitAssign(weekId, key) {
+  const el = document.getElementById("tl-part") || document.getElementById("tl-free");
+  closeModal();
+  assignStation(weekId, key, el ? el.value : "");
+}
+function clearStation(weekId, key) { closeModal(); assignStation(weekId, key, ""); }
+
+/* Kept to the exact signature it has always had: the modal calls it, and so
+   does tools/test_app.mjs. Still one save() per field, which is what lets two
+   people schedule different stations in the same week. */
+function assignStation(weekId, station, partId) {
+  const w = schedById(weekId);
+  if (!w) return;
+  const from = w[station] || "";
+  if (from === partId) { render(); return; }
+  w[station] = partId;
+  saveWeek(w, station);
+  TL_UNDO = { id: weekId, key: station, from, to: partId };
+  render();
+}
+function undoTimelineCell() {
+  const u = TL_UNDO; TL_UNDO = null;
+  if (!u) { render(); return; }
+  const w = schedById(u.id);
+  if (!w) { toast("That week is gone — nothing to undo.", "error"); render(); return; }
+  w[u.key] = u.from;
+  saveWeek(w, u.key);
+  toast("Undone.");
+  render();
+}
+function dismissTimelineUndo() { TL_UNDO = null; render(); }
+function timelineUndoBar() {
+  const u = TL_UNDO;
+  if (!u) return "";
+  const w = schedById(u.id);
+  const label = (ALL_ROWS.find(([k]) => k === u.key) || [u.key, u.key])[1];
+  const when = w && w.weekOf ? "week of " + w.weekOf : (w ? w.id : "");
+  return `<div class="undobar no-print">
+    <span class="ub-i">${icon("check", 15)}</span>
+    <span class="ub-t"><b>${esc(label)}</b> · ${esc(when)} → <b>${esc(cellView(u.to) || "nothing scheduled")}</b>${u.from ? ` (was ${esc(cellView(u.from))})` : ""} — saved for everyone.</span>
+    <button class="sm" onclick="undoTimelineCell()">Undo</button>
+    <button class="sm ub-x" title="Dismiss" aria-label="Dismiss" onclick="dismissTimelineUndo()">${icon("x", 14)}</button>
+  </div>`;
 }
 
-function assignStation(weekId, station, partId) { const w = schedById(weekId); w[station] = partId; saveWeek(w, station); render(); }
 function updWeek(weekId, key, val) { const w = schedById(weekId); w[key] = val; saveWeek(w, key); }
+/* The date changes which column is "now" and where the week sorts, so unlike
+   the free-text fields this one has to repaint. */
+function updWeekDate(weekId, val) { updWeek(weekId, "weekOf", val); render(); }
+
+/* ---------- rendering ---------- */
+
+function weekColumn(w, opts) {
+  const now = isThisWeek(w);
+  const past = !!w.weekOf && !now && w.weekOf < today();
+  return `<section class="tl-wk${w.retro ? " retro" : ""}${now ? " now" : ""}${past ? " past" : ""}">
+    <div class="tl-wkhd${now ? " now" : ""}"${now ? ' aria-label="Week of ' + esc(w.weekOf) + ', the current week"' : ""}>
+      <span class="tl-wkdate">${weekLabel(w)}</span>
+      ${now ? '<span class="pill now">Now</span>' : ""}
+      ${opts && opts.lead ? `<button class="ib sm tl-del no-print" title="Delete this week" aria-label="Delete the week of ${esc(w.weekOf || w.id)}" onclick="delWeek('${esc(w.id)}')">${icon("trash", 13)}</button>` : ""}
+    </div>
+    ${ALL_ROWS.map(([k, label], i) => {
+      const val = w[k] || "";
+      const free = i >= STATIONS.length;
+      return `<button class="tl-cell${val ? "" : " empty"}${now ? " now" : ""}${free ? " tl-note" : ""}"
+        onclick="openAssign('${esc(w.id)}','${k}')"
+        aria-label="${esc(label)}, ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}: ${val ? esc(cellView(val)) : "open"}">
+        <span class="tl-stname">${esc(label)}</span><span>${val ? cellView(val) : "open"}</span>
+      </button>`;
+    }).join("")}
+  </section>`;
+}
+
+function timelineGrid(weeks, opts) {
+  return `<div class="tlgrid${opts && opts.showPast ? " showpast" : ""}" onscroll="TL_SCROLL = this.scrollLeft">
+    <div class="tl-stations">
+      <div class="tl-corner">Station</div>
+      ${ALL_ROWS.map(([, label], i) =>
+        `<div class="tl-strow${i === STATIONS.length ? " tl-sep" : ""}">${esc(label)}</div>`).join("")}
+    </div>
+    ${weeks.map(w => weekColumn(w, opts)).join("")}
+  </div>`;
+}
+
+function renderTimeline() {
+  const lead = isLead();
+  const all = DB.schedule.slice();
+  // Dated weeks are the schedule. Undated ones are the SN5 import, which ships
+  // every week with weekOf:"" — honest for retro data, and 11 rows of noise at
+  // the bottom of a live schedule, which the old build apologised for in a
+  // paragraph instead of moving them.
+  const dated = all.filter(w => w.weekOf).sort((a, b) => a.weekOf.localeCompare(b.weekOf));
+  const undated = all.filter(w => !w.weekOf).sort((a, b) => a.id.localeCompare(b.id));
+
+  if (!all.length) {
+    return `<div class="card tl-empty">
+      <div class="tl-ei">${icon("timeline", 30)}</div>
+      <h2>No weeks scheduled yet</h2>
+      <p>The production schedule assigns a part to a station for a given week.</p>
+      <div class="toolbar tl-center no-print">
+        <button class="primary" onclick="newWeek()">+ Add week</button>
+        ${lead ? `<button onclick="loadArchive()">Load SN5 archive</button>` : ""}
+      </div>
+    </div>`;
+  }
+
+  const cur = dated.find(isThisWeek);
+  /* On a phone the grid is a stack of week cards, so the season's finished
+     weeks are eight screens between you and the one you came to read. Folded
+     away by default down there; on a wide screen they stay in the grid, where
+     scrolling past them costs a flick. */
+  const past = dated.filter(w => !isThisWeek(w) && w.weekOf < today());
+  const scheduled = new Set();
+  all.forEach(w => STATIONS.forEach(([k]) => { if (w[k]) scheduled.add(w[k]); }));
+  const unplanned = DB.parts.filter(p => !scheduled.has(p.id)).length;
+
+  return `
+  ${timelineUndoBar()}
+  <div class="stat-row">
+    <div class="stat-tile"><div class="bignum">${dated.length}</div><div class="stat-label">Weeks scheduled</div></div>
+    <div class="stat-tile"><div class="bignum">${cur ? bookedCount(cur) : "—"}</div><div class="stat-label">${cur ? "Stations booked this week" : "No week is current"}</div></div>
+    <div class="stat-tile"><div class="bignum">${scheduled.size}</div><div class="stat-label">Parts on the schedule</div></div>
+    <div class="stat-tile"><div class="bignum">${unplanned}</div><div class="stat-label">Parts with no slot</div></div>
+  </div>
+  <div class="toolbar no-print">
+    <button class="primary" onclick="newWeek()">+ Add week</button>
+    ${cur ? `<button onclick="jumpToThisWeek()">Jump to this week</button>` : ""}
+    <span class="muted tl-hint">Tap a cell to schedule a part</span>
+  </div>
+  ${past.length && !view.tlPast ? `<div class="toolbar tl-earlier no-print"><button class="sm" onclick="view.tlPast=true;render()">Show ${past.length} earlier week${past.length === 1 ? "" : "s"}</button></div>` : ""}
+  ${dated.length ? timelineGrid(dated, { lead, showPast: !!view.tlPast || !past.length }) : `<div class="card muted">Every week is undated, so nothing can be placed in order yet. Open one below and give it a date.</div>`}
+  ${undated.length ? `
+  <div class="card tl-archive">
+    <h3>SN5 archive <span class="pill retro">retro</span> · ${undated.length} undated week${undated.length === 1 ? "" : "s"}</h3>
+    <div class="toolbar no-print"><button class="sm" onclick="view.tlArchive=!view.tlArchive;render()">${view.tlArchive ? "Hide" : "Show"} archive</button></div>
+    ${view.tlArchive ? timelineGrid(undated, { lead }) : ""}
+  </div>` : ""}`;
+}
+
+/* Put the current week on screen. Called from the toolbar button, and once
+   after each paint so an edit doesn't fling you back to the start of the
+   season. Guarded with the same optional-function idiom core.js already uses,
+   so load order never matters. */
+function jumpToThisWeek() {
+  /* tools/test_app.mjs runs the whole app against a DOM stub with no
+     querySelector and no getBoundingClientRect, and render() calls the sync
+     below on EVERY tab. Same guard, and the same reason, as
+     syncChromeMetrics() in core.js. */
+  if (typeof document.querySelector !== "function") return;
+  const el = document.querySelector("#main .tl-wkhd.now");
+  const grid = document.querySelector("#main .tlgrid");
+  if (!el || !grid) return;
+  const rail = grid.querySelector(".tl-corner");
+  const railW = rail ? rail.getBoundingClientRect().width : 0;
+  const g = grid.getBoundingClientRect(), e = el.getBoundingClientRect();
+  /* Already fully in view behind neither edge nor rail: leave it alone. A
+     short season fits without scrolling, and nudging it anyway slides the
+     first week under the sticky rail and clips it mid-word. */
+  if (e.left >= g.left + railW && e.right <= g.right) return;
+  grid.scrollLeft += e.left - g.left - railW - 8;
+  TL_SCROLL = grid.scrollLeft;
+}
+function syncTimelineScroll() {
+  if (typeof document.querySelector !== "function") return;
+  const grid = document.querySelector("#main .tlgrid");
+  if (!grid) return;
+  if (TL_SCROLL != null) grid.scrollLeft = TL_SCROLL;
+  else jumpToThisWeek();
+}

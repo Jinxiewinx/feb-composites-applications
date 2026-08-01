@@ -622,7 +622,7 @@ const TABS = [
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
-  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null };
+  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false };
   closeDrawer();
   render();
 }
@@ -817,6 +817,12 @@ function render() {
   const tab = TABS.find(t => t.id === view.tab) || TABS[0];
   el.innerHTML = tab.render();
   labelListTables();
+  /* Timeline scrolls sideways along the season, and innerHTML above just reset
+     that to zero — so without this every edit throws you back to the first
+     week. Optional-function guard because tools/test_app.mjs loads the tab
+     files in whatever order its FILES list gives, and because this is the only
+     tab that has anything to restore. */
+  if (typeof syncTimelineScroll === "function") syncTimelineScroll();
   syncChromeMetrics();
 }
 

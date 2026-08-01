@@ -260,6 +260,9 @@ table.list.dash td { cursor: default; }
 .pill.warn     { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
 .pill.bad      { background: var(--bad-bg);  border-color: var(--bad-border);  color: var(--bad); }
 .pill.retro    { background: var(--retro-bg);border-color: var(--retro-border);color: var(--retro); }
+/* "now" is the current week / today, not a status. Gold, and deliberately not
+   .warn: amber reads as in-work. */
+.pill.now      { background: var(--gold-bg);  border-color: var(--gold);         color: var(--brand-ink); }
 
 /* ---- badges: stage (compact status tag) ---- */
 .stage {
