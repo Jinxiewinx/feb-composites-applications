@@ -10,9 +10,10 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-07-31
-Status: **Safe-area work on `claude/mobile-safe-areas`; Parts revamp already on
-main.** 228 app / 34 slicer / 11 packer / 8 drawings / 13 print mobile / 27
-safe-area. See the two sections directly below.
+Status: **UI/UX audit landed on main.** 230 app / 22 design-system / 988 app-UI /
+34 slicer / 11 packer / 13 print mobile / 27 safe-area, all passing.
+`test_drawings` still fails 8/8 — pre-existing, see the open finding near the
+bottom. See "App UI/UX audit" directly below.
 
 Earlier: **Mold Stack Planner phase 1 built, not yet committed.** Branch
 `mold-sheet-stacking-app`. Board inventory + STL slicer + exploded stack view.
@@ -20,6 +21,55 @@ Tests: 90 app, 27 slicer, 73 rules — all passing. Design doc:
 `~/.gstack/projects/Jinxiewinx-feb-composites-applications/simonstarbuck-chisinau-design-20260724-190934.md`.
 Plan: `~/.claude/plans/b-polymorphic-hippo.md`.
 (Prior motorsport UI revamp + dark mode + PWA logo COMPLETE and deployed — see below.)
+
+## App UI/UX audit (2026-07-31)
+
+Simon asked for a UI/UX audit of `03 App/app/` against `06 Design System/`,
+flagged Timeline as needing an overhaul, and asked for the browser window and
+the phone screen to be used better. Three commits on main: `97d90ae`, `fde8757`,
+`150655a`. Plan: `~/.claude/plans/generic-percolating-tiger.md`.
+
+**Read this first if you touch the app's CSS.** `06 Design System/` was
+extracted FROM `index.html`'s `<style>` block, not imported by it. Two copies of
+one design, and `tools/test_designsystem.mjs` is now the only thing holding them
+together. If it fails, the fix is nearly always in the app: 06 is the published
+copy the website and claude.ai/design both read.
+
+**The harness had been lying again.** `loadChromium()` only checked ancestor
+`node_modules` and the global npm root. The repo's only playwright is at
+`.ds-sync/node_modules`, a SIBLING of `tools/`, so every browser test printed
+"not installed" and exited 0 with zero checks run. Second instance of this class
+after `77011b7`. Fixed with an explicit third candidate. Keep
+`.ds-sync/package.json`'s playwright matched to the cached chromium build
+(1.58.0 to 1208 today) or it launches and reports a missing executable.
+
+New tools:
+- `tools/test_designsystem.mjs` — token and component drift, no browser, ~1s.
+  Also checks the CSS parses, which caught a real bug immediately: an
+  unterminated comment silently ate the rule after it and a fix looked applied
+  while doing nothing.
+- `tools/test_appui.mjs` — 988 checks. 11 tabs x 4 widths x 2 themes.
+- `tools/lib/fixtures.mjs` — demo records for the four collections with no SN5
+  archive. Without them five of eleven tabs photograph as empty states.
+- `shoot_ui.mjs` gained 1920, the fixtures, and `--tab all`.
+
+Landed:
+- Design-system drift fixed both ways (app radii/backgrounds/shadows; 06's own
+  hardcoded `.toast` and `.modal` shadows). Style guides regenerated.
+- `main` 1180px to 1600px, fluid Parts rail, a >=1500px breakpoint, sidebar
+  collapse-to-rail. 27% of a 1920 monitor was empty on every tab.
+- Tap targets scoped to the control instead of to two container classes.
+  Weekly Plan's goal checkboxes were 15px on a phone.
+- Timeline rebuilt: transposed to stations-as-rows to match the mockup it was
+  designed from, week cards on a phone, modal + undo instead of a global edit
+  mode. See `fde8757` for the full reasoning and the three traps it surfaced.
+
+Open, low priority: `.modal-backdrop`'s scrim is the one literal colour left in
+`components.css` — there is no `--scrim` token and adding one changes the
+published vocabulary, so it wants its own decision. And `03 App/app/README.md`
+still describes Tickets as "Projects ... Backlog/Active/Blocked/Done", which is
+two names and four statuses out of date; not touched because it is outside this
+work.
 
 ## Design System extracted into `06 Design System/` (2026-07-31)
 
