@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Doc ID** | CS-INDEX |
-| **Revision** | B |
-| **Effective date** | 2026-07-28 |
+| **Revision** | C |
+| **Effective date** | 2026-08-01 |
 | **Maintained by** | Composites Lead (update at the moment any standard changes status, CS-000 §7) |
 
 Depth key: **Drafted** means full procedure, follow it as written (pending approver signature). **Outlined** means all sections present, procedure steps stubbed; complete before first use in anger.
@@ -19,11 +19,11 @@ Depth key: **Drafted** means full procedure, follow it as written (pending appro
 | CS-005 | CNC Machining of Tooling Board (ShopSabre) | C | Draft, pending signature | Drafted | PP-06; Z-plunge incidents |
 | CS-006 | Resin Infusion | B | Draft, pending signature | Drafted | Leak-risk minors; G0 review findings |
 | CS-007 | Wet Layup & Vacuum Bagging | B | Draft, pending signature | Outlined | Clamp/bagging minors |
-| CS-008 | Resins, Mixing & Cure Schedules | B | Draft, pending signature | Outlined | FCF resin starvation; exotherm safety |
+| CS-008 | Resins, Mixing & Cure Schedules | C | Draft, pending signature | Outlined | FCF resin starvation; exotherm safety; cure holds |
 | CS-009 | Trimming, Sanding & Finishing of Cured Composites | B | Draft, pending signature | Outlined | Catch-can puncture; PPE |
 | CS-010 | CF Grounding & Electrical Bonding | B | Draft, pending signature | Drafted | PP-05 |
 | CS-011 | Inventory, Storage & Transport | B | Draft, pending signature | Drafted (storage-map locations to field-verify) | PP-02, PP-10 |
 | CS-012 | Purchasing & Reimbursement (Composites) | B | Draft, pending signature | Drafted (re-verify tiers/names each fall) | PP-02, PP-08 |
 | CS-013 | Work Orders & Part Traceability | B | Draft, pending signature | Drafted | PP-09; bridges to the WO system |
 
-Notes: every standard flips to Released only when the SN6 Composites Lead signs its approval table (CS-000 §7.1); the doc header and this index change together. Next free number: **CS-014**. 2026-07-28: every doc above got a language pass (fewer em dashes, less decorative bold) plus targeted accuracy fixes, most substantively CS-013 (now describes the live Firebase app, not the retired offline `work-orders.html`), CS-005 (a dated web cross-check + a sharpened certified-operator caveat), and CS-011 (a note tying it to the app's Stock tab).
+Notes: every standard flips to Released only when the SN6 Composites Lead signs its approval table (CS-000 §7.1); the doc header and this index change together. Next free number: **CS-014**. 2026-07-28: every doc above got a language pass (fewer em dashes, less decorative bold) plus targeted accuracy fixes, most substantively CS-013 (now describes the live Firebase app, not the retired offline `work-orders.html`), CS-005 (a dated web cross-check + a sharpened certified-operator caveat), and CS-011 (a note tying it to the app's Stock tab). 2026-08-01: CS-008 → Rev C, adding the FEB hold column to the resin table and §5.1 explaining it; the work-order app now blocks a demould step until that hold elapses, and the standard had been stating only the datasheet figures.
