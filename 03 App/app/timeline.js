@@ -128,7 +128,7 @@ function openAssign(weekId, key) {
   openModal(`
     <h2>${esc(label)} — ${w.weekOf ? "week of " + esc(w.weekOf) : esc(w.id)}</h2>
     ${linked ? `<p class="muted">Currently ${chip("parts", cur, linked.partName || cur)} — open it in Parts.</p>` : ""}
-    ${free ? "" : `<p class="gate"><span class="gi">!</span><span>This is the team's plan, not a machine booking. Reserve the ${esc(label)} slot yourself on the RFS system — whoever is running the job books it.</span></p>`}
+    ${free ? "" : `<p class="gate"><span class="gi">!</span><span>This is the team's plan, not a booking.${key === "mold1" || key === "mold2" ? " Whoever runs the job still reserves the ShopSabre themselves on the RFS system." : ""}</span></p>`}
     ${free ? `
       <div class="field"><label>${esc(label)}</label>
         <input id="tl-free" autofocus value="${esc(cur)}" placeholder="${key === "notes" ? "Milestone, break, anything the week needs on it" : "Anything not tied to a station"}">
