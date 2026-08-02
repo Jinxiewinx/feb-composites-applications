@@ -355,7 +355,15 @@ function renderWODetail() {
           ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
           ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
-          ${E ? `<div class="meta no-print"><input style="width:90%" placeholder="notes / photo filenames" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)"></div>` : ""}
+          <!-- Deliberately still a one-line control at rest. This is filled in
+               at the bench, on a phone, with gloves on; a bubble menu and a
+               slash menu there would be worse than what was here. The button
+               beside it opens the full composer in a modal for the case the
+               placeholder used to describe — its old text was literally
+               "notes / photo filenames", i.e. the workaround for attaching a
+               photo was to TYPE THE FILENAME. -->
+          ${E ? `<div class="meta no-print stepnote"><input placeholder="notes" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)">
+            <button class="ib sm" title="Write a longer note, with photos" aria-label="Write a longer note for step ${s.seq}" onclick="openStepNote('${wo.id}',${i})">${icon("image", 14)}</button></div>` : ""}
           ${(s.photoRefs || []).length ? `<div class="meta">photos: ${s.photoRefs.map(p => esc(p.filename || p)).join(", ")}</div>` : ""}
         </div>
         <div class="buyoff">
@@ -394,8 +402,26 @@ function renderWODetail() {
         : `<tr><td>${esc(t.date)}</td><td>${esc(t.note)}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').timeline.push({date:'',note:''});saveWO(woById('${wo.id}'),'timeline');render()">+ event</button>` : ""}
+    <!-- The old free-text notes blob had no author and no timestamp, and any
+         edit silently replaced whatever was there. It stays, authoritative and
+         editable, because it is what somebody typed; the log beside it is
+         append-only and signed, so "who decided this and when" has an answer. -->
     <h3>Notes</h3>
-    ${E ? `<textarea onchange="updWO('notes',this.value)">${esc(wo.notes)}</textarea>` : `<div>${esc(wo.notes) || '<span class="muted">—</span>'}</div>`}
+    ${E ? `<textarea onchange="updWO('notes',this.value)">${esc(wo.notes)}</textarea>` : `<div class="prose">${esc(wo.notes) || '<span class="muted">—</span>'}</div>`}
+    ${threadHtml("workOrders", wo.id, (wo.noteLog || []), { noun: "Note", empty: "No notes yet. Anything worth telling the next person goes here." })}
+    ${(() => {
+      rteSetUpload(name => `projects/${wo.id}/${Date.now()}-${name}`);
+      const draft = loadDraft("wonote", wo.id);
+      return composerHtml({
+        targetId: "wo-note",
+        html: sanitizeHtml(draft),
+        placeholder: "Add a note — what happened, what you measured, a photo…",
+        oninput: `draftInput('wonote','${wo.id}',this)`,
+        onpost: `postWoNote('${wo.id}')`,
+        oncancel: `closeComposer('wo-note')`,
+        postLabel: "Add note as " + signerName(),
+      });
+    })()}
   </div>`;
 }
 
@@ -629,3 +655,64 @@ function signStep(i, extra) {
   render();
 }
 function rmWoDoc(linkId) { removeDocLink("workOrders", view.id, linkId); }
+
+/* Append-only, authored note log on a work order — the same shape as a ticket
+   comment, so threadHtml/commentHtml render it and edit/remove work on it for
+   free. saveField, not a whole-field write, so two people adding notes from the
+   bench at the same time do not clobber each other. */
+function postWoNote(id) {
+  const box = document.getElementById("wo-note");
+  const html = sanitizeHtml((box && box.innerHTML) || "");
+  const text = String((box && box.textContent) || "").trim();
+  if (!text && !/<img/i.test(html)) { toast("Write the note first.", "error"); return; }
+  const w = woById(id);
+  if (!w) return;
+  const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), html };
+  w.noteLog = (w.noteLog || []).concat([c]);
+  saveField("workOrders", w, "noteLog", arr => (arr || []).concat([c]));
+  if (box) box.innerHTML = "";
+  clearDraft("wonote", id);
+  closeComposer("wo-note");
+  render();
+}
+/* A step note long enough to want a photo gets the full composer, in a modal —
+   which is also the right shape on a phone, where #modal already solves the
+   safe-area padding and keeps the save button above the keyboard. */
+function openStepNote(woId, i) {
+  const w = woById(woId);
+  if (!w || !w.steps || !w.steps[i]) return;
+  const s = w.steps[i];
+  rteSetUpload(name => `projects/${woId}/${Date.now()}-${name}`);
+  openModal(`
+    <h2>${esc(stripCS(s.title))}</h2>
+    <p class="muted">Step ${s.seq} of ${esc(woId)}. Photos, measurements, anything the next person needs.</p>
+    ${composerHtml({
+      targetId: "step-note",
+      html: sanitizeHtml(s.noteHtml || esc(s.notes || "")),
+      alwaysOpen: true,
+      placeholder: "What happened at this step…",
+      onpost: `saveStepNote('${woId}',${i})`,
+      oncancel: `closeModal()`,
+      postLabel: "Save note",
+      hint: "",
+    })}
+  `);
+}
+function saveStepNote(woId, i) {
+  const box = document.getElementById("step-note");
+  const html = sanitizeHtml((box && box.innerHTML) || "");
+  const text = String((box && box.textContent) || "").trim();
+  const w = woById(woId);
+  if (!w) return;
+  closeModal();
+  // Both fields: `notes` is what the printed traveler and the one-line input
+  // read, `noteHtml` is the long form. Keeping them in step means the paper
+  // sheet never goes blank because someone used the rich editor.
+  w.steps[i].notes = text;
+  w.steps[i].noteHtml = html;
+  saveField("workOrders", w, "steps", arr => {
+    arr[i] = { ...arr[i], notes: text, noteHtml: html };
+    return arr;
+  });
+  render();
+}

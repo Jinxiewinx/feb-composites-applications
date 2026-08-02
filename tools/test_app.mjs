@@ -100,7 +100,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -716,13 +716,18 @@ await t("comments get an author and a timestamp, and the old free-text note keep
   partsFixture(); openRecord("parts", "P-N1");
   assert(main.innerHTML.includes("line one<br>line two"), "the legacy blob stays authoritative and readable");
   calls.length = 0;
-  el("pcomment").value = "  ";
+  // The parts composer is the shared rich one now, so it is a contenteditable
+  // rather than a textarea — same guarantees, different property.
+  openComposer("pcomment");
+  const box = el("pcomment");
+  box.innerHTML = "  "; box.textContent = "  ";
   lastToast = ""; postPartComment("P-N1");
   assert(lastToast.includes("Write a comment"), "empty comment refused");
-  el("pcomment").value = "mold is sealed";
+  box.innerHTML = "<p>mold is sealed</p>"; box.textContent = "mold is sealed";
   postPartComment("P-N1");
   const c = partById("P-N1").commentLog[0];
   assert(c.text === "mold is sealed" && c.author === "Simon" && c.email === "simon@berkeley.edu" && c.ts, "structured entry: " + JSON.stringify(c));
+  assert(/mold is sealed/.test(c.html), "and carries html alongside text, so old plain records still render: " + c.html);
   assert(calls.some(x => x[0] === "mutateField" && x[1] === "parts" && x[3] === "commentLog"), "appended concurrency-safely: " + JSON.stringify(calls));
   assert(main.innerHTML.includes("mold is sealed") && main.innerHTML.includes("Simon"), "and shows up with its author");
   assert(partById("P-N1").comments === "line one\nline two", "the original comments field is untouched");
@@ -2767,6 +2772,99 @@ await t("MOBILE the screen fit is reset for paper, and torn down on close", () =
     "and closing the preview drops the variable rather than leaving it set");
   assert(/orientationchange/.test(readFileSync(join(root, "print.js"), "utf8")),
     "turning the phone re-fits, instead of wasting half a landscape screen");
+});
+
+console.log("comment edit, delete and the other note surfaces:");
+await t("a comment can finally be edited, and the edit is transactional", () => {
+  // There was no edit and no delete anywhere in this app: a posted comment was
+  // permanent for everyone including its author. No subcollection was needed —
+  // saveField/mutateField reads the current server value inside a transaction,
+  // so a concurrent append from someone else is not clobbered.
+  DB.projects = [{ id: "TKT-E", title: "Edit me", kind: "project", status: "To Do",
+    assignees: [], watchers: [], files: [], comments: [
+      { id: "C1", author: "Simon", email: "simon@berkeley.edu", ts: "2026-08-01T10:00:00.000Z", html: "<p>frist</p>" }] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-E", edit: false };
+  render();
+  editComment("projects", "TKT-E", "C1");
+  assert(editingThis("projects", "TKT-E", "C1"), "the comment is open for editing");
+  assert(!!el("edit-C1"), "with a composer bound to that comment");
+  calls.length = 0;
+  el("edit-C1").innerHTML = "<p>first</p>"; el("edit-C1").textContent = "first";
+  saveEditComment("projects", "TKT-E", "C1");
+  const c = projById("TKT-E").comments[0];
+  assert(/first/.test(c.html) && !/frist/.test(c.html), "body replaced: " + c.html);
+  assert(c.editedAt && c.editedBy === "simon@berkeley.edu", "and stamped: " + JSON.stringify(c));
+  assert(c.ts === "2026-08-01T10:00:00.000Z", "the original time is not rewritten");
+  assert(calls.some(x => x[0] === "mutateField" && x[3] === "comments"),
+    "through the transaction, not a whole-field write: " + JSON.stringify(calls));
+  assert(render() === undefined || main.innerHTML.includes("edited"), "and it says so in the thread");
+});
+await t("an emptied edit is refused rather than posted as a blank", () => {
+  editComment("projects", "TKT-E", "C1");
+  el("edit-C1").innerHTML = ""; el("edit-C1").textContent = "  ";
+  lastToast = "";
+  saveEditComment("projects", "TKT-E", "C1");
+  assert(/remove it instead/i.test(lastToast), lastToast);
+  assert(/first/.test(projById("TKT-E").comments[0].html), "the original survives");
+  cancelEditComment();
+});
+await t("delete is soft, and says who removed it", () => {
+  // This is an engineering record. A resolved nonconformance thread that
+  // somebody can silently vaporise is a QA problem, so the fact that something
+  // was here — and who took it away — stays.
+  removeComment("projects", "TKT-E", "C1");
+  assert(!projById("TKT-E").comments[0].deleted, "not until it is confirmed");
+  confirmProceed();
+  const c = projById("TKT-E").comments[0];
+  assert(c.deleted === true && c.deletedBy === "simon@berkeley.edu", JSON.stringify(c));
+  assert(!c.html, "the body is gone");
+  assert(c.author === "Simon" && c.ts, "the byline and time remain");
+  render();
+  assert(/Removed by/.test(main.innerHTML), "and the thread says so: " + main.innerHTML.slice(0, 200));
+});
+await t("only the author or a lead gets the edit and remove controls", () => {
+  const mine = { id: "C2", email: "simon@berkeley.edu", author: "Simon", ts: "x", html: "<p>a</p>" };
+  const theirs = { id: "C3", email: "nick@b.edu", author: "Nick", ts: "x", html: "<p>b</p>" };
+  fb.roster = { name: "Simon", role: "lead" };
+  assert(canEditComment(mine) && canEditComment(theirs), "a lead can act on anything");
+  fb.roster = { name: "Simon", role: "member" };
+  assert(canEditComment(mine), "you can always edit your own");
+  assert(!canEditComment(theirs), "a member cannot edit someone else's");
+  fb.roster = { name: "Simon", role: "lead" };
+});
+await t("every note surface writes to its own field through the same renderer", () => {
+  // One thread renderer serves tickets, parts and work orders, so the field
+  // mapping is the only thing that differs. A wrong entry here would write
+  // comments onto the wrong key and lose them silently.
+  assert(COMMENT_FIELD.projects === "comments");
+  assert(COMMENT_FIELD.parts === "commentLog");
+  assert(COMMENT_FIELD.workOrders === "noteLog");
+});
+await t("a work-order note is authored, appended safely, and rendered by the shared thread", () => {
+  DB.workOrders = [{ id: "WO-N", partName: "X", processType: "MoldInfusion", revision: "A",
+    status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: false };
+  render();
+  openComposer("wo-note"); render();
+  calls.length = 0;
+  el("wo-note").innerHTML = "<p>bagged at 0.8 inHg</p>"; el("wo-note").textContent = "bagged at 0.8 inHg";
+  postWoNote("WO-N");
+  const n = woById("WO-N").noteLog[0];
+  assert(/0.8 inHg/.test(n.html) && n.author === "Simon" && n.ts, JSON.stringify(n));
+  assert(calls.some(x => x[0] === "mutateField" && x[3] === "noteLog"), "appended concurrency-safely");
+  assert(main.innerHTML.includes("0.8 inHg"), "and shows in the thread");
+});
+await t("a step note keeps its plain text so the printed traveler never goes blank", () => {
+  DB.workOrders[0].steps = [{ seq: 1, title: "Infuse", status: "open", buyoff: { name: "", date: "" }, notes: "" }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: true };
+  render();
+  openStepNote("WO-N", 0);
+  el("step-note").innerHTML = "<p>resin front stalled</p>"; el("step-note").textContent = "resin front stalled";
+  saveStepNote("WO-N", 0);
+  const st = woById("WO-N").steps[0];
+  assert(st.notes === "resin front stalled", "plain text for the paper sheet: " + st.notes);
+  assert(/<p>/.test(st.noteHtml), "and the long form alongside it");
+  assert(woSheetHtml(woById("WO-N")).includes("resin front stalled"), "the printed traveler still carries it");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

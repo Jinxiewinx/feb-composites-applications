@@ -40,6 +40,17 @@ service firebase.storage {
         && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
     }
 
+    // parts/{partId}/{file} — photos and files attached to a part's comment
+    // thread. Added when the rich composer rolled out beyond tickets: there was
+    // no parts/ rule at all, and the file ends with "no rule = deny", so a
+    // photo in a part comment failed silently at upload. Same shape and same
+    // content-type allowlist as projects/.
+    match /parts/{partId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && sizeOk()
+        && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
+    }
+
     // documents/{file} — the Documents-tab library; any signed-in member uploads
     // (its record lands in the roster-gated `documents` Firestore collection).
     match /documents/{file} {

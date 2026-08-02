@@ -582,16 +582,23 @@ function partScheduleWeeks(p) {
    dropped on render. `comments` stays exactly as it is and stays authoritative
    — it is the SN5 note someone typed. `commentLog` is new, optional and
    append-only, so a thread can exist without rewriting a single record. */
+/* Rich now, like every other comment surface. `html` is written alongside the
+   old `text`, never instead of it: records posted before this keep rendering
+   through the plain path in commentHtml(), so there is no migration and nothing
+   to backfill. Still saveField/mutateField, which test_app.mjs asserts. */
 function postPartComment(id) {
   const box = document.getElementById("pcomment");
-  const text = String((box && box.value) || "").trim();
-  if (!text) { toast("Write a comment first.", "error"); return; }
+  const html = sanitizeHtml((box && box.innerHTML) || "");
+  const text = String((box && box.textContent) || "").trim();
+  if (!text && !/<img/i.test(html)) { toast("Write a comment first.", "error"); return; }
   const p = partById(id);
   if (!p) return;
-  const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), text };
+  const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), text, html };
   p.commentLog = (p.commentLog || []).concat([c]);           // optimistic
   saveField("parts", p, "commentLog", arr => (arr || []).concat([c]));
-  if (box) box.value = "";
+  if (box) box.innerHTML = "";
+  clearDraft("comment", id);
+  closeComposer("pcomment");
   render();
 }
 
@@ -691,14 +698,20 @@ function renderPartDetail() {
         ${E ? `<textarea onchange="updPart('comments',this.value)">${esc(p.comments)}</textarea>`
              : `<div class="notebody">${p.comments ? esc(p.comments).replace(/\n/g, "<br>") : '<span class="muted">—</span>'}</div>`}
       </div>
-      ${comments.map(c => `<div class="comment" id="c-${esc(c.id || "")}">
-        <div class="chead">${avatar(c.email || c.author, 26)}<b>${esc(c.author || userName(c.email))}</b><time>${fmtWhen(c.ts)}</time></div>
-        <div class="prose">${c.html ? proseHtml(c.html) : esc(c.text).replace(/\n/g, "<br>")}</div>
-      </div>`).join("")}
-      <div class="no-print" style="margin-top:10px">
-        <textarea id="pcomment" placeholder="Add a comment — it keeps your name and the time…"></textarea>
-        <div style="margin-top:6px"><button class="primary" onclick="postPartComment('${esc(p.id)}')">Comment as ${esc(signerName())}</button></div>
-      </div>
+      ${threadHtml("parts", p.id, comments, { empty: "No comments yet." })}
+      ${(() => {
+        rteSetUpload(name => `parts/${p.id}/${Date.now()}-${name}`);
+        const draft = loadDraft("comment", p.id);
+        return composerHtml({
+          targetId: "pcomment",
+          html: sanitizeHtml(draft),
+          placeholder: "What happened on this part…",
+          oninput: `draftInput('comment','${esc(p.id)}',this)`,
+          onpost: `postPartComment('${esc(p.id)}')`,
+          oncancel: `closeComposer('pcomment')`,
+          postLabel: "Comment as " + signerName(),
+        });
+      })()}
     </div>
   </section>`;
 }

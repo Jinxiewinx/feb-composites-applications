@@ -418,7 +418,7 @@ function normalizePastedHtml(html) {
 // biggest thing on the page.
 function composerHtml(o) {
   const t = o.targetId;
-  if (!composerOpen(t)) {
+  if (!o.alwaysOpen && !composerOpen(t)) {
     return `<button type="button" class="composer-stub no-print" onclick="openComposer('${t}')">
       ${icon("edit", 16)} <span>${esc(o.placeholder || "Write a comment…")}</span>
     </button>`;
@@ -466,3 +466,105 @@ function rteInit() {
    "- " (which inserts its own list) worked. Seeding one empty paragraph means
    there is always a block to format. */
 function rteSeed(html) { return String(html || "").trim() ? html : "<p><br></p>"; }
+
+/* ---------- editing and removing a comment ----------
+   There was no edit and no delete anywhere in this app: a posted comment was
+   permanent for everyone, including its author. Fine for a one-line remark,
+   not fine for an 800-word report with a typo in the cure temperature.
+
+   No subcollection. The comments array stays, and edits go through
+   saveField -> fb.mutateField, which reads the CURRENT server value inside a
+   transaction and re-applies the change — so a concurrent arrayUnion append
+   from someone else is not clobbered, and the loser retries on fresh data.
+   parts.js has been writing its comment log this way in production all along.
+
+   Delete is SOFT. This is an engineering record: a resolved nonconformance
+   thread that someone can silently vaporise is a QA problem, and keeping the
+   element also keeps arrayUnion's identity semantics from surprising anyone
+   later. The body is dropped on render; the fact that something was here, and
+   who removed it, stays. */
+const COMMENT_FIELD = { projects: "comments", parts: "commentLog", workOrders: "noteLog", schedule: "noteLog" };
+function commentsOf(coll, rec) { return (rec && rec[COMMENT_FIELD[coll] || "comments"]) || []; }
+function canEditComment(c) { return !!(c && (c.email === myEmail() || isLead())); }
+
+let EDITING = null;             // { coll, id, cid } while a comment is open for edit
+function editComment(coll, id, cid) { EDITING = { coll, id, cid }; render(); }
+function cancelEditComment() { EDITING = null; rteCloseInsert(); render(); }
+function editingThis(coll, id, cid) {
+  return !!(EDITING && EDITING.coll === coll && EDITING.id === id && EDITING.cid === cid);
+}
+function saveEditComment(coll, id, cid) {
+  const ed = document.getElementById("edit-" + cid);
+  if (!ed) return;
+  const html = sanitizeHtml(ed.innerHTML || "");
+  if (!(ed.textContent || "").trim() && !/<img/i.test(html)) { toast("An empty comment isn't an edit — remove it instead.", "error"); return; }
+  const rec = recById(coll, id);
+  if (!rec) return;
+  const field = COMMENT_FIELD[coll] || "comments";
+  const at = new Date().toISOString();
+  const patch = arr => (arr || []).map(c => c.id === cid ? { ...c, html, editedAt: at, editedBy: myEmail() } : c);
+  rec[field] = patch(rec[field]);            // optimistic
+  saveField(coll, rec, field, patch);
+  EDITING = null;
+  render();
+}
+function removeComment(coll, id, cid) {
+  const rec = recById(coll, id);
+  if (!rec) return;
+  const field = COMMENT_FIELD[coll] || "comments";
+  confirmModal("Remove this comment for everyone? The thread keeps a note that something was removed and who removed it.", () => {
+    const at = new Date().toISOString();
+    const patch = arr => (arr || []).map(c => c.id === cid
+      ? { id: c.id, author: c.author, email: c.email, ts: c.ts, deleted: true, deletedBy: myEmail(), deletedAt: at }
+      : c);
+    rec[field] = patch(rec[field]);
+    saveField(coll, rec, field, patch);
+    render();
+  });
+}
+
+/* One renderer for a thread, so tickets, parts, work orders and weeks all show
+   the same thing and gain edit/delete at the same moment. */
+function commentHtml(coll, id, c) {
+  const who = esc(c.author || userName(c.email));
+  if (c.deleted) {
+    return `<div class="comment deleted" id="c-${esc(c.id || "")}">
+      <div class="chead"><b>${who}</b><time>${fmtWhen(c.ts)}</time></div>
+      <div class="muted tny">Removed by ${esc(userName(c.deletedBy) || c.deletedBy || "?")}${c.deletedAt ? " · " + fmtWhen(c.deletedAt) : ""}.</div>
+    </div>`;
+  }
+  if (editingThis(coll, id, c.id)) {
+    return `<div class="comment" id="c-${esc(c.id || "")}">
+      <div class="chead">${avatar(c.email || c.author, 26)}<b>${who}</b><time>editing</time></div>
+      ${composerHtml({
+        targetId: "edit-" + c.id,
+        html: sanitizeHtml(c.html || esc(c.text || "")),
+        alwaysOpen: true,
+        placeholder: "Edit this comment…",
+        onpost: `saveEditComment('${coll}','${id}','${c.id}')`,
+        oncancel: `cancelEditComment()`,
+        postLabel: "Save changes",
+        hint: "Editing is recorded — the comment will show that it was edited.",
+      })}
+    </div>`;
+  }
+  const body = c.html ? proseHtml(c.html) : esc(c.text || "").replace(/\n/g, "<br>");
+  return `<div class="comment" id="c-${esc(c.id || "")}">
+    <div class="chead">
+      ${avatar(c.email || c.author, 26)}<b>${who}</b>
+      ${c.editedAt ? `<span class="muted tny" title="Edited ${esc(fmtWhen(c.editedAt))}">edited</span>` : ""}
+      <time>${fmtWhen(c.ts)}</time>
+      ${canEditComment(c) ? `<span class="cacts no-print">
+        <button class="ib sm" title="Edit" aria-label="Edit this comment" onclick="editComment('${coll}','${id}','${c.id}')">${icon("edit", 14)}</button>
+        <button class="ib sm danger" title="Remove" aria-label="Remove this comment" onclick="removeComment('${coll}','${id}','${c.id}')">${icon("trash", 14)}</button>
+      </span>` : ""}
+    </div>
+    <div class="prose">${body}</div>
+  </div>`;
+}
+function threadHtml(coll, id, list, opts) {
+  const o = opts || {};
+  const rows = (list || []).map(c => commentHtml(coll, id, c)).join("");
+  return `<h3 id="tk-comments">${list.length || ""} ${esc(o.noun || "Comment")}${list.length === 1 ? "" : "s"}</h3>
+    ${rows || `<span class="muted">${esc(o.empty || "No comments yet.")}</span>`}`;
+}

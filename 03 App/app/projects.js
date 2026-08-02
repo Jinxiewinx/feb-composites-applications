@@ -560,15 +560,7 @@ function renderProjDetail() {
        comment reads as a paragraph in a form; framed like the ticket itself it
        reads as the document it is meant to be. -->
   <div class="card thread-card">
-    <h3 id="tk-comments">${projComments(p).length || ""} Comment${projComments(p).length === 1 ? "" : "s"}</h3>
-    ${projComments(p).map(c => `<div class="comment" id="c-${esc(c.id || "")}">
-      <div class="chead">
-        ${avatar(c.email || c.author, 26)}
-        <b>${esc(c.author || userName(c.email))}</b>
-        <time>${fmtWhen(c.ts)}</time>
-      </div>
-      <div class="prose">${proseHtml(c.html || "")}</div>
-    </div>`).join("") || '<span class="muted">No comments yet. The first one usually says what was actually built.</span>'}
+    ${threadHtml("projects", p.id, projComments(p), { empty: "No comments yet. The first one usually says what was actually built." })}
     ${(() => {
       // Uploads from this composer land in the ticket's own Storage tree, which
       // is the one storage.rules already scopes.

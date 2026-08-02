@@ -414,6 +414,17 @@
   .comment .chead b { color: var(--ink); font-size: 13.5px; }
   .comment .chead time { margin-left: auto; }
   .comment:target { border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
+  /* Edit/remove sit in the header, quiet until the comment is hovered — the
+     same treatment .tl-del gets, including being permanently visible on touch
+     where there is no hover to reveal them. */
+  .cacts { display: flex; gap: 2px; margin-left: 6px; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+  .comment:hover .cacts, .comment:focus-within .cacts { opacity: 1; }
+  @media (pointer: coarse) { .cacts { opacity: 1; } }
+  .comment.deleted { background: none; border-style: dashed; }
+  /* A step note stays a one-line control at the bench; the button beside it is
+     the way into the full composer. */
+  .stepnote { display: flex; align-items: center; gap: 6px; }
+  .stepnote input { flex: 1; min-width: 0; }
 
   /* ---- ticket detail split ----
      .tksplit rides on .mdsplit's grid, sticky rail and <=900 collapse, but

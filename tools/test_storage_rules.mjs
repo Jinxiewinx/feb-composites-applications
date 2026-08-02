@@ -5,8 +5,8 @@
    cases (which gate on contentType) can't be asserted here without the full
    resumable protocol — those are exercised by the app's Firebase SDK in prod.
    What this proves cleanly is the security boundary that matters: sign-in is
-   required, and writes outside the five allowed path trees (avatars/, projects/,
-   documents/, budget/, stackplans/) are denied. Run from "03 App/":
+   required, and writes outside the six allowed path trees (avatars/, projects/,
+   parts/, documents/, budget/, stackplans/) are denied. Run from "03 App/":
      firebase emulators:exec --only auth,storage --project demo-feb-work-orders \
        "node '../tools/test_storage_rules.mjs'"                                */
 
@@ -43,6 +43,10 @@ await denied("unauthenticated write to projects/", null, "projects/P-1/x.pdf");
 await denied("unauthenticated write to avatars/", null, "avatars/someuid");
 await denied("unauthenticated write to budget/", null, "budget/BUY-1/receipt.jpg");
 await denied("unauthenticated write to stackplans/", null, "stackplans/STK-1/mesh.stl");
+// Added with the rich composer on parts: there was no parts/ rule at all, and
+// the file ends in "no rule = deny", so a photo in a part comment failed
+// silently at upload. The tree exists now, and must still be roster-gated.
+await denied("unauthenticated write to parts/", null, "parts/P-SN6-001/photo.jpg");
 // The mold mesh behind the Stock tab's 3D view. Its rule accepts only
 // model/stl and application/octet-stream, so this PDF-typed write must be
 // refused even though the path itself is allowed — the one contentType case
