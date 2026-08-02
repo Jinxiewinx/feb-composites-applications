@@ -1190,6 +1190,12 @@ if (typeof window !== "undefined" && window.addEventListener) {
     e.returnValue = "";       // required by Chrome to show its own wording
   });
   if (typeof rteInit === "function") rteInit();
+  if (typeof installLightbox === "function") {
+    const lb = document.createElement("div");
+    lb.innerHTML = lightboxHtml();
+    document.body.appendChild(lb.firstElementChild);
+    installLightbox();
+  }
   /* One delegated listener for both floating shells, rather than one per
      editor: a render() rebuilds #main wholesale, so anything bound to the
      editor node itself would have to be re-bound on every paint. */
@@ -1200,4 +1206,89 @@ if (typeof window !== "undefined" && window.addEventListener) {
   });
   window.addEventListener("resize", syncChromeMetrics);
   window.addEventListener("orientationchange", syncChromeMetrics);
+}
+
+/* ---------- lightbox ----------
+   Comments carry photos of molds and parts, and the gallery deliberately makes
+   them small so a thread stays readable. This is how you actually look at one.
+   There was no lightbox, no zoom and no full-screen image anywhere in the app
+   before this — the only way to see a photo full size was the <a download>
+   wrapper, which navigated you out of the SPA and took any unposted draft with
+   it.
+
+   Opened by delegation on `.prose img`. That needs no class on the image, which
+   matters because the sanitizer strips class deliberately — the scope class is
+   on the container WE render. */
+let LB_LIST = [], LB_I = 0, LB_RETURN = null;
+function lightboxHtml() {
+  return `<div id="lightbox" role="dialog" aria-modal="true" aria-label="Photo">
+    <div class="lb-scrim" onclick="closeLightbox()"></div>
+    <div class="lb-bar">
+      <span class="lb-name" id="lb-name"></span>
+      <span id="lb-count" class="tny"></span>
+      <button id="lb-prev" title="Previous" aria-label="Previous photo" onclick="lbStep(-1)">${icon("chevronLeft", 18)}</button>
+      <button id="lb-next" title="Next" aria-label="Next photo" onclick="lbStep(1)">${icon("chevronRight", 18)}</button>
+      <a id="lb-dl" download title="Download" aria-label="Download this photo">${icon("download", 18)}</a>
+      <button id="lb-close" title="Close" aria-label="Close" onclick="closeLightbox()">${icon("x", 18)}</button>
+    </div>
+    <div class="lb-stage" onclick="if(event.target===this)closeLightbox()"><img id="lb-img" alt=""></div>
+  </div>`;
+}
+function openLightbox(img) {
+  const box = document.getElementById("lightbox");
+  if (!box || !img) return;
+  // Siblings first (a .cgal run), else every image in the same comment.
+  const scope = img.closest(".cgal") || img.closest(".prose") || document;
+  LB_LIST = Array.from(scope.querySelectorAll("img")).filter(i => i.src && !i.src.startsWith("data:"));
+  LB_I = Math.max(0, LB_LIST.indexOf(img));
+  LB_RETURN = img;
+  box.classList.add("open");
+  // inert on the rest is one attribute and does the whole focus-trap job. The
+  // app's own modal has no trap at all, so this is strictly better than the
+  // existing standard rather than a new burden.
+  ["app", "modal"].forEach(id => { const n = document.getElementById(id); if (n) n.inert = true; });
+  lbShow();
+  const c = document.getElementById("lb-close"); if (c) c.focus();
+}
+function lbShow() {
+  const im = document.getElementById("lb-img"), src = LB_LIST[LB_I];
+  if (!im || !src) return;
+  im.src = src.src; im.alt = src.alt || "";
+  const name = document.getElementById("lb-name");
+  if (name) name.textContent = src.alt || decodeURIComponent(String(src.src).split("/").pop().split("?")[0]).slice(0, 80);
+  const dl = document.getElementById("lb-dl"); if (dl) dl.href = src.src;
+  const cnt = document.getElementById("lb-count");
+  if (cnt) cnt.textContent = LB_LIST.length > 1 ? `${LB_I + 1} / ${LB_LIST.length}` : "";
+  ["lb-prev", "lb-next"].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = LB_LIST.length < 2; });
+}
+function lbStep(d) { if (!LB_LIST.length) return; LB_I = (LB_I + d + LB_LIST.length) % LB_LIST.length; lbShow(); }
+function closeLightbox() {
+  const box = document.getElementById("lightbox");
+  if (!box || !box.classList.contains("open")) return;
+  box.classList.remove("open");
+  ["app", "modal"].forEach(id => { const n = document.getElementById(id); if (n) n.inert = false; });
+  if (LB_RETURN && LB_RETURN.focus) LB_RETURN.focus();
+  LB_RETURN = null; LB_LIST = [];
+}
+function lightboxOpen() { const b = document.getElementById("lightbox"); return !!(b && b.classList.contains("open")); }
+function installLightbox() {
+  if (typeof document.addEventListener !== "function") return;
+  document.addEventListener("click", (e) => {
+    if (!e.target || !e.target.closest) return;
+    const img = e.target.closest(".prose img");
+    if (!img || img.closest(".rte")) return;      // not while you are editing
+    // imgAttachHtml wraps every attachment in <a href download>; without this
+    // the click navigates away to a raw file URL.
+    const a = img.closest("a[href]");
+    if (a) e.preventDefault();
+    openLightbox(img);
+  });
+  /* CAPTURE phase, so this beats escClose — otherwise Escape over a lightbox
+     opened from a comment inside a modal closes both. */
+  document.addEventListener("keydown", (e) => {
+    if (!lightboxOpen()) return;
+    if (e.key === "Escape") { e.stopImmediatePropagation(); closeLightbox(); }
+    else if (e.key === "ArrowRight") lbStep(1);
+    else if (e.key === "ArrowLeft") lbStep(-1);
+  }, true);
 }

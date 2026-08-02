@@ -398,12 +398,40 @@
   .fileitem .thumb { height: 84px; background: var(--fill) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--faint); }
   .fileitem .fn { padding: 5px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fileitem .fn a { color: var(--ink); text-decoration: none; }
-  .comment { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-  .comment:first-of-type { border-top: none; }
-  .comment .cbody { flex: 1; min-width: 0; }
-  .comment .chead { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  .comment .chead b { color: var(--ink); }
-  .comment .ctext img { max-width: 100%; border-radius: 4px; margin: 4px 0; }
+  /* ---- the thread ----
+     Each comment is its own inset surface rather than a paragraph separated by
+     a hairline. --surface-2, not --card: a white card inside a white card is
+     distinguished only by --line, which is ~1.3:1 against a card in BOTH
+     themes — so in dark mode consecutive comments had no visible boundary at
+     all. That was survivable at one line each and is not at document length. */
+  .thread-card { margin-top: 14px; }
+  .comment {
+    display: block; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .comment .chead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .comment .chead b { color: var(--ink); font-size: 13.5px; }
+  .comment .chead time { margin-left: auto; }
+  .comment:target { border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
+
+  /* ---- ticket detail split ----
+     .tksplit rides on .mdsplit's grid, sticky rail and <=900 collapse, but
+     deliberately does NOT take the selected-row rule that hides the Parts index
+     pane: there the rail is a list you navigate away from, and here it is
+     content you need alongside the discussion. */
+  .tkmeta { position: sticky; top: calc(var(--topbar-h) + 10px); }
+  .tkmain { min-width: 0; }
+  .tkmeta-fold > summary { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  .tkmeta .stagerow, .tkmeta .linkrow { margin-top: 4px; }
+  /* On a wide screen the rail is always open and its summary is noise — the
+     disclosure exists for the phone, where it is what buys the thread the top
+     of the page. */
+  @media (min-width: 901px) { .tkmeta-fold > summary { display: none; } }
+  @media (max-width: 900px) {
+    .tkmeta { position: static; }
+    .tksplit { gap: 0; }
+  }
   /* One row that scrolls, never a wrapping block. Eleven buttons at the 40px
      coarse-pointer minimum is ~460px of button in a 341px phone box, which
      wrapped to three rows and made the chrome taller than the 60px writing
@@ -518,6 +546,34 @@
   /* ---- toasts ---- */
   /* max(), not addition: 16px is already clear of most edges, and a toast
      floating 50px up from the bottom of a phone looks broken. Take the larger. */
+  /* ---- lightbox ----
+     A sibling of #modal, not a reuse of it: openModal() hardcodes a 640px
+     dialog with 40px of backdrop padding, and a comment can legitimately be
+     rendered INSIDE a modal, so the lightbox has to be able to open over one.
+     z 55 puts it above #modal (50) and below #toasts (60). */
+  #lightbox { position: fixed; inset: 0; display: none; z-index: 55; }
+  #lightbox.open { display: flex; flex-direction: column; }
+  #lightbox .lb-scrim { position: absolute; inset: 0; background: rgba(9,30,66,.86); }
+  #lightbox .lb-bar {
+    position: relative; z-index: 1; display: flex; align-items: center; gap: 10px;
+    padding: calc(8px + var(--sa-t)) max(12px, var(--sa-r)) 8px max(12px, var(--sa-l));
+    color: var(--sb-text); background: linear-gradient(to bottom, rgba(0,0,0,.55), transparent);
+  }
+  #lightbox .lb-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #lightbox .lb-bar button, #lightbox .lb-bar a {
+    border: none; background: none; color: var(--sb-text); border-radius: var(--radius); padding: 8px 10px; text-decoration: none;
+  }
+  #lightbox .lb-bar button:hover, #lightbox .lb-bar a:hover { background: var(--sb-hover); color: #fff; }
+  #lightbox .lb-stage {
+    position: relative; z-index: 1; flex: 1; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: auto; overscroll-behavior: contain;
+    padding: 0 max(8px, var(--sa-r)) calc(8px + var(--sa-b)) max(8px, var(--sa-l));
+  }
+  /* touch-action is the OPPOSITE of .meshview canvas, which suppresses native
+     gestures because it implements its own orbit and pinch. Here native pinch
+     is exactly what is wanted, so no gesture code is needed at all. */
+  #lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--canvas); touch-action: pinch-zoom; }
   #toasts { position: fixed; right: max(16px, var(--sa-r)); bottom: max(16px, var(--sa-b)); z-index: 60; display: flex; flex-direction: column; gap: 8px; }
   .toast { padding: 10px 14px; border-radius: var(--radius); color: #fff; font-size: 13.5px; box-shadow: var(--shadow-md); max-width: 340px; opacity: 1; transition: opacity .3s, transform .3s; }
   .toast.hide { opacity: 0; transform: translateY(6px); }
@@ -670,11 +726,13 @@
   /* Two or more images in a row become a grid. Three phone photos inline are
      ~2,650px of vertical scroll; as a grid they are ~380px, and the lightbox is
      how you actually look at one. */
-  /* 132px, not 160: the comment column is ~287px on a 393px phone, and a 160px
-     floor could only ever fit ONE — which put the three stacked full-width
-     photos straight back. Two-up is the minimum that makes a gallery a gallery.
-     Wider screens get bigger thumbs from the media query below. */
-  .cgal { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; margin: .85em 0; }
+  /* 118px is not arbitrary: measured, the comment body is 255px wide on a 393px
+     phone once the thread card and the per-comment card have taken their
+     padding. Two columns need a floor at or under (255-8)/2 = 123. Anything
+     larger silently collapses to ONE column, which puts the stack of
+     full-width photos straight back — the exact thing the gallery exists to
+     prevent. Wider screens get proper thumbs from the media query below. */
+  .cgal { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: .85em 0; }
   @media (min-width: 640px) { .cgal { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
   .cgal a { display: block; border-radius: var(--r-md); overflow: hidden; }
   .cgal img {
@@ -1458,6 +1516,61 @@
     table.sub thead { display: table-header-group; } table.sub tr { break-inside: avoid; }
     .step { break-inside: avoid; } .step .buyoff button { display: none; }
     a { color: var(--ink); text-decoration: none; }
+
+    /* ---- comment threads on paper ----
+       None of this existed. print.css is entirely the work-order traveler, and
+       the fallback path below has no rule for prose, user tables or images — so
+       a printed thread was unstyled and untested.
+
+       Links first, because the rule above silently DESTROYS them: colour is
+       dropped and the underline removed, so a hyperlink prints as ordinary
+       black text and the address is simply gone. In a document type whose whole
+       point is carrying links, that is the worst of the lot. These selectors
+       are (0,1,1) so they beat the bare `a` regardless of order. */
+    .prose a { color: var(--ink) !important; text-decoration: underline !important; }
+    .prose a[href^="http"]::after { content: " <" attr(href) ">"; font-size: 8pt; font-weight: 400; word-break: break-all; }
+    .prose .cgal a::after { content: none; }   /* its href is the image already on the page */
+
+    /* --fill and --surface-2 are both #fff on paper, so every background tint
+       that carried a distinction on screen is gone. The borders do the work. */
+    .prose code, .prose pre { background: none; border: 0.75pt solid var(--line); }
+    .prose pre { overflow: visible; white-space: pre-wrap; word-break: break-word; break-inside: avoid; }
+    .tblwrap { overflow: visible !important; }
+    .prose table { width: 100%; font-size: 9pt; break-inside: auto; }
+    .prose thead { display: table-header-group; }   /* header repeats across pages */
+    .prose tr { break-inside: avoid; }
+    .prose th, .prose td { border: 0.75pt solid var(--line); padding: 3pt 5pt; }
+    .prose th { background: none; border-bottom-width: 1.5pt; }
+    .prose tbody tr:nth-child(even) td { background: none; }
+
+    /* Nothing print-sized an image before, so a phone photo printed as a full
+       page and could split across a break mid-photo. */
+    .prose img { max-width: 100%; max-height: 3.2in; width: auto; break-inside: avoid; border: 0.75pt solid var(--line); background: none; }
+    .cgal { grid-template-columns: repeat(3, 1fr); gap: 6pt; break-inside: avoid; }
+    .cgal img { max-height: 1.4in; }
+
+    /* 68ch is right in a 1180px column and wrong on a 7.6in page, where it
+       would leave an inch of margin. On paper the page margin is the measure. */
+    .prose, .prose > *, .prose p, .prose ul, .prose ol,
+    .prose h1, .prose h2, .prose h3, .prose h4, .prose blockquote { max-width: none; }
+    .prose { font-size: 10pt; line-height: 1.4; }
+    .prose h1 { font-size: 15pt; } .prose h2 { font-size: 13pt; }
+    .prose h3 { font-size: 11.5pt; } .prose h4 { font-size: 10pt; }
+    .prose h1, .prose h2, .prose h3, .prose h4 { break-after: avoid; }
+
+    /* A long comment SHOULD split — break-inside:avoid on a document-length
+       block just pushes a mostly-empty page. What must not split is a comment
+       away from the name on it. The .card print rule does not reach these. */
+    .comment { break-inside: auto; border-radius: 0; box-shadow: none;
+      border: 0.75pt solid var(--line); background: none; margin-bottom: 8pt; padding: 8pt 10pt; }
+    .comment .chead { break-after: avoid; }
+
+    #lightbox, .rte-bubble, .rte-insert, .composer, .composer-stub { display: none !important; }
+    /* The rail is metadata; on paper it reads better as a block above the
+       thread than as a column beside it, which .mdsplit's print rule already
+       handles — but the disclosure has to be forced open or it prints empty. */
+    .tkmeta-fold > summary { display: none; }
+    .tkmeta-fold { display: block !important; }
   }
 </style>
 <link rel="stylesheet" href="print.css">

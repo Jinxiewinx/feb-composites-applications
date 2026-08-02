@@ -495,6 +495,22 @@ function renderProjDetail() {
     <h2>${esc(p.title || "(untitled ticket)")}</h2>
     <div class="muted">${esc(p.id)} · <span class="prio ${esc(p.priority)}">${esc(p.priority || "")} priority</span>${p.dueDate ? ` · due ${esc(p.dueDate)}${dd != null ? ` (${dd < 0 ? Math.abs(dd) + " days late" : dd + " days out"})` : ""}` : ""}</div>
 
+    <!-- Split at 901px: metadata into a rail, the narrative into the wide
+         column. Five h3-plus-one-chip-row blocks were each spanning the full
+         1560px content box to carry a handful of words, and pushing the
+         comments (the thing this page is FOR) to roughly y=900, below the fold.
+
+         .mdsplit is reused verbatim rather than reinvented, so the sticky rail,
+         the <=900 single-column collapse and the existing
+         @media print { .mdsplit { display: block } } all come free. What is NOT
+         reused is .mdsplit's has-sel rule: on Parts the left column is a list
+         you navigate away from, so hiding it is right; here it is content you
+         need alongside the discussion, and hiding it would delete the ticket's
+         metadata on every phone. -->
+    <div class="mdsplit tksplit">
+      <div class="tkmeta">
+        <details class="moredetails tkmeta-fold" open>
+          <summary>Details, files and links</summary>
     ${isIssue(p) ? `
     <h3>Work order <span class="muted nocaps">— required</span></h3>
     <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
@@ -512,6 +528,20 @@ function renderProjDetail() {
     ${isIssue(p) ? "" : `<h3>Related parts</h3><div class="stagerow">${partChips}</div>`}
     ${(ticketChips || woChips) ? `<h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div>` : ""}
 
+
+    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets</span></h3>
+    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
+    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
+    <h3>Files</h3>
+    <div class="filegrid">
+      ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+    </div>
+    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div>
+        </details>
+      </div>
+      <div class="tkmain">
+    <h3>Description</h3>
+    <div class="prose">${p.description ? proseHtml(p.description) : '<span class="muted">—</span>'}</div>
     ${!isIssue(p) && !p.parentId ? `
     <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
     ${kids.length ? kids.map(k => `<div class="subticket" onclick="openRecord('projects','${k.id}')">
@@ -522,26 +552,23 @@ function renderProjDetail() {
     <div class="no-print" style="margin-top:6px"><button class="sm" onclick="openNewSubTicket('${p.id}')">+ Add sub-ticket</button></div>
     ` : ""}
 
-    <h3>Description</h3>
-    <div class="prose">${p.description ? proseHtml(p.description) : '<span class="muted">—</span>'}</div>
 
-    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets about this ticket</span></h3>
-    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
-    <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
-    <h3>Files</h3>
-    <div class="filegrid">
-      ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
-    </div>
-    <div class="no-print" style="margin-top:8px"><button onclick="addProjectFiles()">+ Add files</button></div>
-
-    <h3>Comments</h3>
-    ${projComments(p).map(c => `<div class="comment">
-      ${avatar(c.email || c.author, 30)}
-      <div class="cbody">
-        <div class="chead"><b>${esc(c.author || userName(c.email))}</b> · ${fmtWhen(c.ts)}</div>
-        <div class="ctext prose">${proseHtml(c.html || "")}</div>
+  <!-- The thread lives INSIDE the wide column, beside the rail rather than
+       stacked under the whole split — otherwise a ticket with a long metadata
+       rail pushes the discussion back down the page, which is the problem this
+       layout exists to solve. Its own card, because inside one big card a
+       comment reads as a paragraph in a form; framed like the ticket itself it
+       reads as the document it is meant to be. -->
+  <div class="card thread-card">
+    <h3 id="tk-comments">${projComments(p).length || ""} Comment${projComments(p).length === 1 ? "" : "s"}</h3>
+    ${projComments(p).map(c => `<div class="comment" id="c-${esc(c.id || "")}">
+      <div class="chead">
+        ${avatar(c.email || c.author, 26)}
+        <b>${esc(c.author || userName(c.email))}</b>
+        <time>${fmtWhen(c.ts)}</time>
       </div>
-    </div>`).join("") || '<span class="muted">No comments yet.</span>'}
+      <div class="prose">${proseHtml(c.html || "")}</div>
+    </div>`).join("") || '<span class="muted">No comments yet. The first one usually says what was actually built.</span>'}
     ${(() => {
       // Uploads from this composer land in the ticket's own Storage tree, which
       // is the one storage.rules already scopes.
@@ -558,6 +585,9 @@ function renderProjDetail() {
       }) + (draft && composerOpen("comment-editor")
         ? `<div class="muted tny">Draft restored. <button class="link" onclick="discardCommentDraft('${p.id}')">Discard it</button></div>` : "");
     })()}
+  </div>
+      </div>
+    </div>
   </div>`;
 }
 

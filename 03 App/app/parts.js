@@ -691,10 +691,9 @@ function renderPartDetail() {
         ${E ? `<textarea onchange="updPart('comments',this.value)">${esc(p.comments)}</textarea>`
              : `<div class="notebody">${p.comments ? esc(p.comments).replace(/\n/g, "<br>") : '<span class="muted">—</span>'}</div>`}
       </div>
-      ${comments.map(c => `<div class="comment">
-        ${avatar(c.email || c.author, 28)}
-        <div class="cbody"><div class="chead"><b>${esc(c.author || userName(c.email))}</b> · ${fmtWhen(c.ts)}</div>
-        <div class="ctext prose">${esc(c.text).replace(/\n/g, "<br>")}</div></div>
+      ${comments.map(c => `<div class="comment" id="c-${esc(c.id || "")}">
+        <div class="chead">${avatar(c.email || c.author, 26)}<b>${esc(c.author || userName(c.email))}</b><time>${fmtWhen(c.ts)}</time></div>
+        <div class="prose">${c.html ? proseHtml(c.html) : esc(c.text).replace(/\n/g, "<br>")}</div>
       </div>`).join("")}
       <div class="no-print" style="margin-top:10px">
         <textarea id="pcomment" placeholder="Add a comment — it keeps your name and the time…"></textarea>
