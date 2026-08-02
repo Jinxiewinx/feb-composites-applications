@@ -50,17 +50,52 @@ if (cfg.useEmulators === true || (cfg.useEmulators !== false && onLocalhost)) {
   connectStorageEmulator(storage, "127.0.0.1", 9199);
 }
 
-// Shrink an image client-side before upload so avatars/attachments stay small
-// (Firestore-free storage still costs egress; a 4 MB phone photo becomes ~150 KB).
-async function downscaleImage(file, maxDim) {
+/* Shrink an image client-side before upload so attachments stay small (a 4 MB
+   phone photo becomes ~150 KB).
+
+   This used to re-encode EVERYTHING to JPEG q0.85 at 1600px, which is the right
+   trade for a photo of a mold and the wrong one for the other half of what gets
+   attached here. A screenshot of a drawing or a spreadsheet is thin dark lines
+   on white — the exact worst case for JPEG — and it came out with ringing on
+   every line and mush on the dimension text. Worse, a canvas starts
+   transparent and JPEG has no alpha, so any PNG with transparency (an exported
+   plot, a diagram, a logo) was composited onto BLACK and arrived as a dark
+   slab.
+
+   So: PNG stays PNG and gets a larger budget, because a screenshot is only
+   useful if you can read it. Everything else is a photo and gets JPEG over an
+   opaque white fill. Both candidates are encoded when the source is a PNG and
+   the smaller one wins, so a photo someone happened to save as PNG doesn't
+   cost 4 MB for nothing. */
+async function downscaleImage(file, maxDim, opts = {}) {
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+  const isPng = (file.type || "") === "image/png";
+  // A screenshot is only worth keeping if the small text in it survives; 1600
+  // is below the native width of a Retina capture.
+  const cap = isPng ? (opts.maxDimPng || 2400) : maxDim;
+  const scale = Math.min(1, cap / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
-  const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.85));
-  return blob || file;
+
+  const draw = (opaque) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    // Only for the JPEG path: without it the encoder fills alpha with black.
+    if (opaque) { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return canvas;
+  };
+  const encode = (canvas, type, q) => new Promise(res => canvas.toBlob(res, type, q));
+
+  const jpeg = await encode(draw(true), "image/jpeg", 0.85);
+  if (!isPng) { if (bmp.close) bmp.close(); return jpeg || file; }
+
+  const png = await encode(draw(false), "image/png");
+  if (bmp.close) bmp.close();
+  // Keep the PNG unless it is dramatically bigger — a little extra weight is
+  // worth legible text, but a photo saved as PNG can be 10x and isn't.
+  if (png && (!jpeg || png.size <= jpeg.size * 2.5)) return png;
+  return jpeg || png || file;
 }
 
 // The data collections the app syncs. Add one here + a rules block + a counter

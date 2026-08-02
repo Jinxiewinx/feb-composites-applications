@@ -50,9 +50,16 @@ globalThis.Blob = class { constructor(p) { this.text = p.join(""); } };
 globalThis.URL = { createObjectURL: () => "blob:x", revokeObjectURL() {} };
 const _ls = {};
 globalThis.localStorage = { getItem: k => (k in _ls ? _ls[k] : null), setItem: (k, v) => { _ls[k] = String(v); }, removeItem: k => { delete _ls[k]; } };
-// Faithful-enough DOMPurify double: strips script/handlers/js: URLs (incl. the
-// slash-before-attr form real DOMPurify catches), keeps allowed tags. Prod uses
-// the real pinned lib; this exercises the same code path in tests.
+/* A DOMPurify double, because the real library needs a live DOM and this file
+   runs against a hand-rolled `document` stub. It strips scripts, handlers and
+   js: URLs, and passes everything else through.
+
+   IT DOES NOT IMPLEMENT THE ALLOWLIST, and must not be trusted to. Anything
+   asserting which tags or attributes survive belongs in tools/test_sanitize.mjs,
+   which runs the real vendored purify.min.js in Chromium. That file exists
+   because this stub hid two live bugs for as long as it was the only coverage:
+   `data:` URLs were being stored rather than blocked, and `download` was being
+   silently dropped. Assertions here are about the code path, not the policy. */
 globalThis.window.DOMPurify = {
   sanitize: (html) => String(html)
     .replace(/<\s*(script|iframe|object|embed|style)[\s\S]*?<\/\s*\1\s*>/gi, "")

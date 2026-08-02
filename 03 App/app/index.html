@@ -1149,8 +1149,13 @@
     #modal .modal .row2 { grid-template-columns: 1fr; }
 
     /* 16px form controls so iOS doesn't zoom the page on focus. Dense grids
-       (timeline, detail sub-tables) already scroll horizontally, so this is safe. */
-    input, select, textarea { font-size: 16px; }
+       (timeline, detail sub-tables) already scroll horizontally, so this is safe.
+
+       `.rte` is in this list because it is a contenteditable div, not a form
+       control, so it fell through this rule and every other rule written for
+       `input, select, textarea`. The composer was the one place in the app you
+       type the most, and focusing it zoomed the viewport on every iPhone. */
+    input, select, textarea, .rte { font-size: 16px; }
 
     /* Part details: two short columns beat one very long one — nine fields at
        one per row is most of a phone screen of label/value pairs. */
@@ -1196,6 +1201,9 @@
        24px, the Parts one 31px, and the People role select 21px, all on a
        phone. Which container a control lives in has nothing to do with how big
        a finger is. */
+    /* `.rte` again: same contenteditable-is-not-a-form-control problem. It kept
+       its 60px desktop height on a phone while the toolbar above it grew to
+       three 40px rows, so the chrome was twice the size of the writing area. */
     input:not([type=checkbox]):not([type=radio]), select, textarea { min-height: 40px; }
     /* A checkbox is sized by its own box, so min-height does nothing to it and
        there is no honest way to make it 40px without it looking broken. 24px

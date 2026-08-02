@@ -527,7 +527,68 @@ function closeModal() {
   const d = window.__confirmDismissCb; window.__confirmDismissCb = null;
   if (d) d();
 }
-function escClose(e) { if (e.key === "Escape") closeModal(); }
+/* ---------- drafts ----------
+   Nothing typed into this app was ever saved until you posted it. Escape, a
+   refresh, a dead battery, or a Firestore snapshot arriving mid-sentence and
+   triggering a re-render all threw the lot away. That was an annoyance when a
+   comment was a line; it is the difference between using this app and not using
+   it once a comment is a report with photos in it.
+
+   Per-browser, like the watched-tickets "seen" map: a draft is a private,
+   half-finished thought and has no business syncing to the team database before
+   its author decides it is done. Keyed by surface so two half-written comments
+   on two tickets never overwrite each other. */
+const DRAFT_NS = "feb-draft";
+function draftKey(kind, id) { return `${DRAFT_NS}:${kind}:${id}`; }
+function saveDraft(kind, id, html) {
+  try {
+    if (String(html || "").replace(/<[^>]*>/g, "").trim()) localStorage.setItem(draftKey(kind, id), html);
+    else localStorage.removeItem(draftKey(kind, id)); // emptied on purpose: stop offering it back
+  } catch (e) { /* private mode / quota: a draft is a nicety, never a blocker */ }
+}
+function loadDraft(kind, id) {
+  try { return localStorage.getItem(draftKey(kind, id)) || ""; } catch (e) { return ""; }
+}
+function clearDraft(kind, id) {
+  try { localStorage.removeItem(draftKey(kind, id)); } catch (e) {}
+}
+/* Debounced so a fast typist doesn't hit localStorage on every keystroke.
+   Module-level timer keyed to one editor at a time, which is all there ever
+   is — you cannot type in two boxes at once. */
+let DRAFT_T = null;
+function draftInput(kind, id, el) {
+  if (DRAFT_T) clearTimeout(DRAFT_T);
+  DRAFT_T = setTimeout(() => saveDraft(kind, id, el && el.innerHTML), 400);
+}
+/* Only ever fires for text the author has not posted. The browser shows its own
+   generic wording; the point is that the tab does not close silently. */
+function draftsPending() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (String(localStorage.key(i) || "").startsWith(DRAFT_NS + ":")) return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+/* Escape closes the modal — unless you are typing in it. Without the guard,
+   pressing Escape while writing a ticket description threw the modal away and
+   took everything typed with it, and nothing was ever saved anywhere. That was
+   survivable when a description was a sentence. It is not survivable now that
+   these boxes are meant to hold documents.
+
+   Same test partsKeydown() already uses (parts.js), including
+   `isContentEditable` so it covers the rich-text editors and not just inputs. */
+function typingIn(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return el.isContentEditable === true || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+function escClose(e) {
+  if (e.key !== "Escape") return;
+  if (typingIn(e.target)) { e.target.blur(); return; }
+  closeModal();
+}
 
 /* ---------- toasts + styled confirm ---------- */
 function toast(msg, type) {
@@ -567,28 +628,106 @@ function confirmAsync(msg, opts) {
 }
 
 /* ---------- HTML sanitizer (comment rich text) ----------
-   DOMPurify (pinned + SRI in index.html) is the sanitizer. It's a shared,
-   persistent surface (every teammate sees stored comments), so we FAIL CLOSED:
-   if DOMPurify isn't loaded (CDN blocked / offline / test harness), we do NOT
-   fall back to a weaker regex scrubber — we escape to plain text, dropping
-   formatting but guaranteeing no HTML executes. `img`/`a` URLs are https-only
-   (uploaded images already come back as https Storage URLs); no data: URLs,
-   which closes the data:image/svg-in-href navigation vector. */
+   DOMPurify (pinned + SRI in index.html) is the sanitizer. It is a shared,
+   persistent surface — every teammate renders whatever anyone else stored — so
+   it FAILS CLOSED: if DOMPurify is missing, we escape to plain text rather than
+   fall back to a weaker scrubber.
+
+   TWO BUGS FIXED HERE THAT NOTHING COULD SEE, because tools/test_app.mjs stubbed
+   DOMPurify with a regex that ignored the allowlist entirely. Both were found
+   the moment tools/test_sanitize.mjs started running the real library:
+
+   1. `data:` URLs were NOT blocked. The old comment above this function claimed
+      they were. DOMPurify permits data: on img/audio/video/source regardless of
+      ALLOWED_URI_REGEXP, so a pasted screenshot was not "stripped" — it was
+      quietly stored as a base64 blob inside the ticket document, against a
+      1 MiB Firestore limit shared with every other comment on that ticket. One
+      paste could brick a ticket for everyone. Blocked below with a hook.
+
+   2. `download` was silently dropped. Setting ALLOWED_URI_REGEXP to https-only
+      makes DOMPurify apply that test to `download` too, and "photo.png" is not
+      an https URL, so it failed. Every attachment link has been losing its
+      download behaviour. Re-permitted below with a hook.
+
+   `style` is deliberately NOT allowed. Google Docs expresses all formatting as
+   inline styles (bold is `<span style="font-weight:700">`), so allowing it let
+   pasted content carry its own fonts, sizes and a hardcoded `color:#000000`
+   into every comment — overriding the app's typography permanently and going
+   invisible in dark mode. Formatting is carried by tags and styled by .prose;
+   the paste normaliser recovers the semantics before the styles are dropped.
+
+   `class` and `id` are not allowed either: `class` would let pasted markup
+   adopt app chrome (a convincing fake status badge), and `id` would collide
+   with our own anchors. */
+const SANITIZE_CFG = {
+  /* Headings are plural because the brief asks for documents, and because a
+     disallowed tag is UNWRAPPED with its text kept — so a pasted Google Doc
+     used to flatten every heading to an indistinguishable paragraph. blockquote
+     / pre / hr are the same argument. All are inert: no script vector, no
+     URL-bearing attribute. */
+  ALLOWED_TAGS: [
+    "b", "i", "u", "strong", "em", "span", "br", "p", "div",
+    "h1", "h2", "h3", "h4", "ul", "ol", "li", "blockquote", "pre", "code", "hr",
+    "a", "img",
+    "table", "thead", "tbody", "tr", "th", "td", "caption",
+  ],
+  /* width/height reserve space so a thread of photos does not reflow as it
+     loads; they are clamped to integers by the hook below. `loading` only ever
+     takes the value "lazy" here. */
+  ALLOWED_ATTR: ["href", "src", "alt", "download", "width", "height", "loading"],
+  ALLOWED_URI_REGEXP: /^https?:/i,
+  /* The subtlety that cost two silent bugs. Restricting ALLOWED_URI_REGEXP to
+     https makes DOMPurify apply that test to every attribute it does not already
+     consider URI-safe — and its built-in safe list covers `alt` and `title` but
+     not `download`, `width`, `height` or `loading`. So `download="photo.png"`
+     and `width="800"` were being judged as URLs, failing, and being dropped.
+     These four carry no URL and never did. */
+  ADD_URI_SAFE_ATTR: ["download", "width", "height", "loading"],
+};
+
+// Registered once, guarded because core.js is a classic script that must not
+// double-register if it is ever evaluated twice (the test harness does).
+let SANITIZE_HOOKED = false;
+function installSanitizeHooks() {
+  if (SANITIZE_HOOKED || !window.DOMPurify || !window.DOMPurify.addHook) return;
+  SANITIZE_HOOKED = true;
+
+  window.DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+    // (1) data: on any element, not just the ones DOMPurify exempts.
+    if ((data.attrName === "src" || data.attrName === "href")
+        && /^\s*data:/i.test(String(data.attrValue || ""))) {
+      data.keepAttr = false;
+      return;
+    }
+  });
+
+  window.DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.tagName === "A" && node.hasAttribute("href")) {
+      /* Set by us, never by stored content, which is why `target`/`rel` are not
+         in ALLOWED_ATTR. Before this, rteLink() set them on the live node and
+         the sanitizer stripped them straight back off, so every link in every
+         stored comment navigated the SPA away in the same tab. */
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noopener noreferrer nofollow");
+    }
+    if (node.tagName === "IMG") {
+      ["width", "height"].forEach(a => {
+        if (!node.hasAttribute(a)) return;
+        const n = parseInt(node.getAttribute(a), 10);
+        if (!Number.isFinite(n) || n <= 0 || n > 10000) node.removeAttribute(a);
+        else node.setAttribute(a, String(n));
+      });
+      if (node.getAttribute("loading") !== "lazy") node.removeAttribute("loading");
+    }
+  });
+}
+
 function sanitizeHtml(html) {
   if (window.DOMPurify && window.DOMPurify.sanitize) {
-    return window.DOMPurify.sanitize(String(html || ""), {
-      // h3/code/table family added for the comment/description editor's
-      // Heading/Code/Table buttons — a fixed, small addition, not an open door
-      // (no script-bearing tags, no event-handler attributes below).
-      ALLOWED_TAGS: ["b", "i", "u", "strong", "em", "span", "br", "p", "ul", "ol", "li", "a", "img", "div", "font", "h3", "code", "table", "thead", "tbody", "tr", "th", "td"],
-      // "download" is a normal, non-executable attribute (still https-only via
-      // ALLOWED_URI_REGEXP below) — lets an attached image/file link force a
-      // save instead of just navigating to it in a new tab.
-      ALLOWED_ATTR: ["style", "href", "src", "alt", "size", "color", "download"],
-      ALLOWED_URI_REGEXP: /^https?:/i,
-    });
+    installSanitizeHooks();
+    return window.DOMPurify.sanitize(String(html || ""), SANITIZE_CFG);
   }
-  return esc(html); // fail closed: no real sanitizer → no HTML, just text
+  return esc(html); // fail closed: no real sanitizer -> no HTML, just text
 }
 function richTextAvailable() { return !!(window.DOMPurify && window.DOMPurify.sanitize); }
 
@@ -985,6 +1124,13 @@ document.addEventListener("keydown", (e) => {
    (the island moves from the top edge to a side one), so the topbar's height
    changes without a single re-render. */
 if (typeof window !== "undefined" && window.addEventListener) {
+  /* An unposted draft is the one piece of state in this app that exists only in
+     this browser, so closing the tab is the one way to lose it for good. */
+  window.addEventListener("beforeunload", (e) => {
+    if (!draftsPending()) return;
+    e.preventDefault();
+    e.returnValue = "";       // required by Chrome to show its own wording
+  });
   window.addEventListener("resize", syncChromeMetrics);
   window.addEventListener("orientationchange", syncChromeMetrics);
 }

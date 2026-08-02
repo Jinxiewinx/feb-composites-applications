@@ -196,14 +196,18 @@ function openNewProject(parentId) {
 // two toolbars can't drift out of sync — a button added to one is added to
 // both. Image attach is comment-only (see the comment section below) since
 // that's the one thing the two editors don't have in common.
+/* A+ / A- are gone. They ran execCommand("fontSize"), which emits the 1996
+   <font size> tag, sized off the browser's 16px default rather than this app's
+   scale — so a user-set size could never track the prose typography, and
+   size="2" landed near the 11px floor test_appui.mjs enforces. <font> is no
+   longer in the sanitizer allowlist either, so the buttons had stopped doing
+   anything at all. Headings are the way to change emphasis here. */
 function rteToolbarButtons(targetId) {
   return `
     <button type="button" title="Bold" onclick="rte('bold',null,'${targetId}')"><b>B</b></button>
     <button type="button" title="Italic" onclick="rte('italic',null,'${targetId}')"><i>I</i></button>
     <button type="button" title="Underline" onclick="rte('underline',null,'${targetId}')"><u>U</u></button>
     <button type="button" title="Heading" onclick="rte('formatBlock','h3','${targetId}')">H</button>
-    <button type="button" title="Bigger" onclick="rte('fontSize','5','${targetId}')">A+</button>
-    <button type="button" title="Smaller" onclick="rte('fontSize','2','${targetId}')">A−</button>
     <button type="button" title="Bullet list" onclick="rte('insertUnorderedList',null,'${targetId}')">• List</button>
     <button type="button" title="Link" onclick="rteLink('${targetId}')">🔗</button>
     <button type="button" title="Code" onclick="rteCode('${targetId}')">&lt;/&gt;</button>
@@ -582,7 +586,10 @@ function renderProjDetail() {
       <div class="rte-toolbar">${rteToolbarButtons("comment-editor")}
         <button type="button" title="Attach image" onclick="attachCommentImage()">${icon("paperclip", 15)} Image</button>
       </div>
-      <div class="rte" id="comment-editor" contenteditable="true" data-ph="Write a comment…"></div>
+      <div class="rte" id="comment-editor" contenteditable="true" data-ph="Write a comment…"
+        oninput="draftInput('comment','${p.id}',this)"
+        onkeydown="commentKeys(event,'${p.id}')">${sanitizeHtml(loadDraft("comment", p.id))}</div>
+      ${loadDraft("comment", p.id) ? `<div class="muted tny">Draft restored. <button class="link" onclick="discardCommentDraft('${p.id}')">Discard it</button></div>` : ""}
       <div style="margin-top:6px"><button class="primary" onclick="postComment('${p.id}')">Comment as ${esc(signerName())}</button></div>
     </div>
   </div>`;
@@ -665,6 +672,16 @@ function postComment(id) {
     saveProj(p, "watchers");
     mentioned.forEach(e => fb.notify(e, "mention", signerName() + " mentioned you on “" + (p.title || p.id) + "”", { tab: "projects", id }).catch(() => {}));
   }
-  ed.innerHTML = ""; render();
+  ed.innerHTML = ""; clearDraft("comment", id); render();
 }
 function rmProjDoc(linkId) { removeDocLink("projects", view.id, linkId); }
+
+/* Cmd/Ctrl+Enter posts. Every product this app is competing with for muscle
+   memory does it, and the Post button is the far end of a long page once the
+   composer is holding a document. */
+function commentKeys(e, id) {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); postComment(id); }
+}
+function discardCommentDraft(id) {
+  confirmModal("Throw away this unposted draft?", () => { clearDraft("comment", id); render(); });
+}
