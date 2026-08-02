@@ -276,7 +276,10 @@
   .stage-bar-fill.st-mid { background: var(--amber); }
   .stage-bar-fill.st-done { background: var(--ok); }
   .stagecell { display: inline-block; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 5px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
+  /* A <button>, so `font: inherit` and the box reset are needed — everything up
+     to `cursor` is undoing the app's own button styling, the same way .tl-cell
+     does it. Kept visually identical to the old <span>. */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 5px; font: inherit; font-size: 12px; line-height: 1.5; text-align: left; min-height: 0; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
   .chip:hover { filter: brightness(.97); }
   .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
 
@@ -1151,6 +1154,99 @@
   .stat-tile { background: var(--surface-2); border-radius: var(--r-md); padding: 12px 14px; }
   .stat-tile .bignum { font-size: 22px; }
   .stat-tile .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-top: 2px; }
+  /* ---- dashboard ----
+     The old page was seven cards of equal weight, three of which drew the same
+     table with different filters, and a stat row whose numerals were clamped to
+     22px on a 3%-contrast wash. Everything below is about hierarchy: two big
+     numbers, one list whose group counts ARE the headings, and the conditional
+     sections quiet until they have something to say. */
+
+  /* Tiles are buttons now, so the button chrome has to be undone; .card supplies
+     the surface. Padding is tighter than a normal card because the numeral is
+     doing the work. */
+  /* Capped, and packed to the left. At `1fr` each tile stretched to half the
+     content box, so a one-digit number floated in an 800px card with a acre of
+     nothing beside it — the numerals are the point, not the boxes. */
+  .dashtiles { grid-template-columns: repeat(auto-fit, minmax(150px, 210px)); justify-content: start; }
+  .dashtiles .card {
+    display: block; text-align: left; width: 100%; margin: 0;
+    padding: 12px 14px; font: inherit; cursor: pointer;
+  }
+  .dashtiles .card:hover { border-color: var(--accent); background: var(--card); }
+  .dashtiles .bignum { display: block; line-height: 1.15; }
+  .dashtiles .bignum.bad { color: var(--bad); }
+  .dashtiles .stat-label { display: block; }
+
+  /* The group heading IS the count. .bignum at its published 32px — the size
+     the design system ships and the page never used. */
+  .dgrouphd { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; }
+  .dgrouphd:first-child { margin-top: 4px; }
+  .dgrouphd .bignum { font-size: 28px; line-height: 1; }
+  .dgrouphd .bignum.bad { color: var(--bad); }
+  .dgrouphd .dg-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .dashlist h2 { margin-bottom: 2px; }
+  /* A full-width row, so it clears a thumb without a bespoke control. */
+  .dg-more {
+    display: block; width: 100%; margin-top: 12px; padding: 11px 14px;
+    text-align: left; color: var(--muted); background: var(--fill); border-color: transparent;
+  }
+  .dg-more:hover { color: var(--ink); border-color: var(--border-2); }
+
+  /* The folded group. The marker sits on the summary, and the heading inside it
+     keeps its own baseline — so it reads as the same group header as the rest,
+     with a triangle. */
+  .dg-fold > summary { list-style: none; cursor: pointer; }
+  .dg-fold > summary::-webkit-details-marker { display: none; }
+  .dg-fold > summary .dgrouphd::after {
+    content: "▸"; font-size: 13px; color: var(--faint); margin-left: 2px;
+    transition: transform var(--t-fast) var(--ease);
+  }
+  .dg-fold[open] > summary .dgrouphd::after { content: "▾"; }
+  .dg-fold > summary:hover .dg-label { color: var(--ink); }
+
+  .dashweek .dg-more { margin-top: 10px; }
+  .dashblocked .gate, .dashcuring .curerow { margin: 6px 0 0; }
+  .curerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--line); }
+  .curerow:first-of-type { border-top: none; }
+  .cure-at { font-family: var(--font-display); font-weight: 700; color: var(--brand-ink); }
+  .dashwatched h3 .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
+
+  /* Seven stations, two columns on a laptop. */
+  /* Two columns, never four. At auto-fit a wide screen gave four narrow ones,
+     which wrapped "ShopSabre slot 1" onto two lines and put a 118px label next
+     to a 60px value. Seven stations read as 4 + 3 down two columns. */
+  .stationgrid { display: grid; grid-template-columns: 1fr; gap: 2px 26px; }
+  @media (min-width: 901px) { .stationgrid { grid-template-columns: 1fr 1fr; } }
+  .stn { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); min-height: 38px; }
+  .stn-l { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); flex: none; width: 128px; }
+  .stn-v { min-width: 0; }
+
+  /* The car, part by part. One cell per part. */
+  .unitgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 5px; margin: 10px 0 8px; }
+  .ucell {
+    position: relative; aspect-ratio: 1; min-height: 40px; padding: 0; overflow: hidden;
+    display: block; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--fill); color: var(--muted); cursor: pointer;
+  }
+  .ucell:hover { border-color: var(--accent); }
+  .ucell i { position: absolute; left: 0; bottom: 0; height: 4px; background: currentColor; opacity: .9; }
+  .ucell.st-mid { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
+  .ucell.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+  .ucell.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
+  .uglyph { position: absolute; inset: 26%; width: 48%; height: 48%; }
+
+  /* Three numbers on a rule, the lightest thing on the page. */
+  .dashfoot { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 18px; margin-top: 14px; }
+  .df-cell {
+    display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 12px 2px;
+    text-align: left; background: none; border: none; border-top: 1px solid var(--line);
+    border-radius: 0; font: inherit; cursor: pointer; color: var(--muted);
+  }
+  .df-cell:hover { color: var(--ink); background: none; }
+  .df-n { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--brand-ink); flex: none; }
+  .df-of { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .df-l { font-size: 12px; }
+
   .glance { display: flex; gap: 10px; flex-wrap: wrap; }
   .gitem { flex: 1; min-width: 70px; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; }
   .gitem:hover { background: var(--hover); }
@@ -1467,6 +1563,45 @@
        index and the part share it. On a phone the index IS the other screen and
        already carries them, so here they only push the record down 110px. */
     .pstats.compact { display: none; }
+    /* The part grid comes off the phone, same call and same reason. At 393 the
+       cells land at ~26px with eight neighbours 5px away, so a missed tap opens
+       the wrong part — and the blanket `button { min-height: 40px }` in the
+       coarse block would stretch each square into a 26x40 rectangle that PASSES
+       the tap-target check and looks broken. The same 33 parts are the list you
+       are already scrolling, and the Parts tab is one tap away. */
+    .dashcar { display: none; }
+    /* A dashboard row stacked into a card is the title, then WHO on its own
+       line, then DEADLINE on its own line — about 125px each, so six items is
+       a screenful and the groups below it are a thousand pixels down. Who and
+       when share one line here, and lose their labels: a name and a red date
+       need no captions, and the two together are the whole row. */
+    .dashlist table.list td:nth-child(2)::before,
+    .dashlist table.list td:nth-child(3)::before,
+    .dashwatched table.list td:nth-child(2)::before,
+    .dashwatched table.list td:nth-child(3)::before { display: none; }
+    /* Flex, not inline-block: two inline-blocks at 39% and 60% still wrapped,
+       because the whitespace between the two <td>s in the markup is a real
+       space and 39 + 60 + that is over 100. Flex has no such gap, and
+       margin-left:auto pins the date to the right edge whatever its length. */
+    .dashlist table.list tr, .dashwatched table.list tr {
+      display: flex; flex-wrap: wrap; align-items: baseline; padding: 9px 12px; margin-bottom: 8px;
+    }
+    .dashlist table.list td:first-child, .dashwatched table.list td:first-child { flex: 0 0 100%; }
+    .dashlist table.list td:nth-child(2), .dashlist table.list td:nth-child(3),
+    .dashwatched table.list td:nth-child(2), .dashwatched table.list td:nth-child(3) {
+      padding: 3px 0; text-align: left; white-space: nowrap;
+    }
+    .dashlist table.list td:nth-child(3), .dashwatched table.list td:nth-child(3) { margin-left: auto; }
+    /* Seven stations, mostly "open", is six screens of nothing on a phone —
+       the same reasoning as .tl-cell.empty in the Timeline. Show what is
+       actually booked; the count is in the heading either way. */
+    .stn.off { display: none; }
+    .stn-l { width: 96px; }
+    /* Two tiles, one row. The numerals stay big: they are the reason the row
+       exists and they are what is legible in sunlight at arm's length. */
+    .dashtiles { grid-template-columns: 1fr 1fr; }
+    .dgrouphd { margin: 14px 0 4px; }
+    .dgrouphd .bignum { font-size: 24px; }
     /* Four at-a-glance tiles at a 70px floor still fit on one line at 393, so
        they each get about 84px — and "PURCHASES" at 11px uppercase is wider
        than that, so its last letter crossed the tile's border and "WORK
@@ -1479,6 +1614,17 @@
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
     button, .icon-btn, .hamburger { min-height: 40px; }
+    /* A chip is a reference AND the way you get to it, and it was 22px — half a
+       fingertip, and on the Dashboard the only route into a record. Padding
+       rather than min-height: a chip sits inline in a sentence and in a table
+       cell, so growing the box is what makes it hittable without pushing the
+       text off its own baseline. 36px + the row's own padding clears a gloved
+       thumb; a bare min-height would have left a 12px glyph floating in it. */
+    .chip { padding: 10px 12px; min-height: 40px; }
+    /* The Tickets kind filter — All / Projects / Issues — is three <span
+       onclick> at 31px. Found the moment the tap-target check learned to look
+       at [onclick] at all; it had been failing silently since it was written. */
+    .kindfilter span { padding: 11px 14px; }
     /* Same reasoning as the phone rules above, but keyed on the pointer: a
        touchscreen at any width gets the bigger step. */
     .pstep { min-height: 40px; padding: 9px 14px; }

@@ -24,7 +24,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Forms | `.field` and `.grid .f` wrap a label plus control; `.filters` and `.toolbar` are flex rows; `.grid` is an auto-fit column grid. |
 | Cards | `.card`, with `h2` in the display face and `h3` as a small uppercase section label. |
 | Tables | `table.list` is the data table; `th.sortable` for sortable headers; `table.list.dash` for non-interactive rows. |
-| Badges | `.pill` + `.ok`/`.warn`/`.bad`/`.retro`/`.now` (gold, for the current week or today — not a status); `.stage` + `.st-mid`/`.st-done`/`.st-na`; `.chip` (accent-tinted, clickable); `.kind` (tiny uppercase tag). |
+| Badges | `.pill` + `.ok`/`.warn`/`.bad`/`.retro`/`.now` (gold, for the current week or today — not a status); `.stage` + `.st-mid`/`.st-done`/`.st-na`; `.chip` (accent-tinted, clickable — render it as a `button`, it grows to a 36px tap target on touch); `.kind` (tiny uppercase tag). |
 | Status | `.status` + one of `.todo`, `.inprogress`, `.collecting`, `.onhold`, `.done`, `.cancelled`. |
 | Progress | `.stage-bar` wrapping `.stage-bar-fill` + `.st-0`/`.st-mid`/`.st-done`. |
 | Tiles | `.stat-row` of `.stat-tile`, each holding `.bignum` and `.stat-label`. |

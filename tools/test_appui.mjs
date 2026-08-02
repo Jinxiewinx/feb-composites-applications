@@ -143,8 +143,16 @@ const AUDIT = `(() => {
 
   /* Tap targets. Only things a finger is meant to hit, only where they are
      actually visible. Height is what fails in practice; a control can be
-     narrow and still hittable if it is tall. */
-  const targets = [...document.querySelectorAll("#main button, #main a[href], #main select, #main input:not([type=hidden]), header.topbar button")]
+     narrow and still hittable if it is tall.
+
+     [onclick] is in the list because leaving it out made this assertion lie.
+     chip() emitted a <span onclick> at ~22px — half a fingertip, and on the
+     Dashboard the only route into a part, a work order or a ticket — and this
+     check passed on every run, because a <span> matches none of the element
+     selectors. The failure was not caught and quietly reported; it was
+     invisible. Anything the app has wired a click handler to is something a
+     finger is meant to hit, whatever tag it happens to use. */
+  const targets = [...document.querySelectorAll("#main button, #main a[href], #main select, #main input:not([type=hidden]), #main [onclick], header.topbar button")]
     .filter(vis)
     .map(el => ({
       t: (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 28),

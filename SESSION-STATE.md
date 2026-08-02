@@ -10,14 +10,76 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-02
-Status: **Editable descriptions, the photo viewer, buy-off evidence and
-sub-tickets on the board — all COMPLETE, plus the Mold CAD/CAM part stage, and
-Simon's second round (swipe-to-close, a real Back button, People, CAD
-uploads).** 293 app / 55 sanitizer / 23 design-system / 988 app-UI /
-13 print mobile / 30 safe-area, all passing. Storage rules: 12 pass, 1
-pre-existing emulator limitation.
+Status: **Dashboard rebuilt (2026-08-02).** Before that: editable descriptions,
+the photo viewer, buy-off evidence, sub-tickets on the board, the Mold CAD/CAM
+part stage, and Simon's second round (swipe-to-close, a real Back button,
+People, CAD uploads) — all complete and deployed. 298 app / 988 app-UI / 55
+sanitizer / 23 design-system / 30 safe-area / 13 print mobile / 88 website, all
+passing. Storage rules: 12 pass, 1 pre-existing emulator limitation.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Dashboard rebuild (2026-08-02)
+
+Simon asked for the landing page to be the most visually appealing in the app,
+and for five agents to explore, argue, and converge before anything was built.
+They did: design-system fidelity, competitive patterns, information
+architecture, data visualisation, and mobile/shop-floor reality. The argument
+round is where the value was — four of the five conceded a headline position.
+
+**What the data settled, before any taste entered.** I checked the fixtures
+rather than trusting the proposals, and three of the four proposed heroes were
+blank on the team's own archive: all 11 schedule weeks have `weekOf: ""`, and
+all 26 work orders are `retro: true`, which `blockerOpenBefore()` and
+`holdState()` both refuse by design. A hero that renders empty on the only
+reproducible state anyone can screenshot is not a hero. So the rule became:
+**nothing that is empty on the fixture goes above the fold**, and the
+always-populated things — a count, and the list — carry the top.
+
+Also established: there is NO completion history in the model (no `completedAt`;
+`updatedAt` is last-save-of-anything), no competition date, and no budget cap.
+That kills burn-ups, countdowns and any meter with a denominator. And neither
+brand token is re-pointed for dark — they fail in opposite modes (gold 1.78:1 on
+white, blue 1.33:1 on the dark card), so neither can be a fill that works in
+both themes. Logged as a design-system defect; not fixed here.
+
+**The substance: one row per physical thing.** 25 parts carry a layup deadline
+and 26 work orders carry a due date — 51 dated records describing 29 objects,
+because 22 parts have exactly one same-named work order and no name is
+ambiguous. Both explicit link fields (`partId`, `workOrderId`) are empty on all
+59 records, so pairing runs through `linkedCounterpart()`'s name fallback, which
+is what the Parts tab already trusts. "Behind schedule" was overstating by ~40%
+in the largest type on the page.
+
+**Structure now:** two tiles (assigned to you / blocked) as real `button.card`
+at the full 32px Saira; conditional blocked / curing / watched / this-week
+sections; one grouped list, first-match-wins so nothing appears twice; the
+33-cell part grid (desktop only); a three-number footer rail. Gone: the three
+near-identical tables, "At a glance" (four counts that duplicated the sidebar),
+and "Season spend" (a total with no cap, no target and no trend — replaced by
+unreimbursed, whose correct value is zero and who therefore needs no
+denominator).
+
+**Two bugs of my own, both caught by tests I wrote for the merge.** The flip
+that hands a row back to the part when its traveler is Complete tested
+`row.done` *after* mutating it, so it silently never fired. And mutating a
+surviving row's `coll`/`id` mid-loop made it match the "is a part" guard on a
+later turn, look itself up, and absorb itself — leaving the list empty. Only
+reproducible with a Complete work order, i.e. every work order in the archive.
+
+**The chip fix is the one that mattered most, and no layout depended on taste.**
+`chip()` emitted a `<span onclick>` at ~22px — half a fingertip, and the only
+route into a record from this page. The `pointer: coarse` floor names
+`button/.icon-btn/.hamburger` and the form controls, never `.chip`; and
+`test_appui.mjs` selected `button, a[href], select, input`, so the failure was
+not merely uncaught, it was **invisible to the assertion**. `.chip` is published
+in `components.css` as "accent-tinted, clickable" with no min-height, so this
+was a defect in the design system faithfully reproduced by the app. Fixed in
+`core.js` (now a `<button>`), in both stylesheets, and in `conventions.md`.
+
+`test_appui.mjs`'s tap-target selector gained `#main [onclick]`. It immediately
+found a second real failure nobody had reported: the Tickets kind filter
+(All / Projects / Issues) at 31px, failing silently since it was written.
 
 ## Second round from Simon (2026-08-02)
 

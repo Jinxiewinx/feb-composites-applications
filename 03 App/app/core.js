@@ -247,11 +247,25 @@ function fmtReadyAt(startIso, hours) {
   });
 }
 // Clickable chip that jumps to another tab's detail view (light cross-links).
+/* A reference to another record, and the way you get there.
+   It was a <span onclick> at 12px with 1px of vertical padding — about 22px
+   tall, which is half a fingertip, and on the Dashboard it was the ONLY route
+   into a part, a work order or a ticket. Three things hid that:
+     - the pointer:coarse floor in index.html names button/.icon-btn/.hamburger
+       and the form controls; it never named .chip;
+     - test_appui's tap-target check selects button, a[href], select, input, so
+       a <span onclick> is not merely failing, it is invisible to the assertion;
+     - components.css publishes .chip as "accent-tinted, clickable" with no
+       min-height at all, so the app was faithfully reproducing a defect in the
+       design system rather than drifting from it.
+   A <button> instead: it inherits the 40px coarse floor, it enters the
+   tap-target selector so the size is measured from now on, and it gets keyboard
+   focus and :focus-visible for free. */
 function chip(coll, id, label) {
   if (!id) return "";
   const tab = { workOrders: "workorders", parts: "parts", projects: "projects", budget: "budget" }[coll] || coll;
   const known = recById(coll, id);
-  return `<span class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</span>`;
+  return `<button type="button" class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</button>`;
 }
 /* ---------- where you came from ----------
    Records cross-link constantly: a ticket names its parts, a part names its

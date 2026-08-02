@@ -290,6 +290,16 @@ table.list.dash td { cursor: default; }
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 .chip:hover { filter: brightness(.97); }
+/* A chip is documented as clickable, and at 1px of vertical padding it was
+   about 22px tall — half a fingertip. Anywhere it is the way INTO a record
+   (which is most places) that made it the smallest target on the page. The
+   system publishes the defect, so the system fixes it: padding rather than a
+   bare min-height, because a chip sits inline in a sentence as well as in a
+   table cell, and growing the box is what makes it hittable without leaving a
+   12px glyph floating in a tall empty control. */
+@media (pointer: coarse) {
+  .chip { padding: 9px 12px; min-height: 36px; }
+}
 .kind {
   display: inline-block; font-size: 10px; color: var(--muted);
   border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;

@@ -100,7 +100,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1515,7 +1515,10 @@ await t("the weekly rollup names a sub-ticket's parent too, inline so the row st
   view = { ...view, tab: "weekplan", wpWeek: "W-SUB" };
   const html = renderWeekPlan();
   assert(html.includes("Trim the strakes"), "the sub-ticket is listed");
-  assert(/<span class="tny muted">part of <span class="chip"[^>]*>Undertray<\/span><\/span>/.test(html),
+  // The tag is deliberately not pinned — chip() renders a <button> now, for the
+  // tap target. What matters is that the parent is named INLINE (a block would
+  // break the flex row onto its own line) and that it is a chip.
+  assert(/<span class="tny muted">part of <\w+[^>]*class="chip"[^>]*>Undertray<\/\w+><\/span>/.test(html),
     "parent named inline (a <div> would break the flex row onto its own line): " + html.slice(html.indexOf("Trim the strakes") - 200, html.indexOf("Trim the strakes") + 300));
 });
 
@@ -1674,17 +1677,122 @@ await t("aggregates deadlines across tabs", () => {
   assert(items.find(i => i.id === "P-SN6-001").mine === true, "Simon's part should be mine");
   assert(items.find(i => i.id === "P-SN6-002").mine === false, "Nick's part not mine");
 });
-await t("renders upcoming, behind, mine sections", () => { setTab("dashboard"); assert(main.innerHTML.includes("Upcoming team deadlines") && main.innerHTML.includes("Behind schedule") && main.innerHTML.includes("Your open items")); assert(main.innerHTML.includes("SOON PART") && main.innerHTML.includes("LATE PART")); });
-await t("dashboard stat row shows real counts, not just the lists below it", () => {
-  // Same fixture as "aggregates deadlines across tabs" above (SOON PART is
-  // Simon's, LATE PART is Nick's and overdue), plus an explicit budget so
-  // spend isn't left over from whatever the previous test happened to set.
+/* One list, grouped, each item in exactly one bucket. The page used to draw
+   deadlineItems() three times — mine / behind / upcoming — with filters that
+   overlap by construction, so a late item of yours appeared twice on one
+   screen and a lead had to diff three tables to notice. */
+await t("one grouped list, and every item appears in exactly one group", () => {
+  setTab("dashboard");
+  const html = main.innerHTML;
+  assert(html.includes("Your work"), "the list is the spine of the page: " + html.slice(0, 300));
+  assert(!html.includes("Upcoming team deadlines"), "the three near-identical tables are gone");
+  assert(html.includes("SOON PART"), "your item is listed");
+  // LATE PART is Nick's, so it is behind the team expander rather than absent.
+  assert(html.includes("Everything else"), "the team's work is one row away, not a second table");
+  // Scoped to the list: the part grid below it also names every part, which is
+  // its job. What must not happen again is the same row under three headings.
+  const listOnly = html.slice(html.indexOf('id="dash-list"'), html.indexOf("dashcar") >= 0 ? html.indexOf("dashcar") : html.length);
+  assert((listOnly.match(/SOON PART/g) || []).length === 1, "listed once, not once per filter: " + listOnly);
+  assert(/dg-label">This week/.test(html), "and it is grouped by when it is due: " + html);
+});
+await t("the two hero numbers are real buttons, and season spend is gone", () => {
   DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
   setTab("dashboard");
-  assert(main.innerHTML.includes('class="stat-row"'), "has a stat row");
-  assert(/bignum">1<\/div><div class="stat-label">Your open items/.test(main.innerHTML), "1 item is Simon's (SOON PART): " + main.innerHTML);
-  assert(/bignum">1<\/div><div class="stat-label">Behind schedule/.test(main.innerHTML), "1 item is overdue (LATE PART)");
-  assert(main.innerHTML.includes('bignum">$150</div><div class="stat-label">Season spend'), "spend totals $120 + $30");
+  const html = main.innerHTML;
+  assert(html.includes('class="stat-row dashtiles"'), "has a tile row");
+  assert(/<button class="card"[^>]*>\s*<span class="bignum">1<\/span>\s*<span class="stat-label">Assigned to you/.test(html),
+    "one item is Simon's, and the tile is a button so its size is finally measured: " + html.slice(0, 600));
+  assert(/<span class="stat-label">Blocked/.test(html), "the second tile is Blocked, the freshest data in the app");
+  // A running total with no cap, no target and no trend prompts no decision.
+  assert(!/Season spend/.test(html), "season spend is not a number anyone acts on");
+  // Unreimbursed money IS: its correct value is zero, so it needs no denominator.
+  assert(/\$120<\/span>\s*<span class="df-l">unreimbursed/.test(html), "the footer carries what is owed: " + html.slice(-900));
+});
+/* One row per physical thing. A part and its work order are the same object
+   seen twice, and the page counted both. On the SN5 archive that inflated
+   "behind schedule" by ~40%, in the largest type on the page. */
+await t("a part and its work order are one row, not two", () => {
+  const late = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+  const later = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  DB.projects = [];
+  DB.parts = [{ id: "P-M1", partName: "UT DIFFUSER", layupProgress: "In Layup", layupDeadline: late, moldEngineer: "Justin" }];
+  DB.workOrders = [{ id: "WO-M1", partName: "UT DIFFUSER", status: "InWork", dueDate: later, manufacturingEngineer: "Nick", steps: [] }];
+  assert(deadlineItems().length === 2, "the raw list still has both");
+  const merged = mergedDeadlineItems();
+  assert(merged.length === 1, "merged to one physical object: " + JSON.stringify(merged.map(m => m.id)));
+  const row = merged[0];
+  assert(row.coll === "workOrders", "the work order wins — it is where the steps and buy-offs are");
+  // ...unless the traveler is Complete and the part is not. Then the work that
+  // REMAINS is the part's, and linking to finished paperwork helps nobody.
+  // Every SN5 work order is Complete, so this is the archive's normal case.
+  DB.workOrders[0].status = "Complete";
+  const flipped = mergedDeadlineItems()[0];
+  assert(flipped.coll === "parts" && flipped.id === "P-M1", "a closed traveler hands the row back to the open part: " + JSON.stringify(flipped));
+  assert(flipped.done === false, "and it is still open work");
+  DB.workOrders[0].status = "InWork";
+  assert(row.date === late, "the EARLIER date is shown, so merging can never under-report lateness: " + row.date);
+  assert(/Justin/.test(row.who) && /Nick/.test(row.who), "both owners survive; either one may be the person who is late: " + row.who);
+  assert(row.partId === "P-M1", "and the row still knows its part");
+});
+await t("an unmatched or ambiguous name leaves both rows standing", () => {
+  const d = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  DB.projects = [];
+  DB.parts = [{ id: "P-U1", partName: "NOSECONE", layupProgress: "In Layup", layupDeadline: d, moldEngineer: "Simon" }];
+  DB.workOrders = [{ id: "WO-U1", partName: "SIDEPOD", status: "InWork", dueDate: d, steps: [] }];
+  assert(mergedDeadlineItems().length === 2, "different parts are different rows");
+  // Two work orders with the same part name is genuinely ambiguous —
+  // linkedCounterpart returns null rather than guessing, and a wrong merge
+  // would silently delete somebody's deadline.
+  DB.workOrders = [{ id: "WO-A1", partName: "NOSECONE", status: "InWork", dueDate: d, steps: [] },
+                   { id: "WO-A2", partName: "NOSECONE", status: "InWork", dueDate: d, steps: [] }];
+  assert(mergedDeadlineItems().length === 3, "ambiguous: nothing is merged away: " + mergedDeadlineItems().length);
+});
+await t("a part with no work order is never merged away — that is the alarm, not noise", () => {
+  const d = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
+  DB.projects = []; DB.workOrders = [];
+  DB.parts = [{ id: "P-N1", partName: "STRAKE", layupProgress: "Not Started", layupDeadline: d, moldEngineer: "Simon" }];
+  const merged = mergedDeadlineItems();
+  assert(merged.length === 1 && merged[0].coll === "parts", "work with no traveler still shows: " + JSON.stringify(merged));
+});
+/* What is stopping work, and what is curing. Both are conditional sections —
+   they are empty on the SN5 archive (every seeded work order is retro) and a
+   blank 250px band at the top of a landing page reads as a broken app. */
+await t("a blocker stops the page, but only when it is actually in the way", () => {
+  DB.parts = []; DB.projects = [];
+  DB.workOrders = [{ id: "WO-B1", partName: "CLAMSHELL", status: "InWork", moldEngineer: "Nico", steps: [
+    { seq: 1, title: "Stack frozen", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
+    { seq: 2, title: "Machine mold", status: "open", buyoff: { name: "", date: "" } },
+  ] }];
+  assert(blockedNow().length === 1, "the unsigned blocker at the front is in the way");
+  setTab("dashboard");
+  assert(main.innerHTML.includes("Blocked"), "and it reaches the landing page instead of hiding inside the work order");
+  // Signed: nothing is blocked, and the section disappears rather than showing
+  // an all-clear nobody needs to read every week.
+  DB.workOrders[0].steps[0].buyoff = { name: "Simon", date: today() };
+  assert(blockedNow().length === 0, "signed, so nothing is stopping work");
+  // Retro records document, they do not enforce — which is why this is a
+  // conditional section under a tile that can honestly read 0.
+  DB.workOrders[0].steps[0].buyoff = { name: "", date: "" };
+  DB.workOrders[0].retro = true;
+  assert(blockedNow().length === 0, "a historical record is not a live blocker");
+});
+await t("curing shows a clock time, never a countdown", () => {
+  // A countdown would need syncHoldTick's 60-second interval, which watches
+  // `#main .step .gate` and re-renders the whole page — tearing the landing
+  // page down under your thumb every minute. An absolute time never goes stale.
+  DB.parts = []; DB.projects = [];
+  const started = new Date(Date.now() - 2 * 3600000).toISOString();
+  DB.workOrders = [{ id: "WO-C1", partName: "SEAT", status: "InWork", steps: [
+    { seq: 1, title: "Infuse", status: "done", buyoff: { name: "Simon", date: today() }, rule: { kind: "startsHold" }, cure: { resin: RESINS[0].id, startedAt: started } },
+    { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
+  ] }];
+  const c = curingNow();
+  assert(c.length === 1, "one part is curing: " + JSON.stringify(c.map(x => x.wo.id)));
+  setTab("dashboard");
+  const html = main.innerHTML;
+  assert(/ready /.test(html), "says when it comes out: " + html.slice(html.indexOf("dashcuring"), html.indexOf("dashcuring") + 400));
+  assert(!/\d+\s*h\s*\d+\s*m left/.test(html), "and not as a countdown that goes stale between renders");
+  assert(!/class="step"/.test(html), "and never inside .step, which would arm the 60s re-render interval");
 });
 await t("a sub-ticket on the dashboard says which ticket it belongs to", () => {
   // Inside the Tickets tab a sub-ticket is always drawn nested under its
@@ -1704,11 +1812,11 @@ await t("a sub-ticket on the dashboard says which ticket it belongs to", () => {
   setTab("dashboard");
   const html = main.innerHTML;
   assert(html.includes("part of"), "the context line renders: " + html.slice(0, 500));
-  assert(/part of <span class="chip"[^>]*>Nosecone mold<\/span>/.test(html),
+  assert(/part of <\w+[^>]*class="chip"[^>]*>Nosecone mold<\/\w+>/.test(html),
     "and it's the parent's title, clickable, not a bare id: " + html);
 });
 await t("a sub-ticket whose parent was deleted still renders", () => {
-  DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "project", status: "To Do", parentId: "TKT-GONE", dueDate: today(), assignees: [] }];
+  DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "project", status: "To Do", parentId: "TKT-GONE", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
   assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
   setTab("dashboard");
   assert(main.innerHTML.includes("Orphan"), "the ticket is still listed, it just loses the context line");
@@ -1755,7 +1863,10 @@ await t("dashboard Watched card uses the new colored .status pill, not the old f
   const html = renderDashboard();
   assert(html.includes('class="status onhold"'), "migrated Blocked->On Hold renders with the new dot-pill class: " + html.slice(0, 400));
   assert(html.includes(">On Hold<"), "shows the migrated label, not the stale 'Blocked': " + html);
-  assert(html.includes('class="kindbadge issue"'), "kind badge shown on the Watched row");
+  // .kind, not .kindbadge. The page used to render both, twelve lines apart —
+  // two visual answers to "what type of record is this" on one screen. The
+  // Tickets tab keeps .kindbadge, where Project-vs-Issue is the point.
+  assert(html.includes('<span class="kind">Issue</span>'), "one micro-tag idiom on this page, not two: " + html.slice(0, 400));
 });
 
 console.log("cross-links + backup:");

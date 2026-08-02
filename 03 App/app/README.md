@@ -7,9 +7,32 @@ whole team. Set your photo by clicking your avatar at top right.
 
 ## The tabs
 
-Dashboard collects your open items, team deadlines in the next two weeks,
-anything behind schedule, watched projects with new activity, and the budget at a
-glance. It's read-only, and every row links into the tab it came from.
+Dashboard is one grouped list, not a wall of tables. Two numbers at the top —
+what's assigned to you, and what's blocked — then everything open, bucketed
+Late / This week / Next two weeks / Later / No date, with each item appearing
+exactly once. It's read-only, and every row links into the tab it came from.
+
+A part and its work order are one row, not two. They're the same object seen
+twice, the part being the spec and the work order the traveler, and the page
+used to count both: on the SN5 archive, 51 dated records describing 29 physical
+objects, which overstated "behind schedule" by about 40%. They're paired through
+the same `linkedCounterpart()` the Parts tab uses, the earlier of the two dates
+is shown so a merge can never under-report lateness, and both owners are kept.
+An ambiguous name merges nothing — two rows beat a wrong merge that silently
+deletes somebody's deadline. A part with no work order is never merged away;
+work happening with no traveler is worth seeing.
+
+Three sections appear only when they have something to say: what's blocked (an
+unsigned blocker step that's actually in the way, with whose signature releases
+it), what's curing and when it comes out of the mold, and what's booked at RFS
+this week. Curing shows a clock time rather than a countdown, so it never goes
+stale between renders.
+
+Below the list, every part on the car as one cell each, tinted by layup stage
+and tappable through to the record — an index that happens to be coloured, not
+a chart. It draws every part rather than a percentage, because one part is 3%
+and the nose cone and a bracket are not the same job. Desktop only: at phone
+width the cells land small enough that a missed tap opens the wrong part.
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, and a printable hand-fillable
