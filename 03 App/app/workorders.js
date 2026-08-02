@@ -303,7 +303,7 @@ function renderWODetail() {
        anchors, so no state and nothing to keep in sync. -->
   <nav class="jumpbar no-print" aria-label="Jump to section">
     <a href="#wo-overview">Overview</a><a href="#wo-stack">Stack</a><a href="#wo-bom">BOM</a>
-    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-log">Log</a>
+    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-docs">Docs</a><a href="#wo-log">Log</a>
   </nav>
   <div class="card">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
@@ -380,6 +380,13 @@ function renderWODetail() {
         : `<tr><td>${esc(q.criterion)}</td><td>${esc(q.target)}</td><td>${esc(q.actual)}</td><td>${q.pass === true ? '<span class="ok">pass</span>' : q.pass === false ? '<span class="warn">FAIL</span>' : "—"}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').qualityChecks.push({criterion:'',target:'',actual:'',pass:null});saveWO(woById('${wo.id}'),'qualityChecks');render()">+ check</button>` : ""}
+    <!-- The mold drawing, the CAM notes, the DRB deck: the documents that
+         explain this job. They used to be a Slack paste, which meant they were
+         findable for a day (PP-09). Placed after Quality and before the log so
+         a phone reaches Steps first. -->
+    <h3 id="wo-docs">Documents</h3>
+    ${docLinkList(wo.docs, { onRemove: `rmWoDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
+    <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'workOrders', id: '${wo.id}' })">+ Link a document</button></div>
     <h3 id="wo-log">Event log</h3>
     <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
       ${(wo.timeline || []).map((t, i) => E
@@ -621,3 +628,4 @@ function signStep(i, extra) {
   saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], ...patch }; return steps; });
   render();
 }
+function rmWoDoc(linkId) { removeDocLink("workOrders", view.id, linkId); }

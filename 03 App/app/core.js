@@ -119,6 +119,12 @@ const ICONS = {
   archive: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-4.5-4.5L5 21"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  // Added for Google Docs/Slides links. There was no chain, no arrow-out-of-box
+  // and no slide glyph, which is why the rich-text editor's Link button still
+  // falls back to a raw emoji.
+  link: '<path d="M9.5 14.5a3.5 3.5 0 0 0 5 0l3-3a3.54 3.54 0 0 0-5-5l-1 1"/><path d="M14.5 9.5a3.5 3.5 0 0 0-5 0l-3 3a3.54 3.54 0 0 0 5 5l1-1"/>',
+  externalLink: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
+  presentation: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8.5 21l3.5-2 3.5 2"/>',
   _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size) {

@@ -86,14 +86,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|RESINS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1329,6 +1329,118 @@ await t("deleting a purchase with a receipt cleans up its file (regression: noth
   delBuy("B-R2"); confirmProceed();
   assert(calls.some(c => c[0] === "deleteFile" && c[1] === "budget/B-R2/r2.jpg"), "receipt file deleted: " + JSON.stringify(calls));
   assert(!DB.budget.some(b => b.id === "B-R2"), "purchase removed");
+});
+
+console.log("google documents:");
+await t("every Google surface is recognised from its URL alone", () => {
+  // No API, no key, no auth — the URL string is the entire input, so this is
+  // the whole feature's foundation.
+  const cases = [
+    ["https://docs.google.com/document/d/1AbC-dEf_123/edit?usp=sharing", "doc", "1AbC-dEf_123"],
+    ["https://docs.google.com/presentation/d/1XyZ789/edit#slide=id.p3", "slides", "1XyZ789"],
+    ["https://docs.google.com/spreadsheets/d/1vnBlgBzMf7rwrvk/edit?usp=drivesdk", "sheet", "1vnBlgBzMf7rwrvk"],
+    ["https://docs.google.com/forms/d/e/1FAIpQLSf000/viewform", "form", "1FAIpQLSf000"],
+    ["https://drive.google.com/file/d/1FiLeId9/view", "drive", "1FiLeId9"],
+    ["https://drive.google.com/drive/folders/1FolDer2", "folder", "1FolDer2"],
+    ["https://drive.google.com/drive/u/0/folders/1FolDer3", "folder", "1FolDer3"],
+  ];
+  cases.forEach(([url, kind, id]) => {
+    const p = parseGoogleUrl(url);
+    assert(p && p.kind === kind, `${url} → ${p && p.kind}, wanted ${kind}`);
+    assert(p.fileId === id, `${url} → id ${p.fileId}, wanted ${id}`);
+  });
+  // A published deck uses a different id space and still has to parse.
+  const pub = parseGoogleUrl("https://docs.google.com/presentation/d/e/2PACX-1vSbaMdq/pub?start=false");
+  assert(pub.kind === "slides" && pub.fileId === "2PACX-1vSbaMdq", JSON.stringify(pub));
+});
+await t("a non-Google link is kept, not rejected", () => {
+  // Refusing a Notion page or a McMaster part URL would be its own small
+  // blocker, which is the one thing this feature must never be.
+  const p = parseGoogleUrl("https://www.mcmaster.com/93250A760/");
+  assert(p && p.kind === "link" && p.fileId === "", JSON.stringify(p));
+  assert(gdocKind("link").short === "LINK", "and it has a label to render");
+  // Anything that isn't an https URL is refused, though.
+  assert(parseGoogleUrl("not a url") === null);
+  assert(parseGoogleUrl("javascript:alert(1)") === null, "no javascript: scheme");
+  assert(parseGoogleUrl("http://docs.google.com/document/d/x") === null, "https only");
+  assert(parseGoogleUrl("") === null && parseGoogleUrl(null) === null);
+});
+await t("the embed URL is the one Google will actually frame", () => {
+  // Measured 2026-08-01: /preview and /embed return 200 with no
+  // X-Frame-Options and no frame-ancestors. /edit does not.
+  assert(parseGoogleUrl("https://docs.google.com/document/d/D1/edit").embedUrl
+    === "https://docs.google.com/document/d/D1/preview");
+  assert(parseGoogleUrl("https://docs.google.com/presentation/d/S1/edit").embedUrl
+    .startsWith("https://docs.google.com/presentation/d/S1/embed"), "slides use /embed, which works for published decks too");
+  assert(parseGoogleUrl("https://drive.google.com/file/d/F1/view").embedUrl
+    === "https://drive.google.com/file/d/F1/preview");
+  // Forms and folders have no framable view; a form in a frame is a way to
+  // submit it twice, and Drive refuses to frame a folder listing.
+  assert(parseGoogleUrl("https://docs.google.com/forms/d/e/F/viewform").embedUrl === "");
+  assert(parseGoogleUrl("https://drive.google.com/drive/folders/X").embedUrl === "");
+});
+await t("a row offers a preview only when there is something framable", () => {
+  const slides = { id: "GD1", kind: "slides", fileId: "S1", title: "UT DRB deck", url: "https://docs.google.com/presentation/d/S1/edit", openUrl: "https://docs.google.com/presentation/d/S1/edit", embedUrl: "https://docs.google.com/presentation/d/S1/embed" };
+  const folder = { id: "GD2", kind: "folder", fileId: "X", title: "CAD dump", url: "https://drive.google.com/drive/folders/X", openUrl: "https://drive.google.com/drive/folders/X", embedUrl: "" };
+  let html = docLinkRow(slides, {});
+  assert(html.includes("UT DRB deck") && html.includes("SLIDES"), html);
+  assert(html.includes("toggleDocPreview('GD1')"), "framable: the row expands");
+  assert(!html.includes("<iframe"), "collapsed by default, so nobody waits on Google to render a page");
+  assert(docLinkRow(folder, {}).includes("window.open"), "not framable: the row just opens it");
+  // Expanded, the frame appears AND so does the standing note, because a
+  // cross-origin iframe gives no error we could react to.
+  GD_OPEN.add("GD1");
+  html = docLinkRow(slides, {});
+  assert(/<iframe class="docview"/.test(html), "expands to a frame: " + html);
+  assert(html.includes("signed into a different Google account"), "with the permanent explanation");
+  GD_OPEN.delete("GD1");
+});
+await t("linking writes to the record, and removing takes it off again", () => {
+  DB.projects = [{ id: "TKT-DOC", title: "Nosecone", kind: "project", status: "To Do", assignees: [], watchers: [], files: [], comments: [] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-DOC", edit: false };
+  calls.length = 0;
+  addDocLink({ coll: "projects", id: "TKT-DOC" },
+    { id: "GD9", url: "https://docs.google.com/document/d/D9/edit", openUrl: "https://docs.google.com/document/d/D9/edit", embedUrl: "https://docs.google.com/document/d/D9/preview", kind: "doc", fileId: "D9", title: "Layup notes", note: "", by: "simon@berkeley.edu", ts: new Date().toISOString() });
+  const p = projById("TKT-DOC");
+  assert((p.docs || []).length === 1 && p.docs[0].title === "Layup notes", JSON.stringify(p.docs));
+  assert(calls.some(c => c[0] === "appendTo" && c[3] === "docs"),
+    "appended with arrayUnion so two people linking at once don't clobber: " + JSON.stringify(calls));
+  assert(main.innerHTML.includes("Layup notes"), "and it renders on the ticket");
+  // Removing is confirmed, because it's a shared record — ticket file uploads
+  // have no delete path at all, and links are not repeating that.
+  removeDocLink("projects", "TKT-DOC", "GD9");
+  assert((projById("TKT-DOC").docs || []).length === 1, "not gone until confirmed");
+  confirmProceed();
+  assert((projById("TKT-DOC").docs || []).length === 0, "removed");
+});
+await t("a pinned link is a documents record, so search and the tab get it free", () => {
+  DB.documents = [];
+  addDocLink({ coll: "documents" },
+    { id: "GD-PIN", url: "https://docs.google.com/spreadsheets/d/T1/edit", openUrl: "https://docs.google.com/spreadsheets/d/T1/edit", embedUrl: "https://docs.google.com/spreadsheets/d/T1/preview", kind: "sheet", fileId: "T1", title: "Composites Master Tracker", note: "every part mass lives here", by: "simon@berkeley.edu", ts: new Date().toISOString() });
+  const d = DB.documents[0];
+  assert(d.pinned === true && d.category === "Team shelf", JSON.stringify(d));
+  // allDocs() must carry `pinned` through, or the shelf renders twice: once in
+  // its own card and again in the category listing below it.
+  const merged = allDocs().find(x => x.id === "GD-PIN");
+  assert(merged && merged.pinned === true, "pinned survives the allDocs() remap: " + JSON.stringify(merged));
+  assert(merged.src === d.url, "and src points at Google, not at our Storage");
+});
+await t("every tab that can hold a document renders one without throwing", () => {
+  // Five placements share one renderer, so the real risk is a wiring mistake in
+  // one of them rather than the row itself.
+  const link = { id: "GD-A", kind: "doc", fileId: "D", title: "Mold drawing", url: "https://docs.google.com/document/d/D/edit", openUrl: "https://docs.google.com/document/d/D/edit", embedUrl: "https://docs.google.com/document/d/D/preview" };
+  DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", docs: [link] }];
+  DB.workOrders = [{ id: "WO-DOC", partName: "NOSECONE", processType: "MoldInfusion", revision: "A", status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], docs: [link] }];
+  DB.schedule = [{ id: "W-DOC", weekOf: today(), goals: [], cars: [], doneTickets: [], docs: [link] }];
+  DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-900", edit: false };
+  render(); assert(main.innerHTML.includes("Mold drawing"), "parts");
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-DOC", edit: false };
+  render();
+  assert(main.innerHTML.includes("Mold drawing"), "work orders");
+  assert(main.innerHTML.includes('href="#wo-docs"'), "and the hand-maintained jumpbar gained its anchor");
+  view = { ...view, tab: "weekplan", wpWeek: "W-DOC" };
+  assert(renderWeekPlan().includes("Mold drawing"), "weekly plan");
 });
 
 console.log("dashboard:");

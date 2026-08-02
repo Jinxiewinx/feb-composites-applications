@@ -280,6 +280,16 @@ function renderWeekPlan() {
       ${weeks.map(w => `<option value="${w.id}" ${w.id === week.id ? "selected" : ""}>${esc(w.weekOf)} (${esc(w.id)})${weekContains(w, today()) ? " · this week" : ""}</option>`).join("")}
     </select>
   </div>
+  <!-- The meeting deck. #composites, 2025-10-12: "Please update slides before
+       meeting… You can find slides either pinned here in bookmarks or in the
+       drive" — two homes, neither authoritative, and members were told to edit
+       a deck they had to go hunting for. It lives on the week's own schedule
+       doc, in its own field, so it never touches Timeline's station grid. -->
+  <div class="card">
+    <h3>This week's documents <span class="muted nocaps">— the meeting deck, notes, anything for this week</span></h3>
+    ${docLinkList(week.docs, { onRemove: `rmWeekDoc`, empty: "Nothing linked for this week yet.", addLabel: "+ Link a document" })}
+    <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'schedule', id: '${week.id}' })">+ Link a document</button></div>
+  </div>
   <div class="card">
     <h3>Weekly Goals — week of ${esc(week.weekOf)}</h3>
     <div style="display:flex;flex-direction:column;gap:16px">
@@ -301,4 +311,11 @@ function renderWeekPlan() {
     ${cars.length ? `<div style="display:flex;flex-direction:column;gap:12px">${cars.map(c => carCardHtml(week, c)).join("")}</div>`
       : `<p class="muted">No cars set up for this week yet.</p>`}
   </div>`;
+}
+// view.id is the record being viewed on other tabs; Weekly Plan tracks its week
+// in view.wpWeek, so this resolves the week itself rather than reusing view.id.
+function rmWeekDoc(linkId) {
+  const weeks = weekPlanWeeks();
+  const id = (view.wpWeek && weekById(view.wpWeek)) ? view.wpWeek : defaultWeekId(weeks);
+  removeDocLink("schedule", id, linkId);
 }

@@ -35,6 +35,10 @@ function allDocs() {
   const up = (DB.documents || []).map(d => ({
     category: d.category || "Uploads", title: d.title || d.name, kind: d.kind,
     src: d.url, size: d.size, uploaded: true, id: d.id, by: d.by,
+    // Carried through so the shelf can be rendered separately above and
+    // filtered out of the category listing, and so the viewer knows this is a
+    // link to somewhere else rather than a file we host.
+    pinned: !!d.pinned, embedUrl: d.embedUrl || "", note: d.note || "",
   }));
   return bundled.concat(up);
 }
@@ -43,7 +47,11 @@ function renderDocuments() {
   if (openDoc) return renderDocViewer();
 
   const q = (view.q || "").toLowerCase();
-  const all = allDocs();
+  // The shelf renders itself above, so it is filtered out of the category
+  // listing below rather than appearing in both places.
+  const all = allDocs().filter(d => !d.pinned);
+  const shelf = (DB.documents || []).filter(d => d.pinned)
+    .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" }));
   // Derived, never hardcoded, so a new kind (a bundled doc's "html"/"md",
   // say) shows up in the filter automatically instead of going stale —
   // same technique the category list below already uses.
@@ -54,7 +62,21 @@ function renderDocuments() {
   const cats = ["Datasheets", "Standards", "Guides", "Uploads", ...new Set(all.map(d => d.category))]
     .filter((c, i, a) => a.indexOf(c) === i);
   return `
-  <div class="toolbar no-print"><button class="primary" onclick="uploadDocument()">+ Upload document</button></div>
+  <div class="toolbar no-print">
+    <button class="primary" onclick="uploadDocument()">+ Upload document</button>
+    <button onclick="openDocLinkModal({ coll: 'documents' })">+ Pin a link</button>
+  </div>
+  <!-- The shelf answers the question the Slack history keeps asking: the master
+       tracker, the meeting deck and the training doc were each re-pasted months
+       apart because a link in a channel is findable for about a day. Pinned to
+       the top of the tab because being one click from anywhere is the entire
+       point of it. -->
+  <div class="card">
+    <h3>Team shelf${shelf.length ? ` <span class="muted" style="text-transform:none">— the links everyone asks for</span>` : ""}</h3>
+    ${shelf.length
+      ? docLinkList(shelf, { onRemove: "removeShelfDoc" })
+      : `<div class="muted">Nothing pinned yet. <b>+ Pin a link</b> for the documents people keep asking for — the master tracker, the weekly meeting deck, the ShopSabre training.</div>`}
+  </div>
   <div class="filters no-print">
     <select onchange="view.fSub=this.value;render()">
       <option value="">All types</option>
@@ -131,8 +153,17 @@ function openDocFromRow(src, up) {
 function renderDocViewer() {
   const d = openDoc;
   const dl = d.docx ? ` · <a href="${esc(d.docx)}" download>download .docx</a>` : "";
+  const kindNote = d.pinned ? ` · ${esc(gdocKind(d.kind).label)}` : "";
   let body;
-  if (d.kind === "pdf" || d.kind === "html") {
+  /* A pinned Google link is not a file we host: `src` points at Google. Show
+     the same embed the inline preview uses, and say what a blank frame means,
+     because a cross-origin iframe gives us no way to detect one. */
+  if (d.pinned) {
+    body = d.embedUrl
+      ? `<iframe class="docview" src="${esc(d.embedUrl)}" title="${esc(d.title)}"></iframe>
+         <p class="muted tny">Blank? You are probably signed into a different Google account, or you do not have access.</p>`
+      : `<div class="card">This one opens in Google. <a href="${esc(d.src)}" target="_blank" rel="noopener">Open it</a>.</div>`;
+  } else if (d.kind === "pdf" || d.kind === "html") {
     body = `<iframe class="docview" src="${esc(d.src)}" title="${esc(d.title)}"></iframe>`;
   } else if (d.kind === "image") {
     body = `<div class="card" style="text-align:center"><img src="${esc(d.src)}" alt="${esc(d.title)}" style="max-width:100%;border-radius:6px"></div>`;
@@ -145,7 +176,7 @@ function renderDocViewer() {
   <div class="toolbar no-print">
     <button class="ib" onclick="closeDocument()">${icon("chevronLeft",16)} All documents</button>
     <a href="${esc(d.src)}" target="_blank" rel="noopener"><button>Open in new tab</button></a>
-    <span class="muted" style="align-self:center">${esc(d.title)}${dl}</span>
+    <span class="muted" style="align-self:center">${esc(d.title)}${kindNote}${dl}</span>
   </div>
   ${body}`;
 }
@@ -199,4 +230,18 @@ function mdToHtml(md) {
   }
   closeList();
   return out.join("\n");
+}
+
+/* Unpinning. Distinct from delDocument() because there is no Storage object
+   behind a link — the document lives in Google and is not ours to delete. The
+   wording says so, since "delete" on a row that represents someone's Drive file
+   is a genuinely alarming thing to click. */
+function removeShelfDoc(id) {
+  const d = (DB.documents || []).find(x => x.id === id);
+  if (!d) return;
+  confirmModal(`Unpin ${d.title ? `"${d.title}"` : "this link"} from the team shelf for everyone? The document in Google is untouched.`, () => {
+    del("documents", id);
+    DB.documents = DB.documents.filter(x => x.id !== id);
+    render();
+  });
 }

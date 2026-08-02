@@ -676,6 +676,14 @@ function renderPartDetail() {
         <div><div class="lg-label tny">Scheduled weeks</div><div class="linkrow">${
           weeks.map(w => `<span class="chip" onclick="view={...view,tab:'timeline',mode:'list'};render()">week of ${esc(w.weekOf || w.id)}</span>`).join("") || '<span class="muted tny">none</span>'}</div></div>
       </div>
+      <!-- Documents sit under the link grid rather than inside it: a chip row
+           can hold five work-order ids, but a document row needs its title, its
+           type and somewhere to put the Open button. -->
+      <div class="pengrow">
+        <div class="lg-label tny">Documents</div>
+        ${docLinkList(p.docs, { onRemove: `rmPartDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
+        <div class="no-print" style="margin-top:6px"><button class="sm" onclick="openDocLinkModal({ coll: 'parts', id: '${p.id}' })">+ Link a document</button></div>
+      </div>
 
       <h3 id="pt-notes">Notes${comments.length ? ` <span class="muted" style="text-transform:none">— ${comments.length} comment${comments.length === 1 ? "" : "s"}</span>` : ""}</h3>
       <div class="pnote">
@@ -776,3 +784,4 @@ function updPart(key, val) {
   savePart(p, key);
   render();
 }
+function rmPartDoc(linkId) { removeDocLink("parts", view.id, linkId); }

@@ -10,10 +10,57 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-01
-Status: **All six cure holds signed off and enforced.** 252 app / 23 design-system / 988 app-UI / 34
+Status: **Google document links landed; CS-008 at Rev C.** 259 app / 23 design-system / 988 app-UI / 34
 slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Google Docs / Slides linked to records (2026-08-01)
+
+`03 App/app/gdocs.js` is the whole surface. Parses a pasted URL into
+`{kind, fileId, openUrl, embedUrl}` — doc / slides / sheet / form / drive /
+folder, with a `link` fallback so a non-Google URL is kept rather than refused.
+One row renderer (`docLinkRow`) serves all five placements.
+
+Five places: the **team shelf** at the top of Documents (pinned `documents`
+records, `pinned:true`, `category:"Team shelf"`), plus `docs: []` arrays on
+tickets, work orders, parts, and the week's `schedule` doc (that last one is the
+meeting-deck slot).
+
+**No auth, no API key, no consent screen, deliberately.** The app is
+email/password (`fb.js` has no GoogleAuthProvider), so Drive Picker or Drive API
+would put a second Google sign-in in front of every member. Verified in a browser
+on 2026-08-01: the no-auth `og:title` scrape really does return the document name
+(`docs.google.com` echoes our origin in `access-control-allow-origin`), and a
+`/preview` iframe really does render inside `feb-composites.web.app` — the frame
+attached and its body text was live spreadsheet content. Google publishes no
+oEmbed endpoint; both candidate URLs 404.
+
+Preview is collapsed by default and the "you're probably signed into a different
+Google account" note under it is permanent, not an error state: a cross-origin
+iframe fires no readable load or error event, so a blank frame is undetectable.
+
+Reused `.docrow` / `.doclist` / `.docview` from the Documents tab, so the design
+system needed no change (23/23 still green). New: `.doclink`, `.dl-t`, `.dl-cv`,
+`.dl-prev` in the app stylesheet only, and `link` / `externalLink` /
+`presentation` icons in core.js (none existed; the RTE's link button still falls
+back to a raw emoji).
+
+`allDocs()` had to carry `pinned` through its remap or the shelf renders twice.
+
+## CS-008 Rev C (2026-08-01)
+
+§5 gained a **FEB hold** column beside the datasheet demould figures, and a new
+§5.1 saying which governs and why they differ. Status stays "Draft, pending Lead
+signature" — Simon signed the cure numbers, not the standard, and CS-000 §4 is
+explicit that a blank Approver row is never Released.
+
+Pipeline is manual and both steps are needed: `tools/.venv/bin/python
+tools/build_docx.py --all` then `python3 tools/gen_docs_manifest.py`, then
+`python3 tools/check_traceability.py`. Neither tool has a per-document mode, so
+every generated artifact churns; that is committed rather than partly reverted,
+because reverting a PDF while keeping the regenerated manifest leaves the
+manifest recording sizes that no longer match disk.
 
 ## Sub-tickets name their parent in flat lists (2026-08-01)
 

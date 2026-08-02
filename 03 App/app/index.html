@@ -484,6 +484,27 @@
   .docrow .di { font-size: 18px; width: 24px; text-align: center; }
   .docrow .dsz { margin-left: auto; font-size: 11.5px; color: var(--faint); }
   .docview { width: 100%; height: 78vh; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  /* ---- linked Google documents ----
+     Deliberately built from .docrow / .doclist / .docview, which the Documents
+     tab already defines: a linked doc on a work order and a bundled datasheet
+     in the library should look like the same kind of thing, because they are.
+     Only the bits that have no equivalent are new. */
+  .doclink { border-top: 1px solid var(--line); }
+  .doclink:first-child { border-top: none; }
+  .doclink .docrow { border-top: none; }
+  /* The title takes the slack so the type tag and Open button stay right-aligned
+     the way .dsz does in the library, and a long doc name ellipsises instead of
+     pushing them off the row. */
+  .dl-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dsz .sm { margin-left: 8px; }
+  .dl-cv { display: inline-flex; color: var(--faint); margin-left: 6px; vertical-align: middle; }
+  /* An embedded Google frame goes silently blank when the viewer is signed into
+     the wrong account, and a cross-origin iframe fires no error we can catch. So
+     the frame is never the only thing here: the note under it is permanent, not
+     an error state, because we cannot know whether it loaded. */
+  .dl-prev { padding: 0 4px 10px; }
+  .dl-prev .docview { height: 60vh; }
+  .dl-prev p { margin: 6px 0 0; }
   .md-body h1 { font-size: 22px; } .md-body h2 { font-size: 18px; color: var(--brand-ink); } .md-body h3 { font-size: 14px; }
   .md-body table { border-collapse: collapse; margin: 8px 0; }
   .md-body th, .md-body td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; font-size: 13px; }
@@ -1285,6 +1306,7 @@
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="resins.js"></script>
+<script src="gdocs.js"></script>
 <script src="workorders.js"></script>
 <script src="parts.js"></script>
 <script src="projects.js"></script>

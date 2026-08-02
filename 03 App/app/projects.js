@@ -561,6 +561,9 @@ function renderProjDetail() {
     <h3>Description</h3>
     <div>${p.description ? sanitizeHtml(p.description) : '<span class="muted">—</span>'}</div>
 
+    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets about this ticket</span></h3>
+    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
+    <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
     <h3>Files</h3>
     <div class="filegrid">
       ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
@@ -664,3 +667,4 @@ function postComment(id) {
   }
   ed.innerHTML = ""; render();
 }
+function rmProjDoc(linkId) { removeDocLink("projects", view.id, linkId); }
