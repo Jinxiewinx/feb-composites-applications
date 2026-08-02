@@ -729,6 +729,64 @@ function sanitizeHtml(html) {
   }
   return esc(html); // fail closed: no real sanitizer -> no HTML, just text
 }
+
+/* ---------- prose ----------
+   Sanitize, then decorate. The decoration runs on output DOMPurify has already
+   cleared, and the classes it adds come from this file rather than from user
+   content — so it adds no sanitizer surface at all. It exists because the two
+   things long comments most need are things the allowlist deliberately forbids
+   the author from expressing: `class` is not allowed (so pasted markup can
+   never impersonate app chrome), which means a table cannot ask to be
+   scrollable and a run of photos cannot ask to be a gallery. We decide instead.
+
+   Same technique labelListTables() already uses to put data-label on cells for
+   the responsive card collapse: trusted code decorating rendered output.
+
+   Falls back to the bare sanitized string wherever DOMParser is unavailable,
+   which is the test harness's DOM stub. */
+function proseHtml(html) {
+  const clean = sanitizeHtml(html);
+  if (!clean || typeof DOMParser !== "function") return clean;
+  let doc;
+  try { doc = new DOMParser().parseFromString(`<body>${clean}</body>`, "text/html"); }
+  catch (e) { return clean; }
+  const body = doc && doc.body;
+  if (!body) return clean;
+
+  // A wide table scrolls inside its own box rather than pushing the page
+  // sideways. tools/test_appui.mjs fails a horizontal overflow on <main>, and
+  // exempts anything inside a scroller — this is what puts it inside one.
+  body.querySelectorAll("table").forEach(t => {
+    if (t.parentElement && t.parentElement.classList.contains("tblwrap")) return;
+    const wrap = doc.createElement("div");
+    wrap.className = "tblwrap";
+    t.replaceWith(wrap);
+    wrap.appendChild(t);
+  });
+
+  /* Consecutive images become a grid. "Consecutive" ignores whitespace and the
+     <a download> wrapper imgAttachHtml() puts around every attachment, because
+     that wrapper is exactly what a run of pasted photos looks like. */
+  const unit = n => (n.tagName === "IMG" ? n : (n.tagName === "A" && n.children.length === 1 && n.firstElementChild.tagName === "IMG" ? n : null));
+  const blank = n => n.nodeType === 3 && !n.textContent.trim();
+  Array.from(body.children).forEach(node => {
+    if (!unit(node) || (node.parentElement && node.parentElement.classList.contains("cgal"))) return;
+    const run = [node];
+    let next = node.nextSibling;
+    while (next) {
+      if (blank(next)) { next = next.nextSibling; continue; }
+      if (next.nodeType !== 1 || !unit(next)) break;
+      run.push(next); next = next.nextSibling;
+    }
+    if (run.length < 2) return;
+    const gal = doc.createElement("div");
+    gal.className = "cgal";
+    run[0].replaceWith(gal);
+    run.forEach(n => gal.appendChild(n));
+  });
+
+  return body.innerHTML;
+}
 function richTextAvailable() { return !!(window.DOMPurify && window.DOMPurify.sanitize); }
 
 /* ---------- multi-select picker (assignees / parts) ----------

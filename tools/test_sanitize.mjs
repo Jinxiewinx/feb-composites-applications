@@ -111,6 +111,47 @@ ok("strips id (would collide with our own anchors)",
 ok("strips event handlers on an allowed tag",
   !/onclick/i.test(await clean('<p onclick="alert(1)">x</p>')));
 
+/* ---- the decoration pass ----
+   Runs after sanitisation, in trusted code, because the two things long
+   comments most need are things the allowlist forbids the AUTHOR from asking
+   for: a table cannot request a scroll wrapper and a run of photos cannot
+   request a gallery, since `class` is not allowed through. */
+console.log("prose decoration:");
+const prose = (h) => page.evaluate(x => proseHtml(x), h);
+
+const wrapped = await prose("<table><tr><td>a</td></tr></table>");
+ok("a table is wrapped in a scroll container",
+  /<div class="tblwrap"><table/.test(wrapped), wrapped);
+ok("wrapping is idempotent — re-rendering does not nest wrappers",
+  (await prose(wrapped)).match(/tblwrap/g).length === 1);
+
+const two = await prose('<img src="https://x.test/1.png"><img src="https://x.test/2.png">');
+ok("two images in a row become a gallery", /<div class="cgal">/.test(two), two);
+ok("...and both end up inside it", (two.match(/<img/g) || []).length === 2, two);
+
+const one = await prose('<img src="https://x.test/1.png">');
+ok("a single image is left inline, not made a one-cell grid", !/cgal/.test(one), one);
+
+const linked = await prose('<a href="https://x.test/1.png"><img src="https://x.test/1.png"></a>'
+  + '<a href="https://x.test/2.png"><img src="https://x.test/2.png"></a>');
+ok("attachment-wrapped images group too (imgAttachHtml wraps every one)",
+  /<div class="cgal">/.test(linked), linked);
+
+const split = await prose('<img src="https://x.test/1.png"><p>note</p><img src="https://x.test/2.png">');
+ok("images separated by text are NOT grouped", !/cgal/.test(split), split);
+
+ok("a code block keeps its line breaks (white-space is the UA default for <pre>)",
+  await page.evaluate(() => {
+    const d = document.createElement("div");
+    d.className = "prose"; d.innerHTML = proseHtml("<pre>a\nb</pre>");
+    document.body.appendChild(d);
+    const ws = getComputedStyle(d.querySelector("pre")).whiteSpace;
+    const h = d.querySelector("pre").getBoundingClientRect().height;
+    d.remove();
+    return /^pre/.test(ws) && h > 20;   // two lines, not one
+  }));
+ok("decoration never introduces a script", !/script/i.test(await prose("<script>alert(1)</script><table><tr><td>x</td></tr></table>")));
+
 /* ---- fail closed ---- */
 console.log("fail-closed:");
 const noPurify = await page.evaluate(() => {

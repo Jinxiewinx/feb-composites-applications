@@ -563,7 +563,7 @@ function renderProjDetail() {
     ` : ""}
 
     <h3>Description</h3>
-    <div>${p.description ? sanitizeHtml(p.description) : '<span class="muted">—</span>'}</div>
+    <div class="prose">${p.description ? proseHtml(p.description) : '<span class="muted">—</span>'}</div>
 
     <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets about this ticket</span></h3>
     ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
@@ -579,7 +579,7 @@ function renderProjDetail() {
       ${avatar(c.email || c.author, 30)}
       <div class="cbody">
         <div class="chead"><b>${esc(c.author || userName(c.email))}</b> · ${fmtWhen(c.ts)}</div>
-        <div class="ctext">${sanitizeHtml(c.html || "")}</div>
+        <div class="ctext prose">${proseHtml(c.html || "")}</div>
       </div>
     </div>`).join("") || '<span class="muted">No comments yet.</span>'}
     <div class="no-print" style="margin-top:10px">

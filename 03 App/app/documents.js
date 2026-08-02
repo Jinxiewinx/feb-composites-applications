@@ -168,7 +168,7 @@ function renderDocViewer() {
   } else if (d.kind === "image") {
     body = `<div class="card" style="text-align:center"><img src="${esc(d.src)}" alt="${esc(d.title)}" style="max-width:100%;border-radius:6px"></div>`;
   } else if (d.kind === "md") {
-    body = `<div class="md-body card">${MD_CACHE[d.src] || "Loading…"}</div>`;
+    body = `<div class="prose card">${MD_CACHE[d.src] || "Loading…"}</div>`;
   } else {
     body = `<div class="card">This file type doesn't preview in-browser. <a href="${esc(d.src)}" target="_blank" rel="noopener" download>Download it</a>.</div>`;
   }
