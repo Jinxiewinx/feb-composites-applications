@@ -615,7 +615,7 @@ function renderPartDetail() {
   const engs = partEngineers(p);
   const comments = (p.commentLog || []).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   return `
-  <section class="mddetail" aria-label="Part detail">
+  <section class="mddetail" aria-label="Part detail" data-lbgroup="parts:${esc(p.id)}">
     <div class="toolbar no-print">
       <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
       <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
@@ -695,8 +695,11 @@ function renderPartDetail() {
       <h3 id="pt-notes">Notes${comments.length ? ` <span class="muted" style="text-transform:none">— ${comments.length} comment${comments.length === 1 ? "" : "s"}</span>` : ""}</h3>
       <div class="pnote">
         <div class="lg-label tny">Part note <span class="muted" style="text-transform:none">— the free-text field from the tracker</span></div>
-        ${E ? `<textarea onchange="updPart('comments',this.value)">${esc(p.comments)}</textarea>`
-             : `<div class="notebody">${p.comments ? esc(p.comments).replace(/\n/g, "<br>") : '<span class="muted">—</span>'}</div>`}
+        ${richField("parts", p.id, "comments", {
+          plain: true, label: "Part note",
+          empty: "What anyone picking this part up needs to know.",
+          upload: name => `parts/${p.id}/${Date.now()}-${name}`,
+        })}
       </div>
       ${threadHtml("parts", p.id, comments, { empty: "No comments yet." })}
       ${(() => {

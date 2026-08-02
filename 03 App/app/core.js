@@ -961,6 +961,13 @@ document.addEventListener("touchend", (e) => {
   const start = SWIPE_START; SWIPE_START = null;
   if (!start) return;
   const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+  /* The lightbox owns the screen while it is open, and `inert` on #app does
+     nothing to a document-level listener. Without this, swiping right from the
+     left edge to go back a photo also opens the drawer BEHIND the lightbox
+     (sidebar is z 40, the lightbox 55), and it is still open when you close it.
+     Guarded at the listener rather than inside the pure function, which stays
+     free of DOM reads so it remains testable without a TouchEvent. */
+  if (typeof lightboxOpen === "function" && lightboxOpen()) { lbSwipeEnd(start, t); return; }
   const drawerOpen = !!(document.body && document.body.classList.contains("drawer-open"));
   if (shouldOpenDrawerFromSwipe(start.x, start.y, t.clientX, t.clientY, drawerOpen, isNarrowViewport())) toggleDrawer();
 }, { passive: true });
@@ -1220,6 +1227,48 @@ if (typeof window !== "undefined" && window.addEventListener) {
    matters because the sanitizer strips class deliberately — the scope class is
    on the container WE render. */
 let LB_LIST = [], LB_I = 0, LB_RETURN = null;
+/* What the arrows walk. A photo is attached to a RECORD, not to the one comment
+   it happens to sit in, so "next" should mean the next photo on this ticket —
+   the grid tile after this one, then the photo in the comment below it. Each
+   detail page wraps its attachments and its thread in one [data-lbgroup], and
+   that is the first scope tried; .cgal and .prose remain for a thread rendered
+   outside one (a modal, a print preview).
+
+   Two kinds of source live in a group: real <img> elements in comments and
+   descriptions, and [data-lb-src] buttons in the attachment grids, whose image
+   is a CSS background and therefore invisible to querySelectorAll("img"). One
+   selector collects both, in document order, so the sequence matches what you
+   can see on the page.
+
+   Three exclusions, two of which predate this: an <img> inside a .rte is
+   something you are still typing, and a data: URL is the 1x1 upload
+   placeholder. The third is new and only matters now that a group is wider than
+   one .prose block — every comment header carries a 26px avatar, and a face is
+   not a photo of a part. */
+const LB_SEL = "img, [data-lb-src]";
+function lbSrcOf(el) { return el ? (el.getAttribute("data-lb-src") || el.src || "") : ""; }
+function lbNameOf(el) {
+  if (!el) return "";
+  const given = el.getAttribute("data-lb-name") || el.alt || "";
+  if (given) return given;
+  const raw = String(lbSrcOf(el)).split("/").pop().split("?")[0];
+  // decodeURIComponent throws on a bare % — and it is called before lbShow()
+  // assigns the src, so an unescapable name would leave the previous photo on
+  // screen rather than the one that was clicked.
+  try { return decodeURIComponent(raw).slice(0, 80); } catch (e) { return raw.slice(0, 80); }
+}
+function lbCollect(scope) {
+  return Array.from((scope || document).querySelectorAll(LB_SEL))
+    .filter(el => {
+      const src = lbSrcOf(el);
+      if (!src || src.startsWith("data:")) return false;
+      if (!el.closest) return true;
+      // #lightbox is a child of <body>, so the `document` fallback scope would
+      // otherwise collect the viewer's OWN <img> — whose src survives a close —
+      // and every set would carry a ghost frame of the last photo looked at.
+      return !el.closest(".rte") && !el.closest(".avatar") && !el.closest("#lightbox");
+    });
+}
 function lightboxHtml() {
   return `<div id="lightbox" role="dialog" aria-modal="true" aria-label="Photo">
     <div class="lb-scrim" onclick="closeLightbox()"></div>
@@ -1228,7 +1277,7 @@ function lightboxHtml() {
       <span id="lb-count" class="tny"></span>
       <button id="lb-prev" title="Previous" aria-label="Previous photo" onclick="lbStep(-1)">${icon("chevronLeft", 18)}</button>
       <button id="lb-next" title="Next" aria-label="Next photo" onclick="lbStep(1)">${icon("chevronRight", 18)}</button>
-      <a id="lb-dl" download title="Download" aria-label="Download this photo">${icon("download", 18)}</a>
+      <a id="lb-dl" download target="_blank" rel="noopener" title="Download" aria-label="Download this photo" onclick="lbDownload(event)">${icon("download", 18)}</a>
       <button id="lb-close" title="Close" aria-label="Close" onclick="closeLightbox()">${icon("x", 18)}</button>
     </div>
     <div class="lb-stage" onclick="if(event.target===this)closeLightbox()"><img id="lb-img" alt=""></div>
@@ -1237,10 +1286,16 @@ function lightboxHtml() {
 function openLightbox(img) {
   const box = document.getElementById("lightbox");
   if (!box || !img) return;
-  // Siblings first (a .cgal run), else every image in the same comment.
-  const scope = img.closest(".cgal") || img.closest(".prose") || document;
-  LB_LIST = Array.from(scope.querySelectorAll("img")).filter(i => i.src && !i.src.startsWith("data:"));
-  LB_I = Math.max(0, LB_LIST.indexOf(img));
+  // The whole record first, then a .cgal run, then the one comment.
+  const scope = (img.closest && (img.closest("[data-lbgroup]") || img.closest(".cgal") || img.closest(".prose"))) || document;
+  LB_LIST = lbCollect(scope);
+  const at = LB_LIST.indexOf(img);
+  // Not in the list means it was filtered out — a src-less <img> left behind
+  // when the sanitizer dropped an upload placeholder, say. Opening "photo 0"
+  // instead would show an unrelated photo from elsewhere on the record, which
+  // is worse than doing nothing.
+  if (at < 0) return;
+  LB_I = at;
   LB_RETURN = img;
   box.classList.add("open");
   // inert on the rest is one attribute and does the whole focus-trap job. The
@@ -1253,19 +1308,89 @@ function openLightbox(img) {
 function lbShow() {
   const im = document.getElementById("lb-img"), src = LB_LIST[LB_I];
   if (!im || !src) return;
-  im.src = src.src; im.alt = src.alt || "";
+  const url = lbSrcOf(src), label = lbNameOf(src);
+  im.src = url; im.alt = label;
   const name = document.getElementById("lb-name");
-  if (name) name.textContent = src.alt || decodeURIComponent(String(src.src).split("/").pop().split("?")[0]).slice(0, 80);
-  const dl = document.getElementById("lb-dl"); if (dl) dl.href = src.src;
+  if (name) name.textContent = label;
+  // The filename, not just the href: a Firebase Storage URL saved without this
+  // lands in Downloads as a token with no extension.
+  const dl = document.getElementById("lb-dl");
+  if (dl) { dl.href = url; dl.setAttribute("download", label || "photo"); }
   const cnt = document.getElementById("lb-count");
   if (cnt) cnt.textContent = LB_LIST.length > 1 ? `${LB_I + 1} / ${LB_LIST.length}` : "";
   ["lb-prev", "lb-next"].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = LB_LIST.length < 2; });
 }
 function lbStep(d) { if (!LB_LIST.length) return; LB_I = (LB_I + d + LB_LIST.length) % LB_LIST.length; lbShow(); }
+
+/* Actually download it. The `download` attribute is IGNORED on a cross-origin
+   href, and every photo here is on firebasestorage.googleapis.com while the app
+   is on feb-composites.web.app — so the plain anchor did not download at all.
+   It navigated the tab to the raw file (Storage serves content-disposition:
+   inline), which is the exact "left the app and took the unposted draft with
+   it" failure the viewer exists to remove.
+
+   Fetch to a blob and save that instead, which is also the only way the real
+   filename survives. cors.json already allows GET from the app's origins for
+   the Stock tab's mesh fetch, so nothing new is needed there. If the fetch
+   fails anyway, fall through to the anchor's own target="_blank" — a new tab is
+   a poor download but it is not a lost draft. */
+async function lbDownload(e) {
+  const src = LB_LIST[LB_I];
+  if (!src) return;
+  // Synchronously, before any await: a preventDefault after the fetch resolves
+  // is too late, the navigation has already happened.
+  if (e && e.preventDefault) e.preventDefault();
+  const url = lbSrcOf(src), name = lbNameOf(src) || "photo";
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    downloadBlob(name, await res.blob());
+  } catch (err) {
+    // A new tab is a poor download, but it is not a lost draft.
+    if (typeof window !== "undefined" && window.open) window.open(url, "_blank", "noopener");
+  }
+}
+
+/* Swipe is an ACCELERATOR, never the only way through. The arrows stay on
+   screen whenever there is more than one photo, because this app's own rule —
+   set where the selection bubble is hidden on touch, and again on .tl-del — is
+   that a touch affordance is either visible or has an equally capable visible
+   twin. An invisible gesture as the only path is the thing that rule forbids.
+
+   Pure decision, same shape and the same 60px / |dy|<|dx| thresholds as
+   shouldOpenDrawerFromSwipe, so gestures behave consistently across the app and
+   this is testable without a TouchEvent. Returns -1, +1 or 0.
+
+   `zoomed` is why the caller does a DOM read and this doesn't: #lightbox img
+   allows native pinch-zoom on purpose, and once someone has zoomed in, dragging
+   sideways means "pan this photo", not "next photo". */
+function lbSwipeStep(startX, startY, endX, endY, zoomed) {
+  if (zoomed) return 0;
+  const dx = endX - startX, dy = endY - startY;
+  if (Math.abs(dx) < 60) return 0;
+  if (Math.abs(dy) > Math.abs(dx)) return 0;
+  return dx < 0 ? 1 : -1;                       // drag left = go forward
+}
+function lbZoomed() {
+  const vv = typeof window !== "undefined" && window.visualViewport;
+  if (vv && vv.scale > 1.01) return true;
+  const stage = document.getElementById("lb-img");
+  const wrap = stage && stage.parentElement;
+  return !!(wrap && wrap.scrollWidth > wrap.clientWidth + 1);
+}
+function lbSwipeEnd(start, t) {
+  if (LB_LIST.length < 2) return;
+  const d = lbSwipeStep(start.x, start.y, t.clientX, t.clientY, lbZoomed());
+  if (d) lbStep(d);
+}
 function closeLightbox() {
   const box = document.getElementById("lightbox");
   if (!box || !box.classList.contains("open")) return;
   box.classList.remove("open");
+  // Drop the src as well as the class. The viewer's own <img> is a child of
+  // <body>, so a scope that falls back to `document` would otherwise find it
+  // and carry the last photo looked at into an unrelated set.
+  const im = document.getElementById("lb-img"); if (im) { im.removeAttribute("src"); im.alt = ""; }
   ["app", "modal"].forEach(id => { const n = document.getElementById(id); if (n) n.inert = false; });
   if (LB_RETURN && LB_RETURN.focus) LB_RETURN.focus();
   LB_RETURN = null; LB_LIST = [];
@@ -1275,10 +1400,22 @@ function installLightbox() {
   if (typeof document.addEventListener !== "function") return;
   document.addEventListener("click", (e) => {
     if (!e.target || !e.target.closest) return;
-    const img = e.target.closest(".prose img");
+    // A photo in prose, or an attachment tile whose image is a CSS background.
+    let img = e.target.closest(".prose img, [data-lb-src]");
+    /* closest() walks ancestors, and imgAttachHtml wraps every photo in an
+       <a href>. Activating that link from the KEYBOARD dispatches a click whose
+       target is the anchor, which has no img above it — so Enter on a gallery
+       photo used to miss this handler entirely and follow the raw Storage URL
+       out of the app. Every .cgal photo is a tab stop, so that was every photo. */
+    if (!img) {
+      const link = e.target.closest(".prose a[href]");
+      const inner = link && link.querySelector("img");
+      if (inner) img = inner;
+    }
     if (!img || img.closest(".rte")) return;      // not while you are editing
-    // imgAttachHtml wraps every attachment in <a href download>; without this
-    // the click navigates away to a raw file URL.
+    if (img.closest(".avatar")) return;           // a face is not an attachment
+    if (!lbSrcOf(img)) return;                    // a broken <img> is not a photo
+    // Without this the click navigates away to a raw file URL.
     const a = img.closest("a[href]");
     if (a) e.preventDefault();
     openLightbox(img);

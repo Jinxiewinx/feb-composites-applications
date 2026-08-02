@@ -100,7 +100,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|LB_SEL|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -139,7 +139,65 @@ console.log("work orders:");
 await t("seed loads, 26 rows", () => { setTab("workorders"); onFbData("workOrders", woSeed.slice()); assert(DB.workOrders.length === 26); assert(main.innerHTML.includes("26 of 26 work orders")); });
 await t("newWO allocates + saves + opens detail", async () => { calls.length = 0; await newWO(); assert(calls.some(c => c[0] === "allocId" && c[1] === "workOrders")); assert(calls.some(c => c[0] === "save" && c[1] === "workOrders")); assert(view.mode === "detail" && view.edit); });
 await t("blocker blocks later buy-off", () => { const id = view.id; lastToast = ""; buyoff(2); assert(lastToast.includes("Blocked")); assert(!isSigned(woById(id).steps[2])); });
-await t("buy-off stamps identity + writes steps concurrency-safe", () => { calls.length = 0; buyoff(0); const b = woById(view.id).steps[0].buyoff; assert(b.name === "Simon" && b.email === "simon@berkeley.edu" && b.uid === "u1" && b.date); assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "buy-off must use transaction, not whole-field write: " + JSON.stringify(calls)); });
+/* ---- evidence on a buy-off ----------------------------------------------
+   A signature used to record who and when but never what: step 1 could be
+   signed with an empty layup stack, and "Mold design review" with the CAD
+   nowhere in the app. `needs` on the step template says what has to exist
+   first; stepEvidence() is the pure answer that drives the row, the modal and
+   the gate inside buyoff(). */
+await t("a bare work order can't have its stack frozen", () => {
+  const wo = woById(view.id);
+  assert(stepEvidence(wo, 0).missing.includes("stack"), "step 1 needs a stack that doesn't exist yet");
+  lastToast = ""; buyoff(0);
+  assert(!isSigned(woById(view.id).steps[0]), "must not sign: " + JSON.stringify(woById(view.id).steps[0].buyoff));
+});
+await t("each evidence kind is satisfied by the thing it names", () => {
+  const wo = woById(view.id);
+  assert(!EVIDENCE.file.has({ files: [], docs: [] }), "no file and no doc is not evidence");
+  assert(EVIDENCE.file.has({ files: [{ id: "F1" }], docs: [] }), "an uploaded file satisfies it");
+  assert(EVIDENCE.file.has({ files: [], docs: [{ id: "D1" }] }), "a linked Drive doc satisfies it too — the CAD really does live there");
+  assert(!EVIDENCE.note.has(wo, { notes: "  " }), "whitespace is not a note");
+  assert(EVIDENCE.note.has(wo, { notes: "cut on the ShopSabre, 3 mm ball" }), "a written note satisfies it");
+  assert(EVIDENCE.note.has(wo, { noteHtml: "<p>zeroed off the left corner</p>" }), "the rich form counts as well as the plain one");
+});
+await t("a photo is suggested on physical steps only, and never required", () => {
+  const wo = woById(view.id);
+  const machine = (wo.steps || []).findIndex(s => (s.rule && (s.rule.needs || []).includes("note")));
+  assert(machine > 0, "a template step needs a note");
+  assert(stepEvidence(wo, machine).suggested.includes("photo"), "the machining step suggests a photo");
+  assert(!stepEvidence(wo, 0).suggested.includes("photo"), "freezing a stack is a decision, not something to photograph");
+  assert(!stepEvidence(wo, machine).missing.includes("photo"), "a photo is never in `missing`");
+});
+await t("a retro record documents, it does not enforce", () => {
+  const retro = { retro: true, layupStack: [], steps: [{ seq: 1, title: "Stack frozen", rule: { kind: "blocker", needs: ["stack"] } }] };
+  assert(stepEvidence(retro, 0).missing.length === 0, "historical records are not gated after the fact");
+});
+await t("buy-off stamps identity + writes steps concurrency-safe", () => {
+  // The stack is what step 1 was waiting for; with it there, the signature lands.
+  const wo = woById(view.id);
+  wo.layupStack = [{ material: "2x2 twill", orientation: "0" }];
+  calls.length = 0; buyoff(0);
+  const b = woById(view.id).steps[0].buyoff;
+  assert(b.name === "Simon" && b.email === "simon@berkeley.edu" && b.uid === "u1" && b.date);
+  assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "buy-off must use transaction, not whole-field write: " + JSON.stringify(calls));
+});
+await t("a lead signing without evidence must write down why, and it lands in the event log", () => {
+  const wo = woById(view.id);
+  const i = (wo.steps || []).findIndex(s => (s.rule && (s.rule.needs || []).includes("file")));
+  assert(i > 0, "the design-review step needs a file");
+  const before = (wo.timeline || []).length;
+  openEvidenceOverride(i);
+  lastToast = ""; submitEvidenceOverride(i);
+  assert(lastToast.includes("reason"), "an empty reason is refused: " + lastToast);
+  assert(!isSigned(wo.steps[i]), "and nothing is signed");
+  document.getElementById("ev-why").value = "CAD is in the shared Drive, Nick has the link";
+  submitEvidenceOverride(i);
+  assert(isSigned(wo.steps[i]), "with a reason it signs");
+  assert(wo.steps[i].evidenceOverride && wo.steps[i].evidenceOverride.reason.includes("shared Drive"));
+  assert((wo.timeline || []).length === before + 1, "exactly one event-log line");
+  assert(wo.timeline[wo.timeline.length - 1].note.includes("without"), "and it says what was missing: " + wo.timeline[wo.timeline.length - 1].note);
+  assert(stepEvidence(wo, i).missing.length === 0, "an override granted in writing clears the requirement");
+});
 await t("blocker gets a real badge (not bold text), and the first actionable step is marked up-next", () => {
   const wo = { id: "WO-TEST-UPNEXT", partName: "TEST PART", subteam: "AERO", processType: "Wet Layup", revision: "A", status: "InWork", bom: [], qualityChecks: [], steps: [
     { seq: 1, title: "Stack frozen", status: "done", buyoff: { name: "Simon", date: "2026-07-01" } },
@@ -1051,6 +1109,61 @@ await t("input rules are the six that match the sanitizer's tags", () => {
 await t("fileItem() links are downloadable, not just openable", () => {
   const html = fileItem({ url: "https://x.test/receipt.jpg", name: "receipt.jpg", type: "image/jpeg" });
   assert(/download="receipt\.jpg"/.test(html), "download attr present: " + html);
+});
+/* ---- the photo viewer ---------------------------------------------------
+   The lightbox existed but only ever saw `.prose img`, so an attachment could
+   be uploaded and never looked at: the thumbnail was a dead CSS background
+   beside an <a download> that navigated out of the app. */
+await t("an attached photo announces itself to the viewer; a PDF keeps its download link", () => {
+  const img = fileItem({ url: "https://x.test/flange.jpg", name: "flange.jpg", type: "image/jpeg" });
+  assert(/data-lb-src="https:\/\/x\.test\/flange\.jpg"/.test(img), "the thumb carries the source: " + img);
+  assert(/data-lb-name="flange\.jpg"/.test(img), "and the real filename, so a Storage URL downloads with an extension");
+  assert(/<button[^>]*class="thumb"/.test(img), "the thumb is a button, not a dead div");
+  const pdf = fileItem({ url: "https://x.test/spec.pdf", name: "spec.pdf", type: "application/pdf" });
+  assert(!/data-lb-src/.test(pdf), "a PDF is not a photo: " + pdf);
+  assert(/download="spec\.pdf"/.test(pdf), "and it keeps the download it always had");
+});
+await t("the arrows walk the whole record, not one comment", () => {
+  // The two sources a group holds: grid tiles (background images, invisible to
+  // querySelectorAll("img")) and real <img> in comments. Both, in page order.
+  const nodes = [
+    { tag: "BUTTON", attrs: { "data-lb-src": "https://x.test/a.jpg", "data-lb-name": "a.jpg" } },
+    { tag: "IMG", src: "https://x.test/b.jpg", alt: "b.jpg" },
+    { tag: "IMG", src: "data:image/gif;base64,R0lGOD", alt: "uploading" },  // the placeholder
+    { tag: "IMG", src: "https://x.test/face.jpg", alt: "Simon", in: ".avatar" },
+    { tag: "IMG", src: "https://x.test/draft.jpg", alt: "draft", in: ".rte" },
+  ].map(n => ({
+    getAttribute: k => (n.attrs || {})[k] || null,
+    src: n.src, alt: n.alt,
+    closest: sel => (n.in === sel ? {} : null),
+  }));
+  const got = lbCollect({ querySelectorAll: () => nodes });
+  assert(got.length === 2, "two real photos, in order: " + got.length);
+  assert(lbSrcOf(got[0]) === "https://x.test/a.jpg" && lbNameOf(got[0]) === "a.jpg", "a grid tile is a photo the arrows can reach");
+  assert(lbSrcOf(got[1]) === "https://x.test/b.jpg", "and so is the one in the comment below it");
+});
+await t("the viewer's own image never joins the set it is showing", () => {
+  // #lightbox is a child of <body>, so a scope that falls back to `document`
+  // used to collect #lb-img itself — whose src survives a close — and every
+  // set carried a ghost frame of the last photo anyone looked at.
+  const ghost = { getAttribute: () => null, src: "https://x.test/last.jpg", alt: "", closest: sel => (sel === "#lightbox" ? {} : null) };
+  const real = { getAttribute: () => null, src: "https://x.test/real.jpg", alt: "real", closest: () => null };
+  const got = lbCollect({ querySelectorAll: () => [ghost, real] });
+  assert(got.length === 1 && lbSrcOf(got[0]) === "https://x.test/real.jpg", "only the real photo: " + got.length);
+});
+await t("a name that can't be URL-decoded doesn't take the viewer down with it", () => {
+  // decodeURIComponent throws on a bare %, and it runs BEFORE lbShow assigns
+  // the src — so this used to leave the previous photo on screen.
+  const el = { getAttribute: () => null, src: "https://x.test/100%-cure.jpg", alt: "" };
+  assert(lbNameOf(el) === "100%-cure.jpg", "falls back to the raw name: " + lbNameOf(el));
+  assert(lbNameOf({ getAttribute: () => null, src: "https://x.test/a%20b.jpg", alt: "" }) === "a b.jpg", "and still decodes the ones it can");
+});
+await t("swipe pages photos, but not while you are pinch-zoomed into one", () => {
+  assert(lbSwipeStep(300, 200, 100, 205, false) === 1, "drag left goes forward");
+  assert(lbSwipeStep(100, 200, 300, 205, false) === -1, "drag right goes back");
+  assert(lbSwipeStep(300, 200, 280, 205, false) === 0, "20px is a tap, not a swipe");
+  assert(lbSwipeStep(300, 200, 260, 400, false) === 0, "vertical-dominant is a scroll");
+  assert(lbSwipeStep(300, 200, 100, 205, true) === 0, "zoomed in, a sideways drag means pan this photo");
 });
 await t("imgAttachHtml() wraps the image in a downloadable link (regression: bare <img>, no download affordance)", () => {
   const html = imgAttachHtml("https://x.test/photo.png", "photo.png");
@@ -2865,6 +2978,86 @@ await t("a step note keeps its plain text so the printed traveler never goes bla
   assert(st.notes === "resin front stalled", "plain text for the paper sheet: " + st.notes);
   assert(/<p>/.test(st.noteHtml), "and the long form alongside it");
   assert(woSheetHtml(woById("WO-N")).includes("resin front stalled"), "the printed traveler still carries it");
+});
+
+/* ---- descriptions are comments that are always there ---------------------
+   Five fields moved out of edit-mode forms and textareas into the same
+   composer every comment uses. The one that has to keep working is the plain
+   companion: print.js prints wo.notes onto the paper traveler, and statusGate()
+   refuses to close an issue on whatHappened being empty. */
+await t("a rich field writes the markup and keeps the plain value the traveler reads", () => {
+  DB.workOrders = [{ id: "WO-RF", partName: "X", processType: "MoldInfusion", revision: "A",
+    status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [], notes: "old plain note" }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-RF", edit: false };
+  render();
+  assert(main.innerHTML.includes("old plain note"), "the pre-existing plain value still renders, with nothing backfilled");
+  startFieldEdit("workOrders", "WO-RF", "notes", true);
+  el("rf-workOrders-notes").innerHTML = "<p>mold is <b>chipped</b> at the flange</p>";
+  el("rf-workOrders-notes").textContent = "mold is chipped at the flange";
+  calls.length = 0;
+  saveFieldEdit("workOrders", "WO-RF", "notes", true);
+  const w = woById("WO-RF");
+  assert(w.notes === "mold is chipped at the flange", "plain text, for print.js: " + w.notes);
+  assert(/<b>chipped<\/b>/.test(w.notesHtml), "markup beside it: " + w.notesHtml);
+  assert(woSheetHtml(w).includes("mold is chipped at the flange"), "the printed traveler still carries it");
+  assert(calls.filter(c => c[0] === "save" && c[1] === "workOrders").length === 2, "both keys written, field-scoped: " + JSON.stringify(calls));
+});
+await t("opening an empty description and changing nothing closes without a confirm", () => {
+  DB.projects = [{ id: "TKT-E", kind: "project", title: "Empty", status: "To Do", description: "", comments: [], files: [] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-E", edit: false };
+  render();
+  startFieldEdit("projects", "TKT-E", "description", false);
+  // rteSeed() puts <p><br></p> in an empty editor, which is not "" — untouched
+  // must still count as untouched.
+  el("rf-projects-description").innerHTML = "<p><br></p>";
+  assert(!fieldDirty(), "an untouched empty field is not dirty");
+  el("rf-projects-description").innerHTML = "<p>something</p>";
+  assert(fieldDirty(), "typing into it is");
+  cancelFieldEdit();
+});
+await t("an issue's root cause still gates closing it, now that it is a rich field", () => {
+  DB.projects = [{ id: "TKT-G", kind: "issue", title: "Delam", status: "In Progress", workOrderId: "WO-RF",
+    resolutionMethod: "Rework", whatHappened: "", comments: [], files: [] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-G", edit: false };
+  render();
+  assert(statusGate(projById("TKT-G"), "Done"), "empty root cause still blocks");
+  startFieldEdit("projects", "TKT-G", "whatHappened", true);
+  el("rf-projects-whatHappened").innerHTML = "<p>bag leaked at the corner</p>";
+  el("rf-projects-whatHappened").textContent = "bag leaked at the corner";
+  saveFieldEdit("projects", "TKT-G", "whatHappened", true);
+  assert(!statusGate(projById("TKT-G"), "Done"), "written down, it closes");
+});
+await t("a description is edited by clicking the text, not by opening a form", () => {
+  DB.projects = [{ id: "TKT-D", kind: "project", title: "Undertray", status: "To Do", description: "", comments: [], files: [] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-D", edit: false };
+  render();
+  assert(main.innerHTML.includes("richfield"), "the description is the editable surface itself");
+  assert(/What this is, and what done looks like/.test(main.innerHTML), "an empty one says what belongs in it");
+  startFieldEdit("projects", "TKT-D", "description", false);
+  el("rf-projects-description").innerHTML = "<h3>Goal</h3><p>1.2 kg</p>";
+  el("rf-projects-description").textContent = "Goal 1.2 kg";
+  saveFieldEdit("projects", "TKT-D", "description", false);
+  assert(/<h3>Goal<\/h3>/.test(projById("TKT-D").description), "stored as markup: " + projById("TKT-D").description);
+  view = { ...view, edit: true }; render();
+  assert(!main.innerHTML.includes("ep-desc-editor"), "and it is NOT also in the edit form — one place to change it, not two");
+  view = { ...view, edit: false };
+});
+
+/* ---- sub-tickets ---------------------------------------------------------
+   They were filtered out of both planning views, so breaking a ticket down hid
+   the work. */
+await t("a sub-ticket appears on the board and in the list, carrying its parent", () => {
+  DB.projects = [
+    { id: "TKT-P", kind: "project", title: "Undertray mold", status: "In Progress", comments: [], files: [] },
+    { id: "TKT-S", kind: "project", title: "Machine the plug", status: "To Do", parentId: "TKT-P", comments: [], files: [] },
+  ];
+  view = { ...view, tab: "projects", mode: "list", projView: "board", q: "", tkFilter: "" };
+  render();
+  assert(main.innerHTML.includes("Machine the plug"), "the sub-ticket has its own card");
+  assert(/part of .*TKT-P|part of .*Undertray mold/.test(main.innerHTML), "and says whose: " + main.innerHTML.slice(0, 400));
+  view = { ...view, projView: "list" }; render();
+  assert(main.innerHTML.includes("Machine the plug"), "and its own row in the list");
+  assert(main.innerHTML.includes("part of"), "with the same context line");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

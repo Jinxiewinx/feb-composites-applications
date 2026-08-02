@@ -110,7 +110,7 @@ function renderBuyDetail() {
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     ${E && isLead() ? `<button class="danger" onclick="delBuy('${b.id}')">Delete</button>` : ""}
   </div>
-  <div class="card">
+  <div class="card" data-lbgroup="budget:${esc(b.id)}">
     <h2>${esc(b.item || "(unnamed purchase)")}</h2>
     <div class="muted">${esc(b.id)} · <span class="pill ${buyStatusClass(b.status)}">${esc(b.status)}</span>${b.updatedAt ? " · saved " + fmtWhen(b.updatedAt) + " by " + esc(b.updatedBy || "?") : ""}</div>
     ${needsApproval(b) ? `<p class="warn">Over $50 — needs #purchasing sign-off before it's ordered.</p>` : ""}
@@ -121,12 +121,20 @@ function renderBuyDetail() {
       ${buyFld(b, "Source / vendor", "source")}
     </div>
     <h3>Receipt</h3>
+    ${/* Through the shared tile, so a receipt opens in the viewer like every
+          other photo instead of being a thumbnail you can only download. A
+          receipt is always an image — attachReceipt() only accepts one, and
+          storage.rules allows nothing else under budget/. */""}
     ${b.receiptUrl
-      ? `<div class="fileitem"><div class="thumb" style="background-image:url('${esc(b.receiptUrl)}')"></div><div class="fn"><a href="${esc(b.receiptUrl)}" download="receipt-${esc(b.id)}.jpg" target="_blank" rel="noopener">receipt</a></div></div>`
+      ? `<div class="filegrid">${fileItem({ url: b.receiptUrl, name: `receipt-${b.id}.jpg`, type: "image/jpeg" })}</div>`
       : '<span class="muted">No receipt yet.</span>'}
     <div class="no-print" style="margin-top:8px"><button onclick="attachReceipt('${b.id}')">${b.receiptUrl ? "Replace" : "+ Add / scan"} receipt</button></div>
     <h3>Notes</h3>
-    ${E ? `<textarea onchange="updBuy('notes',this.value)">${esc(b.notes)}</textarea>` : `<div>${esc(b.notes) || '<span class="muted">—</span>'}</div>`}
+    ${richField("budget", b.id, "notes", {
+      plain: true, label: "Notes",
+      empty: "Why this was bought, or what went wrong with the order.",
+      upload: name => `budget/${b.id}/${Date.now()}-${name}`,
+    })}
   </div>`;
 }
 

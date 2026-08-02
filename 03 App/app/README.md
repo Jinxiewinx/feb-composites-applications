@@ -41,12 +41,18 @@ so `"Not Started"` sat at index 1 and coloured itself as in-progress. Progress
 colour is derived from what a value *means* now, never from where it sits in an
 array.
 
-Projects is a jira-style tracker for non-part work such as R&D, process fixes and
-outreach. Create from a modal with assignee and related-part pickers and a due
-date, then drag cards across a Backlog/Active/Blocked/Done board or use list
-view. Each project gets its own page with assignees, watchers who get flagged on
-new activity, a files section for photos and docs, and a comment thread with rich
-text and image attachments.
+Tickets is a jira-style tracker holding two kinds: projects (R&D, process fixes,
+outreach, and they can have sub-tickets) and issues (a production
+nonconformance, which needs a work order, a disposition and a documented root
+cause before it can close). Create from a modal with assignee and related-part
+pickers and a due date, then drag cards across the board — To Do, In Progress,
+Collecting Data, On Hold, Done, Cancelled — or use list view. Sub-tickets appear
+on both, in their own status column, labelled with the ticket they belong to:
+breaking work down should make it more visible, not less.
+
+Each ticket gets its own page with assignees, watchers who get flagged on new
+activity, a files section for photos and docs, an editable description and a
+comment thread with rich text and image attachments.
 
 Timeline is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
@@ -135,7 +141,22 @@ or store them, and "Forgot password" on the login page works on its own.
 ## What a buy-off is, and isn't
 
 A work-order buy-off records who was signed in when the button was clicked: name,
-email and timestamp. That's much better than typed initials, but be honest about
+email and timestamp, and since August 2026 it also records *what*. Steps carry a
+`needs` rule saying what has to exist before they can be signed: a layup stack
+before the stack can be frozen, the CAD attached or linked before a mold design
+review, a written note on the machining and drop-test steps. Press Buy off
+without it and the app says what is missing and gives you the button that fixes
+it. A lead can sign anyway, and it costs a sentence that lands in the event log
+next to what was missing — the same bargain as overriding a cure hold, and for
+the same reason: a gate nobody can pass gets worked around outside the app,
+which is worse, because then it isn't written down anywhere.
+
+A photo is suggested and never required, on the steps that need a note. Half
+these steps happen in a dark corner of RFS at eleven at night, and a hard photo
+requirement is how you teach people to write the traveler up the next morning
+from memory instead.
+
+That's much better than typed initials, but be honest about
 the limits, and the same applies to every record in every tab. Nothing here is
 tamper-proof. Any roster member can edit any record, and there's no version
 history inside the app, so the monthly backup files in Drive are the audit trail.
@@ -166,6 +187,19 @@ so a phone photo lands at around 150 KB instead of 4 MB.
 
 Comment rich text is sanitized with DOMPurify before it's stored and again before
 it's shown, so pasted scripts and handlers can't run for other viewers.
+
+Descriptions are comments that happen to always be there, so they use the same
+editor: click the text and write, no Edit button and no form. That covers a
+ticket's description, an issue's What happened, a work order's notes, the part
+note and a purchase's notes. All of them take photos, tables and pasted Google
+Docs, and the four that something else still reads as plain text (the printed
+traveler prints a work order's notes; an issue can't close with an empty root
+cause) keep a plain copy in step with the markup.
+
+Clicking a photo opens it full screen without leaving the app. The arrows walk
+every photo on that record — the Files grid and the comment thread as one set —
+and the download button saves it with its real filename. Swipe works too, on the
+steps where it isn't being confused with panning a photo you've pinched into.
 
 Watcher "new activity" is per-browser. It's tracked in your browser's local
 storage, so the unread dot reflects when you last opened this on *this* device.

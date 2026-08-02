@@ -304,8 +304,16 @@ function renderProjects() {
   </div>
   ${DB.projects.length === 0 ? `<div class="card">No tickets yet. <b>+ New ticket</b> to start one.</div>` : boardMode ? renderProjBoard() : renderProjTable()}`;
 }
-// Sub-tickets only appear nested under their parent, never as their own top-level row.
-function topLevel(p) { return !p.parentId; }
+/* Sub-tickets used to be filtered out of both the board and the list, on the
+   theory that they belong to their parent's page. What that actually meant was
+   that breaking a ticket down HID the work: "Machine the plug" existed, was
+   assigned, was due Friday, and appeared on neither view the team plans from.
+
+   They get their own card and their own row now, in their own status column —
+   a sub-ticket has its own status, so nesting it under a parent in a different
+   column was never going to work on a board anyway. What keeps it from reading
+   as an orphan is parentLine(), which the Dashboard and Weekly Plan already use
+   for exactly this. */
 function projMatch(p) {
   const q = (view.q || "").toLowerCase();
   const kf = view.tkFilter || "";
@@ -315,7 +323,7 @@ function projMatch(p) {
 
 function renderProjBoard() {
   const cols = PROJ_STATUS.map(st => {
-    const list = DB.projects.filter(p => topLevel(p) && projStatus(p) === st && projMatch(p))
+    const list = DB.projects.filter(p => projStatus(p) === st && projMatch(p))
       .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
     return `<div class="col col-${STATUS_SLUG[st]}" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="projDrop('${st}',this)">
       <h4>${st}<span>${list.length}</span></h4>
@@ -332,6 +340,7 @@ function projCard(p) {
   const nComments = projComments(p).length, nFiles = (p.files || []).length;
   return `<div class="pcard" draggable="true" ondragstart="projDragStart('${p.id}')" onclick="openRecord('projects','${p.id}')">
     <div class="t"><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> ${esc(p.title || p.id)}${projUnread(p) ? ' <span class="unread-dot" title="New activity"></span>' : ""}</div>
+    ${parentLine(parentOf(p))}
     <div class="meta">
       <span class="prio ${esc(p.priority)}">${esc(p.priority || "")}</span>
       ${p.dueDate ? `<span class="${late ? "warn" : ""}">${esc(p.dueDate)}${late ? " " + icon("warning", 13) : ""}</span>` : ""}
@@ -351,7 +360,7 @@ function projDrop(status, el) {
 }
 function renderProjTable() {
   const order = { "In Progress": 0, "On Hold": 1, "Collecting Data": 2, "To Do": 3, "Done": 4, "Cancelled": 5 };
-  const rows = DB.projects.filter(p => topLevel(p) && projMatch(p))
+  const rows = DB.projects.filter(p => projMatch(p))
     .sort((a, b) => (order[projStatus(a)] - order[projStatus(b)]) || (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
   return `<table class="list">
     <tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Assignees</th><th>Linked to</th><th>Activity</th></tr>
@@ -361,7 +370,7 @@ function renderProjTable() {
       const linked = isIssue(p) ? (p.workOrderId ? `<span class="chip">${esc(p.workOrderId)}</span>` : "—")
         : (subTickets(p).length ? `<span class="chip">${subTickets(p).length} sub-ticket${subTickets(p).length === 1 ? "" : "s"}</span>` : "—");
       return `<tr onclick="openRecord('projects','${p.id}')">
-        <td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> <b>${esc(p.title || p.id)}</b>${projUnread(p) ? " 🟡" : ""}</td>
+        <td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> <b>${esc(p.title || p.id)}</b>${projUnread(p) ? " 🟡" : ""}${parentLine(parentOf(p))}</td>
         <td><span class="status ${projStatusClass(st)}"><span class="dot"></span>${esc(st)}</span></td>
         <td class="prio ${esc(p.priority)}">${esc(p.priority || "")}</td>
         <td><span class="avatar-stack">${(p.assignees || []).slice(0, 5).map(e => avatar(e, 22)).join("")}</span></td>
@@ -391,7 +400,6 @@ function saveProjectEdits() {
     if (woEl && !woEl.value) { toast("An issue needs a work order.", "error"); return; }
     if (woEl) p.workOrderId = woEl.value;
     p.resolutionMethod = document.getElementById("ep-resolution").value;
-    p.whatHappened = document.getElementById("ep-whathappened").value;
   }
   const blocked = statusGate(p, newStatus);
   if (blocked) { toast(blocked, "error"); return; }
@@ -402,7 +410,6 @@ function saveProjectEdits() {
   p.priority = document.getElementById("ep-priority").value;
   p.dueDate = document.getElementById("ep-due").value;
   p.subteam = document.getElementById("ep-subteam").value;
-  p.description = sanitizeHtml(document.getElementById("ep-desc-editor").innerHTML || "");
   p.assignees = pickerValues("ea");
   p.relatedTickets = pickerValues("ert");
   p.relatedWorkOrders = pickerValues("erwo");
@@ -415,9 +422,9 @@ function saveProjectEdits() {
   // Field-scoped writes, NOT a whole-doc save — so a teammate's concurrent
   // comment/file/watcher change (which lands on other fields) can't be clobbered
   // by this edit landing between their write and our Save.
-  const fields = ["title", "status", "priority", "dueDate", "subteam", "description", "assignees", "relatedTickets", "relatedWorkOrders", "watchers"];
+  const fields = ["title", "status", "priority", "dueDate", "subteam", "assignees", "relatedTickets", "relatedWorkOrders", "watchers"];
   fields.push(isIssue(p) ? "workOrderId" : "relatedParts");
-  if (isIssue(p)) fields.push("resolutionMethod", "whatHappened");
+  if (isIssue(p)) fields.push("resolutionMethod");
   fields.forEach(f => saveProj(p, f));
   announceIfResolved(p, prevStatus);
   view.edit = false; render();
@@ -467,13 +474,15 @@ function renderProjDetail() {
       <div class="field"><label>Assignees</label>${pickerField("ea")}</div>
       ${isIssue(p) ? `
       <div class="field"><label>Work order <span class="req">*required</span></label><select id="ep-wo">${woSelectOptions(p.workOrderId)}</select></div>
-      <div class="field"><label>What happened <span class="req">*required to close</span></label><textarea id="ep-whathappened">${esc(p.whatHappened || "")}</textarea></div>
       <div class="field"><label>Resolution method <span class="req">*required to close</span></label>
         <select id="ep-resolution"><option value="" ${p.resolutionMethod ? "" : "selected"}>— not yet disposed —</option>${RESOLUTION_METHODS.map(m => `<option ${p.resolutionMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
       ` : `<div class="field"><label>Related parts</label>${pickerField("ep")}</div>`}
       <div class="field"><label>Related tickets</label>${pickerField("ert")}</div>
       <div class="field"><label>Related work orders</label>${pickerField("erwo")}</div>
-      <div class="field"><label>Description</label>${rteField("ep-desc-editor", p.description)}</div>
+      <!-- Description and What happened are NOT here any more. They are edited
+           in place on the ticket page, by clicking the text, so there is one
+           place to change each of them rather than two that can disagree about
+           which write lands last. -->
     </div>`;
   }
   const partChips = (p.relatedParts || []).map(id => chip("parts", id, (recById("parts", id) || {}).partName || id)).join(" ") || '<span class="muted">none</span>';
@@ -507,7 +516,11 @@ function renderProjDetail() {
          you navigate away from, so hiding it is right; here it is content you
          need alongside the discussion, and hiding it would delete the ticket's
          metadata on every phone. -->
-    <div class="mdsplit tksplit">
+    <!-- data-lbgroup: one photo set for the whole ticket. The Files grid is in
+         the rail and the comment photos are in the wide column, and "next
+         photo" should walk both — a photo belongs to the ticket, not to the
+         column it happens to be rendered in. -->
+    <div class="mdsplit tksplit" data-lbgroup="projects:${esc(p.id)}">
       <div class="tkmeta">
         <details class="moredetails tkmeta-fold" open>
           <summary>Details, files and links</summary>
@@ -515,7 +528,11 @@ function renderProjDetail() {
     <h3>Work order <span class="muted nocaps">— required</span></h3>
     <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
     <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
-    <div>${p.whatHappened ? esc(p.whatHappened).replace(/\n/g, "<br>") : '<span class="muted">—</span>'}</div>
+    ${richField("projects", p.id, "whatHappened", {
+      plain: true, label: "What happened",
+      empty: "What went wrong, and why. Photos of the defect belong here.",
+      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
+    })}
     <h3>Resolution method</h3>
     <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
     ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
@@ -541,7 +558,11 @@ function renderProjDetail() {
       </div>
       <div class="tkmain">
     <h3>Description</h3>
-    <div class="prose">${p.description ? proseHtml(p.description) : '<span class="muted">—</span>'}</div>
+    ${richField("projects", p.id, "description", {
+      label: "Description",
+      empty: "What this is, and what done looks like.",
+      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
+    })}
     ${!isIssue(p) && !p.parentId ? `
     <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
     ${kids.length ? kids.map(k => `<div class="subticket" onclick="openRecord('projects','${k.id}')">
@@ -583,27 +604,60 @@ function renderProjDetail() {
   </div>`;
 }
 
+/* One attachment tile, shared by tickets, work orders and the budget receipt.
+   A photo opens in the viewer rather than navigating: the thumbnail used to be
+   a dead CSS background beside an <a download>, so the only way to LOOK at a
+   photo someone had attached was to leave the app and open the raw Storage URL
+   — which also threw away any unposted draft on the page.
+
+   The image is still drawn as a background rather than an <img>, because
+   `center/cover` is what makes a grid of mixed-aspect shop photos read as a
+   grid. So the viewer is told about it by data-lb-src instead, which is also
+   what lets the arrows walk a mixed run of grid tiles and inline comment
+   photos. Anything that is not an image keeps the download anchor it had. */
 function fileItem(f) {
   const isImg = (f.type || "").startsWith("image/");
-  const thumb = isImg ? `<div class="thumb" style="background-image:url('${esc(f.url)}')"></div>` : `<div class="thumb">${icon("file", 26)}</div>`;
-  return `<div class="fileitem">${thumb}<div class="fn"><a href="${esc(f.url)}" download="${esc(f.name)}" target="_blank" rel="noopener" title="${esc(f.name)}">${esc(f.name)}</a></div></div>`;
+  const name = esc(f.name || "");
+  if (!isImg) {
+    return `<div class="fileitem"><div class="thumb">${icon("file", 26)}</div>
+      <div class="fn"><a href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}">${name}</a></div></div>`;
+  }
+  return `<div class="fileitem">
+    <button type="button" class="thumb" style="background-image:url('${esc(f.url)}')"
+      data-lb-src="${esc(f.url)}" data-lb-name="${name}" title="${name}" aria-label="Open ${name}"></button>
+    <div class="fn"><a href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}">${name}</a></div>
+  </div>`;
 }
-function addProjectFiles() {
-  const p = projById(view.id);
+/* Attaching a file, for any record that has a `files` array. Written generically
+   because work orders needed one too — a mold design review that can be signed
+   with the CAD nowhere in the app is a signature on nothing.
+
+   Uploads land in the projects/ storage tree whatever the collection, which is
+   deliberate: storage.rules already scopes and content-type-limits that tree,
+   and inventing a workOrders/ prefix would mean a rules deploy — the one thing
+   in this repo that can lock the team out of their own data — to gain nothing.
+   The record itself is roster-gated in Firestore either way. */
+function addRecordFiles(coll, id) {
+  const rec = recById(coll, id);
+  if (!rec) return;
   const inp = document.createElement("input");
   inp.type = "file"; inp.accept = "image/*,application/pdf,.doc,.docx,.txt,.csv";
+  inp.multiple = true;
   inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
-    try {
-      const rec = await fb.upload(`projects/${p.id}/${Date.now()}-${f.name}`, f);
-      const entry = { id: "F" + Date.now(), name: rec.name, url: rec.url, type: rec.type, size: rec.size, by: myEmail(), ts: new Date().toISOString(), path: rec.path };
-      p.files = (p.files || []).concat([entry]);
-      await fb.appendTo("projects", p.id, "files", entry).catch(() => saveProj(p, "files"));
-      render();
-    } catch (e) { toast("Upload failed: " + e.message,"error"); }
+    const files = Array.from(inp.files || []);
+    for (const f of files) {
+      try {
+        const up = await fb.upload(`projects/${id}/${Date.now()}-${f.name}`, f);
+        const entry = { id: "F" + Date.now() + Math.random().toString(36).slice(2, 5), name: up.name, url: up.url, type: up.type, size: up.size, by: myEmail(), ts: new Date().toISOString(), path: up.path };
+        rec.files = (rec.files || []).concat([entry]);
+        await fb.appendTo(coll, id, "files", entry).catch(() => save(coll, rec, "files"));
+      } catch (e) { toast("Upload failed: " + e.message, "error"); }
+    }
+    render();
   };
   inp.click();
 }
+function addProjectFiles() { addRecordFiles("projects", view.id); }
 
 /* ---- rich-text comment editor ---- */
 function rte(cmd, val, targetId) { document.execCommand(cmd, false, val); document.getElementById(targetId || "comment-editor").focus(); }
@@ -647,12 +701,10 @@ function postComment(id) {
 }
 function rmProjDoc(linkId) { removeDocLink("projects", view.id, linkId); }
 
-/* Cmd/Ctrl+Enter posts. Every product this app is competing with for muscle
-   memory does it, and the Post button is the far end of a long page once the
-   composer is holding a document. */
-function commentKeys(e, id) {
-  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); postComment(id); }
-}
+/* Cmd/Ctrl+Enter posts. It lives in rteKeys() now, one implementation for every
+   composer in the app — commentKeys() used to be here and was never wired to a
+   single element, so the hint under every composer promised a shortcut that did
+   nothing. */
 function discardCommentDraft(id) {
   confirmModal("Throw away this unposted draft?", () => { clearDraft("comment", id); render(); });
 }

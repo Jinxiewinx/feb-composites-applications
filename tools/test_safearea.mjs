@@ -82,6 +82,28 @@ const STATES = [
       setPartStage(p.id, "cadProgress", STAGE_CAD[Math.min(STAGE_CAD.length - 1, Math.max(0, i) + 1)]);
     })()`,
   },
+  /* The lightbox was never in this list, and it is the one overlay that owns
+     the entire screen — bar at the top where the island is, image down to the
+     home indicator. Its four controls are also the only way through a set of
+     photos, so they have to be reachable on a phone in both orientations. Built
+     by hand rather than through a click, so the state does not depend on a
+     fixture record happening to carry a photo. */
+  {
+    id: "lightbox", js: `(() => {
+      setTab("parts");
+      const host = document.createElement("div");
+      host.className = "prose";
+      host.innerHTML = '<img src="data:image/svg+xml,' +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900"></svg>') +
+        '" alt="mold flange">';
+      document.getElementById("main").appendChild(host);
+      const img = host.querySelector("img");
+      LB_LIST = [img, img];          // two, so the prev/next arrows are shown
+      LB_I = 0; LB_RETURN = img;
+      document.getElementById("lightbox").classList.add("open");
+      lbShow();
+    })()`,
+  },
   // The reported bug, and its sibling: both printable documents.
   { id: "print-wo", js: `setTab("workorders"); openPrintPreview(DB.workOrders[0] && DB.workOrders[0].id);` },
   {
@@ -150,7 +172,11 @@ const AUDIT = `(() => {
 
   /* A scrim's whole job is to cover the screen, insets included — flagging one
      for reaching the edges would be flagging it for working. */
-  const isScrim = el => el.id === "drawer-backdrop" || el.classList.contains("backdrop");
+  const isScrim = el => el.id === "drawer-backdrop" || el.classList.contains("backdrop")
+    // The lightbox's scrim and its image stage are both full-bleed by design,
+    // and both carry an onclick (tap outside to close), so the audit's
+    // onclick selector picks them up. Covering the screen is the job.
+    || el.classList.contains("lb-scrim") || el.classList.contains("lb-stage");
 
   const visible = el => {
     const s = getComputedStyle(el);
@@ -230,6 +256,7 @@ const AUDIT = `(() => {
         : el.closest(".pv-bar") ? "pv-bar"
         : el.closest("nav.sidebar") ? "sidebar"
         : el.closest("#modal") ? "modal"
+        : el.closest("#lightbox") ? "lightbox"
         : el.id === "drawer-backdrop" ? "scrim"
         : (el.id || el.className || el.tagName).toString().slice(0, 30)) : "none");
     }
@@ -307,7 +334,7 @@ for (const vp of PROFILES) {
       // 2. The island lands on chrome, not on content. Only meaningful where
       //    there IS a top inset — in landscape the island is on the side.
       if (vp.t) {
-        const bad = a.topOwners.filter(o => !["topbar", "pv-bar", "sidebar", "modal", "scrim"].includes(o));
+        const bad = a.topOwners.filter(o => !["topbar", "pv-bar", "sidebar", "modal", "scrim", "lightbox"].includes(o));
         check(bad.length === 0, "top-band-not-chrome",
           `the island sits on [${a.topOwners.join(", ")}] — it should land on the topbar or the print bar`);
       }

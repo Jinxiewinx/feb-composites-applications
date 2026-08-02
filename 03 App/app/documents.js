@@ -166,7 +166,16 @@ function renderDocViewer() {
   } else if (d.kind === "pdf" || d.kind === "html") {
     body = `<iframe class="docview" src="${esc(d.src)}" title="${esc(d.title)}"></iframe>`;
   } else if (d.kind === "image") {
-    body = `<div class="card" style="text-align:center"><img src="${esc(d.src)}" alt="${esc(d.title)}" style="max-width:100%;border-radius:6px"></div>`;
+    // data-lb-src, not .prose: this is a full-page preview rather than a photo
+    // in a thread, but clicking it should still zoom and offer a download
+    // rather than being the one image in the app that does nothing.
+    // role/tabindex as well as the click target: a mouse-only zoom is the thing
+    // this app's own rule about touch and keyboard affordances forbids.
+    body = `<div class="card" style="text-align:center"><img src="${esc(d.src)}" alt="${esc(d.title)}"
+      data-lb-src="${esc(d.src)}" data-lb-name="${esc(d.title)}"
+      role="button" tabindex="0" aria-label="Open ${esc(d.title)} full screen"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLightbox(this)}"
+      style="max-width:100%;border-radius:6px;cursor:zoom-in"></div>`;
   } else if (d.kind === "md") {
     body = `<div class="prose card">${MD_CACHE[d.src] || "Loading…"}</div>`;
   } else {

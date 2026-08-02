@@ -24,32 +24,38 @@ const BLOCKER_WORDS = ["frozen", "design review", "drop test", "acceptance crite
      { kind: "hold", hours: 4 }      a wait of a fixed length (nothing uses this
                                      yet; Ure-Bond's 4 h clamp is the next one)
 
+   `needs` sits in the SAME object and says what has to EXIST before the step can
+   be signed. A buy-off used to record who and when but never what: "Stack
+   frozen" could be signed on a work order whose layup stack was empty, and
+   "Mold design review" with the CAD nowhere in the app. The signature was the
+   record, and the record was a name. See stepEvidence().
+
    BLOCKER_WORDS still matches on titles as well, and has to: the 26 retro work
    orders and every record already in Firestore predate the rule field, so
    title-matching is the only thing enforcing on them. New templates carry both
    and the two agree. */
 const STD_STEPS = {
   MoldInfusion: [
-    ["Stack frozen", { kind: "blocker" }], ["Mold design review", { kind: "blocker" }],
-    ["Glue mold stock"], ["Machine mold"],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"] }],
+    ["Glue mold stock"], ["Machine mold", { needs: ["note"] }],
     ["Seal and release mold"], ["Dry stack and bag"],
-    ["Drop test, 1 inHg or less over 10 min", { kind: "blocker" }], ["Infuse", { kind: "startsHold" }],
+    ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"] }], ["Infuse", { kind: "startsHold" }],
     ["Cure and demould", { kind: "hold", from: "resin" }], ["Trim and finish"]],
   GlassInfusion: [
-    ["Stack frozen", { kind: "blocker" }], ["Prepare plate and release"],
-    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min", { kind: "blocker" }],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Prepare plate and release"],
+    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"] }],
     ["Infuse", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Cut to DXF, confirm revision"], ["Finish"]],
   MoldWetLay: [
-    ["Stack frozen", { kind: "blocker" }], ["Mold design review", { kind: "blocker" }],
-    ["Glue and machine mold"], ["Seal and release mold"],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"] }],
+    ["Glue and machine mold", { needs: ["note"] }], ["Seal and release mold"],
     ["Wet layup and bag", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
   FoamWrapped: [
-    ["Stack frozen", { kind: "blocker" }], ["Shape foam core"],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Shape foam core"],
     ["Wet layup over core", { kind: "startsHold" }], ["Cure", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
-  Other: [["Define acceptance criterion: target and method, set before work starts", { kind: "blocker" }],
+  Other: [["Define acceptance criterion: target and method, set before work starts", { kind: "blocker", needs: ["note"] }],
           ["Execute"], ["Verify against criterion"]],
 };
 // One place that turns a template row into a stored step, so newWO() and
@@ -128,6 +134,63 @@ function isBlocker(step) {
 }
 function isHoldStep(s) { return !!(stepRule(s) && s.rule.kind === "hold"); }
 function startsHold(s) { return !!(stepRule(s) && s.rule.kind === "startsHold"); }
+
+/* ---------- evidence on a buy-off ----------
+   What a signature has to come with. Three checks, each a pure function of the
+   work order and the step, so they are testable with no DOM and so the same
+   answer drives the disabled button, the modal and the gate inside buyoff().
+
+   A PHOTO IS SUGGESTED, NEVER REQUIRED. Simon's call, and the right one: half
+   these steps happen in a dark corner of RFS at eleven at night, and a hard
+   photo requirement is how you teach people to sign the traveller the next
+   morning from memory instead. It is a line of advice in the modal and nothing
+   more. */
+const EVIDENCE = {
+  stack: {
+    label: "a layup stack",
+    why: "Freezing a stack that doesn't exist yet is the signature this app was built to stop.",
+    fix: "Add plies in the Layup stack section above.",
+    has: (wo) => (wo.layupStack || []).length > 0,
+  },
+  file: {
+    // A link counts. The CAD genuinely lives in Drive, and demanding an upload
+    // when the file is already linked on this work order just teaches people to
+    // upload it twice.
+    label: "the CAD, attached or linked",
+    why: "A design review with no drawing anywhere is a signature on nothing.",
+    fix: "Add it under Files, or link it under Documents.",
+    has: (wo) => (wo.files || []).length > 0 || (wo.docs || []).length > 0,
+  },
+  note: {
+    label: "a note on this step",
+    why: "When it was done, on which machine, and what the numbers were. Nobody remembers in March.",
+    fix: "Write it in the step's note field.",
+    has: (wo, s) => !!(String((s && s.notes) || "").trim() || String((s && s.noteHtml) || "").replace(/<[^>]*>/g, "").trim()),
+  },
+};
+function stepNeeds(s) { return (stepRule(s) && s.rule.needs) || []; }
+function stepHasPhoto(s) {
+  return /<img/i.test(String((s && s.noteHtml) || "")) || ((s && s.photoRefs) || []).length > 0;
+}
+/* { missing: [key], suggested: ["photo"] }. Retro records return nothing
+   missing, exactly like every other gate in this file: a historical record
+   documents what happened, it does not enforce it after the fact. An override
+   already granted clears the requirement too — it was granted in writing. */
+function stepEvidence(wo, i) {
+  const s = (wo.steps || [])[i];
+  const out = { missing: [], suggested: [] };
+  if (!s || wo.retro || s.evidenceOverride) return out;
+  const needs = stepNeeds(s);
+  needs.forEach(k => { const rule = EVIDENCE[k]; if (rule && !rule.has(wo, s)) out.missing.push(k); });
+  /* Only steps that want a written note want a photo. Those are the physical
+     ones — machining, the drop test — where a photo IS the measurement. Asking
+     for a photo of "Stack frozen" would be asking for a photo of a decision,
+     and a prompt that fires where it makes no sense is how people learn to
+     dismiss the one that does. */
+  if (needs.includes("note") && !stepHasPhoto(s)) out.suggested.push("photo");
+  return out;
+}
+function evidenceLabels(keys) { return keys.map(k => (EVIDENCE[k] || {}).label || k); }
 
 /* ---------- cure holds ----------
    A hold step waits on the clock started by the step before it. That is a
@@ -303,9 +366,9 @@ function renderWODetail() {
        anchors, so no state and nothing to keep in sync. -->
   <nav class="jumpbar no-print" aria-label="Jump to section">
     <a href="#wo-overview">Overview</a><a href="#wo-stack">Stack</a><a href="#wo-bom">BOM</a>
-    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-docs">Docs</a><a href="#wo-log">Log</a>
+    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-docs">Docs</a><a href="#wo-files">Files</a><a href="#wo-log">Log</a>
   </nav>
-  <div class="card">
+  <div class="card" data-lbgroup="workOrders:${esc(wo.id)}">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
     <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span>${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
     ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
@@ -347,10 +410,18 @@ function renderWODetail() {
       // Waiting on a clock reads like waiting on a signature, because to the
       // person standing there it is the same thing: this step is not yours yet.
       const held = !!hold && !hold.ready && !hold.overridden && state !== "done" && state !== "failed";
+      const ev = stepEvidence(wo, i);
+      const needsEv = state !== "done" && state !== "failed" && ev.missing.length;
       return `<div class="step ${blocker || held ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${i === nextIdx ? "upnext" : ""}">
         <div class="num">${s.seq}</div>
         <div class="body">
           <div>${esc(stripCS(s.title))} ${blocker ? '<span class="step-badge">blocker</span>' : ""}${hold && state !== "done" ? ` <span class="step-badge">hold ${hold.hours} h</span>` : ""}</div>
+          ${/* Said on the row, not only in the modal you get after pressing a
+                disabled button — the point is to know what to go and do BEFORE
+                you walk over to sign. One line, no citation, same register as
+                the hold banner. */""}
+          ${needsEv ? `<p class="gate"><span class="gi">⚠</span><span>Needs ${esc(evidenceLabels(ev.missing).join(" and "))} before it can be signed.</span></p>` : ""}
+          ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. See the event log.</div>` : ""}
           ${held ? holdBanner(hold, i) : ""}
           ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
           ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
@@ -376,7 +447,11 @@ function renderWODetail() {
               : (wo.retro ? `<span class="muted">${esc(s.status || "open")}</span>`
                 : held && !isLead()
                   ? `<button disabled title="curing — ${esc(fmtLeft(hold.msLeft))}">buy off as ${esc(signerName())}</button>`
-                  : `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
+                  : /* Not disabled when evidence is missing: pressing it is how
+                       you find out WHAT is missing and get the button that
+                       fixes it. A dead grey button with a tooltip nobody on a
+                       phone can hover is the version of this that fails. */
+                    `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
       </div>`;
       }).join("");
@@ -395,6 +470,15 @@ function renderWODetail() {
     <h3 id="wo-docs">Documents</h3>
     ${docLinkList(wo.docs, { onRemove: `rmWoDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
     <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'workOrders', id: '${wo.id}' })">+ Link a document</button></div>
+    <!-- Files, new: a work order could link a Google Doc but not hold a file,
+         so the mold CAD lived wherever somebody last pasted it. The design
+         review buy-off now wants it here (or linked above — either satisfies
+         the check; the CAD really does live in Drive). -->
+    <h3 id="wo-files">Files</h3>
+    <div class="filegrid">
+      ${(wo.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+    </div>
+    <div class="no-print" style="margin-top:8px"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>
     <h3 id="wo-log">Event log</h3>
     <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
       ${(wo.timeline || []).map((t, i) => E
@@ -407,7 +491,14 @@ function renderWODetail() {
          editable, because it is what somebody typed; the log beside it is
          append-only and signed, so "who decided this and when" has an answer. -->
     <h3>Notes</h3>
-    ${E ? `<textarea onchange="updWO('notes',this.value)">${esc(wo.notes)}</textarea>` : `<div class="prose">${esc(wo.notes) || '<span class="muted">—</span>'}</div>`}
+    ${/* Click the text to write. `notes` stays a plain string because print.js
+          prints it onto the paper traveler; the markup lives beside it in
+          notesHtml. See richField(). */""}
+    ${richField("workOrders", wo.id, "notes", {
+      plain: true, label: "Notes",
+      empty: "Anything about this job that isn't a step.",
+      upload: name => `projects/${wo.id}/${Date.now()}-${name}`,
+    })}
     ${threadHtml("workOrders", wo.id, (wo.noteLog || []), { noun: "Note", empty: "No notes yet. Anything worth telling the next person goes here." })}
     ${(() => {
       rteSetUpload(name => `projects/${wo.id}/${Date.now()}-${name}`);
@@ -611,10 +702,86 @@ function submitHoldOverride(i) {
   signStep(i, { holdOverride: ov });
 }
 
+/* What's missing, why it matters, and the shortest path to fixing it. Modelled
+   on openHoldOverride(): naming the thing and putting the fix one tap away is
+   what stops a gate being worked around outside the app, which is worse than no
+   gate at all because then it isn't written down anywhere. */
+function openEvidenceModal(i) {
+  const w = woById(view.id);
+  const s = w.steps[i];
+  const ev = stepEvidence(w, i);
+  const rows = ev.missing.map(k => {
+    const r = EVIDENCE[k];
+    return `<p class="gate blocked"><span class="gi">✕</span><span><b>Needs ${esc(r.label)}.</b> ${esc(r.why)}<br>
+      <span class="muted">${esc(r.fix)}</span></span></p>`;
+  }).join("");
+  openModal(`
+    <h2>Can't sign off yet</h2>
+    <p class="muted">${esc(stripCS(s.title))} — step ${s.seq} of ${esc(w.id)}.</p>
+    ${rows}
+    <div class="foot">
+      <button onclick="closeModal()">Close</button>
+      ${ev.missing.includes("note") ? `<button class="primary" onclick="closeModal();openStepNote('${w.id}',${i})">Write the note</button>` : ""}
+      ${ev.missing.includes("file") ? `<button class="primary" onclick="closeModal();addRecordFiles('workOrders','${w.id}')">Add the file</button>` : ""}
+      ${isLead() ? `<button class="danger" onclick="openEvidenceOverride(${i})">Sign without it</button>` : ""}
+    </div>
+  `);
+}
+/* A lead can sign anyway, and it costs a sentence. Same bargain as the cure
+   hold: a gate nobody can ever pass gets worked around, and an unlogged
+   exception is worth nothing to whoever reads this record in March. */
+function openEvidenceOverride(i) {
+  const w = woById(view.id);
+  const ev = stepEvidence(w, i);
+  const what = evidenceLabels(ev.missing).join(" and ");
+  openModal(`
+    <h2>Sign without ${esc(what)}?</h2>
+    <p class="gate"><span class="gi">⚠</span><span>This goes in the event log with your name, the time, and what was missing.</span></p>
+    <div class="field"><label for="ev-why">Why is this being signed without it?</label>
+      <textarea id="ev-why" autofocus rows="3" placeholder="Where the evidence actually is, or why it doesn't exist"></textarea>
+    </div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="submitEvidenceOverride(${i})">Sign it anyway</button>
+    </div>
+  `);
+}
+function submitEvidenceOverride(i) {
+  const el = document.getElementById("ev-why");
+  const why = (el ? el.value : "").trim();
+  if (!why) { toast("An override needs a reason. That's the whole point of it.", "error"); return; }
+  const w = woById(view.id);
+  const ev = stepEvidence(w, i);
+  const what = evidenceLabels(ev.missing).join(" and ");
+  closeModal();
+  const ov = { by: signerName(), email: myEmail(), at: new Date().toISOString(), missing: ev.missing.slice(), reason: why };
+  w.timeline = w.timeline || [];
+  w.timeline.push({
+    date: today(),
+    note: `“${stripCS(w.steps[i].title)}” signed by ${ov.by} without ${what}. Reason: ${why}`,
+  });
+  saveWO(w, "timeline");
+  signStep(i, { evidenceOverride: ov });
+}
+
 async function buyoff(i) {
   const w = woById(view.id);
   const blocked = blockerOpenBefore(w, i);
   if (blocked) { toast("Blocked by unfinished blocker: " + blocked.title, "error"); return; }
+  // What the signature has to come with. Before the cure path, because a cure
+  // modal that collects a resin and a time and THEN refuses to sign has wasted
+  // the one moment somebody was standing at the part with the answer.
+  const ev = stepEvidence(w, i);
+  if (ev.missing.length) { openEvidenceModal(i); return; }
+  // Suggested, not required — Cancel here means "I'll go add one first", so it
+  // says where. confirmModal's cancel button has fixed wording, hence the toast
+  // rather than a second label.
+  if (ev.suggested.includes("photo") && !(await confirmAsync(
+      "No photo on this step. A photo of what you signed for is the difference between a record and a name.",
+      { title: "Sign without a photo?", ok: "Sign it anyway", danger: false }))) {
+    toast("Press Edit, then the camera beside this step's note, to add one.", "info");
+    return;
+  }
   // CS-013: a design review signed by whoever made the thing isn't a review.
   if (w.steps[i].title.toLowerCase().includes("design review") && myEmail() &&
       myEmail() === w.createdBy &&

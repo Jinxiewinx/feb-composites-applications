@@ -9,11 +9,114 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-01
-Status: **Comment redesign COMPLETE (phases 0-4).** 267 app / 55 sanitizer / 23 design-system / 988 app-UI / 34
-slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
+Last updated: 2026-08-02
+Status: **Editable descriptions, the photo viewer, buy-off evidence and
+sub-tickets on the board — all four COMPLETE.** 282 app / 55 sanitizer / 23
+design-system / 988 app-UI / 13 print mobile / 30 safe-area, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Four asks from Simon (2026-08-02)
+
+Plan: `~/.claude/plans/a-few-things-description-jaunty-corbato.md`.
+
+**Descriptions are comments that are always there.** `richField()` in `rte.js`
+renders a value and swaps to the full composer when you click the text. Five
+surfaces use it: ticket description, an issue's What happened, work-order
+Notes, the part note, a purchase's Notes. Description and What happened are now
+gone from the ticket edit form on purpose — one place to change each value, not
+two that can disagree about which write lands last.
+
+Two storage shapes, because the data has two. The ticket description was
+already sanitized HTML. The other four are plain strings that something else
+still reads (`print.js` prints `wo.notes` onto the paper traveler,
+`statusGate()` blocks closing an issue on `whatHappened`), so those store markup
+in `<field>Html` and keep the plain key in sync from `textContent` — the trick
+`saveStepNote()` already used. Nothing was backfilled; a record with no
+`<field>Html` still renders through the old escape-and-`<br>` path.
+
+Found and fixed on the way: **`commentKeys()` was never wired to anything**, so
+the "⌘↵ to post" hint under every composer had been promising a shortcut that
+did nothing since the redesign. It lives in `rteKeys()` now, one implementation
+for every composer, and it respects the upload-in-flight disable.
+
+**The photo viewer.** The lightbox existed but only ever saw `.prose img`, so an
+attachment could be uploaded and never looked at — the thumbnail was a dead CSS
+background beside an `<a download>` that navigated out of the SPA and took any
+unposted draft with it. Now:
+
+- `[data-lbgroup]` on each detail page (ticket, part, work order, purchase) is
+  the arrow scope, so "next" walks the Files grid and the comment photos as one
+  set. `.cgal` and `.prose` remain as fallbacks.
+- Attachment tiles are `<button class="thumb" data-lb-src>`, because the image
+  is a CSS background and `querySelectorAll("img")` cannot see it. `lbCollect()`
+  reads both kinds in document order.
+- Three exclusions in `lbCollect()`: `.rte` (you are still typing it), `data:`
+  (the 1x1 upload placeholder), and `.avatar` — the last one is new and only
+  matters now that a group is wider than one `.prose` block.
+- The download button now sets a real filename; a Storage URL used to save as a
+  token with no extension.
+
+Two live bugs the research turned up and this fixes. **A left-edge swipe over an
+open lightbox opened the drawer behind it** — `inert` on `#app` does nothing to
+a document-level listener — now guarded with `lightboxOpen()` at the touchend
+listener, deliberately not inside the pure decision function. And **`#lb-dl` is
+an `<a>`, so the `@media (pointer: coarse)` 40px floor (written for `button`)
+never applied to it**: the download control rendered ~34px beside three 40px
+neighbours. `test_safearea.mjs` gained a `lightbox` state, which it never had —
+that is why neither was caught.
+
+**What the review agent caught, after the tests were already green.** Worth
+knowing that six suites passing did not mean this was done:
+
+- The `document` fallback scope collected `#lb-img` itself (the viewer lives on
+  `<body>`), and its src survived a close — so every set that fell back carried
+  a ghost frame of the last photo anyone opened. Excluded, and the src is now
+  cleared on close.
+- **The download button did not download.** The `download` attribute is ignored
+  cross-origin, and every photo is on `firebasestorage.googleapis.com` while the
+  app is on `feb-composites.web.app`. It navigated the tab to the raw file
+  (Storage serves `content-disposition: inline`), which is the exact lost-draft
+  failure the viewer exists to remove. Now fetches to a blob and saves that;
+  `cors.json` already allowed GET from the app origins for the Stock mesh fetch.
+- The new coarse-pointer `display: inline-flex` outranked the UA's
+  `[hidden] { display: none }`, so both arrows showed on every single-photo set
+  on a phone. Invisible on a laptop, which is why desktop testing would never
+  find it.
+- `openLightbox` mapped "not in the list" to photo 0 via `Math.max(0, indexOf)`,
+  so clicking a broken image opened an unrelated photo.
+- `decodeURIComponent` throws on a bare `%`, before the src is assigned.
+- Keyboard Enter on a `.cgal` photo dispatched a click whose target was the
+  wrapping anchor, which has no `img` above it — so it missed the handler and
+  followed the raw URL out of the app. Every gallery photo is a tab stop, so
+  that was every photo. Pre-existing, but the viewer being the primary path now
+  makes it matter.
+
+**Evidence on a buy-off.** A signature recorded who and when but never what:
+"Stack frozen" could be signed with an empty layup stack, "Mold design review"
+with the CAD nowhere in the app. `needs` now sits in the step template's rule
+object; `stepEvidence(wo, i)` is the pure answer driving the row banner, the
+modal and the gate in `buyoff()`. Three checks: `stack`, `file` (an upload OR a
+linked Drive doc — the CAD really does live in Drive), `note`. A lead can sign
+without them and it costs a written reason that lands in the event log, the same
+bargain as the cure-hold override.
+
+A photo is **suggested, never required**, and only on steps that need a note —
+the physical ones, where a photo is the measurement. Asking for a photo of
+"Stack frozen" is asking for a photo of a decision, and a prompt that fires
+where it makes no sense teaches people to dismiss the one that matters.
+
+Work orders gained a real Files section for this. Uploads go to the existing
+`projects/{id}/` storage tree on purpose: **`storage.rules` was not touched and
+not deployed.** A `workOrders/` prefix would have meant a rules deploy — the one
+thing in this repo that can lock the team out of their own data — to gain
+nothing, since the record is roster-gated in Firestore either way.
+
+**Sub-tickets on the board and in the list.** `topLevel()` is gone. They were
+filtered out of both planning views, which meant breaking a ticket down HID the
+work. They get their own card in their own status column (a sub-ticket has its
+own status, so nesting was never going to work on a board) with `parentLine()`
+underneath, the helper the Dashboard and Weekly Plan already use.
 
 ## Comment redesign (2026-08-01, COMPLETE and deployed)
 

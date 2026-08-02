@@ -383,6 +383,12 @@
   .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: grab; }
   .pcard:hover { border-color: var(--border-2); }
   .pcard .t { font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
+  /* "part of <parent>" on a sub-ticket's card. The title already carries its
+     own 6px, so this pulls up into that gap rather than opening a second one,
+     and the chip shrinks: at ~180px of card the parent's title must not
+     compete with this card's own. */
+  .pcard .t + .tny { margin: -4px 0 6px; }
+  .pcard .t + .tny .chip { font-size: 11px; padding: 1px 6px; }
   /* Six tracks means ~180px cards, so the meta line wraps instead of breaking a
      date across three lines. nowrap on the children keeps "2026-08-02" and
      "High" whole; the .right group drops to its own line when it has to. */
@@ -395,7 +401,13 @@
   /* ---- project detail: files + comments ---- */
   .filegrid { display: flex; flex-wrap: wrap; gap: 10px; }
   .fileitem { width: 120px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); font-size: 11.5px; }
-  .fileitem .thumb { height: 84px; background: var(--fill) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--faint); }
+  .fileitem .thumb { height: 84px; width: 100%; background: var(--fill) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--faint); }
+  /* A photo tile is a button now — it opens the viewer instead of being a dead
+     picture beside a download link. Reset the button chrome so it still reads as
+     a thumbnail, and say so with the cursor, the way .cgal img already does. */
+  button.thumb { appearance: none; -webkit-appearance: none; border: none; padding: 0; font: inherit; cursor: zoom-in; }
+  button.thumb:hover { filter: brightness(1.06); }
+  button.thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .fileitem .fn { padding: 5px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fileitem .fn a { color: var(--ink); text-decoration: none; }
   /* ---- the thread ----
@@ -467,6 +479,27 @@
     transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
   }
   .composer-stub:hover { border-color: var(--accent); background: var(--hover); }
+
+  /* ---- the always-there field ----
+     A description is a comment that is always there, so at rest it must look
+     like the text it is, not like a form control sitting in a page. No border
+     until you go near it: the hint that it can be edited is the hover, the
+     focus ring and the pointer, the same set the composer stub uses. */
+  .richfield {
+    border: 1px solid transparent; border-radius: var(--r-md);
+    padding: 6px 10px; margin: 0 -10px; cursor: text;
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  }
+  .richfield:hover { border-color: var(--border-2); background: var(--hover); }
+  .richfield:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Open, it is the composer and nothing else — the resting padding would
+     double up against the composer's own. */
+  .richfield.editing { border-color: transparent; background: none; padding: 0; margin: 0; cursor: auto; }
+  /* An empty field still has to be a target you can hit with a glove on, and
+     has to say what belongs in it. Same 44px invitation as .composer-stub. */
+  .rf-empty { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--faint); }
+  .rf-empty .ico { flex: none; }
+  @media (pointer: coarse) { .richfield { min-height: 44px; } }
   /* position: relative is load-bearing — the bubble and the insert menu are
      absolutely positioned against THIS, not the viewport, because inside a
      modal the scroll container is #modal .backdrop rather than the page. */
@@ -575,6 +608,21 @@
     border: none; background: none; color: var(--sb-text); border-radius: var(--radius); padding: 8px 10px; text-decoration: none;
   }
   #lightbox .lb-bar button:hover, #lightbox .lb-bar a:hover { background: var(--sb-hover); color: #fff; }
+  /* Hover does not exist on a phone, and these four are now the primary way
+     through a set of photos rather than an afterthought. Give the tap something
+     to answer with, and give the keyboard a visible ring. */
+  #lightbox .lb-bar button:active, #lightbox .lb-bar a:active { background: var(--sb-hover); color: #fff; transform: scale(.94); }
+  #lightbox .lb-bar button:focus-visible, #lightbox .lb-bar a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  /* The coarse-pointer floor at the foot of this file is written for `button`,
+     and #lb-dl is an <a> — so the download control rendered ~34px next to three
+     40px neighbours. Same rule, stated for the anchor. */
+  @media (pointer: coarse) {
+    #lightbox .lb-bar button, #lightbox .lb-bar a { min-height: 40px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; }
+    /* …but `display` here outranks the UA's [hidden]{display:none}, and
+       lbShow() hides the arrows with .hidden when there is only one photo. On a
+       phone that left two dead controls on every single-photo set. */
+    #lightbox .lb-bar button[hidden] { display: none; }
+  }
   #lightbox .lb-stage {
     position: relative; z-index: 1; flex: 1; min-height: 0;
     display: flex; align-items: center; justify-content: center;
@@ -1577,6 +1625,11 @@
     .comment .chead { break-after: avoid; }
 
     #lightbox, .rte-bubble, .rte-insert, .composer, .composer-stub { display: none !important; }
+    /* On paper a description is just the text. Its click-to-edit chrome is an
+       affordance for a screen, and a faint box around a paragraph reads as a
+       rendering fault once printed. */
+    .richfield { border-color: transparent !important; background: none !important; padding: 0; margin: 0; }
+    .rf-empty { display: none; }
     /* The rail is metadata; on paper it reads better as a block above the
        thread than as a column beside it, which .mdsplit's print rule already
        handles — but the disclosure has to be forced open or it prints empty. */

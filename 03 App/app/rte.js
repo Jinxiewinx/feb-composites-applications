@@ -445,7 +445,29 @@ function openComposer(t) { COMPOSER_OPEN.add(t); render(); setTimeout(() => { co
 function closeComposer(t) { COMPOSER_OPEN.delete(t); rteCloseInsert(); render(); }
 
 function rteKeys(e, targetId) {
-  if (e.key === "Escape") { rteCloseInsert(); return; }
+  if (e.key === "Escape") {
+    const menu = document.getElementById("rte-insert");
+    const menuWasOpen = !!(menu && !menu.hidden);
+    rteCloseInsert();
+    // Escape out of the insert menu first; a second press leaves the field.
+    // Only rich FIELDS close on Escape — a comment composer holding an unposted
+    // draft has a Cancel button and a saved draft, and closing it on a stray
+    // keypress is how you lose an 800-word report.
+    if (!menuWasOpen && typeof FIELD_EDIT === "object" && FIELD_EDIT && targetId === fieldTargetId(FIELD_EDIT)) cancelFieldEdit();
+    return;
+  }
+  /* ⌘/Ctrl+Enter posts. The hint under every composer has promised this since
+     the redesign and it never worked: commentKeys() was written for it and then
+     never wired to anything. Done here, once, by clicking the composer's own
+     post button — so it works for comments, notes and rich fields alike, and it
+     respects the disable rteSetBusy() puts on that button while an image is
+     still uploading. */
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    const el = document.getElementById(targetId);
+    const shell = el && el.closest && el.closest(".composer");
+    const btn = shell && shell.querySelector("[data-rte-post]");
+    if (btn && !btn.disabled) { e.preventDefault(); btn.click(); return; }
+  }
   rteMaybeSlash(e, targetId);
   rteInputRules(e, targetId);
   const c = COMMANDS.find(x => x.key && x.key === e.key.toLowerCase());
@@ -567,4 +589,130 @@ function threadHtml(coll, id, list, opts) {
   const rows = (list || []).map(c => commentHtml(coll, id, c)).join("");
   return `<h3 id="tk-comments">${list.length || ""} ${esc(o.noun || "Comment")}${list.length === 1 ? "" : "s"}</h3>
     ${rows || `<span class="muted">${esc(o.empty || "No comments yet.")}</span>`}`;
+}
+
+/* ---------- the always-there field ----------
+   Simon's framing, and it is the right one: A DESCRIPTION IS JUST A COMMENT
+   THAT IS ALWAYS THERE. The app had drifted into contradicting itself — a
+   comment on a ticket took photos, tables and a pasted Google Doc, while the
+   ticket's own Description took the same markup but was reachable only by
+   pressing Edit at the top of the page and finding it in a form. Four other
+   fields (a work order's notes, the part note, an issue's root cause, a
+   purchase's notes) were bare textareas with no photos and no formatting at all.
+
+   So: same composer, opened by clicking the text. No form, no edit mode.
+
+   TWO STORAGE SHAPES, because the existing data has two.
+     plain: false   the value IS sanitized html (ticket description)
+     plain: true    the value is a plain string that something else still reads
+                    — print.js prints wo.notes onto the paper traveler, and
+                    statusGate() refuses to close an issue on whatHappened being
+                    empty. Those keep working: the markup goes in <field>Html and
+                    the plain key is kept in sync from textContent, which is the
+                    same two-field trick saveStepNote() has been using in
+                    production. Nothing needs backfilling — a record with no
+                    <field>Html renders through the old escape-and-<br> path,
+                    exactly as it does today. */
+let FIELD_EDIT = null;                 // { coll, id, field, plain, orig }
+function fieldTargetId(f) { return f ? "rf-" + f.coll + "-" + f.field : ""; }
+function editingField(coll, id, field) {
+  return !!(FIELD_EDIT && FIELD_EDIT.coll === coll && FIELD_EDIT.id === id && FIELD_EDIT.field === field);
+}
+// What to put in the editor and what to show at rest — one function, so the two
+// can never disagree about which of the two keys wins.
+function richFieldHtml(rec, field, plain) {
+  if (!rec) return "";
+  if (!plain) return sanitizeHtml(rec[field] || "");
+  const rich = rec[field + "Html"];
+  if (rich) return sanitizeHtml(rich);
+  return esc(rec[field] || "").replace(/\n/g, "<br>");
+}
+function startFieldEdit(coll, id, field, plain) {
+  const rec = recById(coll, id);
+  FIELD_EDIT = { coll, id, field, plain: !!plain, orig: richFieldHtml(rec, field, !!plain) };
+  render();
+  setTimeout(() => { const el = document.getElementById(fieldTargetId(FIELD_EDIT)); if (el && el.focus) el.focus(); }, 0);
+}
+/* Clicking a link, a photo or a chip inside the text must do THAT, not drop you
+   into an editor. The lightbox binds `.prose img` by delegation and does not
+   stop propagation, so without this a photo in a description would open the
+   viewer and the editor at the same time. */
+function richFieldClick(e, coll, id, field, plain) {
+  const t = e && e.target;
+  if (t && t.closest && t.closest("a, img, button, .chip")) return;
+  startFieldEdit(coll, id, field, plain);
+}
+/* rteSeed() puts <p><br></p> into an empty editor so formatBlock has a block to
+   work on, so a never-touched empty field does NOT compare equal to the empty
+   string it was opened with. Both sides are normalised, or opening and closing
+   an empty description would ask you to confirm throwing away nothing. */
+function fieldBlank(html) { return !String(html || "").replace(/<[^>]*>/g, "").replace(/&nbsp;|\s/g, "") && !/<img/i.test(html || ""); }
+function fieldDirty() {
+  if (!FIELD_EDIT) return false;
+  const el = document.getElementById(fieldTargetId(FIELD_EDIT));
+  if (!el) return false;
+  const now = sanitizeHtml(el.innerHTML || ""), was = FIELD_EDIT.orig || "";
+  if (fieldBlank(now) && fieldBlank(was)) return false;
+  return now !== was;
+}
+function cancelFieldEdit() {
+  if (!FIELD_EDIT) return;
+  const done = () => { FIELD_EDIT = null; rteCloseInsert(); render(); };
+  // Only ask when there is something to lose. A field opened and closed
+  // untouched — which is most of them — should just close.
+  if (fieldDirty()) confirmModal("Throw away these changes?", done, { ok: "Discard" });
+  else done();
+}
+function saveFieldEdit(coll, id, field, plain) {
+  const el = document.getElementById(fieldTargetId(FIELD_EDIT || { coll, field }));
+  if (!el) return;
+  const rec = recById(coll, id);
+  if (!rec) return;
+  const html = sanitizeHtml(el.innerHTML || "");
+  const text = String(el.textContent || "").trim();
+  // An emptied field is a legitimate edit here, unlike an emptied comment —
+  // "there is no description" is a thing someone means. But an editor holding
+  // only <p><br></p> (what rteSeed puts there) is empty, not markup.
+  const blank = !text && !/<img/i.test(html);
+  if (plain) {
+    rec[field] = text;
+    rec[field + "Html"] = blank ? "" : html;
+    save(coll, rec, field);
+    save(coll, rec, field + "Html");
+  } else {
+    rec[field] = blank ? "" : html;
+    save(coll, rec, field);
+  }
+  FIELD_EDIT = null;
+  rteCloseInsert();
+  render();
+}
+/* The rendered field. At rest it is the text itself, clickable; open it is the
+   full composer, alwaysOpen — a collapsed stub would be wrong here, because you
+   clicked the words to change the words. */
+function richField(coll, id, field, opts) {
+  const o = opts || {};
+  const plain = !!o.plain;
+  const rec = recById(coll, id);
+  if (editingField(coll, id, field)) {
+    if (o.upload) rteSetUpload(o.upload);
+    return `<div class="richfield editing">${composerHtml({
+      targetId: fieldTargetId(FIELD_EDIT),
+      html: richFieldHtml(rec, field, plain),
+      alwaysOpen: true,
+      placeholder: o.placeholder || "Write something…",
+      onpost: `saveFieldEdit('${coll}','${id}','${field}',${plain})`,
+      oncancel: `cancelFieldEdit()`,
+      postLabel: o.postLabel || "Save",
+      hint: o.hint || "Paste photos, tables and text straight in. ⌘↵ to save, esc to cancel.",
+    })}</div>`;
+  }
+  const body = richFieldHtml(rec, field, plain);
+  const label = esc(o.label || field);
+  return `<div class="richfield prose" role="button" tabindex="0" title="Click to edit"
+    aria-label="${label} — click to edit"
+    onclick="richFieldClick(event,'${coll}','${id}','${field}',${plain})"
+    onkeydown="if(event.key==='Enter'){event.preventDefault();startFieldEdit('${coll}','${id}','${field}',${plain})}"
+    >${body ? proseHtml(body)
+      : `<span class="rf-empty">${icon("edit", 15)} ${esc(o.empty || o.placeholder || "Write something…")}</span>`}</div>`;
 }
