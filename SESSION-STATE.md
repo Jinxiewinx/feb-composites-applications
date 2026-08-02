@@ -10,47 +10,65 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-01
-Status: **Comment redesign phases 0-1 landed.** 259 app / 55 sanitizer / 23 design-system / 988 app-UI / 34
+Status: **Comment redesign COMPLETE (phases 0-4).** 267 app / 55 sanitizer / 23 design-system / 988 app-UI / 34
 slicer / 11 packer / 13 print mobile / 27 safe-area / 88 website, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
 
-## Comment redesign (2026-08-01, IN PROGRESS)
+## Comment redesign (2026-08-01, COMPLETE and deployed)
 
-Plan: `~/.claude/plans/quiet-napping-beaver.md`. Four phases; **0 and 1 are done
-and deployed**, 2-4 are not started.
+Plan: `~/.claude/plans/quiet-napping-beaver.md`. All four phases landed;
+hosting is deployed.
 
-Simon's four decisions: keep the comments array (no subcollection) and add
-edit/soft-delete via `saveField`; drop `style` from the sanitizer and normalise
-on paste; one command registry with two shells (bubble+slash on `pointer:fine`,
-scrolling toolbar on `pointer:coarse`); and roll the composer out to **every**
-note surface, not just tickets.
+**ONE THING STILL OUTSTANDING: `storage.rules` is edited but NOT deployed.**
+Phase 4 added a `parts/` tree (there was none, and the file ends in "no rule =
+deny", so a photo in a part comment fails silently at upload). Deploying it is
+`cd "SN6 Resources/03 App" && firebase deploy --only storage`, and it is
+deliberately not bundled with a hosting push — rules are the part that can lock
+the team out of their own data. Until it runs, part-comment photos will not
+upload; everything else on parts works.
 
-**Phase 0 (done).** `tools/test_sanitize.mjs` is new and is the important part:
-the old suite stubbed DOMPurify with a regex that ignored the allowlist, so the
-sanitizer had NO real coverage. Running the real vendored library in Chromium
-immediately found two live bugs — `data:` URLs were being STORED as base64 in
-the ticket document (a bricking vector against the 1 MiB cap, not "stripped" as
-everyone assumed), and `download` was being silently dropped because a
-restrictive `ALLOWED_URI_REGEXP` makes DOMPurify test non-URI attributes as
-URLs. Fixed with a hook and `ADD_URI_SAFE_ATTR`. Also: drafts autosave to
-localStorage, `escClose` no longer eats what you typed, Cmd+Enter posts, PNGs
-stay PNGs on upload, and `.rte` finally joins the two form-control selector
-lists it always belonged in (it is a contenteditable div, which is why the
-composer was 60px on a phone under a 120px toolbar, and why iOS zoomed).
+Simon's decisions: keep the comments array (no subcollection) with edit/soft
+delete via `saveField`; drop `style` from the sanitizer and normalise on paste;
+one command registry with two shells; roll the composer out to every note
+surface.
 
-**Phase 1 (done).** `.prose` replaces `.ctext`-styled-by-nothing, `.md-body` and
-the unstyled description. 15px/1.65, real heading ramp, 68ch prose measure with
-tables/code/galleries breaking out to full width. `proseHtml()` in core.js
-decorates AFTER sanitising: wraps tables in `.tblwrap` so they scroll, and turns
-runs of 2+ images into a `.cgal` grid. Gallery floor is 132px because the
-comment column is 287px on a phone and 160px could only fit one.
+**What the research overturned.** An agent argued the 1 MiB doc cap forced a
+subcollection (~45 comments then bricked); recomputed, images are Storage URLs
+so a long comment is 3-5 KB and the real ceiling is 150-250. A subcollection
+would also have silently broken watcher unread dots, which key off the parent's
+`updatedAt`. Another agent argued for a bubble-only composer; sent to check
+mobile, it found Notion ships NO slash commands on touch and revised.
 
-**Still to do: phases 2-4** — the composer itself (command registry, three
-shells, paste pipeline), the layout move (`.mdsplit` rail, thread in its own
-card, lightbox), and edit/delete plus rollout to parts and work orders. Note
-phase 4 needs a `parts/` rule in `storage.rules` and a rules deploy; there is
-none today.
+**`tools/test_sanitize.mjs` is the file to know about.** The old suite stubbed
+DOMPurify with a regex that ignored the allowlist, so the sanitizer had zero
+real coverage. Running the real vendored library in Chromium found two live
+bugs immediately: `data:` URLs were being STORED as base64 in the ticket
+document (a bricking vector, not "stripped" as the code comment claimed), and
+`download` was silently dropped because a restrictive `ALLOWED_URI_REGEXP`
+makes DOMPurify test non-URI attributes as URLs (fixed with
+`ADD_URI_SAFE_ATTR`). Never assert allowlist policy in test_app.mjs; it cannot
+see it.
+
+**Architecture.** `rte.js` is the composer: one COMMANDS registry, three shells
+(scrolling bar everywhere, selection bubble on `pointer:fine` only, "+"/slash
+insert menu), the paste pipeline and `normalizePastedHtml`, plus the shared
+`commentHtml`/`threadHtml` and `COMMENT_FIELD` map (projects->comments,
+parts->commentLog, workOrders->noteLog). `.prose` in index.html is the single
+long-form scope; `proseHtml()` in core.js decorates AFTER sanitising to add
+`.tblwrap` and `.cgal`, because `class` is not allowlisted so authors cannot
+ask for either.
+
+**Traps worth remembering.** formatBlock needs the angle-bracket form ("<h2>"),
+or it is a silent no-op in Safari. An empty contenteditable holds a bare text
+node with no block, so editors are seeded with `<p><br></p>` or formatBlock has
+nothing to convert. The gallery floor is measured, not chosen: a comment body
+is 255px on a 393px phone once both cards take their padding, so anything above
+~123px collapses to one column. A comment in a template literal must not
+contain a backtick or the literal string "has-sel" (a test forbids the latter
+above the responsive block). And a browser probe that sets `innerHTML` then
+`textContent` silently discards the markup — they are the same content in a
+real DOM and independent properties in the test harness.
 
 ## Google Docs / Slides linked to records (2026-08-01)
 
