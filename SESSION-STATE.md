@@ -20,13 +20,22 @@ emulator on :8080 — both pre-existing.
 Plan: `~/.claude/plans/quiet-napping-beaver.md`. All four phases landed;
 hosting is deployed.
 
-**ONE THING STILL OUTSTANDING: `storage.rules` is edited but NOT deployed.**
-Phase 4 added a `parts/` tree (there was none, and the file ends in "no rule =
-deny", so a photo in a part comment fails silently at upload). Deploying it is
-`cd "SN6 Resources/03 App" && firebase deploy --only storage`, and it is
-deliberately not bundled with a hosting push — rules are the part that can lock
-the team out of their own data. Until it runs, part-comment photos will not
-upload; everything else on parts works.
+`storage.rules` gained a `parts/` tree in phase 4 (there was none, and the file
+ends in "no rule = deny", so a photo in a part comment failed silently at
+upload). **Deployed 2026-08-01 with `firebase deploy --only storage`**, on
+Simon's explicit go-ahead, separately from hosting.
+
+Before deploying it: the change was confirmed purely additive (one new match
+block, no existing rule touched), and `test_storage_rules.mjs` was run against
+the emulator on BOTH the old and new rules to prove the one failing case
+(`authed write of a non-STL content type to stackplans/`) is pre-existing and
+an emulator limitation the test's own header documents, not a regression.
+Afterwards, the live bucket was checked to still return 403 for an anonymous
+write to `parts/` and to an unmatched path.
+
+Note there is no CLI command to read released storage rules back, so
+"deploy --only storage" reporting a successful release is the strongest
+confirmation available short of a signed-in upload.
 
 Simon's decisions: keep the comments array (no subcollection) with edit/soft
 delete via `saveField`; drop `style` from the sanitizer and normalise on paste;
