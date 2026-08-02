@@ -11,11 +11,65 @@ questions. Not a transcript.
 
 Last updated: 2026-08-02
 Status: **Editable descriptions, the photo viewer, buy-off evidence and
-sub-tickets on the board — all four COMPLETE, plus the Mold CAD/CAM part
-stage.** 286 app / 55 sanitizer / 23 design-system / 988 app-UI /
-13 print mobile / 30 safe-area, all passing.
+sub-tickets on the board — all COMPLETE, plus the Mold CAD/CAM part stage, and
+Simon's second round (swipe-to-close, a real Back button, People, CAD
+uploads).** 293 app / 55 sanitizer / 23 design-system / 988 app-UI /
+13 print mobile / 30 safe-area, all passing. Storage rules: 12 pass, 1
+pre-existing emulator limitation.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Second round from Simon (2026-08-02)
+
+**Swipe left closes the drawer.** Right opened it and left did nothing, so the
+only way out was the X or the scrim. `shouldCloseDrawerFromSwipe()` beside the
+open one, same 60px / `|dy|<|dx|` thresholds so the two directions feel like one
+gesture. No edge zone on the close half, deliberately: opening needs one because
+a rightward swipe mid-screen is how you scroll a board or page a photo, and
+closing has no such competition.
+
+**Back goes back.** `NAV_STACK` in `core.js`, pushed by `openRecord()`, popped by
+`navBack(fallback)`. The Tickets toolbar button now names its destination
+("Back to Undertray mold") and falls back to the old "All tickets" wording with
+an empty trail. It is a stack rather than the browser's history because this is
+one page with no URL per record — wiring `popstate` means inventing a URL scheme
+for every tab first. `setTab()` clears it: the sidebar is "take me elsewhere",
+not a step. Cross-tab by design, since the links are.
+
+**People lists main tickets and issues.** `assignmentsFor()` drops sub-tickets
+(`!p.parentId`); parts and work orders stay, which is what Simon picked when
+asked — the ambiguity was whether "just the main tickets, and issues" meant
+"drop parts and WOs" or "drop sub-tickets". At this altitude a parent and its
+four children are one commitment, and listing both made the person who broke
+their work down properly look like the busiest on the team.
+
+**Native CAD uploads.** `storage.rules` gained `cadOk()`: STEP/STP/SLDPRT/
+SLDASM/IGES/IGS/X_T/X_B/3MF/F3D/DXF/DWG/STL, 50 MiB, on `projects/` and
+`parts/`. Both the extension AND the content type are checked — the extension
+because a browser has no MIME type for `.SLDPRT` so it arrives as
+`application/octet-stream` and allowing that alone allows any binary under any
+name; the type because the real risk of a widened upload is the bucket serving
+something the browser RENDERS (stored XSS), which is the same reasoning the
+`stackplans/` rule already runs on.
+
+`n.lower().matches(...)` rather than an `(?i)` inline flag. The emulator cannot
+assert an ALLOW case (its simple-upload endpoint leaves
+`request.resource.contentType` unset, so every contentType-gated rule evaluates
+false there), so a regex flag that silently failed to apply would pass every
+test and surface as a refused upload at RFS. `lower()` cannot fail that way.
+
+**`storage.rules` WAS deployed this time** (`firebase deploy --only storage`),
+because the rules themselves changed. Checked first, same discipline as the
+2026-08-01 deploy: the test suite was run against BOTH the old and the new rules
+and produced an identical result — 12 pass, 1 fail, the fail being the
+long-documented `stackplans/` emulator limitation on a tree this change does not
+touch. Four new deny cases prove the widening did not open a path: a `.step`
+name does not make an unmatched path, the bucket root, or someone else's avatar
+writable. The extension only ever relaxes the TYPE check inside trees that were
+already writable, never the PATH check.
+
+Not widened: `documents/`. Its uploader is the Documents-tab library, a separate
+surface from the Files sections this was asked for.
 
 ## Four asks from Simon (2026-08-02)
 

@@ -54,6 +54,13 @@ Each ticket gets its own page with assignees, watchers who get flagged on new
 activity, a files section for photos and docs, an editable description and a
 comment thread with rich text and image attachments.
 
+Back goes back. Records cross-link constantly, and following a chip from one
+ticket to another used to dump you at the board when you pressed the button,
+because it always meant "the list". It now returns one step along the trail you
+actually took and says which record it's returning to, across tabs — open a
+ticket from a part and Back says the part. Picking a tab from the sidebar ends
+the trail, since that's "take me elsewhere" rather than a step.
+
 Timeline is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
 station that week. Every write leaves an undo bar, because it changes a schedule
@@ -163,10 +170,19 @@ exists or it doesn't. The other stages are claims about a physical object anyone
 in the shop can walk over and check, so they stay one click with an undo bar.
 Overriding it costs a sentence, which lands in the part's own notes.
 
-Native CAD can't be uploaded anywhere in the app: `storage.rules` allows images,
-PDF, Office and text, so a `.SLDPRT` or `.STEP` is refused by content type.
-That's why every check that wants "the CAD" also accepts a linked Drive
-document. The model lives in Drive; what you attach here is the drawing.
+Native CAD uploads to the Files section on a ticket, a work order or a part:
+STEP, STP, SLDPRT, SLDASM, IGES, X_T, 3MF, F3D, DXF, DWG and STL, up to 50 MB
+(everything else stays at 10 MB). `storage.rules` checks the *extension* as well
+as the content type, because a browser has no MIME type for a `.SLDPRT` — it
+arrives as `application/octet-stream`, and allowing that on its own would allow
+any binary under any name. The type is still checked, and that's the actual
+security condition: nothing writable here can be served as something the
+browser will render, which is what would turn an upload into stored XSS against
+the whole team.
+
+A linked Drive document still satisfies every check that wants "the CAD", and
+usually it's the better answer — a STEP file in the app is a copy, while the
+Drive link is the thing everyone else can open and edit.
 
 That's much better than typed initials, but be honest about
 the limits, and the same applies to every record in every tab. Nothing here is

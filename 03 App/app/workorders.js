@@ -158,7 +158,7 @@ const EVIDENCE = {
     // upload it twice.
     label: "the CAD, attached or linked",
     why: "A design review with no drawing anywhere is a signature on nothing.",
-    fix: "Add it under Files, or link it under Documents.",
+    fix: "Attach the STEP or SLDPRT under Files, or link it under Documents.",
     has: (wo) => (wo.files || []).length > 0 || (wo.docs || []).length > 0,
   },
   note: {

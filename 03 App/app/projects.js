@@ -446,6 +446,24 @@ function setTicketStatus(id, val) {
   p.status = val; saveProj(p, "status"); announceIfResolved(p, prevStatus); render();
 }
 
+/* The back button, and what it should say. It used to be "All tickets" and to
+   always mean the board, so following a link from one ticket to another and
+   pressing it threw away where you were. Now it goes back one step and NAMES
+   the step, because a button that says "Back" without saying back to what is a
+   guess you have to take before you can find out. With nothing behind you it is
+   the old button, word for word. */
+function ticketBackBtn() {
+  const prev = navPeek();
+  const label = !prev || prev.mode !== "detail"
+    ? "All tickets"
+    : (() => {
+        const rec = recById(prev.tab === "workorders" ? "workOrders" : prev.tab, prev.id);
+        const name = rec ? (rec.title || rec.partName || rec.id) : prev.id;
+        return "Back to " + String(name).slice(0, 28);
+      })();
+  return `<button class="ib" title="${esc(label)}" onclick="navBack({tab:'projects',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(label)}</button>`;
+}
+
 function renderProjDetail() {
   const p = projById(view.id);
   if (!p) { view.mode = "list"; return renderProjTable(); }
@@ -456,7 +474,7 @@ function renderProjDetail() {
   if (E) {
     return `
     <div class="toolbar no-print">
-      <button class="ib" onclick="view={...view,mode:'list',edit:false};render()">${icon("chevronLeft",16)} All tickets</button>
+      ${ticketBackBtn()}
       <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
       <button class="primary" onclick="saveProjectEdits()">Save</button>
       <button onclick="view.edit=false;render()">Cancel</button>
@@ -494,7 +512,7 @@ function renderProjDetail() {
   const kids = !isIssue(p) && !p.parentId ? subTickets(p) : [];
   return `
   <div class="toolbar no-print">
-    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All tickets</button>
+    ${ticketBackBtn()}
     <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
     <div class="statusdrop ${projStatusClass(st)}"><select onchange="setTicketStatus('${p.id}',this.value)">${PROJ_STATUS.map(s => `<option ${st === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     <button class="primary" onclick="editProject()">Edit</button>
@@ -639,15 +657,18 @@ function fileItem(f) {
    one thing in this repo that can lock the team out of their own data — to gain
    nothing. The record itself is roster-gated in Firestore either way.
 
-   NOTE ON NATIVE CAD. storage.rules allows images, PDF, Office and text, so a
-   .SLDPRT or .STEP is refused at upload. That is why every evidence check that
-   wants "the CAD" also accepts a linked Drive document: the model lives in
-   Drive, and what you attach here is the PDF drawing or a screenshot of it. */
+   NATIVE CAD uploads too, as of August 2026 — see cadOk() in storage.rules for
+   why the extension and the content type are both checked. A browser has no
+   MIME type for .SLDPRT, so these have to be named by extension in `accept`;
+   image/* and the document types can stay as types. A linked Drive document
+   still satisfies every "the CAD" evidence check, because for a model anyone
+   else needs to OPEN, the Drive copy is the useful one. */
+const CAD_EXT = ".step,.stp,.sldprt,.sldasm,.iges,.igs,.x_t,.x_b,.3mf,.f3d,.dxf,.dwg,.stl";
 function addRecordFiles(coll, id, tree) {
   const rec = recById(coll, id);
   if (!rec) return;
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = "image/*,application/pdf,.doc,.docx,.txt,.csv";
+  inp.type = "file"; inp.accept = "image/*,application/pdf,.doc,.docx,.txt,.csv," + CAD_EXT;
   inp.multiple = true;
   inp.onchange = async () => {
     const files = Array.from(inp.files || []);

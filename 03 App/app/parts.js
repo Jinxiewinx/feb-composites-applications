@@ -98,15 +98,15 @@ function partLate(p) { const d = daysUntil(p.layupDeadline); return d != null &&
    WHAT COUNTS. The part's own documents or files, or its work order's — the two
    are twins (see linkedCounterpart), the mold CAD is one artifact, and refusing
    a part because the drawing is attached to its work order instead would just
-   teach people to attach it twice. A Drive link counts as much as an upload,
-   and for native CAD it is the ONLY thing that can: storage.rules refuses a
-   .SLDPRT by content type. */
+   teach people to attach it twice. A Drive link counts as much as an upload:
+   native CAD uploads now (see cadOk() in storage.rules), but for a model
+   somebody else has to OPEN, the Drive copy is still the useful one. */
 const PART_STAGE_NEEDS = { cadProgress: { "Mold CAD/CAM Done": "cad" } };
 const PART_EVIDENCE = {
   cad: {
     label: "the mold CAD, linked or attached",
     why: "“Mold CAD/CAM Done” is a claim that a file exists. If nobody can find it, the claim is the only thing that does.",
-    fix: "Link it from Drive under Documents, or attach the PDF drawing under Files — on this part or on its work order.",
+    fix: "Attach the STEP or SLDPRT under Files, or link it from Drive under Documents — on this part or on its work order.",
     has: (p) => {
       const holds = r => !!(r && (((r.docs || []).length) || ((r.files || []).length)));
       return holds(p) || holds(linkedCounterpart("parts", p));

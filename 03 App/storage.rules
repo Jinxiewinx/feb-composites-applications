@@ -24,6 +24,42 @@ service firebase.storage {
     function signedIn() { return request.auth != null; }
     function sizeOk() { return request.resource.size < 10 * 1024 * 1024; }
 
+    /* ---- native CAD ----
+       Added August 2026, on Simon's ask. Until then a .SLDPRT or .STEP was
+       refused by content type, so "the mold CAD" could only ever be a Drive
+       link or a PDF of the drawing.
+
+       TWO CONDITIONS, and both are load-bearing.
+
+       The EXTENSION is checked, not just the type, because the content type on
+       these is worth nothing: a browser has no MIME mapping for .SLDPRT, so
+       file.type comes back empty and fb.upload falls back to
+       application/octet-stream. Allowing octet-stream on its own would mean
+       allowing any binary at all under any name.
+
+       The TYPE is still checked, and this is the actual security condition. The
+       risk with a widened upload is never the bytes, it is the browser being
+       told to RENDER them: an object served as text/html or image/svg+xml from
+       the bucket is stored XSS against every teammate who opens it. Restricting
+       to octet-stream and model/* means nothing here can be rendered as a
+       document, which is the same reasoning the stackplans/ rule below already
+       runs on.
+
+       lower() rather than an (?i) inline flag, because MOLD.STEP has to work as
+       well as mold.step and people name exports in caps more often than not.
+       The emulator cannot assert an ALLOW case here (its simple-upload endpoint
+       leaves request.resource.contentType unset, so every contentType-gated
+       rule evaluates false there) — which means a regex flag that silently
+       failed to apply would not show up in any test, and would surface as a
+       teammate's upload being refused at RFS. lower() cannot fail that way.
+
+       Bigger cap, because these are genuinely bigger: a mold assembly at 10 MiB
+       is not unusual and the whole point is that it now fits. 50 MiB against a
+       5 GB free tier is ~100 files before it is worth a thought. */
+    function cadName(n) { return n.lower().matches('.*\\.(step|stp|sldprt|sldasm|iges|igs|x_t|x_b|3mf|f3d|dxf|dwg|stl)'); }
+    function cadTypeOk() { return request.resource.contentType.matches('(application/octet-stream|model/.*)'); }
+    function cadOk(n) { return cadName(n) && cadTypeOk() && request.resource.size < 50 * 1024 * 1024; }
+
     // avatars/{uid} — owner writes only; anyone signed in can read (getDownloadURL).
     match /avatars/{uid} {
       allow read: if signedIn();
@@ -36,19 +72,22 @@ service firebase.storage {
     // surface it. Images + common doc types only.
     match /projects/{projId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && sizeOk()
-        && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
+      allow write: if signedIn() && (
+        (sizeOk() && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)'))
+        || cadOk(file));
     }
 
     // parts/{partId}/{file} — photos and files attached to a part's comment
-    // thread. Added when the rich composer rolled out beyond tickets: there was
-    // no parts/ rule at all, and the file ends with "no rule = deny", so a
-    // photo in a part comment failed silently at upload. Same shape and same
-    // content-type allowlist as projects/.
+    // thread and its Files section. Added when the rich composer rolled out
+    // beyond tickets: there was no parts/ rule at all, and the file ends with
+    // "no rule = deny", so a photo in a part comment failed silently at upload.
+    // Same shape and same allowlist as projects/, CAD included — the mold CAD
+    // evidence on the "Mold CAD/CAM Done" stage is attached here.
     match /parts/{partId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && sizeOk()
-        && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
+      allow write: if signedIn() && (
+        (sizeOk() && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)'))
+        || cadOk(file));
     }
 
     // documents/{file} — the Documents-tab library; any signed-in member uploads

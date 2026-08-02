@@ -253,7 +253,49 @@ function chip(coll, id, label) {
   const known = recById(coll, id);
   return `<span class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</span>`;
 }
-function openRecord(tab, id) { view = { ...view, tab, mode: "detail", id, edit: false }; closeDrawer(); render(); }
+/* ---------- where you came from ----------
+   Records cross-link constantly: a ticket names its parts, a part names its
+   work orders and tickets, a comment names another ticket. Following one of
+   those used to be a one-way trip, because the only way back was a button that
+   always meant "the list" — so reading ticket A, tapping through to ticket B
+   and pressing Back dumped you at the board, and finding A again was on you.
+
+   A small stack fixes it, and it is a stack rather than the browser's history
+   because this is a single page with no URL per record; wiring popstate would
+   mean inventing a URL scheme for every tab first.
+
+   Capped: a long afternoon of chip-following should not grow without bound, and
+   nobody has ever wanted the 40th step back. */
+let NAV_STACK = [];
+const NAV_MAX = 25;
+function navHere() { return { tab: view.tab, mode: view.mode, id: view.id, projView: view.projView }; }
+function navSame(a, b) { return !!a && !!b && a.tab === b.tab && a.mode === b.mode && a.id === b.id; }
+function navPush(entry) {
+  if (!entry || !entry.tab) return;
+  if (navSame(NAV_STACK[NAV_STACK.length - 1], entry)) return;   // no repeats
+  NAV_STACK.push(entry);
+  if (NAV_STACK.length > NAV_MAX) NAV_STACK.shift();
+}
+function navClear() { NAV_STACK = []; }
+// What Back would return to, or null. Callers use it to label the button, so
+// "Back" can say WHICH thing it is going back to.
+function navPeek() { return NAV_STACK.length ? NAV_STACK[NAV_STACK.length - 1] : null; }
+/* Pop one. `fallback` is where to land with an empty stack — the tab's own
+   list, which is what the button used to do unconditionally. */
+function navBack(fallback) {
+  const prev = NAV_STACK.pop();
+  const to = prev || fallback || { tab: view.tab, mode: "list", id: null };
+  view = { ...view, ...to, edit: false };
+  render();
+}
+function openRecord(tab, id) {
+  // Opening the same record you are already on is not a move, so it must not
+  // put a step on the stack that Back would then spend doing nothing.
+  const here = navHere();
+  if (!(here.tab === tab && here.mode === "detail" && here.id === id)) navPush(here);
+  view = { ...view, tab, mode: "detail", id, edit: false };
+  closeDrawer(); render();
+}
 
 /* ---------- shared layup-stack viz + editor (parts + work orders) ---------- */
 function plyClass(m) {
@@ -863,6 +905,10 @@ const TABS = [
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
+  // Picking a tab from the sidebar is "take me somewhere else", not a step in a
+  // trail — so the trail ends here rather than letting Back walk you into a tab
+  // you deliberately left.
+  navClear();
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false };
   closeDrawer();
   render();
@@ -952,6 +998,26 @@ function shouldOpenDrawerFromSwipe(startX, startY, endX, endY, drawerOpen, narro
   if (Math.abs(dy) > Math.abs(dx)) return false; // vertical-dominant = scrolling, not this gesture
   return true;
 }
+/* The other half, which was simply never written: swiping right opened the
+   drawer and swiping left did nothing, so the only way out was the X or a tap
+   on the scrim. A gesture that works in one direction and not its opposite
+   reads as broken rather than as unimplemented.
+
+   NO EDGE ZONE here, unlike opening. Opening needs one because a rightward
+   swipe in the middle of the screen is how you scroll a board sideways or page
+   a photo, so it has to be claimed narrowly. Closing has no such competition:
+   the drawer is over the content, nothing behind it is scrollable while it is
+   open, and the finger that just pushed it out lands wherever it lands.
+
+   Same 60px / |dy|<|dx| thresholds as opening, so the two directions feel like
+   one gesture rather than two rules. */
+function shouldCloseDrawerFromSwipe(startX, startY, endX, endY, drawerOpen, narrowViewport) {
+  if (!drawerOpen || !narrowViewport) return false;
+  const dx = endX - startX, dy = endY - startY;
+  if (dx > -60) return false;                      // a real leftward swipe
+  if (Math.abs(dy) > Math.abs(dx)) return false;   // vertical-dominant = scrolling
+  return true;
+}
 let SWIPE_START = null;
 document.addEventListener("touchstart", (e) => {
   const t = e.touches && e.touches[0]; if (!t) { SWIPE_START = null; return; }
@@ -969,7 +1035,9 @@ document.addEventListener("touchend", (e) => {
      free of DOM reads so it remains testable without a TouchEvent. */
   if (typeof lightboxOpen === "function" && lightboxOpen()) { lbSwipeEnd(start, t); return; }
   const drawerOpen = !!(document.body && document.body.classList.contains("drawer-open"));
-  if (shouldOpenDrawerFromSwipe(start.x, start.y, t.clientX, t.clientY, drawerOpen, isNarrowViewport())) toggleDrawer();
+  const narrow = isNarrowViewport();
+  if (shouldOpenDrawerFromSwipe(start.x, start.y, t.clientX, t.clientY, drawerOpen, narrow)) toggleDrawer();
+  else if (shouldCloseDrawerFromSwipe(start.x, start.y, t.clientX, t.clientY, drawerOpen, narrow)) closeDrawer();
 }, { passive: true });
 
 /* ---------- theme (light / dark) ----------

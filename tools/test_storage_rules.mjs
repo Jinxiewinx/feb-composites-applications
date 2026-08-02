@@ -54,6 +54,15 @@ await denied("unauthenticated write to parts/", null, "parts/P-SN6-001/photo.jpg
 // rather than the right one (see the scope note at the top).
 await denied("authed write of a non-STL content type to stackplans/", token, "stackplans/STK-1/mesh.stl");
 await denied("authed write to an unmatched path", token, "secret/x.pdf");
+/* cadOk() (August 2026) widened projects/ and parts/ to take native CAD by
+   FILENAME as well as content type. The thing to prove is that naming a file
+   .step does not by itself open a door: the extension only ever relaxes the
+   type check INSIDE the two trees that were already writable, never the path
+   check that decides which trees exist at all. */
+await denied("a .step name does not open an unmatched path", token, "secret/mold.step");
+await denied("a .step name does not open the bucket root", token, "mold.step");
+await denied("a .step name does not open someone else's avatar", token, "avatars/not-my-uid.step");
+await denied("CAD by name is still denied where the tree itself is denied", token, "cad/MOLD.STEP");
 await denied("authed write to bucket root", token, "rootfile.pdf");
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -97,10 +97,10 @@ const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "p
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
+src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1812,6 +1812,27 @@ await t("shouldOpenDrawerFromSwipe: vertical-dominant motion (scrolling) -> fals
 await t("shouldOpenDrawerFromSwipe: drawer already open -> false (avoids racing the backdrop-close handler)", () => {
   assert(shouldOpenDrawerFromSwipe(10, 200, 90, 205, true, true) === false);
 });
+/* The other direction, which simply was not written: right opened the drawer,
+   left did nothing, and the only way out was the X or a tap on the scrim. */
+await t("shouldCloseDrawerFromSwipe: a leftward swipe with the drawer open closes it", () => {
+  assert(shouldCloseDrawerFromSwipe(200, 200, 100, 205, true, true) === true, "push it back where it came from");
+  // No edge zone, unlike opening: nothing behind an open drawer competes for a
+  // leftward swipe, and the finger lands wherever it lands.
+  assert(shouldCloseDrawerFromSwipe(380, 200, 300, 190, true, true) === true, "from the far side of the screen too");
+});
+await t("shouldCloseDrawerFromSwipe: refuses everything that isn't that", () => {
+  assert(shouldCloseDrawerFromSwipe(200, 200, 100, 205, false, true) === false, "nothing to close");
+  assert(shouldCloseDrawerFromSwipe(200, 200, 100, 205, true, false) === false, "no drawer on a desktop width");
+  assert(shouldCloseDrawerFromSwipe(200, 200, 170, 205, true, true) === false, "30px is a tap, not a swipe");
+  assert(shouldCloseDrawerFromSwipe(200, 100, 160, 400, true, true) === false, "mostly vertical is a scroll");
+  assert(shouldCloseDrawerFromSwipe(100, 200, 200, 205, true, true) === false, "rightward is not a close");
+});
+await t("the two directions are the same gesture, mirrored", () => {
+  // Same 60px floor and the same |dy| < |dx| rule, so opening and closing feel
+  // like one thing rather than two rules that happen to be nearby.
+  assert(shouldOpenDrawerFromSwipe(10, 200, 69, 200, false, true) === false && shouldCloseDrawerFromSwipe(200, 200, 141, 200, true, true) === false, "59px is short both ways");
+  assert(shouldOpenDrawerFromSwipe(10, 200, 70, 200, false, true) === true && shouldCloseDrawerFromSwipe(200, 200, 140, 200, true, true) === true, "60px is enough both ways");
+});
 await t("shouldOpenDrawerFromSwipe: wide/desktop viewport -> false regardless of coordinates", () => {
   assert(shouldOpenDrawerFromSwipe(10, 200, 90, 205, false, false) === false);
 });
@@ -2035,6 +2056,23 @@ await t("a Cancelled ticket doesn't count as an open assignment on People", () =
   DB.workOrders = [];
   const a = assignmentsFor("nick@b.edu");
   assert(a.projects.length === 0, "Cancelled shouldn't read as a live commitment: " + JSON.stringify(a.projects));
+});
+await t("People lists main tickets and issues, not sub-tickets", () => {
+  DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
+  DB.workOrders = [];
+  DB.parts = [{ id: "P-PE", partName: "UT DIFFUSER", layupProgress: "In Layup", moldEngineer: "Nick Jepsen" }];
+  DB.projects = [
+    { id: "TKT-M", kind: "project", title: "Undertray mold", status: "In Progress", assignees: ["nick@b.edu"] },
+    { id: "TKT-S1", kind: "project", title: "Machine the plug", status: "To Do", parentId: "TKT-M", assignees: ["nick@b.edu"] },
+    { id: "TKT-S2", kind: "project", title: "Seal the plug", status: "To Do", parentId: "TKT-M", assignees: ["nick@b.edu"] },
+    { id: "TKT-I", kind: "issue", title: "Delam on RW endplate", status: "In Progress", workOrderId: "WO-1", assignees: ["nick@b.edu"] },
+  ];
+  const a = assignmentsFor("nick@b.edu");
+  const ids = a.projects.map(p => p.id).sort();
+  // Breaking work down properly should not make someone look like the busiest
+  // person on the team — the parent and its children are one commitment here.
+  assert(ids.join(",") === "TKT-I,TKT-M", "the parent and the issue, not the sub-tickets: " + ids.join(","));
+  assert(a.parts.length === 1 && a.wos.length === 0, "parts and work orders are untouched: " + JSON.stringify([a.parts.length, a.wos.length]));
 });
 await t("reports CSV has header + rows", () => {
   DB.parts = [{ id: "P-R", partName: "SEAT", subteam: "BERGO" }];
@@ -3108,6 +3146,49 @@ await t("a description is edited by clicking the text, not by opening a form", (
   view = { ...view, edit: true }; render();
   assert(!main.innerHTML.includes("ep-desc-editor"), "and it is NOT also in the edit form — one place to change it, not two");
   view = { ...view, edit: false };
+});
+
+/* ---- back goes back, not "to the list" -----------------------------------
+   Following a chip from one ticket to another used to be a one-way trip: the
+   button always meant the board, so reading A, tapping through to B and
+   pressing Back dumped you at the board with A to find again. */
+await t("Back walks the trail you actually took, and says where it goes", () => {
+  navClear();
+  DB.projects = [
+    { id: "TKT-A", kind: "project", title: "Undertray mold", status: "To Do", comments: [], files: [] },
+    { id: "TKT-B", kind: "project", title: "Diffuser strakes", status: "To Do", comments: [], files: [] },
+  ];
+  view = { ...view, tab: "projects", mode: "list", id: null, q: "", tkFilter: "" };
+  openRecord("projects", "TKT-A");
+  assert(/All tickets/.test(ticketBackBtn()), "one step in, Back is still the old button: " + ticketBackBtn());
+  openRecord("projects", "TKT-B");
+  assert(/Back to Undertray mold/.test(ticketBackBtn()), "now it names the ticket you were on: " + ticketBackBtn());
+  navBack({ tab: "projects", mode: "list", id: null });
+  assert(view.mode === "detail" && view.id === "TKT-A", "and goes there, not to the board");
+  navBack({ tab: "projects", mode: "list", id: null });
+  assert(view.mode === "list", "one more step lands on the board");
+  navBack({ tab: "projects", mode: "list", id: null });
+  assert(view.mode === "list", "and an empty trail is the old behaviour, not an error");
+});
+await t("the trail doesn't collect steps that go nowhere", () => {
+  navClear();
+  view = { ...view, tab: "projects", mode: "list", id: null };
+  openRecord("projects", "TKT-A");
+  openRecord("projects", "TKT-A");     // the chip on a ticket that links to itself
+  assert(NAV_STACK.length === 1, "re-opening the record you are on is not a move: " + NAV_STACK.length);
+  // Picking a tab is "take me elsewhere", not a step — Back must not walk you
+  // into a tab you deliberately left.
+  setTab("parts");
+  assert(NAV_STACK.length === 0, "the sidebar ends the trail");
+});
+await t("the trail crosses tabs, because the links do", () => {
+  navClear();
+  DB.parts = DB.parts.length ? DB.parts : [{ id: "P-BK", partName: "Nosecone", cadProgress: "Not Started" }];
+  view = { ...view, tab: "parts", mode: "list", id: null };
+  openRecord("parts", DB.parts[0].id);
+  openRecord("projects", "TKT-A");
+  assert(new RegExp("Back to " + (DB.parts[0].partName || DB.parts[0].id)).test(ticketBackBtn()),
+    "a ticket opened from a part goes back to the part: " + ticketBackBtn());
 });
 
 /* ---- sub-tickets ---------------------------------------------------------
