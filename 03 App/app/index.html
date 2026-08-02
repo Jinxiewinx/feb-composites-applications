@@ -404,8 +404,82 @@
   .comment .chead { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
   .comment .chead b { color: var(--ink); }
   .comment .ctext img { max-width: 100%; border-radius: 4px; margin: 4px 0; }
-  .rte-toolbar { display: flex; gap: 2px; margin-bottom: 6px; flex-wrap: wrap; }
-  .rte-toolbar button { padding: 4px 8px; font-size: 13px; }
+  /* One row that scrolls, never a wrapping block. Eleven buttons at the 40px
+     coarse-pointer minimum is ~460px of button in a 341px phone box, which
+     wrapped to three rows and made the chrome taller than the 60px writing
+     area under it. Six buttons plus "+" is ~250px: one row, with slack. */
+  .rte-toolbar {
+    display: flex; gap: 2px; margin-bottom: 6px; flex-wrap: nowrap;
+    overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .rte-toolbar::-webkit-scrollbar { display: none; }
+  .rte-toolbar button { padding: 4px 8px; font-size: 13px; flex: none; }
+  .rte-more { font-weight: 700; }
+
+  /* ---- composer ----
+     Collapsed until clicked: at rest a 44px invitation instead of an unlabelled
+     rectangle, and the toolbar does not exist to wrap behind an empty box. */
+  .composer-stub {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 11px 14px; min-height: 44px;
+    border: 1px dashed var(--border-2); border-radius: var(--r-md);
+    background: var(--surface); color: var(--faint);
+    font: inherit; text-align: left; cursor: text;
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  }
+  .composer-stub:hover { border-color: var(--accent); background: var(--hover); }
+  /* position: relative is load-bearing — the bubble and the insert menu are
+     absolutely positioned against THIS, not the viewport, because inside a
+     modal the scroll container is #modal .backdrop rather than the page. */
+  .composer { position: relative; }
+  /* The editor carries .prose too, so what you are typing looks like what will
+     be posted: a heading is a heading while you write it, a table has borders,
+     a photo is framed. Previously you applied a heading and nothing visibly
+     changed, which is why nobody used the formatting. */
+  .composer.open .rte { min-height: 220px; }
+  /* Inside a composer the measure is the box, not 68ch — a cap here would
+     leave dead space to the right of the caret and read as a rendering fault. */
+  .rte.prose > *, .rte.prose p, .rte.prose ul, .rte.prose ol,
+  .rte.prose h1, .rte.prose h2, .rte.prose h3, .rte.prose h4,
+  .rte.prose blockquote { max-width: none; }
+  .rte.prose > :first-child { margin-top: 0; }
+  .rte.dragover { border-color: var(--accent); background: var(--accent-soft); }
+  .composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .composer-hint { flex: 1; min-width: 0; }
+
+  /* ---- the selection pill ----
+     Dark in both themes because it sits ON TOP of the text it modifies and must
+     never read as part of the writing surface. --sb-* is the app's only surface
+     family that stays dark in both themes and already carries text and hover
+     states, so this needs no new tokens. Hidden on touch: it depends on precise
+     text selection, and selection handles are OS-drawn at ~10px. */
+  .rte-bubble {
+    position: absolute; z-index: 20; display: flex; align-items: center; gap: 2px;
+    padding: 4px; border-radius: var(--r-md);
+    background: var(--sb-bg); border: 1px solid var(--border-2); box-shadow: var(--shadow-lg);
+  }
+  .rte-bubble[hidden] { display: none; }
+  .rte-bubble button {
+    border: none; background: none; color: var(--sb-text);
+    padding: 6px 9px; border-radius: var(--radius); font-size: 13px; min-height: 0;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .rte-bubble button:hover { background: var(--sb-hover); color: #fff; }
+  .rte-bubble button.on { background: var(--sb-active); color: #fff; }
+  @media (pointer: coarse) { .rte-bubble { display: none !important; } }
+
+  /* ---- the insert menu ----
+     Light, and deliberately the same shape as .picker .opt: someone who has
+     used the assignee picker already knows how this behaves. */
+  .rte-insert {
+    position: absolute; z-index: 20; min-width: 220px; max-width: min(320px, 90vw);
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+    max-height: 260px; overflow-y: auto; padding: 4px;
+  }
+  .rte-insert[hidden] { display: none; }
+  .rte-insert .opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; cursor: pointer; font-size: 13px; border-radius: var(--radius); }
+  .rte-insert .opt:hover, .rte-insert .opt.sel { background: var(--accent-soft); }
   .rte { min-height: 60px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--surface); }
   .rte:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
   /* Both editors carried a data-ph hint that nothing ever rendered, so the
@@ -1413,6 +1487,7 @@
 <script src="core.js"></script>
 <script src="resins.js"></script>
 <script src="gdocs.js"></script>
+<script src="rte.js"></script>
 <script src="workorders.js"></script>
 <script src="parts.js"></script>
 <script src="projects.js"></script>

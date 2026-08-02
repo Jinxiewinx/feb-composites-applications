@@ -1189,6 +1189,15 @@ if (typeof window !== "undefined" && window.addEventListener) {
     e.preventDefault();
     e.returnValue = "";       // required by Chrome to show its own wording
   });
+  if (typeof rteInit === "function") rteInit();
+  /* One delegated listener for both floating shells, rather than one per
+     editor: a render() rebuilds #main wholesale, so anything bound to the
+     editor node itself would have to be re-bound on every paint. */
+  document.addEventListener("selectionchange", () => { if (typeof rteSyncBubble === "function") rteSyncBubble(); });
+  document.addEventListener("mousedown", (e) => {
+    if (typeof rteCloseInsert !== "function") return;
+    if (!e.target.closest || !e.target.closest("#rte-insert, .rte-more")) rteCloseInsert();
+  });
   window.addEventListener("resize", syncChromeMetrics);
   window.addEventListener("orientationchange", syncChromeMetrics);
 }

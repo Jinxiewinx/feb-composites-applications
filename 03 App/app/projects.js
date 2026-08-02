@@ -189,63 +189,23 @@ function openNewProject(parentId) {
     <div class="foot"><button onclick="closeModal()">Cancel</button><button id="np-submit-btn" class="primary" onclick="submitNewProject()">Create ${forSub ? "sub-ticket" : kindNoun("project")}</button></div>
   `);
 }
-// The same rich-text toolbar the comment box uses, pointed at a description
-// field — one more call site, not a new component. targetId lets rte() know
-// which contenteditable div a toolbar click applies to.
-// Shared by rteField() (ticket description) and the comment editor, so the
-// two toolbars can't drift out of sync — a button added to one is added to
-// both. Image attach is comment-only (see the comment section below) since
-// that's the one thing the two editors don't have in common.
-/* A+ / A- are gone. They ran execCommand("fontSize"), which emits the 1996
-   <font size> tag, sized off the browser's 16px default rather than this app's
-   scale — so a user-set size could never track the prose typography, and
-   size="2" landed near the 11px floor test_appui.mjs enforces. <font> is no
-   longer in the sanitizer allowlist either, so the buttons had stopped doing
-   anything at all. Headings are the way to change emphasis here. */
-function rteToolbarButtons(targetId) {
-  return `
-    <button type="button" title="Bold" onclick="rte('bold',null,'${targetId}')"><b>B</b></button>
-    <button type="button" title="Italic" onclick="rte('italic',null,'${targetId}')"><i>I</i></button>
-    <button type="button" title="Underline" onclick="rte('underline',null,'${targetId}')"><u>U</u></button>
-    <button type="button" title="Heading" onclick="rte('formatBlock','h3','${targetId}')">H</button>
-    <button type="button" title="Bullet list" onclick="rte('insertUnorderedList',null,'${targetId}')">• List</button>
-    <button type="button" title="Link" onclick="rteLink('${targetId}')">🔗</button>
-    <button type="button" title="Code" onclick="rteCode('${targetId}')">&lt;/&gt;</button>
-    <button type="button" title="Table" onclick="rteTable('${targetId}')">⊞</button>`;
-}
+/* The composer lives in rte.js now — one command registry with three shells
+   (a scrolling bar, a selection pill on fine pointers, an insert menu), a paste
+   pipeline, and drag-and-drop. rteToolbarButtons/rte/rteCode/rteTable and
+   attachCommentImage are gone; rteField() is kept below because the create and
+   edit MODALS still use a plain always-open editor, where a collapsed stub
+   would be an extra click for a field you opened the form to fill in. */
 function rteField(targetId, html) {
-  return `<div class="rte-toolbar">${rteToolbarButtons(targetId)}</div>
-  <div class="rte" id="${targetId}" contenteditable="true" data-ph="Details, goals, links…">${sanitizeHtml(html || "")}</div>`;
+  return `${rteBar(targetId)}
+  <div class="rte prose" id="${targetId}" contenteditable="true" data-ph="Details, goals, links…"
+    onpaste="rtePaste(event,'${targetId}')" onkeydown="rteKeys(event,'${targetId}')"
+    onkeyup="rteSyncBubble()" onmouseup="rteSyncBubble()" onfocus="RTE_ACTIVE='${targetId}'"
+    ondragover="event.preventDefault();this.classList.add('dragover')"
+    ondragleave="this.classList.remove('dragover')" ondrop="rteDrop(event,'${targetId}')"
+    >${rteSeed(sanitizeHtml(html || ""))}</div>
+  ${rteBubbleHtml()}${rteInsertHtml()}`;
 }
-// Reject anything but a plain http(s) URL BEFORE execCommand ever runs —
-// sanitizeHtml() stripping a bad scheme afterward isn't enough defense in
-// depth for a link the editor already inserted and displayed as if it were fine.
-function isSafeLinkUrl(url) { return /^https?:\/\//i.test(String(url || "").trim()); }
-function rteLink(targetId) {
-  const el = document.getElementById(targetId); if (el) el.focus();
-  const url = prompt("Link URL (https://…)");
-  if (url == null) return; // cancelled
-  if (!isSafeLinkUrl(url)) { toast("Links must start with http:// or https://.", "error"); return; }
-  document.execCommand("createLink", false, url.trim());
-  // createLink doesn't let us set target/rel directly — the freshly-inserted
-  // <a> is the current selection's anchor; force it to open safely.
-  const sel = window.getSelection && window.getSelection();
-  const a = sel && sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest("a");
-  if (a) { a.target = "_blank"; a.rel = "noopener"; }
-}
-// No native execCommand for inline code — wrap the current selection manually.
-function rteCode(targetId) {
-  const el = document.getElementById(targetId); if (el) el.focus();
-  const sel = window.getSelection && window.getSelection();
-  const text = (sel && sel.toString()) || "code";
-  document.execCommand("insertHTML", false, `<code>${esc(text)}</code>`);
-}
-// Fixed 2x2 template only — no size prompt, keeps the sanitizer allowlist
-// narrow and predictable rather than accepting arbitrary row/col growth.
-function rteTable(targetId) {
-  const el = document.getElementById(targetId); if (el) el.focus();
-  document.execCommand("insertHTML", false, "<table><tr><td> </td><td> </td></tr><tr><td> </td><td> </td></tr></table>");
-}
+
 function openNewSubTicket(parentId) { openNewProject(parentId); }
 function ticketKindChanged() {
   const kind = document.getElementById("np-kind").value;
@@ -582,16 +542,22 @@ function renderProjDetail() {
         <div class="ctext prose">${proseHtml(c.html || "")}</div>
       </div>
     </div>`).join("") || '<span class="muted">No comments yet.</span>'}
-    <div class="no-print" style="margin-top:10px">
-      <div class="rte-toolbar">${rteToolbarButtons("comment-editor")}
-        <button type="button" title="Attach image" onclick="attachCommentImage()">${icon("paperclip", 15)} Image</button>
-      </div>
-      <div class="rte" id="comment-editor" contenteditable="true" data-ph="Write a comment…"
-        oninput="draftInput('comment','${p.id}',this)"
-        onkeydown="commentKeys(event,'${p.id}')">${sanitizeHtml(loadDraft("comment", p.id))}</div>
-      ${loadDraft("comment", p.id) ? `<div class="muted tny">Draft restored. <button class="link" onclick="discardCommentDraft('${p.id}')">Discard it</button></div>` : ""}
-      <div style="margin-top:6px"><button class="primary" onclick="postComment('${p.id}')">Comment as ${esc(signerName())}</button></div>
-    </div>
+    ${(() => {
+      // Uploads from this composer land in the ticket's own Storage tree, which
+      // is the one storage.rules already scopes.
+      rteSetUpload(name => `projects/${p.id}/${Date.now()}-${name}`);
+      const draft = loadDraft("comment", p.id);
+      return composerHtml({
+        targetId: "comment-editor",
+        html: sanitizeHtml(draft),
+        placeholder: "Write a comment…",
+        oninput: `draftInput('comment','${p.id}',this)`,
+        onpost: `postComment('${p.id}')`,
+        oncancel: `closeComposer('comment-editor')`,
+        postLabel: "Comment as " + signerName(),
+      }) + (draft && composerOpen("comment-editor")
+        ? `<div class="muted tny">Draft restored. <button class="link" onclick="discardCommentDraft('${p.id}')">Discard it</button></div>` : "");
+    })()}
   </div>`;
 }
 
@@ -624,23 +590,6 @@ function rte(cmd, val, targetId) { document.execCommand(cmd, false, val); docume
 // attachment instead of being a dead end you can only right-click.
 function imgAttachHtml(url, name) {
   return `<a href="${url}" download="${esc(name)}" target="_blank" rel="noopener"><img src="${url}" alt="${esc(name)}"></a>`;
-}
-function attachCommentImage() {
-  const p = projById(view.id);
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = "image/*";
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
-    try {
-      const rec = await fb.upload(`projects/${p.id}/${Date.now()}-${f.name}`, f);
-      document.execCommand("insertHTML", false, imgAttachHtml(rec.url, f.name));
-      // an attached image is also a file on the project
-      const entry = { id: "F" + Date.now(), name: rec.name, url: rec.url, type: rec.type, size: rec.size, by: myEmail(), ts: new Date().toISOString(), path: rec.path };
-      p.files = (p.files || []).concat([entry]);
-      await fb.appendTo("projects", p.id, "files", entry).catch(() => saveProj(p, "files"));
-    } catch (e) { toast("Image upload failed: " + e.message,"error"); }
-  };
-  inp.click();
 }
 // Match @tokens in comment text to roster users. Uses EXACT token equality (not
 // substring), so "@Nicole" doesn't also ping "Nico" — the same over-match trap

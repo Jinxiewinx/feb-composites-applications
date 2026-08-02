@@ -93,14 +93,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -996,25 +996,52 @@ await t("isSafeLinkUrl accepts only http(s), rejects javascript:/data:/relative"
   assert(isSafeLinkUrl("/relative/path") === false);
   assert(isSafeLinkUrl("") === false);
 });
-await t("rteLink rejects an unsafe URL before ever calling execCommand (prompt stub always returns a non-URL, exercising the reject path)", () => {
-  let called = false;
-  const origExec = document.execCommand;
-  document.execCommand = () => { called = true; };
+/* These two used to stub `document.execCommand` and assert on it by name, which
+   pinned an implementation rather than a behaviour. rte.js introduced two seams
+   — promptForUrl() and insertAtCaret() — so the same guarantees can be asserted
+   without naming the engine, and they survive it being swapped. */
+await t("rteLink validates before it inserts anything, and says why", () => {
+  let inserted = null;
+  const origInsert = globalThis.insertAtCaret, origPrompt = globalThis.promptForUrl;
+  globalThis.insertAtCaret = (t, html) => { inserted = html; };
+  globalThis.promptForUrl = () => "not-a-url";
   lastToast = "";
-  rteLink("np-desc-editor"); // global prompt() stub returns the literal string "stub" — not http(s)
-  document.execCommand = origExec;
-  assert(!called, "must not reach execCommand with an unsafe/invalid URL");
-  assert(/http/i.test(lastToast), "explains why it was rejected: " + lastToast);
+  rteLink("np-desc-editor");
+  assert(inserted === null, "nothing reaches the document with an unsafe URL");
+  assert(/http/i.test(lastToast), "and it explains why: " + lastToast);
+  // A cancelled prompt is silent, not an error.
+  lastToast = "";
+  globalThis.promptForUrl = () => null;
+  rteLink("np-desc-editor");
+  assert(inserted === null && !lastToast, "cancelling says nothing");
+  globalThis.insertAtCaret = origInsert; globalThis.promptForUrl = origPrompt;
 });
-await t("rteCode/rteTable insert their fixed templates via execCommand", () => {
-  const seen = [];
-  const origExec = document.execCommand;
-  document.execCommand = (cmd, ui, val) => seen.push([cmd, val]);
-  rteCode("np-desc-editor");
-  rteTable("np-desc-editor");
-  document.execCommand = origExec;
-  assert(seen[0][0] === "insertHTML" && /<code>/.test(seen[0][1]), "code wraps selection: " + JSON.stringify(seen[0]));
-  assert(seen[1][0] === "insertHTML" && /<table>/.test(seen[1][1]) && /<td>/.test(seen[1][1]), "table inserts a fixed template: " + JSON.stringify(seen[1]));
+await t("the markup builders are pure, escape their input, and size correctly", () => {
+  // No DOM, no execCommand — these are the actual contract of the code and
+  // table/code buttons, and they are testable on their own.
+  assert(codeHtml("x=1") === "<code>x=1</code>");
+  assert(codeHtml("<b>") === "<code>&lt;b&gt;</code>", "escapes: " + codeHtml("<b>"));
+  assert(codeHtml("") === "<code>code</code>", "empty selection gets a placeholder word");
+  const t3 = tableHtml(3, 3);
+  assert(/<thead>/.test(t3) && /<th>/.test(t3), "has a header row, which the old fixed 2x2 never did: " + t3);
+  assert((t3.match(/<tr>/g) || []).length === 3, "3 rows incl. the header: " + t3);
+  assert((t3.match(/<td>/g) || []).length === 6, "2 body rows x 3 cols");
+  assert((tableHtml(99, 99).match(/<td>/g) || []).length <= 20 * 12, "clamped, so a typo can't emit a 99x99 table");
+});
+await t("input rules are the six that match the sanitizer's tags", () => {
+  // A rule that emits a tag the sanitizer unwraps would appear to work and then
+  // silently lose the formatting on post, so the two lists must agree.
+  const emitted = ["h2", "h3", "ul", "ol", "blockquote"];
+  emitted.forEach(tag => assert(SANITIZE_CFG.ALLOWED_TAGS.includes(tag),
+    `input rules produce <${tag}> so the sanitizer must allow it`));
+  assert(INPUT_RULES.length === 6, "six rules: " + INPUT_RULES.length);
+  // Each rule fires on the markdown prefix a person actually types...
+  [["# ", 0], ["## ", 1], ["### ", 2], ["- ", 3], ["1. ", 4], ["> ", 5]].forEach(([typed, i]) =>
+    assert(INPUT_RULES[i][0].test(typed), `"${typed}" should trigger rule ${i}`));
+  // ...and not on the things this team types all day, which is why the slash
+  // menu and these rules are anchored to the start of a block.
+  ["1/4in ", "2/2 twill ", "CS-003 ", "a - b "].forEach(txt =>
+    assert(!INPUT_RULES.some(([re]) => re.test(txt)), `must not fire on "${txt}"`));
 });
 await t("fileItem() links are downloadable, not just openable", () => {
   const html = fileItem({ url: "https://x.test/receipt.jpg", name: "receipt.jpg", type: "image/jpeg" });
