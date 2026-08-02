@@ -28,11 +28,23 @@ it), what's curing and when it comes out of the mold, and what's booked at RFS
 this week. Curing shows a clock time rather than a countdown, so it never goes
 stale between renders.
 
-Below the list, every part on the car as one cell each, tinted by layup stage
-and tappable through to the record — an index that happens to be coloured, not
-a chart. It draws every part rather than a percentage, because one part is 3%
-and the nose cone and a bracket are not the same job. Desktop only: at phone
-width the cells land small enough that a missed tap opens the wrong part.
+Two columns on a wide screen, split on what you can act on versus what tells you
+where you are. Main column: the two counts, what's blocked, the list. Right rail:
+this week at RFS, the season, what's curing, what changed, what's owed. The rail
+is sticky, because orientation is exactly the thing that should stay put while
+you read. Below 1101px it drops beneath the list; between 700 and 1100 it goes
+two-up so the stage bars don't stretch into decorative rules.
+
+The season is three bars — CAD, Mold, Layup — counted over **all** parts, not the
+open ones the Parts tab counts. Different question, so different denominator:
+here it's how much of the car exists, there it's what's left to do. Both bars say
+which they are, and the counts are printed as words underneath because the amber
+and green sit close enough together to be hard work for a red-green colourblind
+reader.
+
+Every block wears a different surface on purpose — raised card, bare alert, big
+white card, flat bordered card, recessed panel, amber tint, gold rail, hairline —
+so the page stops reading as one texture where nothing outranks anything.
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, and a printable hand-fillable

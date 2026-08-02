@@ -19,6 +19,52 @@ passing. Storage rules: 12 pass, 1 pre-existing emulator limitation.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
 
+## Dashboard, round two — two columns (2026-08-02)
+
+Simon's verdict on round one: "I like it, but there is now too much." Three
+asks, all taken: the 33-cell part grid replaced by the three stage bars; two
+columns on desktop; a different visual treatment per block.
+
+**Split on ACT vs ORIENT**, which he picked from three options. Main column is
+the two counts, what is blocked, and the list. Rail is this week, the season,
+curing, new activity, money. Rail is sticky above 1101px, two-up between 701 and
+1100, stacked below. Season bars count ALL parts (his choice), where the Parts
+tab counts open ones — different question, so both label their denominator.
+
+**A UI/UX reviewer agent went over the result** (ui-ux-pro-max + frontend-design
+skills, real screenshots at four widths and both themes). It was worth it; most
+of its findings landed:
+
+- **The numeral hierarchy was inverted.** Tiles at 32px, group counts at 28px —
+  a step too small to read as a rank, so a tile showing `0` outranked `6 LATE`.
+  Now 22 vs 30, and the h2 that owns the list went to 24.
+- **The list held five smaller cards.** Each bucket emitted a full `table.list`
+  with its own border, shadow, radius and a repeated ITEM/WHO/DEADLINE band —
+  three of the five groups had one row. Header now renders once (later ones stay
+  in the DOM, visually hidden, because `labelListTables()` reads them to build
+  the responsive `data-label`s), and the nested table chrome is gone.
+- **`.dashseason` is a `<section>`, not a `.card`, so `.card h3` never reached
+  it** and the heading fell through to browser default — ~17px sentence-case
+  near-black beside a 12px uppercase muted one, in adjacent rail blocks.
+- **Chip fills were outvoting the red.** Ten tinted row titles down the page beat
+  six red dates for attention. Chips are plain links inside the list now; the
+  tint returns on hover, where it means something.
+- Rhythm was inverted (blocks 14px apart, groups inside a card 18px). Money block
+  was orphaned on bare canvas once the rail stacked. `--fill` equals `--canvas`
+  in light and `--surface-2` in dark, so the "recessed" panel had no edge.
+
+Two specificity bugs of my own, both caught by looking at renders rather than
+tests: `@media (min-width: 1500px) { .stat-row }` outranked `.dashtiles`, so the
+tiles stretched to 600px each at 1920; then fixing that with `.stat-row.dashtiles`
+outranked the phone rule and stacked them one per row at 393. Neither is
+test-visible — both widths passed every assertion while looking wrong.
+
+**Not taken:** the reviewer wanted the "Assigned to you" tile deleted as
+redundant with the sentence below it. That is only true in the fallback state
+where nothing is assigned to you; Simon explicitly chose two tiles. Kept. It also
+wanted `.kind` raised from 10px — that is a design-system component on the type
+floor's exemption list and used by every tab, so it is not a Dashboard decision.
+
 ## Dashboard rebuild (2026-08-02)
 
 Simon asked for the landing page to be the most visually appealing in the app,

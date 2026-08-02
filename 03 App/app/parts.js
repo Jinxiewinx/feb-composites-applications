@@ -500,9 +500,14 @@ function partSummary() {
 }
 // Open parts only, for all three stages — a breakdown that counted finished
 // parts in CAD but not in Layup would read as three different denominators.
-function stageBreakdown(key, vals) {
+// `rows` lets a caller pick its own denominator. This tab wants OPEN parts —
+// counting finished ones in CAD but not in Layup would read as three different
+// denominators. The Dashboard wants all of them, because there the question is
+// how much of the car exists rather than what is left to do; it says which it
+// is in the heading, since the two numbers legitimately differ.
+function stageBreakdown(key, vals, rows) {
   const buckets = { "st-0": 0, "st-mid": 0, "st-done": 0, "st-na": 0 };
-  DB.parts.filter(p => !partDone(p)).forEach(p => { buckets[stageClass(p[key] || vals[0], vals)]++; });
+  (rows || DB.parts.filter(p => !partDone(p))).forEach(p => { buckets[stageClass(p[key] || vals[0], vals)]++; });
   return buckets;
 }
 function summaryChip(label, n, on, onclick, cls) {

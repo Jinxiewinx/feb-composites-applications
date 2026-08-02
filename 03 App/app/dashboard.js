@@ -266,35 +266,38 @@ function renderDashboard() {
   const list = showTeam ? mine.concat(team).sort(dashSort) : mine;
   const teamLate = team.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
 
+  /* Two columns, split on ACT versus ORIENT. The main column is what you can do
+     something about right now — how much is on you, what is stopping work, and
+     the list itself. The rail is what tells you where you are: the week, the
+     season, what the clock is doing, what changed, what is owed.
+
+     One grid, one DOM. Below 1100px the rail simply follows the list, because
+     the list is the thing you came for and orientation can wait a scroll. */
   return `
-  ${dashTiles(mine.length, blocked.length)}
-  ${blocked.length ? dashBlocked(blocked) : ""}
-  ${curing.length ? dashCuring(curing) : ""}
-  ${watched.length ? dashWatched(watched) : ""}
-  ${dashWeek()}
-  <div class="card dashlist">
-    <h2>${showTeam ? "Everything open" : "Your work"}</h2>
-    ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
-    ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
-    ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
-      showTeam ? (mine.length ? "Show only my work" : "Hide the team's work")
-               : `Everything else — ${team.length} open, ${teamLate} late`
-    }</button>` : ""}
-  </div>
-  ${dashParts()}
-  <div class="dashfoot">
-    <button class="df-cell" onclick="setTab('budget')">
-      <span class="df-n">$${openSum.toFixed(0)}</span>
-      <span class="df-l">unreimbursed · ${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"}</span>
-    </button>
-    <button class="df-cell" onclick="setTab('parts')">
-      <span class="df-n">${DB.parts.filter(partDone).length}<span class="df-of">/${DB.parts.length}</span></span>
-      <span class="df-l">parts laid up</span>
-    </button>
-    <button class="df-cell" onclick="setTab('workorders')">
-      <span class="df-n">${late.length}</span>
-      <span class="df-l">past deadline</span>
-    </button>
+  <div class="dashsplit">
+    <div class="dashmain">
+      ${dashTiles(mine.length, blocked.length)}
+      ${blocked.length ? dashBlocked(blocked) : ""}
+      <div class="card dashlist">
+        <h2>${showTeam ? "Everything open" : "Your work"}</h2>
+        ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
+        ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
+        ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
+          showTeam ? (mine.length ? "Show only my work" : "Hide the team's work")
+                   : `Everything else — ${team.length} open, ${teamLate} late`
+        }</button>` : ""}
+      </div>
+    </div>
+    <aside class="dashrail" aria-label="Where the season stands">
+      ${dashWeek()}
+      ${dashSeason()}
+      ${curing.length ? dashCuring(curing) : ""}
+      ${watched.length ? dashWatched(watched) : ""}
+      <button class="dashmoney" onclick="setTab('budget')">
+        <span class="dm-n">$${openSum.toFixed(0)}</span>
+        <span class="dm-l">unreimbursed${openOrders.length ? ` · ${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"}` : ""}</span>
+      </button>
+    </aside>
   </div>`;
 }
 
@@ -396,46 +399,38 @@ function dashWeek() {
   </div>`;
 }
 
-/* The car, part by part. 33 cells, one per part, each one a link into the
-   record — an index that happens to be coloured, not a chart. At this many
-   parts it draws every unit, so it states no percentage and no projection: one
-   part is 3% and the nose cone and a bracket are the same 3%, which a
-   continuous bar would hide.
+/* Where the season stands. Three bars, one per stage, reusing the Parts
+   overview's own idiom rather than inventing a picture for the landing page —
+   .stagebreak / .sb-bar / .sb-seg / .sb-nums already exist and are already
+   read correctly by this team.
 
-   Desktop only. At 393px the cells land at ~26px, and eight neighbours 4px away
-   are eight different parts, so a missed tap opens the wrong record — and the
-   blanket `button { min-height: 40px }` would silently stretch each square into
-   a 26x40 rectangle that passes the tap-target check and looks broken. Same
-   call, and the same reason, as .pstats.compact being hidden on a phone. */
-function dashParts() {
+   The denominator is ALL parts, not the open ones the Parts tab counts, and the
+   heading says so. On this page the question is how much of the car exists, so
+   the bars only ever move forward across a season; on Parts the question is
+   what is left to do, so finished parts leave the denominator. Both are right
+   for their own page and they legitimately disagree, which is why neither is
+   allowed to be unlabelled.
+
+   The counts are printed as words underneath, always. The amber/green
+   adjacency sits at the edge of what is separable for a red-green colourblind
+   reader, so the numbers are the encoding and the bar is the summary. */
+function dashSeason() {
   const parts = DB.parts || [];
-  if (!parts.length) return "";
-  const st = typeof partStageByKey === "function" ? partStageByKey("layupProgress") : null;
-  if (!st) return "";
-  const b = { "st-0": 0, "st-mid": 0, "st-done": 0, "st-na": 0 };
-  const cells = parts.slice()
-    .sort((a, c) => (a.layupDeadline || "9999").localeCompare(c.layupDeadline || "9999") || a.id.localeCompare(c.id))
-    .map(p => {
-      const v = p[st.key] || st.vals[0];
-      const cls = stageClass(v, st.vals);
-      b[cls]++;
-      const name = p.partName || p.id;
-      return `<button class="ucell ${cls}" title="${esc(name)} — ${esc(v)}" aria-label="${esc(name)}, layup ${esc(v)}"
-        onclick="openRecord('parts','${esc(p.id)}')">${
-        cls === "st-done" ? '<svg class="uglyph" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5.4 L4.2 7.6 L8 3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        : cls === "st-na" ? '<svg class="uglyph" viewBox="0 0 10 10" aria-hidden="true"><line x1="2.6" y1="7.4" x2="7.4" y2="2.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
-        : cls === "st-mid" ? `<i style="width:${stagePct(v, st.vals)}%"></i>` : ""}</button>`;
-    }).join("");
-  return `<div class="card dashcar">
-    <h3>The car, part by part <span class="muted nocaps">— ${parts.length} parts, pick one to open it</span></h3>
-    <div class="unitgrid">${cells}</div>
-    <div class="sb-nums tny">
-      <span class="muted">${b["st-0"]} not started</span> ·
-      <span class="mid">${b["st-mid"]} under way</span> ·
-      <span class="done">${b["st-done"]} laid up</span>${b["st-na"] ? ` · <span class="na">${b["st-na"]} n/a</span>` : ""}
-      <span class="muted">— ${parts.length} parts, not ${parts.length} equal jobs.</span>
-    </div>
-  </div>`;
+  if (!parts.length || typeof PART_STAGES === "undefined") return "";
+  return `<section class="dashseason">
+    <h3>Season <span class="muted nocaps">— all ${parts.length} parts</span></h3>
+    ${PART_STAGES.map(st => {
+      const b = stageBreakdown(st.key, st.vals, parts);
+      const tot = b["st-0"] + b["st-mid"] + b["st-done"] + b["st-na"] || 1;
+      const seg = (cls, n, lbl) => n ? `<span class="sb-seg ${cls}" style="width:${(n / tot) * 100}%" title="${n} ${lbl}"></span>` : "";
+      return `<div class="stagebreak">
+        <div class="sb-label">${esc(st.label)}</div>
+        <div class="sb-bar">${seg("st-0", b["st-0"], "not started")}${seg("st-mid", b["st-mid"], "under way")}${seg("st-done", b["st-done"], "done")}${seg("st-na", b["st-na"], "not applicable")}</div>
+        <div class="sb-nums tny"><span class="done">${b["st-done"]} done</span>${b["st-mid"] ? ` · <span class="mid">${b["st-mid"]} under way</span>` : ""}${b["st-0"] ? ` · <span class="muted">${b["st-0"]} to start</span>` : ""}${b["st-na"] ? ` · <span class="na">${b["st-na"]} n/a</span>` : ""}</div>
+      </div>`;
+    }).join("")}
+    <button class="dg-more" onclick="setTab('parts')">Open Parts</button>
+  </section>`;
 }
 
 /* The list. One row per thing, each thing in exactly one bucket. */
@@ -446,9 +441,18 @@ function dashGroups(list) {
     if (!byBucket.has(k)) byBucket.set(k, []);
     byBucket.get(k).push(it);
   });
+  /* The header row is emitted ONCE, on the first group that has rows. It used
+     to be per group: four ~40px ITEM/WHO/DEADLINE bands inside one card, three
+     of them introducing a single row. That is the opposite of dense. Later
+     groups still carry a header for the responsive collapse and for screen
+     readers — core.js's labelListTables() reads row 0's <th> to build each
+     cell's data-label — but it is hidden visually. */
+  let first = true;
   return `<div id="dash-list">${DASH_BUCKETS.map(b => {
     const rows = byBucket.get(b.id);
     if (!rows || !rows.length) return "";
+    const headCls = first ? "" : " class=\"vh\"";
+    first = false;
     /* Undated work is real but it is not news, and there is a lot of it — the
        SN5 import alone carries eight parts with no deadline and no owner. It
        goes last and it goes folded, so it stops being the tallest thing on a
@@ -456,7 +460,7 @@ function dashGroups(list) {
        flag: nothing here needs to survive a render, and the disclosure
        triangle is a control every browser already gets right. */
     const head = groupHead(b.label, rows.length, b.id === "late" ? "bad" : "");
-    const table = `<table class="list dash"><tr><th>Item</th><th>Who</th><th>Deadline</th></tr>${rows.map(itemRow).join("")}</table>`;
+    const table = `<table class="list dash"><tr${headCls}><th>Item</th><th>Who</th><th>Deadline</th></tr>${rows.map(itemRow).join("")}</table>`;
     if (b.id !== "nodate") return head + table;
     return `<details class="dg-fold"><summary>${head}</summary>${table}</details>`;
   }).join("")}</div>`;

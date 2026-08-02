@@ -1706,7 +1706,7 @@ await t("the two hero numbers are real buttons, and season spend is gone", () =>
   // A running total with no cap, no target and no trend prompts no decision.
   assert(!/Season spend/.test(html), "season spend is not a number anyone acts on");
   // Unreimbursed money IS: its correct value is zero, so it needs no denominator.
-  assert(/\$120<\/span>\s*<span class="df-l">unreimbursed/.test(html), "the footer carries what is owed: " + html.slice(-900));
+  assert(/\$120<\/span>\s*<span class="dm-l">unreimbursed/.test(html), "the rail carries what is owed: " + html.slice(-900));
 });
 /* One row per physical thing. A part and its work order are the same object
    seen twice, and the page counted both. On the SN5 archive that inflated
