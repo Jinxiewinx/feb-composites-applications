@@ -156,6 +156,18 @@ these steps happen in a dark corner of RFS at eleven at night, and a hard photo
 requirement is how you teach people to write the traveler up the next morning
 from memory instead.
 
+On the Parts tab, one stage value is gated the same way: setting CAD to "Mold
+CAD/CAM Done" wants the mold CAD linked from Drive or attached as a PDF, on the
+part or on its work order. That one is a claim about a file, and a file either
+exists or it doesn't. The other stages are claims about a physical object anyone
+in the shop can walk over and check, so they stay one click with an undo bar.
+Overriding it costs a sentence, which lands in the part's own notes.
+
+Native CAD can't be uploaded anywhere in the app: `storage.rules` allows images,
+PDF, Office and text, so a `.SLDPRT` or `.STEP` is refused by content type.
+That's why every check that wants "the CAD" also accepts a linked Drive
+document. The model lives in Drive; what you attach here is the drawing.
+
 That's much better than typed initials, but be honest about
 the limits, and the same applies to every record in every tab. Nothing here is
 tamper-proof. Any roster member can edit any record, and there's no version

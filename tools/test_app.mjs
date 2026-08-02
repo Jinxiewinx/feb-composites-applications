@@ -100,7 +100,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|LB_SEL|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -704,6 +704,73 @@ await t("marking a part flat (N/A) asks first, and says so on the detail page", 
   assert(main.innerHTML.includes("flat — no mold"), "and the detail page spells out what the violet pill means");
   // Leaving N/A joins the track at its first step, which is one move, not a jump.
   assert(setPartStage("P-N2", "moldProgress", "Not Started") === "applied", "coming back off N/A is an ordinary move");
+});
+/* ---- evidence on a part stage -------------------------------------------
+   Exactly one stage value is a claim about a FILE rather than about a physical
+   object anyone in the shop can look at, and that is the one that is gated. */
+await t("“Mold CAD/CAM Done” is the only gated stage value", () => {
+  partsFixture();
+  const p = partById("P-N2");
+  p.docs = []; p.files = []; p.workOrderId = ""; p.partName = "ONLY-THIS-PART-N2";
+  assert(partStageEvidence(p, "cadProgress", "Mold CAD/CAM Done").missing.includes("cad"), "the CAD claim is gated");
+  ["Part CAD Done", "Not Started"].forEach(v =>
+    assert(!partStageEvidence(p, "cadProgress", v).missing.length, v + " is not gated"));
+  STAGE_MOLD.concat(STAGE_LAYUP).forEach(v => {
+    assert(!partStageEvidence(p, "moldProgress", v).missing.length, "mold “" + v + "” is about an object, not a file");
+    assert(!partStageEvidence(p, "layupProgress", v).missing.length, "layup “" + v + "” likewise");
+  });
+});
+await t("a Drive link, an upload, or the work order's copy all count", () => {
+  partsFixture();
+  const p = partById("P-N2");
+  p.workOrderId = ""; p.partName = "ONLY-THIS-PART-N2";
+  const gated = () => partStageEvidence(p, "cadProgress", "Mold CAD/CAM Done").missing.length > 0;
+  p.docs = []; p.files = []; assert(gated(), "nothing anywhere");
+  p.docs = [{ id: "D1", url: "https://docs.google.com/x" }]; assert(!gated(), "a Drive link counts — native CAD can't be uploaded at all");
+  p.docs = []; p.files = [{ id: "F1", name: "mold.pdf" }]; assert(!gated(), "so does an attached PDF drawing");
+  // The part and its work order are twins; the CAD is one artifact, so being on
+  // either satisfies it rather than forcing it to be attached twice.
+  p.files = [];
+  DB.workOrders = DB.workOrders.concat([{ id: "WO-PEV", partName: "ONLY-THIS-PART-N2", docs: [{ id: "D2" }], files: [] }]);
+  p.workOrderId = "WO-PEV";
+  assert(!gated(), "the linked work order's copy counts too");
+  p.workOrderId = ""; p.docs = []; p.files = [];
+  DB.workOrders = DB.workOrders.filter(w => w.id !== "WO-PEV");
+});
+await t("a gated stage refuses the click, says why, and never writes", () => {
+  partsFixture();
+  const p = partById("P-N2");
+  p.docs = []; p.files = []; p.workOrderId = ""; p.partName = "ONLY-THIS-PART-N2";
+  p.cadProgress = "Part CAD Done";
+  selectPart("P-N2");
+  const r = setPartStage("P-N2", "cadProgress", "Mold CAD/CAM Done");
+  assert(r === "blocked-evidence", "blocked, not applied: " + r);
+  assert(partById("P-N2").cadProgress === "Part CAD Done", "nothing written");
+  assert(/mold CAD/i.test(el("modal").innerHTML), "and it names what's missing: " + el("modal").innerHTML.slice(0, 200));
+  // The keyboard path goes through the same function, so it is gated identically.
+  partsKeydown({ key: "1", target: { tagName: "BODY" } });
+  assert(partById("P-N2").cadProgress === "Part CAD Done", "1 is gated the same way");
+});
+await t("a lead can set it anyway, and the reason lands in the part's own notes", () => {
+  partsFixture();
+  const p = partById("P-N2");
+  p.docs = []; p.files = []; p.workOrderId = ""; p.partName = "ONLY-THIS-PART-N2";
+  p.cadProgress = "Part CAD Done"; p.commentLog = [];
+  selectPart("P-N2");
+  openPartStageOverride("P-N2", "cadProgress", "Mold CAD/CAM Done");
+  lastToast = ""; submitPartStageOverride("P-N2", "cadProgress", "Mold CAD/CAM Done");
+  assert(lastToast.includes("reason"), "an empty reason is refused: " + lastToast);
+  assert(partById("P-N2").cadProgress === "Part CAD Done", "and nothing moved");
+  document.getElementById("pev-why").value = "flat plate, cut from the DXF — there is no mold";
+  submitPartStageOverride("P-N2", "cadProgress", "Mold CAD/CAM Done");
+  const q = partById("P-N2");
+  assert(q.cadProgress === "Mold CAD/CAM Done", "with a reason it moves");
+  // A part has no event log, but its note thread is one — and is what anybody
+  // reads to find out what happened to this part.
+  const note = (q.commentLog || [])[0];
+  assert(note && /there is no mold/.test(note.text), "the reason is in the notes: " + JSON.stringify(note));
+  assert(note.author === "Simon" && note.ts, "authored and timestamped like any other note");
+  assert(!partStageEvidence(q, "cadProgress", "Mold CAD/CAM Done").missing.length, "an override granted in writing clears the requirement");
 });
 await t("1 / 2 / 3 advance CAD / Mold / Layup on the open part by exactly one step", () => {
   partsFixture(); render();

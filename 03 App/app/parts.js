@@ -81,6 +81,52 @@ function stageRail(p) {
 function partDone(p) { return ["Layup Complete", "Polished"].includes(p.layupProgress); }
 function partLate(p) { const d = daysUntil(p.layupDeadline); return d != null && d < 0 && !partDone(p); }
 
+/* ---------- evidence on a stage ----------
+   A stage is NOT a buy-off, and the difference decides how hard this bites.
+   A work-order step is signed: it records a name, an email and a timestamp, and
+   the gate there is a wall. A stage is progress — one click, no signature, and
+   an undo bar underneath it. So exactly one value carries a requirement, and it
+   is the one that is a claim about an artifact rather than about work done:
+
+     CAD → "Mold CAD/CAM Done"   the mold CAD has to exist somewhere findable
+
+   "Machining", "Sealed", "Layup Complete" are all statements about a physical
+   object that anybody standing in the shop can check, and gating them would
+   turn the fastest interaction in the app into a form. This one is a statement
+   about a file, and a file either exists or it does not.
+
+   WHAT COUNTS. The part's own documents or files, or its work order's — the two
+   are twins (see linkedCounterpart), the mold CAD is one artifact, and refusing
+   a part because the drawing is attached to its work order instead would just
+   teach people to attach it twice. A Drive link counts as much as an upload,
+   and for native CAD it is the ONLY thing that can: storage.rules refuses a
+   .SLDPRT by content type. */
+const PART_STAGE_NEEDS = { cadProgress: { "Mold CAD/CAM Done": "cad" } };
+const PART_EVIDENCE = {
+  cad: {
+    label: "the mold CAD, linked or attached",
+    why: "“Mold CAD/CAM Done” is a claim that a file exists. If nobody can find it, the claim is the only thing that does.",
+    fix: "Link it from Drive under Documents, or attach the PDF drawing under Files — on this part or on its work order.",
+    has: (p) => {
+      const holds = r => !!(r && (((r.docs || []).length) || ((r.files || []).length)));
+      return holds(p) || holds(linkedCounterpart("parts", p));
+    },
+  },
+};
+function partStageNeed(key, val) { return (PART_STAGE_NEEDS[key] || {})[val] || null; }
+/* { missing: [key] }. Retro records document rather than enforce, matching every
+   other gate in this app; an override already granted clears it, because it was
+   granted in writing and the writing is in the part's own note log. */
+function partStageEvidence(p, key, val) {
+  const out = { missing: [] };
+  const need = partStageNeed(key, val);
+  if (!need || !p || p.retro) return out;
+  if ((p.stageOverrides || {})[key]) return out;
+  const rule = PART_EVIDENCE[need];
+  if (rule && !rule.has(p)) out.missing.push(need);
+  return out;
+}
+
 /* ---------- moving a stage ----------
    Advancing a stage is the commonest thing anyone does in this tab, and it used
    to cost four interactions: select, press Edit, open a <select>, pick. The
@@ -110,6 +156,10 @@ function setPartStage(id, key, val, ev) {
   const from = wasNA ? -1 : track.indexOf(cur);
   const to = track.indexOf(val);
   const apply = () => applyPartStage(p, st, val);
+  /* Before every other question. The skip-ahead and move-back confirms are
+     about whether you meant it; this is about whether it is true, and there is
+     no point asking someone to confirm a move the app is going to refuse. */
+  if (partStageEvidence(p, key, val).missing.length) { openPartEvidenceModal(p.id, key, val); return "blocked-evidence"; }
   if (stageIsNA(val)) {
     confirmModal(`Mark ${name} as flat — no ${st.label.toLowerCase()} at all? Its recorded “${cur}” is dropped for everyone.`,
       apply, { ok: "Mark flat" });
@@ -131,6 +181,67 @@ function setPartStage(id, key, val, ev) {
   apply();
   return "applied";
 }
+/* What is missing, why, and the shortest way to fix it — with the buttons that
+   do the fixing, so the gate does not just say no. Same shape as the work
+   order's evidence modal. */
+function openPartEvidenceModal(id, key, val) {
+  const p = partById(id), st = partStageByKey(key);
+  if (!p || !st) return;
+  const ev = partStageEvidence(p, key, val);
+  const wo = linkedCounterpart("parts", p);
+  openModal(`
+    <h2>Not yet — ${esc(val)}</h2>
+    <p class="muted">${esc(p.partName || p.id)} · ${esc(st.label)}</p>
+    ${ev.missing.map(k => {
+      const r = PART_EVIDENCE[k];
+      return `<p class="gate blocked"><span class="gi">✕</span><span><b>Needs ${esc(r.label)}.</b> ${esc(r.why)}<br>
+        <span class="muted">${esc(r.fix)}</span></span></p>`;
+    }).join("")}
+    ${wo ? `<p class="muted tny">Checked on this part and on work order ${esc(wo.id)} — either one counts.</p>` : ""}
+    <div class="foot">
+      <button onclick="closeModal()">Close</button>
+      <button class="primary" onclick="closeModal();openDocLinkModal({ coll: 'parts', id: '${esc(id)}' })">Link it from Drive</button>
+      <button onclick="closeModal();addRecordFiles('parts','${esc(id)}','parts')">Attach a file</button>
+      ${isLead() ? `<button class="danger" onclick="openPartStageOverride('${esc(id)}','${esc(key)}','${esc(val)}')">Set it anyway</button>` : ""}
+    </div>
+  `);
+}
+/* A lead can set it anyway, for a sentence. A part has no event log, but it has
+   an append-only authored note thread — which IS its event log, and is already
+   the thing anyone reads to find out what happened to this part. The note goes
+   there rather than into a store invented for it. */
+function openPartStageOverride(id, key, val) {
+  const p = partById(id), st = partStageByKey(key);
+  if (!p || !st) return;
+  openModal(`
+    <h2>Set ${esc(st.label)} to “${esc(val)}” anyway?</h2>
+    <p class="gate"><span class="gi">⚠</span><span>This goes in the part's notes with your name and the time, where the next person will read it.</span></p>
+    <div class="field"><label for="pev-why">Where is the CAD, or why isn't there one?</label>
+      <textarea id="pev-why" autofocus rows="3" placeholder="e.g. flat plate, cut straight from the DXF — there is no mold"></textarea>
+    </div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="submitPartStageOverride('${esc(id)}','${esc(key)}','${esc(val)}')">Set it anyway</button>
+    </div>
+  `);
+}
+function submitPartStageOverride(id, key, val) {
+  const el = document.getElementById("pev-why");
+  const why = (el ? el.value : "").trim();
+  if (!why) { toast("An override needs a reason. That's the whole point of it.", "error"); return; }
+  const p = partById(id), st = partStageByKey(key);
+  if (!p || !st) { closeModal(); return; }
+  closeModal();
+  const need = partStageNeed(key, val);
+  p.stageOverrides = { ...(p.stageOverrides || {}), [key]: { by: signerName(), email: myEmail(), at: new Date().toISOString(), missing: need, reason: why } };
+  savePart(p, "stageOverrides");
+  const text = `${st.label} set to “${val}” without ${(PART_EVIDENCE[need] || {}).label || "evidence"}. Reason: ${why}`;
+  const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), text, html: `<p>${esc(text)}</p>` };
+  p.commentLog = (p.commentLog || []).concat([c]);
+  saveField("parts", p, "commentLog", arr => (arr || []).concat([c]));
+  applyPartStage(p, st, val);
+}
+
 function applyPartStage(p, st, val) {
   const from = p[st.key];
   p[st.key] = val;
@@ -556,10 +667,18 @@ function partStageRow(p, st) {
       title="${isCur ? esc(st.label) + " is " + esc(v) : "Set " + esc(st.label) + " to " + esc(v)}"
       onclick="setPartStage('${esc(p.id)}','${st.key}','${esc(v)}',event)">${esc(v)}</button>`;
   };
+  /* Say what a step wants BEFORE it is clicked. The step stays enabled — the
+     click is how you find out what is missing and get the buttons that fix it,
+     and a disabled control with a tooltip is unreachable on the phone this is
+     used from. */
+  const gated = st.vals.filter(v => partStageEvidence(p, st.key, v).missing.length);
+  const ovr = (p.stageOverrides || {})[st.key];
   return `<div class="pstage">
     <div class="ps-label">${st.label}</div>
     <div class="ps-steps" role="group" aria-label="${esc(st.label)} progress">${st.vals.map(step).join("")}</div>
     ${curCls === "st-na" ? `<div class="ps-cap tny muted">flat — no mold</div>` : ""}
+    ${gated.length ? `<div class="ps-cap tny muted">“${esc(gated[0])}” needs ${esc((PART_EVIDENCE[partStageNeed(st.key, gated[0])] || {}).label || "evidence")} first.</div>` : ""}
+    ${ovr ? `<div class="ps-cap tny muted">Set without evidence by ${esc(userName(ovr.email) || ovr.by)}. The reason is in the notes.</div>` : ""}
   </div>`;
 }
 
@@ -690,6 +809,17 @@ function renderPartDetail() {
         <div class="lg-label tny">Documents</div>
         ${docLinkList(p.docs, { onRemove: `rmPartDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
         <div class="no-print" style="margin-top:6px"><button class="sm" onclick="openDocLinkModal({ coll: 'parts', id: '${p.id}' })">+ Link a document</button></div>
+      </div>
+      <!-- Files, new alongside Documents: a part could link a Drive doc but not
+           hold a file, so a PDF mold drawing had nowhere to live except a
+           comment. Uploads go to the parts/ storage tree, which storage.rules
+           already has — no rules change. -->
+      <div class="pengrow">
+        <div class="lg-label tny">Files</div>
+        <div class="filegrid">
+          ${(p.files || []).map(fileItem).join("") || '<span class="muted tny">None yet.</span>'}
+        </div>
+        <div class="no-print" style="margin-top:6px"><button class="sm" onclick="addRecordFiles('parts','${p.id}','parts')">+ Add files</button></div>
       </div>
 
       <h3 id="pt-notes">Notes${comments.length ? ` <span class="muted" style="text-transform:none">— ${comments.length} comment${comments.length === 1 ? "" : "s"}</span>` : ""}</h3>

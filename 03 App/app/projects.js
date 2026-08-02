@@ -632,12 +632,18 @@ function fileItem(f) {
    because work orders needed one too — a mold design review that can be signed
    with the CAD nowhere in the app is a signature on nothing.
 
-   Uploads land in the projects/ storage tree whatever the collection, which is
-   deliberate: storage.rules already scopes and content-type-limits that tree,
-   and inventing a workOrders/ prefix would mean a rules deploy — the one thing
-   in this repo that can lock the team out of their own data — to gain nothing.
-   The record itself is roster-gated in Firestore either way. */
-function addRecordFiles(coll, id) {
+   `tree` is the storage.rules prefix, NOT the collection name — parts have
+   their own parts/ tree and work orders do not. A work order's files land under
+   projects/ deliberately: storage.rules already scopes and content-type-limits
+   that tree, and inventing a workOrders/ prefix would mean a rules deploy — the
+   one thing in this repo that can lock the team out of their own data — to gain
+   nothing. The record itself is roster-gated in Firestore either way.
+
+   NOTE ON NATIVE CAD. storage.rules allows images, PDF, Office and text, so a
+   .SLDPRT or .STEP is refused at upload. That is why every evidence check that
+   wants "the CAD" also accepts a linked Drive document: the model lives in
+   Drive, and what you attach here is the PDF drawing or a screenshot of it. */
+function addRecordFiles(coll, id, tree) {
   const rec = recById(coll, id);
   if (!rec) return;
   const inp = document.createElement("input");
@@ -647,7 +653,7 @@ function addRecordFiles(coll, id) {
     const files = Array.from(inp.files || []);
     for (const f of files) {
       try {
-        const up = await fb.upload(`projects/${id}/${Date.now()}-${f.name}`, f);
+        const up = await fb.upload(`${tree || "projects"}/${id}/${Date.now()}-${f.name}`, f);
         const entry = { id: "F" + Date.now() + Math.random().toString(36).slice(2, 5), name: up.name, url: up.url, type: up.type, size: up.size, by: myEmail(), ts: new Date().toISOString(), path: up.path };
         rec.files = (rec.files || []).concat([entry]);
         await fb.appendTo(coll, id, "files", entry).catch(() => save(coll, rec, "files"));

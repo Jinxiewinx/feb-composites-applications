@@ -11,8 +11,9 @@ questions. Not a transcript.
 
 Last updated: 2026-08-02
 Status: **Editable descriptions, the photo viewer, buy-off evidence and
-sub-tickets on the board — all four COMPLETE.** 282 app / 55 sanitizer / 23
-design-system / 988 app-UI / 13 print mobile / 30 safe-area, all passing.
+sub-tickets on the board — all four COMPLETE, plus the Mold CAD/CAM part
+stage.** 286 app / 55 sanitizer / 23 design-system / 988 app-UI /
+13 print mobile / 30 safe-area, all passing.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
 
@@ -111,6 +112,31 @@ Work orders gained a real Files section for this. Uploads go to the existing
 not deployed.** A `workOrders/` prefix would have meant a rules deploy — the one
 thing in this repo that can lock the team out of their own data — to gain
 nothing, since the record is roster-gated in Firestore either way.
+
+**Part stages, added on Simon's say-so right after.** Exactly one stage value is
+gated: CAD → "Mold CAD/CAM Done". The line drawn is that a stage is not a
+buy-off — no signature, no name recorded, an undo bar underneath — so only the
+value that is a claim about a FILE gets a gate. "Machining", "Sealed", "Layup
+Complete" are claims about a physical object anyone in the shop can walk over
+and check, and gating those would turn the fastest interaction in the app into
+a form.
+
+Evidence counts from the part's own docs or files OR its linked work order's:
+they are twins, the mold CAD is one artifact, and refusing a part because the
+drawing hangs off its work order would only teach people to attach it twice. A
+lead override costs a sentence, which lands in the part's `commentLog` — a part
+has no event log, but its authored note thread is one, and is what anyone
+actually reads to find out what happened to it.
+
+Parts gained a Files section for this, uploading to the existing `parts/`
+storage tree. **`storage.rules` still not touched and not deployed.**
+
+**Known limit, worth knowing before someone fights the uploader:** native CAD
+cannot be uploaded anywhere in this app. `storage.rules` allows images, PDF,
+Office and text, so a `.SLDPRT` or `.STEP` is refused by content type. That is
+why every "the CAD" check also accepts a linked Drive document — the model lives
+in Drive and what gets attached here is the drawing. Widening the rule would
+mean a `storage.rules` deploy; not done, and not obviously worth it.
 
 **Sub-tickets on the board and in the list.** `topLevel()` is gone. They were
 filtered out of both planning views, which meant breaking a ticket down HID the
