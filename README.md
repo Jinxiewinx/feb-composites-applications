@@ -83,6 +83,7 @@ It works because Fluent's Chromium export has a consistent layout (panel titles 
 node tools/test_app.mjs      # app logic across every tab, in a DOM stub
 node tools/test_designsystem.mjs  # the app's CSS against 06 Design System, no browser
 node tools/test_appui.mjs    # layout: 11 tabs x 4 widths x 2 themes, measured
+node tools/test_detailui.mjs  # the same, but with records OPEN and their fields full
 node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
 node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
 node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
@@ -123,6 +124,35 @@ the topbar, every surface actually changing colour in dark mode, and `main`
 using the window it was given. That last one is how the wasted 27% of a 1920
 monitor got found.
 
+`test_detailui.mjs` is the fourth, and it exists because `test_appui.mjs`
+passed clean on a bug Simon could see on his phone. That test audits eleven tabs
+and never opens a record, and every fixture in `tools/lib/fixtures.mjs` carries
+`comments: []`, no `docs` and no `files` — so it was measuring an app in which
+nobody had ever commented, linked a Drive doc or attached a file. An empty
+thread cannot overflow. This one fills those fields from
+`tools/lib/fixtures-content.mjs` (a bare 120-character Drive URL, an
+underscore-joined CAD filename, a 600-character one-paragraph update typed at
+RFS, a pasted six-column table, a code block) and opens every detail page plus
+six overlay states — the lightbox, three modals, the composer with a draft in
+it, the drawer — at 320, 393, 430 and 1440.
+
+Two things it does that are worth copying. It asserts that the populated content
+actually reached the page, and that an overlay actually opened, because a check
+that measures the wrong thing reports green: the first run passed six overlay
+views having opened none of them. And it distinguishes a hard cut from a
+designed one — `overflow: hidden` with no `text-overflow: ellipsis` is a defect,
+an ellipsis is a decision.
+
+It also has the clearest lesson in this repo about the limits of measuring. The
+first round of fixes turned every number green, and three reviewer agents
+looking at the screenshots opened with the same finding: the tables were
+unreadable. `overflow-wrap: anywhere` gives a table cell a min-content width of
+one character, so instead of overflowing into the scroller that already exists
+for it, every column had collapsed to its narrowest form — a pasted pull-test
+table rendered its header as C / o / u / p / o / n down the page. No overflow,
+nothing clipped, nothing off-screen, and you could not read a row across. Run
+`--shots` and look at them.
+
 `test_safearea.mjs` is the third of that family and the least obvious. The app
 sets `viewport-fit=cover` and runs standalone with a translucent status bar on
 purpose, so it draws edge to edge and the navy topbar meets the Dynamic Island
@@ -153,6 +183,13 @@ relative to itself rather than the cwd, running it inside a git worktree
 photographs that worktree, which is how four competing designs for the Parts tab
 were shot under identical conditions and judged frame for frame.
 
-To drive the app locally, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
+To drive the app locally with a database in it, use `node
+tools/serve_populated.mjs --port 8791`: the real app on a real port, Firebase
+stubbed out, seeded from the SN5 archive and the same populated fixtures the
+tests use. Nothing is saved, so reloading resets it. Open it in Chrome's device
+toolbar at iPhone 15 rather than a narrow desktop window — half the responsive
+rules key off `pointer: coarse`, and only the device toolbar sets that.
+
+For the app as it really is, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
 
 One quirk worth knowing: the git root is this folder rather than `03 App/`, because the scripts in `tools/` resolve their paths relative to here. `firebase deploy` still has to run from inside `03 App/`.

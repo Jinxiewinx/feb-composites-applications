@@ -10,7 +10,15 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-02
-Status: **Dashboard rebuilt (2026-08-02).** Before that: editable descriptions,
+Status: **Mobile layout fixed for populated records (2026-08-02).** Simon
+reported that a work order with comments and linked documents runs off the side
+of a phone, zooms the page out, and clips text. Fixed and pushed in three
+commits; see the section below. New: `tools/lib/fixtures-content.mjs` and
+`tools/test_detailui.mjs` (434 checks), plus `tools/serve_populated.mjs` for
+touching the populated app in a real browser. NOT YET DEPLOYED at the time this
+line was written.
+
+Before that: **Dashboard rebuilt (2026-08-02).** Before that: editable descriptions,
 the photo viewer, buy-off evidence, sub-tickets on the board, the Mold CAD/CAM
 part stage, and Simon's second round (swipe-to-close, a real Back button,
 People, CAD uploads) — all complete and deployed. 298 app / 988 app-UI / 55
@@ -18,6 +26,81 @@ sanitizer / 23 design-system / 30 safe-area / 13 print mobile / 88 website, all
 passing. Storage rules: 12 pass, 1 pre-existing emulator limitation.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## Mobile, with the fields actually filled in (2026-08-02)
+
+Simon: open a work order with comments and documents on a phone, the UI goes
+over the edge of the box, gets cut off, and the browser zooms out. Also text
+clipping, and long messages splitting over many lines making elements too tall.
+
+**Why the suite missed all of it.** `test_appui.mjs` audits eleven tabs at four
+widths and passed clean. It never opens a record, and every fixture in
+`lib/fixtures.mjs` carries `comments: []`, no `docs` and no `files`. An empty
+thread cannot overflow. So the fix was two things: fixtures that populate, and
+a test that opens things.
+
+`tools/lib/fixtures-content.mjs` holds the hostile-but-real content: a bare
+120-character Drive URL, an underscore-joined CAD filename, a 600-character
+one-paragraph update, a pasted six-column table, a code block.
+`tools/test_detailui.mjs` opens every detail page AND six overlay states
+(lightbox, three modals, the composer with a draft, the drawer) at 320/393/430
+plus 1440 as a control.
+
+**What was actually wrong, in order of how much it mattered:**
+
+1. Long tokens did not wrap. One pasted URL made the widest line ~680px, the
+   document scrolled sideways, and mobile Safari fits the layout viewport to
+   that. `overflow-wrap: anywhere` on team-written text. Use `anywhere`, not
+   `break-word`: only `anywhere` shrinks min-content width, which is what a
+   grid track sizes from — `break-word` looks fixed in a screenshot and still
+   scrolls the page.
+2. Grid tracks kept min-content as their automatic minimum. `.tkmeta` had no
+   `min-width: 0` and the <=900 collapse used `1fr` rather than
+   `minmax(0, 1fr)`. A populated ticket measured 1030px inside a 393px phone.
+3. The Documents shelf built its own row markup with a bare `<span>` title
+   instead of `docLinkRow`'s `.dl-t`.
+
+**Then the numbers went green and the layout was still bad**, which is the part
+worth remembering. Three reviewer agents looked at the rendered screenshots and
+two independently opened with the same finding: `overflow-wrap: anywhere` in a
+TABLE cell gives the cell a min-content width of one character, so instead of
+overflowing into the scroller that already exists (`table.sub` has had
+`overflow-x: auto` below 900px for ages; `.prose table` has `.tblwrap`), every
+column collapsed to its narrowest form. A pasted pull-test table rendered its
+header as C / o / u / p / o / n down the page and "5110" as "511 / 0". It
+measured perfectly clean and could not be read. `overflow-wrap: normal` on
+`td`/`th` after the anywhere rule, and the scrollers do their job.
+
+Also from that pass: scroll cues on `.prose pre` / `.tblwrap` / `table.sub`
+(the four-layer background trick, `background-attachment: local` for the covers
+and `scroll` for the shadows, so the shadow shows only where content actually
+overflows — no JS, cannot desync); the ticket meta rail had shipped hardcoded
+`open` so it had never once collapsed on a phone; comment headers broke every
+name across two lines; a long Weekly Plan goal left an orphaned checkbox on its
+own line; `0 KB` beside a linked Google Doc; document titles get two lines on a
+phone because the datasheet shelf is prefix-heavy and one line cut off exactly
+the revision date.
+
+**Two traps found in the harness itself**, both of the kind that make a test
+lie. The fb stub sets `state: "ready"` on its first line, so waiting on it
+measured a half-seeded database — wait on `__fixturesReady`. And measuring an
+`<a>` that wraps a `<button>` reports the anchor's 14px line box, which called
+every Open button in the app too small when none of them were.
+
+**Fixture gotcha worth knowing:** `sanitizeHtml` sets
+`ALLOWED_URI_REGEXP: /^https?:/i` on purpose, so a relative image src in COMMENT
+markup is stripped to a bare `<img>` and renders as a broken image. A record's
+`files` array does not go through the sanitizer, which is why those thumbnails
+render. Comment photo fixtures must use an https URL; the browser tests route it
+to a local PNG.
+
+Still open from the reviews, all pre-existing and none of it the reported bug:
+comment threads are oldest-first so the newest status is several screens down;
+destructive trash controls are the highest-contrast thing on several rows; the
+Weekly Plan car rows wrap three columns ragged at 393px; section headings carry
+explanatory sentences that become the loudest text on a phone; the work order
+detail is one 17-screen card with no section boundaries. Ask Simon before
+taking any of those on — they are design changes, not fixes.
 
 ## Dashboard, round two — two columns (2026-08-02)
 
