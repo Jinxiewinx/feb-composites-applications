@@ -43,7 +43,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { serveApp, loadChromium, skipMessage } from "./lib/browser.mjs";
 import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
-import { APPLY_CONTENT } from "./lib/fixtures-content.mjs";
+import { APPLY_CONTENT, PHOTO_URL } from "./lib/fixtures-content.mjs";
+import { readFile } from "node:fs/promises";
 
 function arg(name, dflt) {
   const i = process.argv.indexOf("--" + name);
@@ -95,6 +96,44 @@ const VIEWS = [
   { id: "documents", tab: "documents", what: "the documents shelf, with pinned links",
     needs: "CAM notes" },
   { id: "dashboard", tab: "dashboard", what: "the dashboard, with populated records behind it",
+    needs: "" },
+
+  /* ---- the states that only exist while you are doing something ----
+     Everything above is a page you can photograph. These are not: each is an
+     overlay mounted outside #main, opened over populated content, and every one
+     of them is where that content gets WRITTEN rather than read. A doc-link
+     form on a phone, a step note being typed at the bench, a photo opened out
+     of a comment — none of them had ever been measured at any width, because
+     nothing in the suite opened them. `needs` is empty here: the audit measures
+     the overlay, so a token from the page behind it is not what to look for. */
+  { id: "lightbox", tab: "workorders", what: "a comment photo opened in the lightbox",
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
+           const im = document.querySelector("#main .comment .prose img"); if (im) openLightbox(im);`,
+    needs: "" },
+  { id: "doclink-modal", tab: "workorders", what: "the link-a-document form",
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
+           openDocLinkModal({ coll: "workOrders", id: DB.workOrders[0].id });`,
+    needs: "" },
+  { id: "stepnote-modal", tab: "workorders", what: "the full step-note composer, on a step that already has a long note",
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); openStepNote(DB.workOrders[0].id, 0);`,
+    needs: "" },
+  { id: "addgoal-modal", tab: "weekplan", what: "the add-a-goal form",
+    open: `const w = (DB.schedule || []).find(x => x.goals) || DB.schedule[0];
+           openAddGoalModal(w.id, "arivera@berkeley.edu");`,
+    needs: "" },
+  { id: "composer-open", tab: "workorders", what: "the note composer expanded with a long draft in it",
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
+           openComposer("wo-note");
+           const ed = document.getElementById("wo-note");
+           /* The LONGEST comment, not the first. The first is the bare-URL one
+              and it is 130 characters, so seeding from it measured an editor
+              with almost nothing in it and called that a pass. */
+           const src = [...document.querySelectorAll("#main .comment .prose")]
+             .sort((a, b) => b.textContent.length - a.textContent.length)[0];
+           if (ed && src) { ed.innerHTML = src.innerHTML; }`,
+    needs: "" },
+  { id: "drawer-open", tab: "workorders", what: "the navigation drawer over a populated record",
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); toggleDrawer();`,
     needs: "" },
 ];
 
@@ -154,7 +193,16 @@ window.__fixturesReady = true;
 const AUDIT = `(() => {
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
-  const main = document.getElementById("main");
+  /* Not just #main. A modal, a lightbox and the drawer are the states a
+     screenshot sweep of a tab can never reach, and they are where the
+     populated content actually gets EDITED — the doc-link form, the step-note
+     composer, a photo opened out of a comment. Each mounts outside #main, so
+     an audit rooted there measured none of them. Whichever of these is on
+     screen is the thing being measured; #main is the fallback. */
+  const overlay = [...document.querySelectorAll("#modal .modal, #lightbox, nav.sidebar")]
+    .filter(el => el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== "none");
+  const main = overlay.find(el => el.id === "lightbox" || el.classList.contains("modal"))
+    || document.getElementById("main");
   const vis = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
@@ -259,6 +307,11 @@ const AUDIT = `(() => {
 
   return {
     vw, vh,
+    /* What the audit actually measured. Without this every overlay view passes
+       by measuring the page behind an overlay that never opened, which is the
+       same "an empty thread cannot overflow" trap this whole file exists to
+       close — one level up. */
+    root: main.id || main.className || main.tagName,
     docScrollW: document.documentElement.scrollWidth,
     docClientW: document.documentElement.clientWidth,
     bodyScrollW: document.body.scrollWidth,
@@ -278,6 +331,12 @@ const { server, port } = await serveApp({});
 const browser = await chromium.launch();
 const report = [];
 
+let PHOTO = null;
+async function photo() {
+  if (!PHOTO) PHOTO = await readFile(new URL("../03 App/app/icon-192.png", import.meta.url));
+  return PHOTO;
+}
+
 for (const vp of widths) {
   for (const v of views) {
     const ctx = await browser.newContext({
@@ -287,6 +346,10 @@ for (const vp of widths) {
       hasTouch: vp.coarse,
     });
     await ctx.route("**/fb.js", r => r.fulfill({ body: STUB, contentType: "text/javascript" }));
+    /* The comment photo. It has to be an https URL to survive the sanitizer, so
+       it cannot be a relative path — served from disk here instead of letting
+       the test depend on Firebase Storage being reachable. */
+    await ctx.route(PHOTO_URL, async r => r.fulfill({ body: await photo(), contentType: "image/png" }));
 
     const page = await ctx.newPage();
     const errors = [];
@@ -308,6 +371,16 @@ for (const vp of widths) {
     report.push({ at, ...a });
 
     ok(`${at} renders`, a.mainText > 20, `only ${a.mainText} chars in main`);
+    if (v.id === "lightbox") ok(`${at} lightbox opened`, a.root === "lightbox", `measured "${a.root}"`);
+    else if (/-modal$/.test(v.id)) ok(`${at} modal opened`, /modal/.test(a.root), `measured "${a.root}"`);
+    else if (v.id === "drawer-open") {
+      const open = await page.evaluate(`document.body.classList.contains("drawer-open")`);
+      ok(`${at} drawer opened`, open, "the drawer never opened");
+    } else if (v.id === "composer-open") {
+      const filled = await page.evaluate(
+        `((document.getElementById("wo-note") || {}).textContent || "").length`);
+      ok(`${at} composer opened with a draft`, filled > 200, `${filled} chars in the editor`);
+    }
     if (v.needs) {
       const found = await page.evaluate(
         `(document.getElementById("main").textContent || "").includes(${JSON.stringify(v.needs)})`);

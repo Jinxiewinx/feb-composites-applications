@@ -37,6 +37,19 @@
 
 const stamp = (offsetDays) => new Date(Date.now() + offsetDays * 86400000).toISOString();
 
+/* Photos in a COMMENT have to be https. sanitizeHtml() sets
+   ALLOWED_URI_REGEXP to /^https?:/i deliberately (see core.js — it is what
+   stops a pasted screenshot being stored as a base64 blob against the 1 MiB
+   Firestore document limit), so a relative "icon-192.png" in comment markup is
+   stripped to a bare <img> with no src. The first version of these fixtures did
+   exactly that and rendered the browser's broken-image glyph, which two
+   reviewers dutifully reported as an app bug when it was a fixture bug.
+
+   This is the shape of a real Firebase Storage URL, and the browser tests route
+   it to a local PNG. A record's `files` array does NOT go through the
+   sanitizer, so those can stay relative. */
+export const PHOTO_URL = "https://firebasestorage.googleapis.com/v0/b/feb-composites/o/fixture-bag.png?alt=media";
+
 /* The three worst tokens, named so a failure can say which one spilled. */
 export const LONG_URL =
   "https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefghij/view?usp=sharing&ts=68a1f2c9";
@@ -121,7 +134,7 @@ export const THREAD = [
   },
   {
     id: "cfx6", author: "Ana Rivera", email: "arivera@berkeley.edu", ts: stamp(-1.3),
-    html: "<p>Bag at 27 inHg:</p><p><img src=\"icon-192.png\" alt=\"bagged diffuser tool\"></p>",
+    html: "<p>Bag at 27 inHg:</p><p><img src=\"" + PHOTO_URL + "\" alt=\"bagged diffuser tool\"></p>",
   },
   { id: "cfx7", author: "Dana Chen", email: "dchen@berkeley.edu", ts: stamp(-0.4), html: "<p>Nice.</p>" },
 ];
