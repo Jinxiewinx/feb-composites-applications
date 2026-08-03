@@ -97,22 +97,10 @@ function renderDocuments() {
     return `<div class="card">
       <h3>${esc(cat)} <span class="muted">(${list.length})</span></h3>
       <div class="doclist">
-        ${/* Two things this row learned from the phone audit.
-
-              The title span carries .dl-t, the same truncating cell
-              docLinkRow() uses. Without it the span has no min-width:0, so a
-              document nobody renamed — title is the raw Drive URL — made the
-              row 630px wide and the whole tab scrolled sideways.
-
-              The size shows only when there IS one. A linked Google Doc is not
-              a file this app hosts, so it has no bytes, and "0 KB" beside a
-              document that opens perfectly reads as a broken upload. It also
-              cost the title about 45px of a 393px row, which is roughly what
-              the truncated datasheet names were short of. */""}
         ${list.map(d => `<div class="docrow" onclick="openDocFromRow('${esc(d.src)}','${d.uploaded ? "up" : ""}')">
           <span class="di">${icon(d.kind === "html" ? "print" : (d.kind || "").startsWith("image") ? "image" : "file", 18)}</span>
-          <span class="dl-t">${esc(d.title)}${d.uploaded ? ` <span class="muted tny">· ${esc(d.by || "")}</span>` : ""}</span>
-          <span class="dsz">${(d.kind || "file").toUpperCase()}${d.size ? ` · ${fmtKB(d.size)}` : ""}${d.uploaded && isLead() ? ` <button class="danger ib" title="Delete" onclick="event.stopPropagation();delDocument('${d.id}')">${icon("trash", 14)}</button>` : ""}</span>
+          <span>${esc(d.title)}${d.uploaded ? ` <span class="muted tny">· ${esc(d.by || "")}</span>` : ""}</span>
+          <span class="dsz">${(d.kind || "file").toUpperCase()} · ${fmtKB(d.size || 0)}${d.uploaded && isLead() ? ` <button class="danger ib" title="Delete" onclick="event.stopPropagation();delDocument('${d.id}')">${icon("trash", 14)}</button>` : ""}</span>
         </div>`).join("")}
       </div>
     </div>`;

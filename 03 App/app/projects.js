@@ -540,33 +540,8 @@ function renderProjDetail() {
          column it happens to be rendered in. -->
     <div class="mdsplit tksplit" data-lbgroup="projects:${esc(p.id)}">
       <div class="tkmeta">
-        <!-- Deliberately NOT open. The whole reason this rail is a details
-             element is the phone, where an expanded rail (assignees, watchers,
-             related parts, three document rows, a file grid, the add buttons)
-             pushed the discussion — the thing this page is FOR — about five
-             screens down. It shipped hardcoded open, so it had never once
-             collapsed for anybody.
-
-             Above 901px the stylesheet hides the summary and force-shows the
-             children, so the rail is simply always there and the attribute is
-             irrelevant. Done in CSS rather than by rendering the attribute from
-             a width check, because nothing re-renders on resize: a page
-             rendered narrow and then widened would hide the summary AND leave
-             the rail closed, with no way to reach the metadata at all. -->
-        <details class="moredetails tkmeta-fold">
-          ${/* The summary says what is behind it. Collapsing the rail on a phone
-                is right; collapsing it behind five words and a caret is not,
-                because assignees are the thing you glance at a ticket for and
-                nothing said they were in there. Counted, not listed: the point
-                is to answer "is it worth opening" in one line. */""}
-          <summary>Details, files and links${(() => {
-            const n = [
-              [(p.assignees || []).length, "assignee"],
-              [(p.docs || []).length, "doc"],
-              [(p.files || []).length, "file"],
-            ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
-            return n.length ? ` <span class="muted nocaps">— ${esc(n.join(", "))}</span>` : "";
-          })()}</summary>
+        <details class="moredetails tkmeta-fold" open>
+          <summary>Details, files and links</summary>
     ${isIssue(p) ? `
     <h3>Work order <span class="muted nocaps">— required</span></h3>
     <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
@@ -661,14 +636,8 @@ function renderProjDetail() {
 function fileItem(f) {
   const isImg = (f.type || "").startsWith("image/");
   const name = esc(f.name || "");
-  /* The icon is a link, not a decoration. On a phone the only thing you could
-     tap on a non-image file was the filename underneath it — one line of 11.5px
-     text, 14px tall, about a third of a fingertip — while the 84px square above
-     it did nothing. An image card already had a real target (the thumb opens
-     the lightbox); this gives the other kind the same. */
   if (!isImg) {
-    return `<div class="fileitem">
-      <a class="thumb" href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}" aria-label="Download ${name}">${icon("file", 26)}</a>
+    return `<div class="fileitem"><div class="thumb">${icon("file", 26)}</div>
       <div class="fn"><a href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}">${name}</a></div></div>`;
   }
   return `<div class="fileitem">
