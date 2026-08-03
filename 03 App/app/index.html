@@ -564,7 +564,14 @@
   .rte.prose > :first-child { margin-top: 0; }
   .rte.dragover { border-color: var(--accent); background: var(--accent-soft); }
   .composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-  .composer-hint { flex: 1; min-width: 0; }
+  /* `flex: 1; min-width: 0` is right on a desktop and wrong on a phone: with
+     two buttons already in the row there is about 30px left, so the hint
+     wrapped to ONE WORD PER LINE — ten lines of "Paste / photos, / tables /
+     and / text / straight / in." standing taller than the buttons beside it,
+     with a block of empty space to its left. It reads as unfinished. A
+     100% flex-basis puts it on its own line under the buttons instead, which
+     is where a hint belongs on a narrow screen anyway. */
+  .composer-hint { flex: 1 1 200px; min-width: 0; }
 
   /* ---- the selection pill ----
      Dark in both themes because it sits ON TOP of the text it modifies and must
@@ -644,7 +651,16 @@
      z 55 puts it above #modal (50) and below #toasts (60). */
   #lightbox { position: fixed; inset: 0; display: none; z-index: 55; }
   #lightbox.open { display: flex; flex-direction: column; }
-  #lightbox .lb-scrim { position: absolute; inset: 0; background: rgba(9,30,66,.86); }
+  /* Opaque, not 86%. The lightbox stacks above the topbar (55 vs 5), so this
+     was never a z-order bug — the page simply showed through. At 14% a white
+     topbar lifts enough that its search icon, its bell and the bell's red
+     unread badge all read as controls, and they sit in the same row as the
+     lightbox's own back / forward / download / close. The search icon landed
+     literally between the previous and next chevrons: the control that looks
+     most like "zoom this photo" was not part of the viewer, and next-photo was
+     a thumb-width from a notification bell. A photo viewer should black the
+     page out. */
+  #lightbox .lb-scrim { position: absolute; inset: 0; background: rgb(9,30,66); }
   #lightbox .lb-bar {
     position: relative; z-index: 1; display: flex; align-items: center; gap: 10px;
     padding: calc(8px + var(--sa-t)) max(12px, var(--sa-r)) 8px max(12px, var(--sa-l));
@@ -834,11 +850,17 @@
     background: var(--fill); border: 1px solid var(--line);
     padding: 1px 5px; border-radius: 3px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em;
-    /* A filename in inline code is one long token, so on a phone it wraps —
-       and by default each fragment got its own box with its own rounded
-       corners and borders, so one file read as three. `clone` gives the whole
-       run one continuous background instead. */
-    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    /* A filename in inline code is one long token, so on a phone it wraps to
+       three lines and reads as three separate filenames. The fix is NOT
+       box-decoration-break: clone — clone gives every fragment its own full
+       border and radius, which is the thing that makes them look separate.
+       `slice` (the default) draws the border only at the true start and end of
+       the run, so the broken edges stay open and the fragments read as one
+       wrapped thing. Stated rather than left implicit, since the wrong value
+       here looks like a fix and is the bug. */
+    box-decoration-break: slice; -webkit-box-decoration-break: slice;
+    /* And no rounding on the broken edges either, for the same reason. */
+    border-radius: 3px;
   }
   .prose pre {
     background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius);
@@ -884,7 +906,7 @@
 
      --shadow-edge is a token so the two themes get their own value; the fade
      colour has to be the surface underneath, which differs per element. */
-  .prose pre, .tblwrap, table.sub {
+  .prose pre {
     background-repeat: no-repeat;
     background-size: 34px 100%, 34px 100%, 12px 100%, 12px 100%;
     background-position: left center, right center, left center, right center;
@@ -897,13 +919,31 @@
       radial-gradient(farthest-side at 0 50%, var(--shadow-edge), transparent),
       radial-gradient(farthest-side at 100% 50%, var(--shadow-edge), transparent);
   }
-  .tblwrap, table.sub {
-    background-image:
-      linear-gradient(to right, var(--card), transparent),
-      linear-gradient(to left, var(--card), transparent),
-      radial-gradient(farthest-side at 0 50%, var(--shadow-edge), transparent),
-      radial-gradient(farthest-side at 100% 50%, var(--shadow-edge), transparent);
+  /* A TABLE gets a scrollbar instead of the shadow, and this is not a
+     preference — the shadow does not work there. The background trick paints on
+     the scroll container, and a table's own cells paint on top of it: a header
+     tint and a zebra row hide the shadow while a plain row lets it through, so
+     the same table showed two grey smudges on two rows and nothing on the
+     others. Worse than no cue at all.
+
+     A styled scrollbar is honest by construction — no overflow, no scrollbar,
+     no way for it to be wrong — which the shadow was not.
+
+     UNVERIFIED ON A REAL PHONE, and worth saying so: headless Chromium draws
+     an overlay scrollbar that takes no space (offsetHeight == clientHeight) and
+     does not appear in a screenshot, so this could not be checked here. On iOS
+     the reported behaviour is that styling ::-webkit-scrollbar makes it
+     persistent rather than gesture-only; if that turns out to be false on the
+     team's phones, a wide table on a phone has no scroll affordance at all and
+     this needs a different answer. Check it on a handset. */
+  .tblwrap, table.sub { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+  .tblwrap::-webkit-scrollbar, table.sub::-webkit-scrollbar {
+    height: 6px; -webkit-appearance: none;
   }
+  .tblwrap::-webkit-scrollbar-thumb, table.sub::-webkit-scrollbar-thumb {
+    background: var(--border-2); border-radius: 3px;
+  }
+  .tblwrap::-webkit-scrollbar-track, table.sub::-webkit-scrollbar-track { background: transparent; }
   .tblwrap table { margin: 0; }
   .tblwrap::-webkit-scrollbar { height: 10px; }
   .tblwrap::-webkit-scrollbar-thumb { background: var(--border-2); border: 3px solid var(--card); border-radius: 999px; }
@@ -1265,10 +1305,18 @@
      fit was pushed onto line two whole — leaving an orphaned checkbox above it
      with nothing beside it and the due pill alone on a third line. Three lines,
      three alignments, and the goal underneath it rendering normally, which
-     reads as a fault rather than a layout. min-width:0 lets the text shrink and
-     wrap inside its own box instead of onto a new one. The chip is the same
-     shape for a ticket row, where the label is a whole ticket title. */
-  .task-row .tsk-text, .task-row > .chip { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+     reads as a fault rather than a layout. The chip is the same shape for a
+     ticket row, where the label is a whole ticket title.
+
+     `flex: 1 1 0`, and the zero is the entire fix — `1 1 auto` with min-width:0
+     does NOT work here, which cost a round to find out. Flex decides WHERE THE
+     LINE BREAKS using each item's hypothetical main size, and for basis:auto
+     that is the item's max-content width: the whole goal on one line, ~450px.
+     So the item was moved to a line of its own BEFORE any shrinking was
+     considered, then shrank to fit there — which is exactly the orphaned
+     checkbox. A basis of 0 makes the hypothetical size 0, so the item never
+     causes a break and does its shrinking in place. */
+  .task-row .tsk-text, .task-row > .chip { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
   .task-row.done .tsk-text { text-decoration: line-through; color: var(--faint); }
   .due-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--fill); color: var(--muted); font-weight: 600; white-space: nowrap; margin-left: auto; }
   .due-pill.soon { background: var(--warn-bg); color: var(--amber); }
@@ -1889,6 +1937,8 @@
        padding: the name is one clipped line either way, and padding alone put
        the text off-centre in the strip. */
     .fileitem .fn a { min-height: 40px; display: flex; align-items: center; }
+    /* No Cmd key on a phone, so this is an instruction nobody can follow. */
+    .kbdhint { display: none; }
     /* Same reasoning as the phone rules above, but keyed on the pointer: a
        touchscreen at any width gets the bigger step. */
     .pstep { min-height: 40px; padding: 9px 14px; }

@@ -554,7 +554,19 @@ function renderProjDetail() {
              rendered narrow and then widened would hide the summary AND leave
              the rail closed, with no way to reach the metadata at all. -->
         <details class="moredetails tkmeta-fold">
-          <summary>Details, files and links</summary>
+          ${/* The summary says what is behind it. Collapsing the rail on a phone
+                is right; collapsing it behind five words and a caret is not,
+                because assignees are the thing you glance at a ticket for and
+                nothing said they were in there. Counted, not listed: the point
+                is to answer "is it worth opening" in one line. */""}
+          <summary>Details, files and links${(() => {
+            const n = [
+              [(p.assignees || []).length, "assignee"],
+              [(p.docs || []).length, "doc"],
+              [(p.files || []).length, "file"],
+            ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
+            return n.length ? ` <span class="muted nocaps">— ${esc(n.join(", "))}</span>` : "";
+          })()}</summary>
     ${isIssue(p) ? `
     <h3>Work order <span class="muted nocaps">— required</span></h3>
     <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>

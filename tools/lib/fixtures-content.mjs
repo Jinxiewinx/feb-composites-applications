@@ -67,6 +67,16 @@ const WALL_OF_TEXT =
   "against the big one so if your numbers look off by a couple of points that is probably why " +
   "and not your bag.";
 
+/* Cut at a word boundary, with a full stop. Slicing WALL_OF_TEXT at a raw
+   character count left "...the sealant tape change was the fi" sitting in a
+   step note and in the event log, and two reviewers correctly reported it as
+   text truncated with no ellipsis — a bug the app did not have and the fixture
+   had invented. A fixture that manufactures findings costs more than it saves. */
+const upto = (n) => {
+  const cut = WALL_OF_TEXT.slice(0, n);
+  return cut.slice(0, cut.lastIndexOf(" ")).replace(/[,.]$/, "") + ".";
+};
+
 const doc = (n, over) => ({
   id: "GD-FIX-" + n,
   url: "https://docs.google.com/document/d/1fixture" + n + "/edit",
