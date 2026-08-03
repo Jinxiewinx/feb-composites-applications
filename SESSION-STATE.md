@@ -15,8 +15,9 @@ reported that a work order with comments and linked documents runs off the side
 of a phone, zooms the page out, and clips text. Fixed and pushed in three
 commits; see the section below. New: `tools/lib/fixtures-content.mjs` and
 `tools/test_detailui.mjs` (434 checks), plus `tools/serve_populated.mjs` for
-touching the populated app in a real browser. NOT YET DEPLOYED at the time this
-line was written.
+touching the populated app in a real browser. **Deployed to
+feb-composites.web.app and verified off the live host** (hosting only; no rules
+change). The team has not been told — that is still an ask.
 
 Before that: **Dashboard rebuilt (2026-08-02).** Before that: editable descriptions,
 the photo viewer, buy-off evidence, sub-tickets on the board, the Mold CAD/CAM
@@ -94,13 +95,28 @@ markup is stripped to a bare `<img>` and renders as a broken image. A record's
 render. Comment photo fixtures must use an https URL; the browser tests route it
 to a local PNG.
 
+**One thing needs a real phone.** A wide table scrolls sideways in its own box,
+and the affordance is now a styled 6px scrollbar. Headless Chromium draws an
+overlay scrollbar that takes no space and never appears in a screenshot, so
+whether it is actually visible on iOS is UNVERIFIED. If it is not, a wide table
+on a phone has no scroll cue at all and needs a different answer. The reason
+it is not the edge-fade shadow (which works and is in place on code blocks) is
+that a table's own cells paint over it: header tint and zebra rows hid it on
+some rows and not others, so it rendered as two grey smudges.
+
 Still open from the reviews, all pre-existing and none of it the reported bug:
 comment threads are oldest-first so the newest status is several screens down;
 destructive trash controls are the highest-contrast thing on several rows; the
 Weekly Plan car rows wrap three columns ragged at 393px; section headings carry
 explanatory sentences that become the loudest text on a phone; the work order
-detail is one 17-screen card with no section boundaries. Ask Simon before
-taking any of those on — they are design changes, not fixes.
+detail is one 17-screen card with no section boundaries; the drawer has no
+close control and 640px of empty space below the last nav item; the lightbox
+puts every control in the top 55px, the hardest place for a one-handed thumb,
+and cannot zoom a photo; primary/secondary button order flips between the form
+modals (primary right) and the composers (primary left), so in the composers
+the position muscle memory says is "confirm" is Cancel, which discards a long
+note. Ask Simon before taking any of those on — they are design changes, not
+fixes.
 
 ## Dashboard, round two — two columns (2026-08-02)
 
