@@ -143,6 +143,26 @@ views having opened none of them. And it distinguishes a hard cut from a
 designed one — `overflow: hidden` with no `text-overflow: ellipsis` is a defect,
 an ellipsis is a decision.
 
+Three, actually, and the third was bought the hard way. `nothing unreachable`
+looks for an element with a real box that the browser never paints AND that sits
+inside a closed `<details>` whose summary is also hidden — content with no way to
+reveal it. It exists because a "mobile fix" here forced a closed `<details>` open
+with `display: block` at desktop widths and took the ticket page's entire left
+rail down to blank white space. A closed `<details>` skips PAINTING; an author
+`display` only restores LAYOUT. The children reported a 345x18 box,
+`contentVisibility: visible`, `visibility: visible`, `opacity: 1`, and drew
+nothing. `element.checkVisibility()` was the only signal that knew, and the
+assertion written for exactly that case had used `getBoundingClientRect().height
+> 0` instead. **Layout is not paint**, and every hand-rolled visibility helper in
+this repo asks the wrong one.
+
+It takes `--width 1440` as well, and you should use it. The regression above
+shipped because the change existed only to alter desktop behaviour and every
+screenshot taken of it — and all four reviewer agents — looked at 393px.
+`test_appui.mjs` covers Tickets at 1440 and never opens a ticket; a blank rail
+overflows nothing, clips nothing and is not too tall, so no numeric check could
+see it. Shoot both widths, and especially the width the change is for.
+
 It also has the clearest lesson in this repo about the limits of measuring. The
 first round of fixes turned every number green, and three reviewer agents
 looking at the screenshots opened with the same finding: the tables were

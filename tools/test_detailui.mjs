@@ -268,6 +268,32 @@ const AUDIT = `(() => {
     .map(el => ({ cls: name(el), over: el.scrollWidth - el.clientWidth, why: blame(el),
       t: (el.textContent || "").trim().slice(0, 30) }));
 
+  /* ---- content that is laid out but never painted, with no way to reveal it ----
+     The generalised form of the bug that took the ticket page down on desktop.
+
+     The vis() helper above — and every "is it visible" helper anyone writes —
+     asks the DOM for boxes and computed styles. A closed <details> whose
+     children carry an author display answers every one of those questions with
+     "visible" and is still not drawn. The only API that knows is
+     checkVisibility().
+
+     Scoped deliberately to the case that is always a bug: unpainted content
+     inside a closed <details> whose summary is ALSO not visible. If the summary
+     is on screen the content is one tap away and that is a design decision, not
+     a defect. If it is not, the content is unreachable and the user sees a hole
+     where their data should be. Zero is the only acceptable number, and it
+     costs nothing when it passes. */
+  const orphaned = all.filter(el => {
+    if (el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      if (p.tagName === "DETAILS" && !p.open) {
+        const s = p.querySelector(":scope > summary");
+        return !(s && s.checkVisibility());
+      }
+    }
+    return false;
+  }).map(el => ({ cls: name(el), t: (el.textContent || "").trim().slice(0, 30) }));
+
   /* Anything that scrolls sideways, reported not asserted: a wide pasted table
      inside .tblwrap is the right answer, a .comment that scrolls is not. */
   const scrollers = all.filter(isScroller)
@@ -315,7 +341,7 @@ const AUDIT = `(() => {
     docScrollW: document.documentElement.scrollWidth,
     docClientW: document.documentElement.clientWidth,
     bodyScrollW: document.body.scrollWidth,
-    spills, clipped, scrollers, targets,
+    spills, clipped, scrollers, targets, orphaned,
     blocks: blocks.slice(0, 8),
     mainText: txt.trim().length,
   };
@@ -398,6 +424,11 @@ for (const vp of widths) {
     ok(`${at} nothing clipped`, a.clipped.length === 0,
       a.clipped.slice(0, 3).map(c => `${c.cls} +${c.over}px${c.why ? " [" + c.why + "]" : ""}`).join(", "));
 
+    /* Laid out, never painted, no control to reveal it. This is the check the
+       ticket-page regression needed and did not have. */
+    ok(`${at} nothing unreachable`, a.orphaned.length === 0,
+      a.orphaned.slice(0, 3).map(o => `${o.cls} "${o.t}"`).join(", "));
+
     /* Three screens. A comment that long on a phone is not a long comment, it
        is a broken wrap. */
     const tall = a.blocks.filter(b => b.h > vp.h * 3);
@@ -425,12 +456,25 @@ for (const vp of widths) {
         const sum = d.querySelector("summary");
         return [
           d.hasAttribute("open") ? "open" : "closed",
-          kid && kid.getBoundingClientRect().height > 0 ? "shown" : "hidden",
-          sum && getComputedStyle(sum).display !== "none" ? "summary" : "no-summary",
+          /* checkVisibility(), NOT getBoundingClientRect().height > 0. Height
+             was the signal the first version of this used, it passed, and the
+             ticket page shipped blank on desktop. A closed <details> whose
+             children carry an author `display` has real boxes with real
+             dimensions that the browser never paints: 345x18, contentVisibility
+             "visible", visibility "visible", opacity 1, and nothing on screen.
+             checkVisibility() is the one API that answers the question being
+             asked. */
+          kid && kid.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+            ? "shown" : "hidden",
+          sum && sum.checkVisibility() ? "summary" : "no-summary",
         ].join("/");
       });
+      /* The rail is open at every width now. Above 901px the summary is hidden
+         and the content is simply there; below, the summary shows so it can be
+         collapsed by hand. Asserted at BOTH ends because the desktop half is
+         the half that broke and the half nothing else looks at. */
       ok(`${at} rail disclosure`,
-        vp.w <= 900 ? rail === "closed/hidden/summary" : rail === "closed/shown/no-summary", rail);
+        vp.w <= 900 ? rail === "open/shown/summary" : rail === "open/shown/no-summary", rail);
     }
 
     if (SHOTS) {

@@ -435,7 +435,11 @@ function composerHtml(o) {
     <div class="composer-foot">
       <button class="primary" data-rte-post onclick="${o.onpost}">${esc(o.postLabel || "Comment")}</button>
       ${o.oncancel ? `<button onclick="${o.oncancel}">Cancel</button>` : ""}
-      <span class="muted tny composer-hint">${esc(o.hint || "Paste photos, tables and text straight in. ⌘↵ to post.")}</span>
+      ${/* The keyboard shortcut is split into its own span so a phone can drop
+            it. "⌘↵ to post" on a device with no Cmd key is an instruction that
+            cannot be followed, and it was the longest thing in a hint that had
+            no room to begin with. Hidden by the pointer:coarse block. */""}
+      <span class="muted tny composer-hint">${esc(o.hint || "Paste photos, tables and text straight in.")}${o.hint ? "" : ` <span class="kbdhint">⌘↵ to post.</span>`}</span>
     </div>
   </div>`;
 }

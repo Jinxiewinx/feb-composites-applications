@@ -10,7 +10,13 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-02
-Status: **Mobile layout fixed for populated records (2026-08-02).** Simon
+Status: **Mobile layout fixed for populated records, re-landed after a
+desktop regression (2026-08-02).** The first attempt shipped a CSS rule that
+made the ticket page's whole left rail render blank on desktop; it was reverted
+within the hour and re-landed without that one change. Read "The regression"
+below before touching the ticket rail.
+
+Previously: **Mobile layout fixed for populated records (2026-08-02).** Simon
 reported that a work order with comments and linked documents runs off the side
 of a phone, zooms the page out, and clips text. Fixed and pushed in three
 commits; see the section below. New: `tools/lib/fixtures-content.mjs` and
@@ -27,6 +33,61 @@ sanitizer / 23 design-system / 30 safe-area / 13 print mobile / 88 website, all
 passing. Storage rules: 12 pass, 1 pre-existing emulator limitation.
 `test_drawings` still fails 8/8 and `test_wo_rules` needs the Firestore
 emulator on :8080 — both pre-existing.
+
+## The regression: never fight <details> with CSS (2026-08-02)
+
+Shipped, caught by Simon within the hour ("bricked the whole UI on desktop"),
+reverted, diagnosed, re-landed without it. Worth reading in full because the
+mistake was in the TEST, not only in the CSS.
+
+**What it was.** To collapse the ticket meta rail on a phone I dropped `open`
+from the `<details>` and added, at >=901px, `.tkmeta-fold > *:not(summary) {
+display: block }` to force the content back. The summary is already hidden at
+that width. Result on desktop: the rail rendered as blank white space —
+assignees, watchers, related parts, documents, files, all gone, with no control
+left to open them. Measured: 12 of 12 rail sections visible before, **0** after.
+
+**Why the CSS cannot work.** A closed `<details>` skips PAINTING its content.
+An author `display` only restores LAYOUT. On the broken build the rail children
+reported `getBoundingClientRect()` of 345x18, `contentVisibility: visible`,
+`visibility: visible`, `opacity: 1` — and the browser drew nothing.
+`element.checkVisibility()` returned false, and it was the only signal telling
+the truth. Second, independent problem: `display: block` also flattens the
+children's own layout, and four `.stagerow` plus `.linkrow`, `.filegrid` and
+`.gate` are all flex.
+
+**Why the test passed.** The assertion I wrote for exactly this used
+`kid.getBoundingClientRect().height > 0` as its definition of "shown". Height
+was non-zero. **Layout is not paint**, and every hand-rolled "is it visible"
+helper — including `vis()` in test_detailui.mjs — asks the wrong question.
+
+**What now stops it.** `test_detailui.mjs` grew a `nothing unreachable` check:
+any element with a real box that fails `checkVisibility()` AND sits inside a
+closed `<details>` whose summary is also not visible. That is content hidden
+with no way to reveal it, which is always a bug. Verified against the broken
+build: it fails with `h3 "Assignees", div.stagerow "AR Ana RiveraDC Dana Chen"`.
+The rail-disclosure assertion now uses `checkVisibility()` too.
+
+**The process failure, which is the real lesson.** The change existed only to
+alter DESKTOP behaviour and I reviewed only mobile: every screenshot, and all
+four reviewer agents, looked at 393px. `test_appui.mjs` covers Tickets at 1440
+but never opens a ticket. `test_detailui.mjs` opened it at 1440 but its other
+checks are overflow/clip/height/tap-target, and a blank rail overflows nothing.
+Its `renders` check uses `textContent`, which counts unpainted nodes.
+
+So: **shoot and review both widths for any change, and especially the width the
+change is FOR.** `tools/test_detailui.mjs --width 1440 --shots <dir>` does the
+desktop half.
+
+The rail keeps `open` at every width now. The phone cost (the thread starts
+lower down) is accepted until it is solved by rendering the rail differently
+rather than by overriding a browser primitive.
+
+**Recurring trap, hit three times this session:** a backtick inside a JS
+template literal ends the literal. It bit `documents.js`, `projects.js` and the
+`AUDIT` string in `test_detailui.mjs` — every time it was prose in a comment
+using backticks to quote code. Write those comments without backticks. The
+`AUDIT` literal already says "no backticks below this line" and that is why.
 
 ## Mobile, with the fields actually filled in (2026-08-02)
 
