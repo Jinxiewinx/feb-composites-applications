@@ -99,7 +99,11 @@ function renderDocuments() {
       <div class="doclist">
         ${list.map(d => `<div class="docrow" onclick="openDocFromRow('${esc(d.src)}','${d.uploaded ? "up" : ""}')">
           <span class="di">${icon(d.kind === "html" ? "print" : (d.kind || "").startsWith("image") ? "image" : "file", 18)}</span>
-          <span>${esc(d.title)}${d.uploaded ? ` <span class="muted tny">· ${esc(d.by || "")}</span>` : ""}</span>
+          <!-- .dl-t, the same truncating title cell docLinkRow uses. Without it
+               this span has no min-width:0, so a document whose title is the
+               raw URL nobody renamed makes the row 630px wide and the tab
+               scrolls sideways on a phone. -->
+          <span class="dl-t">${esc(d.title)}${d.uploaded ? ` <span class="muted tny">· ${esc(d.by || "")}</span>` : ""}</span>
           <span class="dsz">${(d.kind || "file").toUpperCase()} · ${fmtKB(d.size || 0)}${d.uploaded && isLead() ? ` <button class="danger ib" title="Delete" onclick="event.stopPropagation();delDocument('${d.id}')">${icon("trash", 14)}</button>` : ""}</span>
         </div>`).join("")}
       </div>

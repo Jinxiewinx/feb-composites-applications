@@ -636,8 +636,14 @@ function renderProjDetail() {
 function fileItem(f) {
   const isImg = (f.type || "").startsWith("image/");
   const name = esc(f.name || "");
+  /* The icon is a link, not a decoration. On a phone the only thing you could
+     tap on a non-image file was the filename underneath it — one line of 11.5px
+     text, 14px tall, about a third of a fingertip — while the 84px square above
+     it did nothing. An image card already had a real target (the thumb opens
+     the lightbox); this gives the other kind the same. */
   if (!isImg) {
-    return `<div class="fileitem"><div class="thumb">${icon("file", 26)}</div>
+    return `<div class="fileitem">
+      <a class="thumb" href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}" aria-label="Download ${name}">${icon("file", 26)}</a>
       <div class="fn"><a href="${esc(f.url)}" download="${name}" target="_blank" rel="noopener" title="${name}">${name}</a></div></div>`;
   }
   return `<div class="fileitem">

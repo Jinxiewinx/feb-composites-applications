@@ -411,8 +411,15 @@
   button.thumb { appearance: none; -webkit-appearance: none; border: none; padding: 0; font: inherit; cursor: zoom-in; }
   button.thumb:hover { filter: brightness(1.06); }
   button.thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .fileitem .fn { padding: 5px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fileitem .fn a { color: var(--ink); text-decoration: none; }
+  .fileitem .fn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The padding lives on the anchor, not the cell around it, so the whole strip
+     under the thumbnail is the link rather than a 14px line of text floating in
+     a padded box. */
+  .fileitem .fn a { display: block; padding: 5px 7px; color: var(--ink); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; }
+  a.thumb { text-decoration: none; cursor: pointer; }
+  a.thumb:hover { filter: brightness(1.06); }
+  a.thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   /* ---- the thread ----
      Each comment is its own inset surface rather than a paragraph separated by
      a hairline. --surface-2, not --card: a white card inside a white card is
@@ -446,7 +453,12 @@
      deliberately does NOT take the selected-row rule that hides the Parts index
      pane: there the rail is a list you navigate away from, and here it is
      content you need alongside the discussion. */
-  .tkmeta { position: sticky; top: calc(var(--topbar-h) + 10px); }
+  /* Both panes need min-width:0. A grid item's automatic minimum is its
+     min-content width, so ONE unbreakable thing in the rail — a filename in a
+     file card, a long assignee list — sizes the track to fit it and the whole
+     page grows with it. .tkmain had this and .tkmeta did not, which is why a
+     populated ticket measured 1030px wide inside a 393px phone. */
+  .tkmeta { position: sticky; top: calc(var(--topbar-h) + 10px); min-width: 0; }
   .tkmain { min-width: 0; }
   .tkmeta-fold > summary { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
   .tkmeta .stagerow, .tkmeta .linkrow { margin-top: 4px; }
@@ -718,6 +730,24 @@
   .prose { font-size: 15px; line-height: 1.65; color: var(--ink); }
   .prose > *, .prose p, .prose ul, .prose ol, .prose h1, .prose h2, .prose h3,
   .prose h4, .prose blockquote { max-width: 68ch; }
+  /* ---- long tokens ----
+     A pasted Drive URL is about 120 characters with no space in it, and a CAD
+     filename in the team's own convention (SN6_Undertray_..._REV-C.SLDPRT) is
+     one word to the line breaker because underscores are not break
+     opportunities. Neither can wrap by default, so one of them makes the
+     widest line on the page ~680px, the document scrolls sideways, and mobile
+     Safari fits the layout viewport to THAT — the whole page zooms out. This
+     was the bug Simon reported and it is one declaration.
+
+     `anywhere` rather than `break-word`: only `anywhere` also shrinks the
+     element's min-content width, which is what a grid track and a table cell
+     size themselves from. With `break-word` the text wraps and the box stays
+     680px wide, which looks fixed in a screenshot and still scrolls the page.
+
+     Applied to text the TEAM writes, not to the app's own chrome, so an id or
+     a status pill still refuses to break mid-word. */
+  .prose, .comment, .richfield, .chead, .meta, .dl-t, .gitem .gl,
+  table.sub td, table.sub th, table.list td { overflow-wrap: anywhere; }
   .prose table, .prose pre, .prose .tblwrap, .prose .cgal,
   .prose > img, .prose > a > img { max-width: 100%; }
 
@@ -1599,7 +1629,10 @@
        and it is the SAME condition the wide layout uses to decide what the
        right pane holds, so the two widths can never disagree about state. A
        squeezed two-column layout on a phone is the failure mode this avoids. */
-    .mdsplit { grid-template-columns: 1fr; gap: 0; }
+    /* minmax(0, 1fr), not 1fr: a 1fr track still takes min-content as its
+       automatic minimum, so one unbreakable filename in the pane makes the
+       single column wider than the phone and the page scrolls sideways. */
+    .mdsplit { grid-template-columns: minmax(0, 1fr); gap: 0; }
     .mdsplit.has-sel > .mdindex { display: none; }
     /* Nothing selected: the index is the page, and the season read that fills
        the right pane on a wide screen stacks UNDER it rather than being thrown
@@ -1734,6 +1767,10 @@
        onclick> at 31px. Found the moment the tap-target check learned to look
        at [onclick] at all; it had been failing silently since it was written. */
     .kindfilter span { padding: 11px 14px; }
+    /* The filename under a file card. A 40px min-height rather than more
+       padding: the name is one clipped line either way, and padding alone put
+       the text off-centre in the strip. */
+    .fileitem .fn a { min-height: 40px; display: flex; align-items: center; }
     /* Same reasoning as the phone rules above, but keyed on the pointer: a
        touchscreen at any width gets the bigger step. */
     .pstep { min-height: 40px; padding: 9px 14px; }

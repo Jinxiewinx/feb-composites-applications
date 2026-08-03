@@ -885,7 +885,12 @@ await t("the ≤900 collapse is a stylesheet rule, in the one responsive block, 
   assert(respAt > 0, "the responsive block marker is still there");
   const collapse = css.indexOf(".mdsplit.has-sel > .mdindex { display: none; }");
   assert(collapse > respAt, "the collapse rule lives in the responsive block at the end, not beside the component: " + collapse + " vs " + respAt);
-  assert(css.slice(respAt).indexOf(".mdsplit { grid-template-columns: 1fr;") > 0, "and the single-column stack it belongs to");
+  // minmax(0, 1fr), not 1fr. A plain 1fr track keeps min-content as its
+  // automatic minimum, so one unbreakable filename in the pane sizes the column
+  // past the phone and the page scrolls sideways. Pinned as the literal string
+  // because that zero is the whole point and a well-meaning tidy-up would drop
+  // it back to `1fr` without anything noticing.
+  assert(css.slice(respAt).indexOf(".mdsplit { grid-template-columns: minmax(0, 1fr);") > 0, "and the single-column stack it belongs to");
   assert(css.slice(respAt).indexOf(".pitem { grid-template-columns: minmax(0, 1fr) 168px") > 0, "as does the one-line row for the tablet band");
   // Above the breakpoint both panes are shown, so neither rule may exist outside a media query.
   assert(css.slice(0, respAt).indexOf("has-sel") === -1, "no has-sel rule above the responsive block");
