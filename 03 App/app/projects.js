@@ -540,7 +540,20 @@ function renderProjDetail() {
          column it happens to be rendered in. -->
     <div class="mdsplit tksplit" data-lbgroup="projects:${esc(p.id)}">
       <div class="tkmeta">
-        <details class="moredetails tkmeta-fold" open>
+        <!-- Deliberately NOT open. The whole reason this rail is a details
+             element is the phone, where an expanded rail (assignees, watchers,
+             related parts, three document rows, a file grid, the add buttons)
+             pushed the discussion — the thing this page is FOR — about five
+             screens down. It shipped hardcoded open, so it had never once
+             collapsed for anybody.
+
+             Above 901px the stylesheet hides the summary and force-shows the
+             children, so the rail is simply always there and the attribute is
+             irrelevant. Done in CSS rather than by rendering the attribute from
+             a width check, because nothing re-renders on resize: a page
+             rendered narrow and then widened would hide the summary AND leave
+             the rail closed, with no way to reach the metadata at all. -->
+        <details class="moredetails tkmeta-fold">
           <summary>Details, files and links</summary>
     ${isIssue(p) ? `
     <h3>Work order <span class="muted nocaps">— required</span></h3>

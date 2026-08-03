@@ -55,6 +55,11 @@
     --shadow: 0 1px 2px rgba(10,22,40,.06), 0 1px 3px rgba(10,22,40,.09);
     --shadow-md: 0 2px 6px rgba(10,22,40,.07), 0 8px 22px rgba(10,22,40,.10);
     --shadow-lg: 0 18px 44px rgba(10,22,40,.20);
+    /* The inner edge shadow that says a box scrolls sideways. Its own token
+       because it is read against --fill in a code block and --card in a table,
+       and it has to survive the dark theme, where the light-theme value is
+       invisible against a dark surface. */
+    --shadow-edge: rgba(10,22,40,.20);
     --carbon: rgba(255,255,255,.04);
     /* motion + type */
     --t: .17s; --t-fast: .12s; --ease: cubic-bezier(.2,.6,.2,1);
@@ -97,6 +102,7 @@
     --purple: #a385e6; --purple-bg: #241c3a; --purple-border: #3d2f5c;
     --info-bg: #182842; --gold-bg: #2a2411;
     --shadow: 0 1px 2px rgba(0,0,0,.5); --shadow-md: 0 4px 18px rgba(0,0,0,.55); --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
+    --shadow-edge: rgba(0,0,0,.55);
     --carbon: rgba(255,255,255,.03);
   }
   * { box-sizing: border-box; }
@@ -432,9 +438,20 @@
     border: 1px solid var(--line); border-radius: var(--r-md);
     padding: 14px 16px; margin-bottom: 10px;
   }
-  .comment .chead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
-  .comment .chead b { color: var(--ink); font-size: 13.5px; }
-  .comment .chead time { margin-left: auto; }
+  /* Wraps as a row, and the two atoms in it never wrap inside themselves.
+     Avatar + name + timestamp + two icon buttons in 330px meant every comment
+     opened with "Ana / Rivera" beside a date stacked over a time — a lumpy 2x2
+     block of fragments before a word of content, on every comment in the
+     thread. A name and a timestamp are single objects; if they don't all fit on
+     one line the line should break BETWEEN them. */
+  .comment .chead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+    font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  /* nowrap plus an ellipsis escape: a display name is short, but the fallback
+     when there is no name is the email address, and nowrap alone on a 40-
+     character address would push the header past the card. */
+  .comment .chead b { color: var(--ink); font-size: 13.5px; white-space: nowrap;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .comment .chead time { margin-left: auto; white-space: nowrap; }
   .comment:target { border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
   /* Edit/remove sit in the header, quiet until the comment is hovered — the
      same treatment .tl-del gets, including being permanently visible on touch
@@ -465,10 +482,25 @@
   /* On a wide screen the rail is always open and its summary is noise — the
      disclosure exists for the phone, where it is what buys the thread the top
      of the page. */
-  @media (min-width: 901px) { .tkmeta-fold > summary { display: none; } }
+  @media (min-width: 901px) {
+    .tkmeta-fold > summary { display: none; }
+    /* And the rail is shown whatever the open attribute says. A closed
+       <details> hides its children through the UA stylesheet, which an author
+       `display` does override — so this is what lets the markup ship without
+       `open` and still be complete on a desktop, at any window size, with no
+       re-render on resize. */
+    .tkmeta-fold > *:not(summary) { display: block; }
+  }
   @media (max-width: 900px) {
     .tkmeta { position: static; }
     .tksplit { gap: 0; }
+    /* Closing the rail has to be said, not assumed. A closed <details> hides
+       its children through the UA stylesheet, and ANY author `display` on a
+       child overrides that — several of these thirteen children get one from
+       .card h3 and friends, so the rail rendered fully expanded while reporting
+       itself closed. Stated explicitly here, and force-shown above 901px, so
+       the two widths cannot disagree about it. */
+    .tkmeta-fold:not([open]) > *:not(summary) { display: none; }
   }
   /* One row that scrolls, never a wrapping block. Eleven buttons at the 40px
      coarse-pointer minimum is ~460px of button in a 341px phone box, which
@@ -746,8 +778,26 @@
 
      Applied to text the TEAM writes, not to the app's own chrome, so an id or
      a status pill still refuses to break mid-word. */
-  .prose, .comment, .richfield, .chead, .meta, .dl-t, .gitem .gl,
-  table.sub td, table.sub th, table.list td { overflow-wrap: anywhere; }
+  .prose, .comment, .richfield, .chead, .meta, .dl-t, .gitem .gl { overflow-wrap: anywhere; }
+  /* NOT IN A TABLE CELL, and this is the whole reason the rule is written as
+     two declarations instead of one.
+
+     A table already has the right answer to being too wide for a phone: it
+     scrolls sideways inside its own box. table.sub gets that below 900px and a
+     pasted table gets it from .tblwrap. But a cell that may break anywhere has
+     a min-content width of one character, so instead of overflowing and
+     scrolling, every column collapsed to its narrowest possible form and the
+     table "fit". A pasted pull-test table came out with the header reading C /
+     o / u / p / o / n down the page, "5110" split as "511 / 0", and a
+     four-letter criterion broken as "mas / s". It measured clean — no
+     overflow, nothing clipped, nothing off-screen — and was unreadable, which
+     is the exact failure mode of fixing a layout by the numbers alone. Two
+     independent reviewers looking at the screenshots called it the worst thing
+     on the page.
+
+     So cells wrap at spaces and hyphens like normal text, the table takes the
+     width it needs, and the scroller does its job. */
+  table td, table th { overflow-wrap: normal; word-break: normal; }
   .prose table, .prose pre, .prose .tblwrap, .prose .cgal,
   .prose > img, .prose > a > img { max-width: 100%; }
 
@@ -784,6 +834,11 @@
     background: var(--fill); border: 1px solid var(--line);
     padding: 1px 5px; border-radius: 3px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em;
+    /* A filename in inline code is one long token, so on a phone it wraps —
+       and by default each fragment got its own box with its own rounded
+       corners and borders, so one file read as three. `clone` gives the whole
+       run one continuous background instead. */
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
   }
   .prose pre {
     background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius);
@@ -812,6 +867,43 @@
      card-collapse is unavailable to it, and reflowing a layup schedule into
      cards would destroy the column relationships anyway. It scrolls instead. */
   .tblwrap { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; margin: .85em 0; }
+
+  /* ---- "there is more to the right" ----
+     A touch device draws no scrollbar until you touch, so a code block or a
+     wide table that scrolls looked exactly like one that had been cut off: the
+     last glyph sliced in half at the edge of the box and nothing to say why.
+     Both reviewers read the same shopsabre command as data loss.
+
+     The four-layer trick: two cover gradients painted in the element's own
+     background colour with `background-attachment: local` (so they travel with
+     the content and slide out of the way once you scroll), and two shadows
+     with `scroll` (so they stay pinned to the box). Where content overflows,
+     the cover has moved and the shadow shows. Where it doesn't, the cover sits
+     on top of the shadow and nothing is drawn. No JS, no resize observer, and
+     it cannot get out of sync with the actual scroll position.
+
+     --shadow-edge is a token so the two themes get their own value; the fade
+     colour has to be the surface underneath, which differs per element. */
+  .prose pre, .tblwrap, table.sub {
+    background-repeat: no-repeat;
+    background-size: 34px 100%, 34px 100%, 12px 100%, 12px 100%;
+    background-position: left center, right center, left center, right center;
+    background-attachment: local, local, scroll, scroll;
+  }
+  .prose pre {
+    background-image:
+      linear-gradient(to right, var(--fill), transparent),
+      linear-gradient(to left, var(--fill), transparent),
+      radial-gradient(farthest-side at 0 50%, var(--shadow-edge), transparent),
+      radial-gradient(farthest-side at 100% 50%, var(--shadow-edge), transparent);
+  }
+  .tblwrap, table.sub {
+    background-image:
+      linear-gradient(to right, var(--card), transparent),
+      linear-gradient(to left, var(--card), transparent),
+      radial-gradient(farthest-side at 0 50%, var(--shadow-edge), transparent),
+      radial-gradient(farthest-side at 100% 50%, var(--shadow-edge), transparent);
+  }
   .tblwrap table { margin: 0; }
   .tblwrap::-webkit-scrollbar { height: 10px; }
   .tblwrap::-webkit-scrollbar-thumb { background: var(--border-2); border: 3px solid var(--card); border-radius: 999px; }
@@ -1168,6 +1260,15 @@
      A goal is a sentence, and this is about a sentence's worth of width. */
   .task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 90ch; }
   .task-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--ok); flex-shrink: 0; }
+  /* The task and its checkbox stay on the same line. The row wraps, and a flex
+     item's automatic minimum is its min-content width, so a goal too long to
+     fit was pushed onto line two whole — leaving an orphaned checkbox above it
+     with nothing beside it and the due pill alone on a third line. Three lines,
+     three alignments, and the goal underneath it rendering normally, which
+     reads as a fault rather than a layout. min-width:0 lets the text shrink and
+     wrap inside its own box instead of onto a new one. The chip is the same
+     shape for a ticket row, where the label is a whole ticket title. */
+  .task-row .tsk-text, .task-row > .chip { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   .task-row.done .tsk-text { text-decoration: line-through; color: var(--faint); }
   .due-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--fill); color: var(--muted); font-weight: 600; white-space: nowrap; margin-left: auto; }
   .due-pill.soon { background: var(--warn-bg); color: var(--amber); }
@@ -1680,6 +1781,23 @@
   }
   @media (max-width: 640px) {
     header.topbar h1 { font-size: 16px; }
+
+    /* A document title gets two lines here instead of one with an ellipsis.
+       One line truncates at about 24 characters on a 393px phone, and the
+       datasheet shelf is full of names where the first 24 characters are the
+       part everyone shares: "EC SDS XCR Epoxy Coating R…" beside "EC TDS XCR
+       Epoxy Coating…" differ at character four, and the three SDS sheets cut
+       off exactly the revision date, which is the field you open an SDS to
+       check. Two lines is ~70 characters and reaches the discriminator on
+       every name on the shelf, while the clamp keeps the row from growing
+       without limit on a pasted URL. */
+    .dl-t {
+      white-space: normal;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; overflow-wrap: anywhere;
+    }
+    .docrow { align-items: flex-start; }
+    .docrow .di, .docrow .dsz { padding-top: 1px; }
 
     /* Tickets board: one status section per row, each full width. Desktop drag
        isn't used here; a card tap opens it. */

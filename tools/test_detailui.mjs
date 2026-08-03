@@ -337,6 +337,29 @@ for (const vp of widths) {
         small.slice(0, 3).map(t => `"${t.t}" ${t.h}px`).join(", "));
     }
 
+    /* The ticket rail's disclosure, both directions. It is the one thing here
+       that is a behaviour rather than a measurement, and it can break silently
+       in two opposite ways: shipping `open` again (the phone gets five screens
+       of metadata before the discussion, which is how it shipped) or losing the
+       901px force-show (a desktop gets a hidden summary AND a closed rail, so
+       the ticket's metadata is unreachable at any width). Neither shows up in a
+       screenshot of the other width. */
+    if (v.id === "ticket-detail") {
+      const rail = await page.evaluate(() => {
+        const d = document.querySelector("#main details.tkmeta-fold");
+        if (!d) return "no rail";
+        const kid = [...d.children].find(el => el.tagName !== "SUMMARY");
+        const sum = d.querySelector("summary");
+        return [
+          d.hasAttribute("open") ? "open" : "closed",
+          kid && kid.getBoundingClientRect().height > 0 ? "shown" : "hidden",
+          sum && getComputedStyle(sum).display !== "none" ? "summary" : "no-summary",
+        ].join("/");
+      });
+      ok(`${at} rail disclosure`,
+        vp.w <= 900 ? rail === "closed/hidden/summary" : rail === "closed/shown/no-summary", rail);
+    }
+
     if (SHOTS) {
       await page.screenshot({ path: join(SHOTS, `${v.id}-${vp.id}.png`), fullPage: true });
     }
