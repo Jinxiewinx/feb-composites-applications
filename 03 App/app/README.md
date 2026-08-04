@@ -203,6 +203,47 @@ is worse than a stale nameplate — and a lead can re-publish everything with
 **Rebuild scan mirror** under Reports. That also covers records that predate the
 feature and writes that bypass `save()` (`mutateField`, `appendTo`).
 
+## Scanning inside the app, and the two bench actions
+
+The topbar has a **Scan** button next to search. Where the browser exposes
+`BarcodeDetector` (Chrome, Android) it opens the camera; where it does not
+(Safari) it offers a typed-code field and says why. No scanning library is
+vendored: jsQR or zxing would be 200 KB+ to close a gap for a browser whose own
+camera app reads the code perfectly well and lands on `q.html` anyway. A code
+resolves whether it arrives as the full URL, the bare code, lowercase, or with
+whitespace round it, because somebody will retype it off a scuffed label.
+
+Every mold, item and lot detail page has **Move** and a stage button that names
+its destination ("Sealed", not "Advance"), both outside edit mode. Move offers
+the `BIN` storage records and can take the shelf by scan, so the sequence is:
+scan the mold, tap Move, scan the shelf. That makes `location` a controlled
+value, which is what CS-011 §7.3 says it needs to be and could not yet enforce.
+Advancing leaves an undo **bar**, not a toast, and it is the same bar the Parts
+tab uses.
+
+## Which lots went in
+
+The cure buy-off already asked what resin went in and when. It now also asks
+which fabric roll, which resin lot and which hardener lot, in the same modal,
+because that is already the one moment somebody is standing at the part having
+just mixed resin. A second prompt at the same instant is the one people learn to
+dismiss.
+
+The fields are **default-and-confirm, not select**: each is pre-filled with the
+most recently opened lot of that class, which under CS-011's one-open-container
+rule is the one physically on the bench. Right by default about 90% of the time
+beats blank 100% of the time, at one tap instead of three scans. There is a scan
+button beside each, and a scan sets `lotSource: "scanned"` rather than
+`"recalled"`, so a verified lot is distinguishable from a remembered one.
+
+**"I don't know" is a valid answer** and records `lotSource: "unknown"`. This is
+the load-bearing decision. A gate that can only be satisfied by naming a lot
+gets satisfied by naming the wrong one: with two jugs on the bench at 11pm,
+someone scans the nearest, and the record is then precise, confident and wrong.
+An honest gap is worth more, and it is the same principle as the
+`"not recorded (retro)"` sentinel in the SN5 work orders. The lots print on the
+traveler too, `lotSource` included and unflattering.
+
 **Routing.** The app had none before this. Navigation is still the in-memory
 `view` object; `syncUrl()` mirrors it into the hash with `replaceState`, never
 `pushState`, because `NAV_STACK` is a referrer trail and browser history is
@@ -469,6 +510,7 @@ node tools/test_qr.mjs            # QR version/ECC arithmetic + the public proje
 node tools/test_labels.mjs        # the label sheet, measured and rasterised
 node tools/test_route.mjs         # deep links, incl. a link arriving before the data
 node tools/test_q_landing.mjs     # the public scan page, offline and leak-checked
+node tools/test_scan.mjs          # in-app scanning, move/advance, lot capture
 node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab
 node tools/shoot_ui.mjs --out .ui-shots --inset portrait   # ...with a simulated island
 cd "03 App" && firebase emulators:exec --only firestore \

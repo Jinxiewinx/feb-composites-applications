@@ -226,6 +226,92 @@ for (const vp of VIEWPORTS) {
   await ctx.close();
 }
 
+function check2(cond, msg, detail) {
+  if (cond) { pass++; console.log(`  ok  ${msg}`); }
+  else { fail++; console.log(`FAIL  ${msg}${detail ? "\n        " + detail : ""}`); }
+}
+// LAYOUTS has nine rungs (0..8); "has headroom" means the worst case is not
+// pinned at the last one.
+const LAYOUTS_LEN_HINT = 8;
+
+/* ---------- the two-page cap, with every hold step fully filled in ----------
+ *
+ * The traveler promises exactly two pages, and print.js keeps that promise with
+ * a nine-rung layout ladder: it renders at the most generous layout that still
+ * fits and drops a rung when it does not. Anything added to a step row spends
+ * that headroom, and the failure is quiet — the sheet just gets tighter until
+ * one day it does not fit and prints a third page nobody expects.
+ *
+ * Lot capture added a line to every hold step (which fabric, which resin, which
+ * hardener), so this measures the worst realistic case: every work order with
+ * every cure filled in, using the app's OWN measurePages(), which is what
+ * fitSheetHtml() gates on. Measuring a bounding box instead would be wrong —
+ * .ws-page is one growing div that the print engine splits, so its height is
+ * not the page count.
+ */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  // openApp creates the page, stubs fb.js and waits for the seed; making a
+  // second one here is what made the first version of this block time out.
+  const { page } = await openApp(ctx, port);
+  // `DB` is a top-level `let` in core.js, so it is NOT a property of window.
+  await page.waitForFunction(() => typeof DB !== "undefined" && (DB.workOrders || []).length > 0, null, { timeout: 15000 });
+
+  const res = await page.evaluate(() => {
+    window.onFbData("lots", [
+      { id: "FAB-SN6-001", cls: "FAB", name: "195 TWILL SIGMATEX", stage: "Open", vendorLot: "SGX-2411-B7" },
+      { id: "RSN-SN6-001", cls: "RSN", name: "IN2 INFUSION RESIN", role: "resin", stage: "Open", vendorLot: "24C-0918" },
+      { id: "RSN-SN6-002", cls: "RSN", name: "AT30 SLOW HARDENER", role: "hardener", stage: "Open", vendorLot: "24C-0919" },
+    ]);
+    for (const w of DB.workOrders) {
+      w.retro = false;                                  // retro records skip the gates
+      for (const s of w.steps || []) {
+        if (typeof startsHold === "function" && startsHold(s)) {
+          s.cure = { resin: "in2-at30-slow", startedAt: "2026-09-22T21:42:00.000Z", tempC: 18,
+                     lotFabric: "FAB-SN6-001", lotResin: "RSN-SN6-001", lotHardener: "RSN-SN6-002",
+                     lotSource: "scanned" };
+        }
+      }
+    }
+    const out = [];
+    const host = printRoot();
+    const prevHtml = host.innerHTML, prevClass = host.className;
+    for (const w of DB.workOrders) {
+      host.className = "measuring";
+      let rung = -1, pages = 0;
+      for (let li = 0; li < LAYOUTS.length; li++) {
+        host.innerHTML = woSheetHtml(w, { layout: LAYOUTS[li] });
+        pages = measurePages(host);
+        if (pages <= MAX_PAGES) { rung = li; break; }
+      }
+      out.push({ id: w.id, rung, pages });
+    }
+    host.innerHTML = prevHtml; host.className = prevClass;
+    return out;
+  });
+
+  const over = res.filter(r => r.rung < 0);
+  const worst = Math.max(...res.map(r => r.pages));
+  check2(over.length === 0,
+    `every work order fits ${2} pages with lots recorded (${res.length} checked, worst ${worst.toFixed(2)})`,
+    over.map(r => `${r.id} needs ${r.pages.toFixed(2)} pages even at the tightest layout`).join("; "));
+  /* Reported, not asserted, and deliberately so.
+     The ladder is ALREADY pinned at its tightest rung for the longest SN5 work
+     orders — measured with and without the lot line, the rung distribution is
+     identical (4,5,6,7,8 both ways), so lot capture cost nothing. Asserting
+     "there is headroom" here would fail on debt that predates this feature and
+     would read as a regression it is not.
+     What IS asserted is the thing that actually matters: nothing needs a third
+     page. But the number below is worth watching — at rung 8 the next thing
+     anybody adds to a step row has nowhere to go, and the fix then is a real
+     one (a third page, or less on the row), not another rung. */
+  const worstRung = Math.max(...res.map(r => r.rung));
+  const pinned = res.filter(r => r.rung >= LAYOUTS_LEN_HINT).length;
+  console.log(`  ..  layout headroom: worst rung ${worstRung} of ${LAYOUTS_LEN_HINT}` +
+    (pinned ? ` — ${pinned} work order${pinned === 1 ? " is" : "s are"} at the tightest layout already (pre-existing)` : ""));
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 console.log(`\n${pass} passed, ${fail} failed`);

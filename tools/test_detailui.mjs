@@ -133,6 +133,21 @@ const VIEWS = [
   { id: "stepnote-modal", tab: "workorders", what: "the full step-note composer, on a step that already has a long note",
     open: `openRecord("workorders", (DB.workOrders[0] || {}).id); openStepNote(DB.workOrders[0].id, 0);`,
     needs: "" },
+  /* The three modals added with scanning. All get opened on a phone because
+     that is the only device any of them will ever be used on: nobody scans a
+     mold from a laptop, and the cure modal is filled in standing at the part. */
+  { id: "scan-modal", tab: "molds", what: "the scanner, with the typed-code fallback",
+    open: `scanToOpen();`, needs: "" },
+  { id: "move-modal", tab: "molds", what: "moving something to a shelf",
+    open: `openRecord("molds", (DB.molds[0] || {}).id); quickMove("molds", DB.molds[0].id);`, needs: "" },
+  { id: "cure-lots-modal", tab: "workorders", what: "the cure buy-off with the lot fields filled in",
+    open: `const w = { id: "WO-SN6-901", partName: "TEST", processType: "MoldInfusion", status: "InWork",
+                       revision: "A", retro: false, timeline: [], layupStack: [{ material: "195 twill" }],
+                       steps: blankSteps("MoldInfusion").map((s, i) => ({ ...s, seq: i + 1 })) };
+           DB.workOrders.push(w);
+           openRecord("workorders", w.id);
+           openCureModal(w.steps.findIndex(s => startsHold(s)));`,
+    needs: "" },
   { id: "addgoal-modal", tab: "weekplan", what: "the add-a-goal form",
     open: `const w = (DB.schedule || []).find(x => x.goals) || DB.schedule[0];
            openAddGoalModal(w.id, "arivera@berkeley.edu");`,

@@ -578,6 +578,7 @@ function openCureModal(i) {
     <div class="field"><label for="cure-temp">Shop temperature, °C (optional)</label>
       <input id="cure-temp" type="number" inputmode="numeric" placeholder="e.g. 18" value="${prior.tempC ?? ""}" onchange="cureModalPreview()">
     </div>
+    ${lotFieldsHtml(prior)}
     <div id="cure-preview"></div>
     <div class="foot">
       <button onclick="closeModal()">Cancel</button>
@@ -614,10 +615,110 @@ function submitCure(i) {
   const time = (document.getElementById("cure-time") || {}).value || "00:00";
   const tempRaw = (document.getElementById("cure-temp") || {}).value;
   const startedAt = new Date(date + "T" + time).toISOString();
-  const cure = { resin: id, startedAt };
+  const cure = { resin: id, startedAt, ...readLotFields() };
   if (tempRaw !== "" && tempRaw != null && !isNaN(Number(tempRaw))) cure.tempC = Number(tempRaw);
   closeModal();
   signStep(i, { cure });
+}
+
+/* ---------- which lots went in ----------
+ *
+ * This lives in the cure modal and nowhere else, on purpose. That modal is
+ * already the one moment somebody is standing at the part having just mixed
+ * resin, and it already asks what went in and when. A separate prompt would be
+ * a second interruption at the same instant, and the second one is the one
+ * people learn to dismiss.
+ *
+ * THE DESIGN IS DEFAULT-AND-CONFIRM, NOT SELECT.
+ * What actually happens at 11pm is that nothing gets scanned: the roll is
+ * already unrolled, the jug is "the one that was open", and the phone is across
+ * the room because their hands are covered in resin. So each field is
+ * pre-filled with the most recently opened lot of that class and asks for one
+ * confirmation. Right by default about 90% of the time beats blank 100% of the
+ * time, and it costs one tap instead of three scans.
+ *
+ * "I don't know" IS A VALID ANSWER and records lotSource: "unknown". A gate
+ * that can only be satisfied by a lie gets satisfied by a lie — the same
+ * principle as the "not recorded (retro)" sentinel in the SN5 work orders and
+ * CS-013 §8's ban on fabricated buy-offs. An honest `unknown` is worth more
+ * than a confident wrong lot, and it is the second-order failure that matters:
+ * with two jugs on the bench, scanning the NEAREST one produces a precise,
+ * confident, wrong record.
+ */
+const LOT_FIELDS = [
+  ["lotFabric", "Fabric", "FAB"],
+  ["lotResin", "Resin", "RSN"],
+  ["lotHardener", "Hardener", "RSN"],
+];
+
+// The lot most recently opened for a class: the one that is physically on the
+// bench, assuming CS-011's "one open container per material" rule is kept.
+function defaultLot(cls, role) {
+  const cand = (DB.lots || [])
+    .filter(l => l.cls === cls && l.stage === "Open")
+    .filter(l => !role || !l.role || l.role === role)
+    .sort((a, b) => String(b.openedOn || "").localeCompare(String(a.openedOn || "")));
+  return cand.length ? cand[0].id : "";
+}
+
+function lotFieldsHtml(prior) {
+  const any = (DB.lots || []).length;
+  if (!any) {
+    return `<p class="gate"><span class="gi">!</span><span>No material lots exist yet, so this layup
+      can't record which roll and which jug went in. Add them under <b>Materials</b> and label the
+      containers; then this asks one question instead of nobody being able to answer it in March.</span></p>`;
+  }
+  return `<h3 style="margin-bottom:2px">Which lots went in</h3>
+    <p class="muted tny" style="margin-top:0">Pre-filled with whatever is currently open. Change it if it's wrong,
+    and say so if you don't know — an honest "not recorded" is worth more than a confident guess.</p>
+    ${LOT_FIELDS.map(([key, label, cls]) => {
+      const role = key === "lotResin" ? "resin" : key === "lotHardener" ? "hardener" : "";
+      const cur = prior[key] != null ? prior[key] : defaultLot(cls, role);
+      const opts = (DB.lots || []).filter(l => l.cls === cls && (!role || !l.role || l.role === role));
+      return `<div class="field"><label for="${key}">${esc(label)}</label>
+        <div style="display:flex;gap:8px">
+          <select id="${key}" style="flex:1 1 auto;min-width:0">
+            ${opts.map(l => `<option value="${esc(l.id)}" ${l.id === cur ? "selected" : ""}>${esc(l.name || l.id)}${l.vendorLot ? " · lot " + esc(l.vendorLot) : ""}</option>`).join("")}
+            <option value="unknown" ${cur === "unknown" ? "selected" : ""}>I don't know / not recorded</option>
+          </select>
+          ${typeof scanSupported === "function" && scanSupported()
+            ? `<button type="button" class="sm ib" title="Scan the container's label" onclick="scanLotInto('${key}','${cls}')">${icon("scan", 15)}</button>` : ""}
+        </div></div>`;
+    }).join("")}`;
+}
+
+/* Scanned beats remembered, and the record says which it was. lotSource is a
+   first-class field precisely so an inferred lot is distinguishable from a
+   verified one rather than both looking equally authoritative in March. */
+const LOT_SCANNED = {};
+function scanLotInto(key, cls) {
+  openScan({
+    title: "Scan the container",
+    hint: "Point the camera at the label on the roll or jug.",
+    accept: id => String(id).startsWith(cls + "-"),
+    onCode: id => {
+      const sel = document.getElementById(key);
+      if (sel && [...sel.options].some(o => o.value === id)) { sel.value = id; LOT_SCANNED[key] = true; }
+      else toast(`${id} isn't in Materials yet.`, "error");
+    },
+  });
+}
+
+function readLotFields() {
+  if (!(DB.lots || []).length) return {};
+  const out = {};
+  let anyKnown = false, anyScanned = false, anyUnknown = false;
+  for (const [key] of LOT_FIELDS) {
+    const el = document.getElementById(key);
+    const v = el ? el.value : "";
+    if (!v || v === "unknown") { anyUnknown = true; continue; }
+    out[key] = v;
+    anyKnown = true;
+    if (LOT_SCANNED[key]) anyScanned = true;
+  }
+  for (const k of Object.keys(LOT_SCANNED)) delete LOT_SCANNED[k];
+  out.lotSource = !anyKnown ? "unknown" : anyScanned ? "scanned" : anyUnknown ? "partial" : "recalled";
+  return out;
 }
 
 /* Why this many hours. The step row deliberately carries no standard reference

@@ -132,7 +132,53 @@ Until then every scan honestly says "No record with this ID yet". After that,
 
 The team has NOT been told about any of this; that is still an ask.
 
-**Still to do**, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
+## Scan actions and lot capture (2026-08-03, stage 5)
+
+New `app/scan.js`; lot fields added to the existing cure modal in
+`workorders.js`; Move / next-stage buttons on every shop record; the lots print
+on the traveler. New suite `tools/test_scan.mjs` (50).
+
+**No scanning library is vendored, and that is a decision not an omission.**
+Chrome and Android expose `BarcodeDetector` natively; Safari does not. jsQR or
+zxing would be 200KB+ to close that gap for a browser whose OWN camera app reads
+the code fine and lands on q.html. So: feature-detect, and fall back to typing
+the code, which is why the ID is printed large on the label.
+
+**Lot capture lives in the cure modal and nowhere else.** That modal is already
+the moment somebody is standing at the part having just mixed resin, and already
+asks what went in and when. A second prompt at the same instant is the one people
+learn to dismiss.
+
+**The load-bearing decision: "I don't know" is a valid answer**, recorded as
+`lotSource: "unknown"`. A gate that can only be satisfied by naming a lot gets
+satisfied by naming the WRONG one -- two jugs on the bench at 11pm, someone scans
+the nearest, and the record is precise, confident and wrong. Fields are
+default-and-confirm (pre-filled with the most recently opened lot of that class,
+which under CS-011's one-open-container rule is the one on the bench), not blank
+selects. `scanned` / `recalled` / `partial` / `unknown` are distinguishable, and
+print on the traveler unflatteringly.
+
+**A mobile regression I caused and fixed.** The Scan button was a FIFTH icon in
+`.topbar .actions`. At a 320px viewport that took the document to 351px -- and on
+mobile Safari a document wider than the viewport zooms the WHOLE PAGE out, it
+does not scroll one element. Root cause is generic: a flex item's automatic
+minimum size is its content, so `header.topbar h1` refused to shrink. Fixed with
+`min-width: 0` + ellipsis on the title, which also cleared six PRE-EXISTING 320px
+failures (dashboard, documents, weekplan, ticket-detail, budget-detail,
+addgoal-modal). test_detailui went 676 -> 781 passing.
+
+**The traveler's 2-page cap, measured.** Lot capture adds a line to every hold
+step. Measured with and without it, the layout-rung distribution is IDENTICAL
+(4,5,6,7,8), so it cost nothing. But note: the ladder is ALREADY pinned at its
+tightest rung for the longest SN5 work order. That is pre-existing, so
+test_print_mobile REPORTS it rather than asserting it (asserting would read as a
+regression this feature did not cause). The next thing added to a step row has
+nowhere to go, and the fix then is a real one, not another rung.
+
+**Still to do**: the CS-001 Rev C / CS-013 Rev C standards work, and a deploy of
+the molds/items/lots rules blocks.
+
+Previously, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
 the `localId()` fix that MUST land in the same commit -- it scans
 `-SN6-(\d+)$` across a whole collection and will mint colliding IDs once one
 collection holds several prefixes, and only on the offline path); stage 5 (scan

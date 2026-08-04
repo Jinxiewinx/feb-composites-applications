@@ -202,8 +202,15 @@
     padding: calc(10px + var(--sa-t)) max(20px, var(--sa-r)) 10px max(20px, var(--sa-l));
     background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
   header.topbar:empty { display: none; }
-  header.topbar h1 { font-family: var(--font-display); font-size: 19px; margin: 0 auto 0 0; color: var(--ink); font-weight: 600; letter-spacing: .01em; }
-  .topbar .actions { display: flex; align-items: center; gap: 8px; }
+  /* min-width:0 + ellipsis is what lets the bar survive a narrow phone. A flex
+     item's automatic minimum size is its CONTENT, so without this the title
+     refuses to shrink, the actions get pushed out, and the whole document ends
+     up wider than the viewport — which on mobile Safari zooms the entire page
+     out rather than scrolling one element. Measured: adding a fifth icon button
+     to .actions took a 320px viewport to a 351px document until this landed. */
+  header.topbar h1 { font-family: var(--font-display); font-size: 19px; margin: 0 auto 0 0; color: var(--ink); font-weight: 600; letter-spacing: .01em;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
   .tb-desktop { display: flex; align-items: center; gap: 8px; }
   /* Hamburger + overflow "⋯" appear only on small screens (see media queries). */
   .hamburger { display: none; border: none; background: none; font-size: 20px; line-height: 1; padding: 6px 8px; cursor: pointer; color: var(--ink); border-radius: var(--radius); }
@@ -736,6 +743,20 @@
   #modal .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
     position: sticky; bottom: -22px; z-index: 1; background: var(--surface);
     padding: 10px 0; margin-bottom: -10px; }
+
+  /* ---- scanner ---- */
+  /* The camera preview is capped by aspect-ratio rather than a fixed height so
+     it stays inside a 320px phone modal without letterboxing. object-fit:cover
+     because a squashed preview makes aiming at a 21mm code harder than it
+     already is with gloves on. */
+  .scanbox { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 46vh;
+    border-radius: var(--radius); overflow: hidden; background: #000; }
+  .scanbox video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* A target to aim at. Purely an affordance: detection uses the whole frame,
+     so a code outside the box still reads — the retical just stops people
+     holding the phone a foot away. */
+  .scanret { position: absolute; inset: 18%; border: 2px solid var(--gold);
+    border-radius: 8px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); pointer-events: none; }
 
   /* ---- label builder ---- */
   /* The list is capped and scrolls rather than growing the modal: by March there
@@ -2178,6 +2199,7 @@
 <script src="drawings.js"></script>
 <script src="stock.js"></script>
 <script src="shop.js"></script>
+<script src="scan.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>

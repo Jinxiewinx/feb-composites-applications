@@ -106,6 +106,31 @@ function woSheetHtml(wo, opts) {
     return `Hold ${r.febHoldH} h after ${esc(strip(prev.title || "the previous step")).toLowerCase()} · ${esc(r.label)} · started ${esc(started)} · ready ${esc(ready || RULE)}`;
   }
 
+  /* The lots that went in, printed under the hold line.
+   *
+   * A traveler that records the resin SYSTEM but not the resin LOT answers "what
+   * did we use" and not "which batch", and the second is the question a bad
+   * panel raises in March. Blank forms get rules to write on, because the whole
+   * point of the printed traveler is that it works when the phone does not.
+   *
+   * `lotSource` prints too, and unflatteringly: an inferred lot that looks
+   * exactly like a verified one is worse than no lot at all. */
+  function lotSheetLine(s, prev, isBlank) {
+    const rule = typeof stepRule === "function" ? stepRule(s) : (s && s.rule);
+    if (!rule || rule.kind !== "hold") return "";
+    const cure = !isBlank && prev && prev.cure;
+    const name = id => {
+      if (!id || id === "unknown") return "not recorded";
+      const l = (typeof DB !== "undefined" && (DB.lots || []).find(x => x.id === id));
+      return l ? `${l.name || id}${l.vendorLot ? " (lot " + l.vendorLot + ")" : ""}` : id;
+    };
+    if (!cure || !(cure.lotFabric || cure.lotResin || cure.lotHardener || cure.lotSource)) {
+      return `Lots in — fabric${RULE}· resin${RULE}· hardener${RULE}`;
+    }
+    const src = cure.lotSource && cure.lotSource !== "recalled" ? ` · ${esc(cure.lotSource)}` : "";
+    return `Lots in — fabric ${esc(name(cure.lotFabric))} · resin ${esc(name(cure.lotResin))} · hardener ${esc(name(cure.lotHardener))}${src}`;
+  }
+
   /* ---- steps: the centerpiece ---- */
   const stepRows = steps.map((s, si) => {
     const isBlk = typeof isBlocker === "function" && isBlocker(s);
@@ -119,12 +144,14 @@ function woSheetHtml(wo, opts) {
        to go, and the resin prints too — the hold length means nothing without
        knowing what it was for. */
     const holdLine = holdSheetLine(s, steps[si - 1], blank);
+    const lotLine = lotSheetLine(s, steps[si - 1], blank);
     return `<tr class="${isBlk ? "blk" : ""}">
       <td class="num seq">${esc(s.seq || "")}</td>
       <td>
         <div class="stitle"><span class="ws-cb"></span>${esc(strip(s.title))}</div>
         ${isBlk ? `<div class="blkflag">Blocker: no sign-off, no moving on</div>` : ""}
         ${holdLine ? `<div class="holdflag">${holdLine}</div>` : ""}
+        ${lotLine ? `<div class="holdflag">${lotLine}</div>` : ""}
         ${note ? `<div class="cs">${esc(note)}</div>` : ""}
       </td>
       <td class="initial">${nm ? `<span class="signed"><span class="nm">${esc(nm)}</span></span>` : ""}</td>

@@ -295,6 +295,14 @@ function renderShopDetail(tab) {
     ${labelBtn(spec.coll, o.id)}
     ${E && isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
   </div>
+  ${/* The two bench actions, above the fold and outside edit mode. Someone
+        standing at a shelf with gloves on should not have to press Edit, find
+        a field and open a dropdown to say "it moved" or "that's done". */""}
+  <div class="toolbar no-print">
+    <button class="ib" onclick="quickMove('${esc(spec.coll)}','${esc(o.id)}')">${icon("layers", 15)} Move</button>
+    ${shopNextStage(spec, o) ? `<button class="ib" onclick="quickAdvance('${esc(spec.coll)}','${esc(o.id)}')">${icon("check", 15)} ${esc(shopNextStage(spec, o))}</button>` : ""}
+  </div>
+  ${typeof shopUndoBar === "function" ? shopUndoBar() : ""}
   <div class="card" data-lbgroup="${esc(spec.coll)}:${esc(o.id)}">
     <h2>${esc(o.name || "(unnamed " + spec.noun + ")")}</h2>
     <div class="muted">${esc(o.id)} · <span class="pill ${shopStageClass(spec, o)}">${esc(o.stage || "—")}</span>${
@@ -322,6 +330,14 @@ function renderShopDetail(tab) {
 }
 
 function navBackLabel(spec) { return "All " + spec.nounPlural; }
+
+// The next stage, or "" at the end. Named on the button rather than a generic
+// "Advance", so the tap is a decision you can see before you make it.
+function shopNextStage(spec, o) {
+  const stages = shopClassOf(spec, o).stage || [];
+  const i = stages.indexOf(o.stage);
+  return i >= 0 && i < stages.length - 1 ? stages[i + 1] : "";
+}
 
 /* What this mold has made. A read-only join rather than a stored list, so it
    cannot go stale: it is every work order and part pointing here. */
