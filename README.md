@@ -4,6 +4,9 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 
 — Simon
 
+New lead? Start with [HANDOFF.md](HANDOFF.md). It explains how to run and care
+for everything in here.
+
 ## What's in here
 
 | Folder | Contents | Start with |
@@ -12,215 +15,182 @@ I put this together in July 2026, after comp, from everything we did in SN5 — 
 | `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
-| `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013), markdown source with built .docx outputs | `CS-INDEX` |
+| `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output | `CS-INDEX` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
-| `05 Printables/` | Shop reference sheets in `printables.html`: resin ratio and cure table, layup flowcharts, vacuum numbers, mold-prep card, ShopSabre checklist, PPE | print it |
-| `06 Design System/` | The app's visual language pulled out into a reusable system: color/type/spacing tokens, a component CSS library, and a living style guide | `styleguide.html` |
-| `08 Website/` | The public team website for sponsors and recruits, built on the design system | `README.md` |
-| `tools/` | Scripts that build and check the rest: the markdown-to-docx builder, the retro work-order generator, the link auditor, and the app's test suites | |
+| `05 Printables/` | Shop reference sheets meant to be printed: resin ratios, flowcharts, checklists | `README.md` |
+| `06 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
+| `08 Website/` | The public team website for sponsors and recruits, built on the design system. Not deployed yet | `README.md` |
+| `tools/` | Everything that builds and checks the rest: the docx builder, the generators, the servers, and 19 test suites | `README.md` |
+
+## Getting started
+
+You need Node for the app tooling, Python 3 for the document pipeline (the
+virtualenv at `tools/.venv` already exists), the Firebase CLI for deploys and
+the rules tests, and Playwright for the browser tests
+(`npm i -g playwright && npx playwright install chromium`).
+
+Three commands cover most days, all run from this folder:
+
+```bash
+node tools/serve_populated.mjs --port 8791   # the app locally, seeded, no Firebase
+node tools/test_app.mjs                      # the core logic suite
+node tools/test_designsystem.mjs             # CSS drift check, ~1 second
+```
+
+The live app needs no setup at all: it is at https://feb-composites.web.app,
+and access is controlled by the roster inside it.
 
 ## The app
 
-`03 App/app/` is the team's shared workspace for a season, running on Firebase with an email allowlist for the roster. It's live at **https://feb-composites.web.app**, updates live for everyone, and works on phones and tablets as well as desktop. Full detail, setup and architecture are in `03 App/app/README.md`; this is the tour.
+`03 App/app/` is the team's shared workspace for a season, running on Firebase
+with an email allowlist for the roster. It updates live for everyone and works
+on phones and tablets as well as desktop. The full manual, setup and
+architecture live in `03 App/app/README.md`; this is the short tour.
 
-![Dashboard tab: open items, deadlines, watched tickets and budget at a glance](03%20App/design/dashboard-mockup-20260728.png)
+![Dashboard: your open items, what is blocked, deadlines and budget at a glance](03%20App/design/dashboard-mockup-20260803.png)
 
-**Tabs:**
+Fourteen tabs, in the order they appear:
 
-- **Dashboard** — your open items, team deadlines in the next two weeks, anything behind schedule, watched tickets with new activity, and the budget at a glance. Read-only; every row links into the tab it came from.
-- **Work Orders** — the manufacturing traveler: layup stack, BOM, step buy-offs stamped with who signed them, blocker enforcement, and a printable hand-fillable sheet. Every printed sheet is exactly two pages — the app measures the content and picks the most generous layout that still fits, so nothing spills onto a third page. Steps also enforce **cure holds**: buying off an infusion or a wet layup asks which resin went in, when it finished and how cold the shop was, and the demould step then stays locked until the hold has run. The enforced hold is FEB's own number and it is longer than the datasheet asks for; both are shown, labelled as what they are, behind a "why 48 h?" link that opens the actual TDS. A lead can override, but only with a typed reason that lands in the work order's event log alongside how many hours short it was. Every cure number lives in one file, `03 App/app/resins.js`: six resin systems, each with the datasheet figure quoted from a PDF that ships with the app, the hold FEB actually enforces, and who signed that hold off. A hold below its datasheet figure, or one with nobody's name against it, is caught by a test rather than trusted.
-- **Parts** — the season's Part Tracker: CAD/Mold/Layup progress, subteam, engineers, target weight, layup deadline. On a wide screen it's a split — every part indexed down the left, the selected one beside it — so opening a part doesn't destroy the list and going back doesn't destroy the part. Arrow keys walk the index and `1`/`2`/`3` advance the three stages, so you can work down your own parts without touching the mouse. Each stage is a row of steps you click directly; going forward writes and leaves an undo, while going backwards or skipping steps asks first and says what it would skip. With nothing selected the right pane shows the season instead: how the open parts spread across the three stages, and who owns what's behind.
-- **Stock** — a live tooling-board inventory (a full 4×8 sheet and an offcut are the same kind of record, so remnants come back into stock instead of piling up), plus the **mold stack planner**: hand it a mold STL (or just type a rectangular block) and it works out which boards to glue and how to saw them — picks thicknesses that waste the least board, splits tall molds at the ShopSabre's ~6″ cut-depth limit, prints a numbered cut list, and draws the stack exploded so a reviewer can check the fit before signing off. A real Fusion export is often 30+ separate bodies, so it splits them and asks which one you mean. Two things make the sign-off less of an act of faith: a **rotatable 3D view** of the actual mold sitting inside the translucent blocks (the exploded drawing only ever showed it as a dashed outline traced on each layer) — drag to turn it, scroll or pinch to zoom, and the pinch works on a phone at the bench, and **Export stock STL**, which writes the planned blocks back out — one file per machine setup, in millimetres, at the mold's own CAD origin, so it drops onto the model in CAD and CAM can use it as the stock body without anyone re-modelling it by hand. The stack also prints as a proper **engineering drawing set** — a general isometric, a third-angle three-view, and then one dimensioned sheet per layer, because the boards get glued by hand and whoever is holding layer 3 needs to know how far in from each edge of layer 2 it goes. Dimensions read in inches to the nearest 1/16″ with the exact millimetre bracketed beside them, the mold is drawn under the blocks as a silhouette traced off the stored STL, and every sheet marks the same datum corner. Three sample molds ship with the app, so the planner can be tried without exporting anything from Fusion first, and **Load SN5 archive** now also brings in the board rack SN5 left behind — the planner picks thicknesses from what you actually own, so a fresh project has nothing to plan against until that runs.
-- **Molds** — a mold is a record now, not free text buried in one work order. Stage, home location, which board it was cut from, when it was sealed and by whom, and **how many parts have been pulled off it** — the number nobody tracked and the reason molds get run past their release life. The work orders and parts that used it are listed on it as a live join, so "what has this mold made" is a lookup. This is the direct fix for molds sitting in shared storage for weeks with nobody sure whose they were.
-- **Materials** — fabric rolls and their offcuts, resin and hardener lots, consumables. Vendor lot number, supplier, received/opened/expiry dates, mix ratio, and where it lives. An offcut is a roll with a parent, so remnants stay traceable instead of becoming "the thick one".
-- **Items** — test panels, jigs and storage bins. A panel carries its layup stack, the coupon range cut from it, and which lots went in, which is what turns a tensile CSV from a number in a filename into a record.
-- **Tickets** — a jira-style tracker merging what used to be separate Projects and Issues: R&D, process fixes, bugs, outreach, anything that isn't a part. Board or list view, assignees, watchers, due dates, sub-tickets, cross-links to parts and work orders, a comment thread with rich text (headings, links, code, tables) and downloadable photo attachments.
-- **Timeline** — the production schedule as a station-by-week grid. Weeks are the columns and the seven stations the rows, so "when is the ShopSabre free" is one horizontal scan. Add a week and it lands dated on the Monday after the last one; tap any week's date to move it, and any day you pick snaps to that week's Monday. The two ShopSabre rows carry the reminder that a slot here is the team's plan and not a booking: the machine is reserved on the RFS/RSO site, by whoever is running the job.
-- **Weekly Plan** — a day-by-subteam view of the same schedule: what's getting done each day by which car group, plus a per-person weekly task rollup pulled automatically from ticket due dates and manual assignments.
-- **Budget** — purchase requests through Submitted, Ordered and Reimbursed, with a season total, an open-orders subtotal, a flag on anything over $50, and a mobile "scan receipt" button that opens the phone camera and attaches the photo to the purchase.
-- **Documents** — every reference doc in one place: the manufacturer datasheets, CS standards (rendered from markdown, with the .docx also downloadable) and shop printables, filterable by type. Anyone can upload a doc. It also holds the **team shelf**: the Google Docs, Slides and Sheets people keep asking for (the master tracker, the weekly meeting deck, the ShopSabre training), pinned once so they have an address instead of being re-pasted into Slack every few months. Google documents can also be linked to the thing they are about, on a work order, a part, a ticket, or a given week. Paste a URL and the app works out whether it is a Doc, Slides, a Sheet or a Drive folder, tries to read the real title off the page, and offers an inline preview you can expand. There is no sign-in, no Google permission to grant and nothing to set up: at worst it behaves exactly like the link you would have pasted anyway.
-- **Reports** — per-dataset CSV export, a one-click printable Monday-meeting status board, and the bulk **label printer**.
-- **People** — the roster with photos, roles, and each person's live assignments across parts, tickets and work orders.
+- **Dashboard:** your open items, what is blocked, the deadline list, this week and the money. Read-only; every row links into the tab it came from.
+- **Work Orders:** the manufacturing traveler: layup stack, BOM, step buy-offs stamped with who signed, blocker steps, and enforced cure holds backed by the datasheets in `resins.js`. Prints to a hand-fillable sheet that is always exactly two pages.
+- **Parts:** the season tracker as a split view: every part down the left, the selected one beside it, each stage a row of steps you click. Arrow keys walk the list; `1`/`2`/`3` advance the stages.
+- **Stock:** tooling-board inventory plus the mold stack planner: hand it a mold STL and it picks boards, splits at the ShopSabre depth limit, prints a numbered cut list and a dimensioned drawing set, and exports the stock back out as STL for CAM.
+- **Molds:** a mold is a record: stage, home location, sealing record, and how many parts have been pulled off it, with the work orders and parts that used it as a live join.
+- **Materials:** fabric rolls and their offcuts, resin and hardener lots, consumables. Lot numbers, received/opened/expiry dates, mix ratios, locations.
+- **Items:** test panels, jigs and bins. A panel carries its layup stack, its coupon range and which lots went in.
+- **Tickets:** a jira-style tracker for everything that is not a part: R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, rich-text comments with photos.
+- **Timeline:** the production schedule as a station-by-week grid, so "when is the ShopSabre free" is one horizontal scan.
+- **Weekly Plan:** the same schedule by day and subteam, plus a per-person task rollup.
+- **Budget:** purchases through Submitted, Ordered and Reimbursed, with a receipt-scan button on phones.
+- **Documents:** datasheets, CS standards and printables in one filterable shelf, plus pinned Google Docs. Paste a Drive URL anywhere in the app and it resolves the title and offers a preview, with no Google sign-in.
+- **Reports:** CSV exports, a printable Monday status board, and the bulk label builder.
+- **People:** the roster with roles and each person's live assignments.
 
-![Mold stack planner: an STL turns into an exploded board stack and a numbered cut list](03%20App/design/stock-mockup-20260728.png)
+![Parts: the index of every part beside the selected one, each stage a row of steps](03%20App/design/parts-mockup-20260803.png)
 
-![Parts tab: the index of every part beside the selected one, with each stage a row of steps you click](03%20App/design/parts-detail-mockup-20260731.png)
+![Stock: tooling-board inventory and the mold stack planner](03%20App/design/stock-mockup-20260803.png)
 
-**Labels.** Every physical thing gets a 4 × 1 inch printed label carrying its ID, its name, the fact that actually identifies it, and a QR code that resolves back to the record. On a part that fact is the layup stack; on a mold it is the sealing record and how many parts have come off it. That is the point: the label answers "what is this" with the phone still in your pocket, because RFS wifi drops and gloves are covered in resin. Scanning is the fast path, not the only one. There's a Label button on a work order and a part, and a bulk builder under Reports that lets you pick the stock (Avery 5161 20-up, or 5522 WeatherProof polyester for chemicals) and the cell to start at, so a part-used sheet gets finished instead of binned. It prints a 100 mm calibration bar too, because browsers silently apply "Fit to page" scaling and ten seconds with a steel rule is cheaper than a wasted sheet of polyester. The 4 × 1 target is also, to within 1.4 mm, a 24 mm tape label, so the same layout drives a thermal printer when one arrives.
+Cross-links are everywhere; click a chip to jump to the related record. ⌘K
+searches everything. Light and dark themes follow the system setting, and
+printing always comes out black-on-white. Access is enforced server-side by
+`firestore.rules`: creating an account grants nothing until a lead adds the
+email to the roster.
 
-**Scanning.** Pointing a plain phone camera at a label opens a page that says what the object is, what stage it's at and where it lives, **with no account and no signal**. The ID is in the URL, so it's on screen in about 16 ms even when the database never answers; the rest fills in if there's a connection. Working signed-out is the point: a Jacobs staffer needs to know whose mold is blocking the container, and adding them to the roster to answer that would be absurd. What they can see is a nine-field nameplate (id, class, name, stage, location, work order, revision), every one of which is already printed on the label they're holding. Layup stacks, names, emails, costs and files stay behind the roster, enforced by a separate mirror collection rather than by hoping, because Firestore rules can only grant a whole document, never a field. There's an "Open in the app" button for anyone who is signed in.
+### Labels and scanning
 
-**Scanning inside the app.** There's a Scan button in the topbar too, so a two-step job takes two scans and no typing: scan the mold, tap Move, scan the shelf. That's what turns "where is the seat mold" into a lookup instead of a Slack ask, and it's why storage shelves get labels of their own. Every mold, material and item also has a one-tap stage button that names where it's going ("Sealed", not "Advance"), with an undo bar that stays put rather than a toast that vanishes.
+Every physical thing gets a 4 × 1 inch label: the ID, the fact that actually
+identifies it, and a QR code that resolves back to the record. Label buttons
+sit on work orders, parts, stock, and molds; the bulk builder under Reports
+prints onto Avery sheets with a start-cell picker and a 100 mm calibration bar,
+because browsers silently apply "fit to page" and polyester sheets cost real
+money.
 
-**Which lots went in.** The cure buy-off already asked what resin went in and when; it now also asks which fabric roll, which resin lot and which hardener lot, in the same modal, because that's already the one moment someone is standing at the part having just mixed resin. Each field is pre-filled with whatever is currently open, so the common case is one tap rather than three scans. And **"I don't know" is a valid answer** that records itself as such. That's deliberate: a gate you can only satisfy by naming a lot gets satisfied by naming the wrong one, and a confident wrong lot is worse than an honest gap. The lots print on the traveler, including whether they were scanned or remembered.
+![Labels: a printed Avery sheet with IDs, key facts and QR codes](03%20App/design/labels-mockup-20260803.png)
 
-Cross-links are everywhere — click a chip to jump to the related record. Press ⌘K (Ctrl-K) for global search. It has a light and dark theme (follows system setting, remembered after that), and printing always comes out black-on-white regardless of theme.
+Pointing a plain phone camera at a label opens a public nameplate that says
+what the object is, what stage it is at and where it lives, with no account
+and no app install. Names, costs and files stay behind the roster, enforced by
+a separate mirror collection. There is a Scan button inside the app too, so a
+two-step move is scan the mold, tap Move, scan the shelf. The cure buy-off
+also captures which fabric roll and which resin and hardener lots went in, and
+"I don't know" is a recorded answer, because a confident wrong lot is worse
+than an honest gap.
 
-Access is roster-gated: creating an account doesn't grant access to anything until a lead adds that email to the roster, enforced server-side by `firestore.rules`, not just hidden buttons. A `member` does day-to-day work everywhere; a `lead` can also delete records, restore from a backup, and manage the roster.
+![Scanning: the public nameplate a phone camera opens, no sign-in](03%20App/design/scan-mockup-20260803.png)
 
-The old single-file `03 App/work-orders.html` stays as an offline backup and archive viewer — it opens any exported JSON with no server at all. Don't delete it.
+The old single-file `03 App/work-orders.html` stays as an offline backup and
+archive viewer. It opens any exported JSON with no server at all. Don't delete
+it.
 
 ## The CFD PDF viewer
 
-`07 CFD PDF Viewer/` compares Fluent CFD reports without opening two PDFs side by side and hunting for the same plot in each. Runs as a desktop app (Electron, macOS and Windows builds) or a plain web page — either way it's the same code. Full detail in its own `README.md`.
+`07 CFD PDF Viewer/` compares Fluent CFD reports without opening two PDFs side
+by side and hunting for the same plot in each. It runs as a desktop app
+(Electron, macOS and Windows) or a plain web page; either way it is the same
+code. Full detail in its own `README.md`, including a two-command way to try
+it on the sample reports that ship in the folder.
 
-Load two or more design-point reports and:
+![The Panels view: the same named plot pulled from every open report](07%20CFD%20PDF%20Viewer/design/cfd-panels-mockup-20260803.png)
 
-- **Pages** scrolls them together, column per report.
-- **Panels** pulls one named plot out of every open report, cropped and scaled identically, so the eye does the comparing.
-- **Overlay** lays two reports on top of each other — blend, a draggable swipe divider, or a per-pixel difference map (two identical reports read exactly 0.00%, so the number is trustworthy).
-- **Summary** tables mesh counts, solver settings, iterations and residuals from every report, with changed values highlighted — often answers the question before you look at a plot.
-- **Search** covers plot names and full document text across every open report at once.
+Load two or more design-point reports and: **Pages** scrolls them together,
+column per report. **Panels** pulls one named plot out of every report,
+cropped and scaled identically. **Overlay** lays two reports on top of each
+other with a blend, a swipe divider, or a per-pixel difference map. **Summary**
+tables the mesh counts, solver settings and residuals with changed values
+highlighted, which often answers the question before you look at a plot.
+**Search** covers plot names and full text across every open report.
 
-It works because Fluent's Chromium export has a consistent layout (panel titles at a fixed point size, a roughly uniform pitch down the page) that the indexer uses to find and name every panel without any manual setup — see that README for how the matching and page-break handling work.
+It works because Fluent's export has a consistent layout that the indexer uses
+to find and name every panel with no manual setup.
 
 ## The rest, briefly
 
-**Pain Points and CS Standards** (`01`, `02`) are where the app's rules come from: 10 root-caused SN5 problems, each mapped to a numbered standard that fixes it (`CS-INDEX` is the lookup, `python3 tools/check_traceability.py` audits the mapping). XCR is the current mold sealer, the RFS ShopSabre is the machining path, and every quantitative claim in a standard cites a datasheet in `04 Datasheets/` or a recorded team measurement — two web-search "facts" turned out to be wrong during this build, both caught by reading the actual PDFs. Every standard ships "Draft, pending Lead signature" until someone actually signs the approval table; four (CS-001, CS-007, CS-008, CS-009) are Outlined rather than fully Drafted, so double check before leaning on those hard.
+**Pain Points and CS Standards** (`01`, `02`) are where the app's rules come
+from: 10 root-caused SN5 problems, each mapped to a numbered standard that
+fixes it. `CS-INDEX` is the lookup and `python3 tools/check_traceability.py`
+audits the mapping. XCR is the current mold sealer, the RFS ShopSabre is the
+machining path, and every quantitative claim cites a datasheet in
+`04 Datasheets/` or a recorded team measurement. Every standard ships "Draft,
+pending Lead signature" until someone signs the approval table. Three
+(CS-007, CS-008, CS-009) are Outlined rather than fully Drafted, so double
+check before leaning on those.
 
-**Datasheets and Printables** (`04`, `05`) are reference material — 25 manufacturer TDS/SDS PDFs chosen from actual purchase history, and shop-floor cheat sheets meant to be printed.
+**Datasheets and Printables** (`04`, `05`) are reference material: manufacturer
+TDS/SDS PDFs chosen from actual purchase history, and shop-floor sheets meant
+to be printed.
 
-**Design System** (`06`) is the app's visual language pulled out into something reusable: the color/type/spacing tokens (`tokens.css`), the component styles built on them (`components.css`), and a living style guide (`styleguide.html`) that renders the whole system in light and dark. It was extracted from the app's stylesheet so the next FEB tool, poster, or page can start on-brand instead of reinventing Berkeley Blue and the layup-status colors. Open `styleguide.html` in a browser, or read `06 Design System/README.md` for how to link it into a page. It is also synced to claude.ai/design, so anything designed there comes out in Berkeley Blue with the right type and the right status colors; `.design-sync/` holds the inputs that sync uses and `.design-sync/NOTES.md` explains how to re-run it.
+**Design System** (`06`) is the app's visual language pulled out into something
+reusable: tokens, component styles, and a living style guide in light and
+dark. The app remains the source of truth; `tools/test_designsystem.mjs` keeps
+the two from drifting apart. It also syncs to claude.ai/design.
 
-**The team website** (`08`) is the public site for sponsors and recruits, built from a design handoff on the `06` design system: a scrolling home page plus seven secondary pages, plain HTML and CSS with one JS file, no framework. It links the repo's own design system rather than carrying a copy, so a token change in `06` reaches it with one build. All the photos are placeholders and the application form is not wired yet; `08 Website/README.md` has the list. Not deployed. Run it with `node "08 Website/build.mjs"` then serve `08 Website/site`.
+![The style guide: tokens and components, light theme](06%20Design%20System/styleguide-light-mockup-20260803.png)
 
-**Open items (need a human):** move the `feb-composites` Firebase project to a team Google account (or add the next lead as an owner) so it survives handoff; confirm the ShopSabre's exact model against CS-005 §5; field-verify the CS-011 storage map at RFS; sign the approval tables.
+**The team website** (`08`) is the public site for sponsors and recruits,
+plain HTML and CSS on the `06` design system, no framework. Photos are
+placeholders, the application form is not wired, and it has never been
+deployed; its README has the list. Run it with `node "08 Website/build.mjs"`
+then serve `08 Website/site`.
 
-**Maintenance:** edit standards in `02 CS Standards/src/`, rebuild with `tools/.venv/bin/python tools/build_docx.py --all`. Regenerate retro work orders only if the source data was wrong: `tools/.venv/bin/python tools/gen_retro_wos.py`.
+![The public site's home page](08%20Website/design/website-home-mockup-20260803.png)
 
-**Tests**, all runnable from here:
+**Open items (need a human):** move the `feb-composites` Firebase project to a
+team Google account (or add the next lead as an owner) so it survives handoff;
+confirm the ShopSabre's exact model against CS-005 §5; field-verify the CS-011
+storage map at RFS; sign the approval tables. HANDOFF.md carries the full
+list.
 
-```bash
-node tools/test_app.mjs      # app logic across every tab, in a DOM stub
-node tools/test_designsystem.mjs  # the app's CSS against 06 Design System, no browser
-node tools/test_appui.mjs    # layout: 11 tabs x 4 widths x 2 themes, measured
-node tools/test_detailui.mjs  # the same, but with records OPEN and their fields full
-node tools/test_slicer.mjs   # mold geometry: slicing, islands, containment
-node tools/test_packer.mjs   # cut lists: guillotine feasibility, kerf, stock policy
-node tools/test_drawings.mjs # mold drawings: renders every sheet and checks it is READABLE
-node tools/test_print_mobile.mjs  # the printed sheets on a phone: fit, controls, save
-node tools/test_safearea.mjs # the notch, the Dynamic Island, the home indicator
-node tools/test_website.mjs  # the public site: design system, reveals, eggs, no-JS, phone
-cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
-  "node '../tools/test_wo_rules.mjs'"                      # security rules
-```
+**Maintenance:** edit standards in `02 CS Standards/src/`, rebuild with
+`tools/.venv/bin/python tools/build_docx.py --all`, then
+`python3 tools/gen_docs_manifest.py` and `python3 tools/check_traceability.py`.
+Regenerate retro work orders only if the source data was wrong.
 
-The last two are the odd ones out and worth knowing about. Everything else
-asserts on strings and numbers — and a sheet passes all of that while printing a
-dimension straight through a dimension line, or running off the side of a phone.
-Both render the real thing in headless Chromium and measure what the browser
-actually laid out. `test_drawings.mjs` checks eight mold fixtures for legibility:
-no label crossed by a solid line, no two labels overlapping, nothing upside down,
-nothing under 5.5pt, nothing off the sheet. `test_print_mobile.mjs` boots the
-whole app (with `fb.js` stubbed at the route, so no Firebase and no auth) at four
-device widths and checks every printable document fits, its controls stay
-reachable and thumb-sized, closing gives the app back, and the screen fit never
-reaches the paper. Add `--shots` to either for PNGs of whatever failed. Both need
-Playwright (`npm i -g playwright && npx playwright install chromium`) and skip
-loudly without it — run them before shipping a change to `drawings.js`,
-`print.js` or `print.css`.
+## Tests
 
-`test_designsystem.mjs` and `test_appui.mjs` are the newest pair, and they exist
-because `06 Design System/` was extracted from the app rather than imported by
-it. Two copies of one design, with nothing holding them together, rot quietly:
-the app's kanban column and modal had drifted a pixel off the radius token,
-`.stage` had lost its background and `.avatar` its fill, and none of that shows
-up in a screenshot. The first is the diff, run as a test, and it also checks the
-CSS actually parses — which sounds pointless until an unterminated comment eats
-the next rule and a fix you just made silently does nothing. The second renders
-all eleven tabs at 1920, 1440, 900 and 393 in both themes and measures the
-things a picture can only show you: nothing off the side, no tap target under
-40px where there is a thumb, no text under 11px, nothing sticky hiding behind
-the topbar, every surface actually changing colour in dark mode, and `main`
-using the window it was given. That last one is how the wasted 27% of a 1920
-monitor got found.
-
-`test_detailui.mjs` is the fourth, and it exists because `test_appui.mjs`
-passed clean on a bug Simon could see on his phone. That test audits eleven tabs
-and never opens a record, and every fixture in `tools/lib/fixtures.mjs` carries
-`comments: []`, no `docs` and no `files` — so it was measuring an app in which
-nobody had ever commented, linked a Drive doc or attached a file. An empty
-thread cannot overflow. This one fills those fields from
-`tools/lib/fixtures-content.mjs` (a bare 120-character Drive URL, an
-underscore-joined CAD filename, a 600-character one-paragraph update typed at
-RFS, a pasted six-column table, a code block) and opens every detail page plus
-six overlay states — the lightbox, three modals, the composer with a draft in
-it, the drawer — at 320, 393, 430 and 1440.
-
-Two things it does that are worth copying. It asserts that the populated content
-actually reached the page, and that an overlay actually opened, because a check
-that measures the wrong thing reports green: the first run passed six overlay
-views having opened none of them. And it distinguishes a hard cut from a
-designed one — `overflow: hidden` with no `text-overflow: ellipsis` is a defect,
-an ellipsis is a decision.
-
-Three, actually, and the third was bought the hard way. `nothing unreachable`
-looks for an element with a real box that the browser never paints AND that sits
-inside a closed `<details>` whose summary is also hidden — content with no way to
-reveal it. It exists because a "mobile fix" here forced a closed `<details>` open
-with `display: block` at desktop widths and took the ticket page's entire left
-rail down to blank white space. A closed `<details>` skips PAINTING; an author
-`display` only restores LAYOUT. The children reported a 345x18 box,
-`contentVisibility: visible`, `visibility: visible`, `opacity: 1`, and drew
-nothing. `element.checkVisibility()` was the only signal that knew, and the
-assertion written for exactly that case had used `getBoundingClientRect().height
-> 0` instead. **Layout is not paint**, and every hand-rolled visibility helper in
-this repo asks the wrong one.
-
-It takes `--width 1440` as well, and you should use it. The regression above
-shipped because the change existed only to alter desktop behaviour and every
-screenshot taken of it — and all four reviewer agents — looked at 393px.
-`test_appui.mjs` covers Tickets at 1440 and never opens a ticket; a blank rail
-overflows nothing, clips nothing and is not too tall, so no numeric check could
-see it. Shoot both widths, and especially the width the change is for.
-
-It also has the clearest lesson in this repo about the limits of measuring. The
-first round of fixes turned every number green, and three reviewer agents
-looking at the screenshots opened with the same finding: the tables were
-unreadable. `overflow-wrap: anywhere` gives a table cell a min-content width of
-one character, so instead of overflowing into the scroller that already exists
-for it, every column had collapsed to its narrowest form — a pasted pull-test
-table rendered its header as C / o / u / p / o / n down the page. No overflow,
-nothing clipped, nothing off-screen, and you could not read a row across. Run
-`--shots` and look at them.
-
-`test_safearea.mjs` is the third of that family and the least obvious. The app
-sets `viewport-fit=cover` and runs standalone with a translucent status bar on
-purpose, so it draws edge to edge and the navy topbar meets the Dynamic Island
-like a native app — which means **every element at a screen edge owns its own
-inset**, and getting one wrong hides a button under the island. `env()` can't be
-faked in a headless browser, so the app reads `--sa-t/-r/-b/-l` instead, and the
-test overrides those four to real iPhone 15 Pro values and measures what the
-browser laid out: portrait, landscape, and landscape-on-a-Pro-Max (932px — wider
-than the 900px breakpoint, which is the combination that catches insets left
-inside a media query). It also checks the island lands on *chrome* rather than on
-a table row, and that nothing sticky pins itself behind the topbar.
-
-There's a third thing in that family which is deliberately **not** a test:
+The full inventory, what each suite covers, which need Playwright or the
+Firebase emulator, and the hard-won lessons behind the browser tests all live
+in [`tools/README.md`](tools/README.md). The short version:
 
 ```bash
-node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab, 4 widths x 2 themes
+node tools/test_app.mjs           # app logic, no browser, run this first
+node tools/test_designsystem.mjs  # CSS drift between app and 06, ~1s
+node tools/test_appui.mjs         # every tab, four widths, two themes, measured
+node tools/test_detailui.mjs      # the same with records open and fields full
 ```
 
-It renders the real app with real SN5 data and writes images. It asserts nothing,
-because the failure it exists for can't be written down as a number — the Parts
-tab passed every string assertion in `test_app.mjs` while drawing each of its
-three progress stages twice, and colouring un-started molds as if they were
-half-finished. Nobody had looked at it. Pair it with
-`.claude/agents/ui-reviewer.md`, a read-only reviewer that scores a screen on
-eight axes and only passes at no-axis-below-3, average ≥4 — the same bar
-`00 Agent/simon.md` applies to documents. Because `shoot_ui.mjs` resolves the app
-relative to itself rather than the cwd, running it inside a git worktree
-photographs that worktree, which is how four competing designs for the Parts tab
-were shot under identical conditions and judged frame for frame.
+plus suites for the mold slicer and packer, the drawings, printing on phones,
+labels and QR codes, scanning, the public scan page, the sanitizer, safe-area
+insets, the website, and the three Firebase rules files. Before shipping
+anything visual, run the matching browser suite and look at the screenshots it
+can write with `--shots`; the tests measure, but only eyes catch "unreadable".
 
-To drive the app locally with a database in it, use `node
-tools/serve_populated.mjs --port 8791`: the real app on a real port, Firebase
-stubbed out, seeded from the SN5 archive and the same populated fixtures the
-tests use. Nothing is saved, so reloading resets it. Open it in Chrome's device
-toolbar at iPhone 15 rather than a narrow desktop window — half the responsive
-rules key off `pointer: coarse`, and only the device toolbar sets that.
+To regenerate the annotated screenshots in this and the other READMEs after a
+UI change:
 
-For the app as it really is, serve it with `python3 tools/nocache_server.py 8126` rather than `python3 -m http.server` — the latter sends no cache headers and will happily serve a stale script while you debug code that isn't running.
+```bash
+node tools/make_mockups.mjs
+```
 
-One quirk worth knowing: the git root is this folder rather than `03 App/`, because the scripts in `tools/` resolve their paths relative to here. `firebase deploy` still has to run from inside `03 App/`.
+One quirk worth knowing: the git root is this folder rather than `03 App/`,
+because the scripts in `tools/` resolve their paths relative to here.
+`firebase deploy` still has to run from inside `03 App/`.

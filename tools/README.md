@@ -1,0 +1,186 @@
+# tools/
+
+Everything in here builds or checks the rest of the repo. Nothing in this
+folder ships to users; it exists so that a change to the app, the standards, or
+the website can be verified before it lands. Run everything from the repo root
+(`SN6 Resources/`), because the scripts resolve their paths relative to there.
+
+## Prerequisites
+
+- **Node** (any recent version) for every `.mjs` script.
+- **Python 3** for the document pipeline. `build_docx.py` needs the virtualenv
+  at `tools/.venv`, which already exists in the working copy. Invoke it as
+  `tools/.venv/bin/python tools/build_docx.py`.
+- **Playwright + Chromium** for the browser tests and the cameras:
+  `npm i -g playwright && npx playwright install chromium`. Tests that need it
+  skip loudly when it is missing, with a green exit code, so read the output.
+  The repo's own copy lives at `.ds-sync/node_modules`; keep its playwright
+  version matched to the cached Chromium build or it launches and reports a
+  missing executable.
+- **Firebase CLI** for the three rules suites, which run against the emulator.
+
+## The tests
+
+Logic and data, no browser:
+
+| Test | What it checks |
+|---|---|
+| `test_app.mjs` | App logic across every tab, in a DOM stub. The big one; run it first. |
+| `test_designsystem.mjs` | The app's CSS against `06 Design System/`: token and component drift, and that the CSS parses at all. ~1 second. |
+| `test_slicer.mjs` | Mold geometry: STL slicing, islands, containment. |
+| `test_packer.mjs` | Cut lists: guillotine feasibility, kerf, stock policy. |
+| `test_qr.mjs` | QR encoding. Asserts version 3 alphanumeric exactly; see "The QR guard" below. |
+
+Rendered in headless Chromium (need Playwright):
+
+| Test | What it checks |
+|---|---|
+| `test_appui.mjs` | Layout of every tab at four widths and two themes, measured: nothing off-screen, tap targets, text sizes, dark-mode coverage. |
+| `test_detailui.mjs` | The same, but with records open and their fields full: detail pages plus six overlay states at 320/393/430/1440. |
+| `test_drawings.mjs` | Mold drawing sheets: renders each one and checks it is readable. No label crossed by a line, nothing under 5.5pt, nothing off the sheet. |
+| `test_print_mobile.mjs` | The printable documents on a phone: fit, reachable controls, the two-page traveler cap. |
+| `test_safearea.mjs` | The notch, the Dynamic Island, the home indicator, at real iPhone inset values. |
+| `test_labels.mjs` | The label sheets, down to the pixels: each QR is rasterized and its dark-pixel fraction checked, because a blank SVG passes every DOM assertion. |
+| `test_sanitize.mjs` | The comment sanitizer, running the real vendored DOMPurify. Never assert allowlist policy anywhere else; nothing else can see it. |
+| `test_scan.mjs` | In-app scanning and lot capture. |
+| `test_q_landing.mjs` | The public `/Q/<ID>` nameplate page, including its offline watchdog. |
+| `test_route.mjs` | Deep links from a scanned code into the signed-in app. |
+| `test_website.mjs` | The public site: design-system usage, reveals, no-JS fallback, phone layout. |
+
+Against the Firebase emulator:
+
+| Test | What it checks |
+|---|---|
+| `test_wo_rules.mjs` | Firestore security rules for the team collections. |
+| `test_storage_rules.mjs` | Storage rules: who can upload what, where. One failing case is a documented emulator limitation, not a regression; the test header explains. |
+| `test_pub_rules.mjs` | The `pub` scan-mirror rules: anonymous read of one document, nothing else. |
+
+The emulator suites run like this:
+
+```bash
+cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
+  "node '../tools/test_wo_rules.mjs'"
+```
+
+## Generators and the document pipeline
+
+| Script | What it does |
+|---|---|
+| `build_docx.py` | Renders the markdown sources in `02 CS Standards/src/` and `01 Pain Points.../src/` into FEB-styled .docx. No per-document mode; everything churns, commit all of it. |
+| `gen_docs_manifest.py` | Bundles datasheets, standards and printables into `03 App/app/docs/` and writes the manifest the Documents tab reads. Run it after adding a datasheet or rebuilding a standard. |
+| `check_traceability.py` | Audits the pain-point-to-standard mapping and every csRef in the retro work orders. Run after any standards change. |
+| `gen_retro_wos.py` | Regenerates the 26 retro SN5 work orders from the Master Tracker extract. Only needed if the source data was wrong. |
+| `gen_sn5_seeds.py` | The other SN5 archives (parts, schedule, stock) from the same sources. |
+| `gen_sample_molds.mjs` | The three sample mold STLs that ship with the stack planner. |
+
+The standards flow, in order: edit `02 CS Standards/src/*.md`, then
+
+```bash
+tools/.venv/bin/python tools/build_docx.py --all
+python3 tools/gen_docs_manifest.py
+python3 tools/check_traceability.py
+```
+
+## Servers and cameras
+
+| Script | What it does |
+|---|---|
+| `serve_populated.mjs` | The real app on a local port, Firebase stubbed, seeded from the SN5 archive plus populated fixtures. Nothing saves; reload resets. The way to poke the app by hand. |
+| `nocache_server.py` | A static server that actually sends no-cache headers. Use it instead of `python3 -m http.server`, which will happily serve a stale script while you debug code that is not running. |
+| `shoot_ui.mjs` | The camera: PNGs of any tab at four widths and two themes, real SN5 data. Asserts nothing. |
+| `make_mockups.mjs` | The camera plus a picture frame: the annotated screenshots embedded in the READMEs. Captions live in its SHOTS table; rerun it after a UI change and the mockups update themselves. |
+| `print-preview.html` | Open in a browser; its Audit all button runs every seed work order through the print layout ladder and reports page counts. |
+
+`tools/lib/` holds the shared plumbing (`browser.mjs` serves directories and
+finds Chromium; `fixtures.mjs` and `fixtures-content.mjs` are the demo data)
+and `tools/fixtures/` holds a test STL.
+
+For manual phone checks, open `serve_populated.mjs`'s URL in Chrome's device
+toolbar at iPhone 15 rather than a narrow desktop window. Half the responsive
+rules key off `pointer: coarse`, and only the device toolbar sets that.
+
+## Why the browser tests exist
+
+Most of the suite asserts on strings and numbers, and a sheet can pass all of
+that while printing a dimension straight through a dimension line, or running
+off the side of a phone. The browser tests render the real thing in headless
+Chromium and measure what the browser actually laid out. Add `--shots <dir>`
+to `test_drawings.mjs` or `test_print_mobile.mjs` for PNGs of whatever failed.
+Run them before shipping a change to `drawings.js`, `print.js` or `print.css`.
+
+The rest of this file is the lessons that suite was bought with. They are
+worth reading before writing any new UI test.
+
+### Layout is not paint
+
+A closed `<details>` skips painting its content. An author `display` rule only
+restores layout. A "mobile fix" here once forced a closed `<details>` open with
+`display: block` at desktop widths and took the ticket page's entire left rail
+down to blank white space. The children reported a real bounding box,
+`visibility: visible`, `opacity: 1`, and drew nothing. The only signal telling
+the truth was `element.checkVisibility()`, and the assertion written for
+exactly that case had used `getBoundingClientRect().height > 0` instead.
+
+Every hand-rolled "is it visible" helper asks the wrong question. Use
+`checkVisibility()`. `test_detailui.mjs` now has a `nothing unreachable` check
+for content hidden with no way to reveal it, verified against the broken build.
+
+One level further down: paint is not correctness either. An `<svg>` QR with a
+malformed path passes `checkVisibility()`, reports a perfect box, and paints
+nothing. `test_labels.mjs` rasterizes each code to a canvas and asserts the
+dark-pixel fraction lands between 0.30 and 0.60. A real code is about 45%
+dark, a blank square is 0%, a black box is 100%. Pixels are the only honest
+check for a QR.
+
+### Shoot both widths, especially the one the change is for
+
+That `<details>` regression shipped because the change existed only to alter
+desktop behavior and every screenshot taken of it, and all four reviewer
+agents, looked at 393px. A blank rail overflows nothing, clips nothing, and is
+not too tall, so no numeric check could see it either.
+`test_detailui.mjs --width 1440 --shots <dir>` does the desktop half.
+
+### Fixtures must populate, and green is not readable
+
+`test_appui.mjs` once passed clean on a bug Simon could see on his phone. It
+audits every tab and never opens a record, and every fixture carried empty
+comments, no docs and no files. An empty thread cannot overflow. That is why
+`tools/lib/fixtures-content.mjs` exists: a bare 120-character Drive URL, an
+underscore-joined CAD filename, a 600-character one-paragraph update, a pasted
+six-column table, a code block. `test_detailui.mjs` opens every detail page
+with those fields full.
+
+The same fix round also produced the clearest limit of measuring: every number
+went green while the tables became unreadable. `overflow-wrap: anywhere` gives
+a table cell a min-content width of one character, so a pasted pull-test table
+rendered its header letter by letter down the page. No overflow, nothing
+clipped, and you could not read a row across. Run `--shots` and look.
+
+Two harness traps of the same kind. The fb stub sets `state: "ready"` on its
+first line, before the seeds land, so waiting on it measures a half-seeded
+database; wait on `__fixturesReady`. And measuring an `<a>` that wraps a
+`<button>` reports the anchor's 14px line box, which calls every such button
+too small when none of them are.
+
+### The camera is not a test, on purpose
+
+`shoot_ui.mjs` renders the real app with real SN5 data and writes images. It
+asserts nothing, because the failure it exists for cannot be written down as a
+number: the Parts tab once passed every string assertion while drawing each of
+its three progress stages twice. Pair the shots with
+`.claude/agents/ui-reviewer.md`, a read-only reviewer that scores a screen on
+eight axes. Because the camera resolves the app relative to itself rather than
+the cwd, running it inside a git worktree photographs that worktree, which is
+how competing designs get shot under identical conditions.
+
+### The QR guard
+
+`HTTPS://FEB-COMPOSITES.WEB.APP/Q/MOLD-SN6-004` is 45 characters. In QR
+alphanumeric mode that fits version 3 (29 modules) at error-correction level
+Q, 25% recovery. In byte mode the same string needs version 4 and only gets
+15%. One lowercase letter or one query parameter costs a version and an ECC
+level, and the printed label looks identical; it just scans worse once it has
+resin on it. `test_qr.mjs` asserts `getModuleCount() === 29` exactly, and that
+single assertion is the whole guard. The same arithmetic caps an ID at 14
+characters. Note that the qrcode-generator library does not auto-detect
+alphanumeric mode; pass `'Alphanumeric'` explicitly or you silently get bytes.
