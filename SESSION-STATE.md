@@ -212,8 +212,26 @@ marker, today, no approval needed.
 Rebuilt with `tools/.venv/bin/python tools/build_docx.py --all`, manifest
 refreshed (42 docs, 16 standards to PDF), `check_traceability.py` passes.
 
-**Still to do**: nothing in the plan. Open asks for Simon are in the summary
-below.
+**Deployed and verified on production, on a 393px viewport, signed out:**
+`/Q/MOLD-SN6-004` paints MOLD / MOLD-SN6-004 with no sideways scroll; the app's
+sign-in wall holds the deep link (`PENDING_LINK === "MOLD-SN6-004"`), so signing
+in lands on the record; no page errors. Anonymous reads of workOrders, parts,
+roster, budget, config, meta, molds, items and lots all 403; `pub` get is
+allowed and `pub` list is not.
+
+**Everything in the plan is done.** Two things still need Simon, and only Simon:
+
+1. **Click "Rebuild scan mirror"** once, under Reports, as a lead. `pub` is
+   empty until then, so every scan honestly says "no record with this ID yet".
+   After that `fb.save()` keeps it current on its own.
+2. **Buy the paint marker.** ~$5, no approval needed, and it is the highest-value
+   item in the whole body of work: every hand mark in the shop is currently
+   being dissolved by the shop's own IPA wipe.
+
+Also unasked and still outward-facing: the team has not been told about any of
+this. And CS-001/013/002/003/004/005/011/012 are all "Draft, pending Lead
+signature" — the Approver rows are blank, and CS-000 says a doc whose approver
+row is blank is never Released.
 
 Previously, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
 the `localId()` fix that MUST land in the same commit -- it scans
