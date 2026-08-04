@@ -109,8 +109,28 @@ shrinks the window passes against the broken version.
 
 **Deployed** to feb-composites.web.app, hosting AND firestore rules (the `pub`
 block is new, so rules had to go too; that is the exception to `--only hosting`,
-and it was verified with test_pub_rules against the emulator first). The team has
-NOT been told; that is still an ask.
+and it was verified with test_pub_rules against the emulator first).
+
+**Verified anonymously against production**, which is the only check that counts
+for a public read: `GET pub/<id>` returns 404 (allowed, just empty), while
+`workOrders`, `parts`, `roster`, `budget`, `config` and `meta` all return 403,
+`pub` list returns 403, and `pub` write returns 403.
+
+**One bug only production could show.** q.html is served at `/Q/<ID>` by a
+rewrite, so every RELATIVE url on it resolves one level deep:
+`import("./firebase-config.js")` became `/Q/firebase-config.js`, which the same
+rewrite answered with q.html itself. The import "succeeded" against HTML,
+FIREBASE_CONFIG was never set, and every scan claimed "couldn't reach the
+database" over a perfectly good network. The local test server registers exact
+paths and has no wildcard rewrite, so it cannot reproduce this. Now guarded by a
+source-level check: no relative src/href/import may appear in q.html.
+
+**ACTION NEEDED, and only a lead can do it: `pub` is empty.** Nothing is
+published until someone opens Reports and clicks **Rebuild scan mirror** once.
+Until then every scan honestly says "No record with this ID yet". After that,
+`fb.save()` keeps it current by itself.
+
+The team has NOT been told about any of this; that is still an ask.
 
 **Still to do**, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
 the `localId()` fix that MUST land in the same commit -- it scans
