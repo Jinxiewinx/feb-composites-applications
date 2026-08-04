@@ -9,8 +9,40 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-03
-Status: **Printed labels ship (2026-08-03).** Stage 2 of the identification and
+Last updated: 2026-08-03 (evening)
+Status: **Documentation overhaul ships (2026-08-03).** Five commits: the
+mockups are now annotated REAL screenshots regenerable with
+`node tools/make_mockups.mjs` (23 of them, dated 20260803, covering all 14
+tabs, labels, the scan nameplate, the CFD viewer's three views, the website
+and the style guide in both themes); the top-level README became a newcomer
+tour with a Getting started section and the testing essay moved to the new
+`tools/README.md`; both app READMEs caught up with the app ("six tabs" is
+finally dead); every section README gained its imagery and missing basics
+(CFD try-it-now, website not-deployed banner, datasheet add procedure, first
+Printables README); and `HANDOFF.md` at the repo root is the operator's guide
+for Nick. No app code changed except `shoot_ui.mjs` ALL_TABS gaining
+molds/lots/items and `tools/lib/browser.mjs` gaining .mjs/.pdf MIME entries,
+so no deploy was needed or done.
+
+Things a future session should know from this one:
+
+- `make_mockups.mjs` waits on `__fixturesReady`, not `fb.state`; the stub
+  races exactly as test_detailui documents, and the labels shot found no
+  DB.molds until that changed.
+- serveDir refused the CFD viewer's pdf.js: no `.mjs` MIME entry meant
+  Chromium rejected the module worker. Fixed in browser.mjs.
+- `ds-bundle/` and `.ds-sync/`, `07 CFD PDF Viewer/node_modules` and
+  `DP_22_variant.pdf` are all untracked; a fresh worktree lacks them.
+  make_mockups needs the playwright under `.ds-sync/node_modules` and the
+  variant PDF, so in a worktree symlink/copy them in first.
+- The survey claim that a `03 Work Orders/` folder exists at the root was
+  wrong; nothing to add to the folder table.
+- Em dashes are now zero in every swept README outside Simon's own signed
+  intro and the Datasheets table idiom.
+
+Previous status follows.
+
+Status (earlier that day): **Printed labels ship (2026-08-03).** Stage 2 of the identification and
 traceability plan: every physical thing can now be given a 4 x 1 inch label with
 a QR that resolves to its record. New `app/labels.js` + `app/vendor/qrcode.min.js`,
 label CSS appended to `print.css`, Label buttons on work orders and parts, bulk
