@@ -101,10 +101,16 @@ async function downscaleImage(file, maxDim, opts = {}) {
 // The data collections the app syncs. Add one here + a rules block + a counter
 // prefix below to introduce a new record type. `roster` and `meta` are infra,
 // not in this list.
-const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents", "stock", "stackplans"];
-// Id prefix per collection for allocId(). schedule ids are week keys, not
-// counter-allocated, so it has no prefix.
-const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK" };
+const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents", "stock", "stackplans", "molds", "items", "lots"];
+/* Id prefix per collection for allocId(). schedule ids are week keys, not
+   counter-allocated, so it has no prefix.
+
+   `items` and `lots` have no entry because they are MULTI-CLASS: one collection
+   holding several kinds of object, each with its own prefix and its own counter
+   (PNL/JIG/BIN, FAB/RSN/CON). Callers pass the class to allocId() and it wins
+   over this map. Three collections rather than nine because their fields are
+   near-identical and nine onSnapshot listeners at boot buys nothing. */
+const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK", molds: "MOLD" };
 
 /* ---- the public mirror ----
 
@@ -227,12 +233,24 @@ const fb = {
     });
   },
 
-  // PREFIX-SN6-### from a shared per-collection counter so two laptops can't
-  // mint the same id. Transactions need a connection; caller handles offline.
-  async allocId(coll) {
-    const prefix = ID_PREFIX[coll] || coll.toUpperCase();
+  /* PREFIX-SN6-### from a shared counter so two laptops can't mint the same id.
+     Transactions need a connection; the caller handles offline.
+
+     `cls` is for the multi-class collections (items, lots): pass "PNL" or "FAB"
+     and you get PNL-SN6-007 counted separately from JIG-SN6-002. Without a
+     per-class counter you would get PNL-SN6-001 followed by JIG-SN6-002, which
+     reads as broken even though it is not.
+
+     THE TRAP, and the reason counterKey is written this way: the counter key
+     must NOT change for any existing collection. `cls || coll` keeps every
+     existing call byte-identical, so meta/workOrders stays meta/workOrders.
+     Re-keying it would reset the counter to 1 and start minting duplicate WO
+     ids over the top of real records. */
+  async allocId(coll, cls) {
+    const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
+    const counterKey = cls || coll;
     return runTransaction(db, async (tx) => {
-      const ref = doc(db, "meta", coll);
+      const ref = doc(db, "meta", counterKey);
       const snap = await tx.get(ref);
       const n = (snap.exists() && snap.data().next) || 1;
       tx.set(ref, { next: n + 1 }, { merge: true });

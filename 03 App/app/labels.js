@@ -164,7 +164,13 @@ function pubProjection(coll, o) {
 // 7pt on a greasy label while the bare codes can.
 function labelClass(coll, o) {
   const byColl = { workOrders: "WORK ORDER", parts: "PART", stock: "BOARD", molds: "MOLD" };
-  if (coll === "items" || coll === "lots") return String(o.cls || "").toUpperCase() || null;
+  if (coll === "items" || coll === "lots") {
+    // The class word is what stops "PART P-SN6-007" being read as
+    // "TICKET PROJ-SN6-007" on a greasy label, so a record with no cls gets no
+    // label rather than a blank one.
+    const words = { PNL: "TEST PANEL", JIG: "JIG", BIN: "STORAGE", FAB: "FABRIC", RSN: "RESIN", CON: "CONSUMABLE" };
+    return words[o.cls] || (o.cls ? String(o.cls).toUpperCase() : null);
+  }
   return byColl[coll] || null;
 }
 
@@ -172,6 +178,9 @@ function pubStatus(coll, o) {
   if (coll === "parts") return o.layupProgress || o.moldProgress || "";
   return o.status || o.stage || "";
 }
+// The stage word on a scanned mold is the single most useful fact after its
+// name: "Ready for layup" versus "Machined" is the whole question someone is
+// standing in front of it asking.
 
 /* ---------- one label ---------- */
 

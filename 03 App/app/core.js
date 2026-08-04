@@ -59,22 +59,40 @@ function del(coll, id) { return fb.del(coll, id).catch(e => toast("Delete failed
 // Every caller reads its whole form BEFORE awaiting this, because the offline
 // fallback below opens a modal, and openModal() replaces whatever modal was on
 // screen — including the create form the caller is still reading fields from.
-async function allocId(coll) {
-  try { return await fb.allocId(coll); }
+async function allocId(coll, cls) {
+  try { return await fb.allocId(coll, cls); }
   catch (e) {
     const ok = await confirmAsync("Couldn't reach the shared ID counter (offline?). Assign a local ID now — it could collide with one made on another laptop. Continue?",
       { ok: "Use a local ID", danger: false });
     if (!ok) return null;
-    return localId(coll);
+    return localId(coll, cls);
   }
 }
-// Offline fallback only — normal path is the shared counter in fb.allocId().
-function localId(coll) {
-  const prefix = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY" }[coll] || coll.toUpperCase();
+/* Offline fallback only; the normal path is the shared counter in fb.allocId().
+ *
+ * `cls` and the prefix-scoped scan below are NOT optional detail. This used to
+ * take the highest `-SN6-(\d+)` in the WHOLE collection, which was fine when
+ * every collection held one kind of record. `items` and `lots` hold several
+ * (PNL/JIG/BIN, FAB/RSN/CON), so an unscoped scan would hand out PNL-SN6-014
+ * because a JIG happened to reach 13 — colliding with a real PNL the moment the
+ * counters resynced, and silently, because the ids look perfectly well formed.
+ *
+ * It would only ever happen on the offline path, which is the RFS wifi-dropout
+ * case nobody tests under. Hence: filter by prefix, not by collection.
+ */
+function localId(coll, cls) {
+  const prefix = cls || ID_PREFIX_LOCAL[coll] || coll.toUpperCase();
+  const re = new RegExp("^" + prefix + "-SN6-(\\d+)$");
   let max = 0;
-  (DB[coll] || []).forEach(o => { const m = String(o.id).match(/-SN6-(\d+)$/); if (m) max = Math.max(max, +m[1]); });
+  (DB[coll] || []).forEach(o => { const m = String(o.id).match(re); if (m) max = Math.max(max, +m[1]); });
   return `${prefix}-SN6-${String(max + 1).padStart(3, "0")}`;
 }
+// Mirrors ID_PREFIX in fb.js, which is module-scoped and invisible here.
+// Multi-class collections are absent on purpose: they must be given a class.
+const ID_PREFIX_LOCAL = {
+  workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY",
+  documents: "DOC", stock: "BRD", stackplans: "STK", molds: "MOLD",
+};
 function recById(coll, id) { return (DB[coll] || []).find(o => o.id === id); }
 
 /* ---------- SVG icon system ----------
@@ -336,6 +354,10 @@ function openRecord(tab, id) {
 const ID_TO_COLL = {
   WO: "workOrders", P: "parts", PROJ: "projects", BUY: "budget",
   DOC: "documents", BRD: "stock", STK: "stock",
+  MOLD: "molds",
+  // Multi-class collections: several prefixes, one collection, one tab each.
+  PNL: "items", JIG: "items", BIN: "items",
+  FAB: "lots", RSN: "lots", CON: "lots",
 };
 function tabForId(id) {
   const pfx = (String(id || "").toUpperCase().match(/^([A-Z]+)-/) || [])[1];
@@ -1041,6 +1063,9 @@ const TABS = [
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
   { id: "stock", label: "Stock", ic: "layers", coll: "stock", render: () => renderStock() },
+  { id: "molds", label: "Molds", ic: "parts", coll: "molds", render: () => renderShop("molds") },
+  { id: "lots", label: "Materials", ic: "documents", coll: "lots", render: () => renderShop("lots") },
+  { id: "items", label: "Items", ic: "layers", coll: "items", render: () => renderShop("items") },
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
   { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
   { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", render: () => renderWeekPlan() },

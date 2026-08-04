@@ -156,6 +156,43 @@ export const weekPlanPatch = (weekId) => ({
    Kept as a string because both consumers inject it with page.evaluate(), and
    because it must run AFTER the archive fetch so the schedule patch has a week
    to attach to. */
+/* Molds, items and lots (2026-08-03). Three tabs photograph as empty states
+   without these, and an empty tab is the one state a density audit learns
+   nothing from. Content is deliberately hostile where it can be: a mold name
+   long enough to clip, a stack string at full CS-002 length, an item with
+   nothing but an id. */
+export const MOLDS = [
+  { id: "MOLD-SN6-001", name: "UT INLET L/H", stage: "Ready for layup", location: "BIN-SN6-001",
+    board: "BRD-SN5-002", density: "30", layers: "2 x 3in", sealingType: "XCR",
+    sealedDate: "2026-09-14", sealedBy: "RJB", uses: 3, rev: "A" },
+  { id: "MOLD-SN6-002", name: "UNDERTRAY LEFT SIDE POD OUTBOARD SKIN LOWER SECTION TWO",
+    stage: "Machined", density: "60", uses: 0, rev: "A" },
+  { id: "MOLD-SN6-003", name: "NOSECONE", stage: "Board glued", uses: 0 },
+  { id: "MOLD-SN6-004", stage: "Designed" },
+];
+export const ITEMS = [
+  { id: "PNL-SN6-001", cls: "PNL", name: "CORE COMPARISON PANEL", stage: "Cured",
+    stack: "6X 195 TWILL + .125 NOMEX + 88 SPREAD-TOW", laidOn: "2026-09-22",
+    coupons: "C01-C12", thicknessMm: 1.9, resinLot: "RSN-SN6-001", lotSource: "scanned" },
+  { id: "PNL-SN6-002", cls: "PNL", name: "GLASS INFUSION TRIAL", stage: "Planned" },
+  { id: "BIN-SN6-001", cls: "BIN", name: "RFS CONTAINER SHELF A", stage: "Active" },
+  { id: "BIN-SN6-002", cls: "BIN", name: "JACOBS BASEMENT SHELF B3", stage: "Active" },
+  { id: "JIG-SN6-001", cls: "JIG", name: "NOSECONE TRIM JIG", stage: "Stored", location: "BIN-SN6-002" },
+];
+export const LOTS = [
+  { id: "RSN-SN6-001", cls: "RSN", name: "IN2 INFUSION RESIN", role: "resin", stage: "Open",
+    ratio: "100 : 30 BY WEIGHT", vendorLot: "24C-0918", supplier: "Easy Composites",
+    receivedOn: "2026-08-28", openedOn: "2026-09-02", expiresOn: "2027-08-28",
+    location: "BIN-SN6-001", qty: "2.1 kg" },
+  { id: "RSN-SN6-002", cls: "RSN", name: "AT30 SLOW HARDENER", role: "hardener", stage: "Open",
+    vendorLot: "24C-0919", supplier: "Easy Composites", location: "BIN-SN6-001" },
+  { id: "FAB-SN6-001", cls: "FAB", name: "195 TWILL SIGMATEX", stage: "Open", qty: "12 m",
+    supplier: "Sigmatex", location: "BIN-SN6-001" },
+  { id: "FAB-SN6-002", cls: "FAB", name: "195 TWILL OFFCUT", stage: "Open",
+    parentId: "FAB-SN6-001", qty: "0.8 m" },
+  { id: "CON-SN6-001", cls: "CON", name: "TACKY TAPE", stage: "Sealed", supplier: "Easy Composites" },
+];
+
 export const APPLY_FIXTURES = `
 (() => {
   const U = ${JSON.stringify(USERS)};
@@ -163,6 +200,9 @@ export const APPLY_FIXTURES = `
   window.onFbData("projects", ${JSON.stringify(PROJECTS)});
   window.onFbData("budget", ${JSON.stringify(BUDGET)});
   window.onFbData("notifications", ${JSON.stringify(NOTIFICATIONS)});
+  window.onFbData("molds", ${JSON.stringify(MOLDS)});
+  window.onFbData("items", ${JSON.stringify(ITEMS)});
+  window.onFbData("lots", ${JSON.stringify(LOTS)});
   /* Date the archive weeks. The SN5 seed ships every week with weekOf:"" —
      honest for retro data, useless for a screenshot, because an undated week
      can never be "this week" and half the tab's states never render. Walk them

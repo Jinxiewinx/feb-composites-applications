@@ -50,7 +50,9 @@ function renderReports() {
     <button onclick="exportCSV('projects')">Tickets</button>
     <button onclick="exportCSV('budget')">Budget</button>
     <button onclick="openLabelBuilder()">${icon("print", 15)} Labels</button>
-    ${isLead() ? `<button onclick="rebuildScanMirror()" title="Re-publish the public scan nameplates for every physical record">Rebuild scan mirror</button>` : ""}
+    ${isLead() ? `<button onclick="rebuildScanMirror()" title="Re-publish the public scan nameplates for every physical record">Rebuild scan mirror</button>
+    <button onclick="findMoldsInWorkOrders()" title="Turn the free-text mold names on work orders into real mold records">Find molds in work orders</button>
+    <button onclick="backfillPartWorkOrderLinks()" title="Link each part to the work order with the same name">Link parts to work orders</button>` : ""}
     <button class="primary" style="margin-left:auto" onclick="window.print()">Print status board</button>
   </div>
   <div class="card">

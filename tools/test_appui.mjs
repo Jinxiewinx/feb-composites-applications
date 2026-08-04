@@ -7,7 +7,7 @@
  * Did a colour get hardcoded so it never changes in dark mode. Is 27% of a
  * 1920px monitor empty.
  *
- * Eleven tabs x four widths x two themes is 88 renders, and a check that only
+ * Fourteen tabs x four widths x two themes is 112 renders, and a check that only
  * runs on Parts is a check that misses Weekly Plan. So everything here is
  * per-tab by construction: one page.evaluate() returns a flat facts object,
  * and each fact becomes one ok() with its measured value attached, so a
@@ -35,8 +35,8 @@ const ok = (name, cond, detail = "") => {
   else { fail++; console.log(`  FAIL ${name}${detail ? " — " + detail : ""}`); }
 };
 
-const TABS = ["dashboard", "workorders", "parts", "stock", "projects",
-  "timeline", "weekplan", "budget", "documents", "reports", "people"];
+const TABS = ["dashboard", "workorders", "parts", "stock", "molds", "lots", "items",
+  "projects", "timeline", "weekplan", "budget", "documents", "reports", "people"];
 
 /* The same four widths shoot_ui.mjs photographs, so a failing number and the
    picture of it always come from the same layout. `coarse` drives the tap

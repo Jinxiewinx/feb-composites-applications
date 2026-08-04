@@ -73,7 +73,12 @@ await expect(403, "member", "PATCH", "/roster/friend@feb.test", { name: S("Frien
 await expect(403, "member", "DELETE", "/roster/lead@feb.test");
 
 console.log("new collections (member CRUD, lead-only delete):");
-for (const coll of ["parts", "projects", "schedule", "budget", "stock", "stackplans"]) {
+/* molds/items/lots joined this list on 2026-08-03 with printed labels. They
+   carry the same access shape as everything else — a public scan reads the
+   separate `pub` mirror, never these — and that separation is exactly what the
+   `rando` line below is checking. */
+for (const coll of ["parts", "projects", "schedule", "budget", "stock", "stackplans",
+                    "molds", "items", "lots"]) {
   await expect(200, "member", "PATCH", `/${coll}/X-001`, { id: S("X-001"), name: S("t") });
   await expect(200, "member", "GET", `/${coll}/X-001`);
   await expect(403, "member", "DELETE", `/${coll}/X-001`);

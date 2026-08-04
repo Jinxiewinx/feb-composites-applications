@@ -116,9 +116,29 @@ CS standards and pain-points all open as PDFs in-app, with the standards rendere
 from markdown by pandoc and the .docx still downloadable, plus the shop
 printables. Anyone can upload a doc.
 
+Molds, Materials and Items are the physical world, added with printed labels.
+A **mold** used to exist only as free text inside one work order, so two work
+orders using the same mold held two copies of the truth and `mold.location` was
+wrong on one of them the moment anybody moved it. Now it is a record with its own
+stage, home location, sealing date and a count of parts pulled off it, and the
+work orders and parts that used it are listed on it as a live join. **Materials**
+holds fabric rolls and offcuts, resin and hardener lots, and consumables, which
+is what makes "which roll went into this panel" answerable at all. **Items**
+holds test panels, jigs and storage bins; a panel carries its stack, its coupon
+range and its lot references, which is the fix for tensile data whose only
+identity was a trailing integer in a filename.
+
+All three run on one schema in `app/shop.js`. Three near-identical tabs written
+three times would drift, and the mobile behaviour would drift with them.
+
 Reports does per-dataset CSV export for parts, work orders, projects and budget,
 plus a one-click printable Monday-meeting status board, and it is where you print
-labels in bulk.
+labels in bulk. A lead also gets three one-off migrations there: **Find molds in
+work orders** proposes a mold record per distinct free-text mold name and lets a
+human untick the duplicates (no algorithm should decide that "MOLD-UT-INLET" and
+"UT INLET MOLD" are the same mold); **Link parts to work orders** backfills the
+edge that `sn5-parts.json` never had, on exact one-to-one name matches only; and
+**Rebuild scan mirror** re-publishes the public nameplates.
 
 ## Labels
 

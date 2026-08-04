@@ -35,6 +35,21 @@ service cloud.firestore {
     // Documents: any member can upload/edit; only a lead prunes the library.
     match /documents/{id}  { allow read, create, update: if onRoster(); allow delete: if isLead(); }
 
+    /* The physical world, added with printed labels (2026-08-03).
+       molds (MOLD-SN6-###) = a real mold, which outlives the work orders that
+       use it — it used to exist only as free text inside one WO, so two WOs
+       using the same mold held two copies of the truth and mold.location was
+       wrong on one of them the moment anybody moved it.
+       items = test panels, jigs and storage bins (PNL/JIG/BIN).
+       lots  = fabric rolls and offcuts, resin and hardener, consumables
+               (FAB/RSN/CON), which is what makes "which roll went into this
+               panel" answerable.
+       Both multi-class collections carry a `cls` field; same access shape as
+       every other record collection. */
+    match /molds/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /items/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /lots/{id}       { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+
     // Notifications: any member can create one (for a teammate); you can only
     // read/update/delete notifications addressed to YOU (a lead can prune any).
     // The app subscribes with where('to','==', myEmail), which matches the read rule.

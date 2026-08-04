@@ -91,6 +91,22 @@ const VIEWS = [
     open: `openRecord("projects", (DB.projects[0] || {}).id)`, needs: "inHg" },
   { id: "budget-detail", tab: "budget", what: "a purchase with a long note",
     open: `openRecord("budget", (DB.budget[0] || {}).id)`, needs: "inHg" },
+  /* The three physical-world tabs. A mold detail carries the longest name in
+     the fixtures (55 characters) and a full reference chain; a panel carries a
+     CS-002 stack string and four lot references. Both are read AND edit,
+     because the edit view is a wall of inputs and is the one that overflows. */
+  { id: "mold-detail", tab: "molds", what: "a mold with a very long name and reference chips",
+    open: `openRecord("molds", (DB.molds[1] || {}).id)` },
+  { id: "mold-detail-edit", tab: "molds", what: "the same mold in edit mode",
+    open: `openRecord("molds", (DB.molds[1] || {}).id); view.edit = true; render()` },
+  { id: "panel-detail", tab: "items", what: "a test panel with its stack and lot references",
+    open: `openRecord("items", (DB.items[0] || {}).id)` },
+  { id: "panel-detail-edit", tab: "items", what: "the same panel in edit mode",
+    open: `openRecord("items", (DB.items[0] || {}).id); view.edit = true; render()` },
+  { id: "lot-detail", tab: "lots", what: "a resin lot with dates and a mix ratio",
+    open: `openRecord("lots", (DB.lots[0] || {}).id)` },
+  { id: "lot-detail-edit", tab: "lots", what: "the same lot in edit mode",
+    open: `openRecord("lots", (DB.lots[0] || {}).id); view.edit = true; render()` },
   { id: "weekplan", tab: "weekplan", what: "the weekly plan with documents linked",
     needs: "CAM notes" },
   { id: "documents", tab: "documents", what: "the documents shelf, with pinned links",
