@@ -49,6 +49,7 @@ function renderReports() {
     <button onclick="exportCSV('workOrders')">Work Orders</button>
     <button onclick="exportCSV('projects')">Tickets</button>
     <button onclick="exportCSV('budget')">Budget</button>
+    <button onclick="openLabelBuilder()">${icon("print", 15)} Labels</button>
     <button class="primary" style="margin-left:auto" onclick="window.print()">Print status board</button>
   </div>
   <div class="card">

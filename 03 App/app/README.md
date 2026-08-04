@@ -117,7 +117,38 @@ from markdown by pandoc and the .docx still downloadable, plus the shop
 printables. Anyone can upload a doc.
 
 Reports does per-dataset CSV export for parts, work orders, projects and budget,
-plus a one-click printable Monday-meeting status board.
+plus a one-click printable Monday-meeting status board, and it is where you print
+labels in bulk.
+
+## Labels
+
+Every physical thing gets a 4 x 1 inch label carrying its ID, its name, the fact
+that actually identifies it, and a QR code that resolves to the record. On a part
+that fact is the layup stack; on a mold it is the sealing record and the number of
+parts pulled off it. The point is that the label answers "what is this" with the
+phone still in your pocket, because RFS wifi drops and gloves are covered in
+resin. Scanning is the fast path, not the only one.
+
+There is a Label button on a work order and on a part, and a bulk builder under
+Reports. The builder lets you pick the stock (Avery 5161, 20 up, or 5522
+WeatherProof polyester for chemicals) and the cell to start at, so a part-used
+sheet gets finished instead of binned. It also prints a 100 mm calibration bar:
+browsers silently apply "Fit to page" scaling, and ten seconds with a steel rule
+is cheaper than a wasted sheet of polyester.
+
+The QR encodes `HTTPS://FEB-COMPOSITES.WEB.APP/Q/<ID>`, uppercase and with no
+query string or fragment. That is not a style choice. QR alphanumeric mode covers
+only `0-9 A-Z space $%*+-./:`, and staying inside it keeps a 45-character URL at
+version 3 (29 modules) with error-correction level Q, 25% recovery. One lowercase
+letter, one `?utm=`, or a switch to a `#hash` route drops it to byte mode, which
+needs version 4 and only gets level M. Nothing about the printed label looks
+different; it just scans worse once it has resin on it. `tools/test_qr.mjs`
+asserts the module count is exactly 29 so that change cannot land quietly.
+
+The same arithmetic caps an ID at 14 characters (47 - 30 of host - 3 of `/Q/`).
+Everything in the grammar fits except a coupon, `PNL-SN6-006-C03` at 15, which is
+why coupon labels are text-only: 12 mm tape has 8 mm of print height and cannot
+hold even a version 1 code with its quiet zone.
 
 Cross-links are everywhere: click a chip to jump to the related record. A part's
 layup stack and its linked work order's stack stay in sync, so edit either one.
@@ -372,6 +403,8 @@ node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake b
 node tools/test_designsystem.mjs  # app CSS vs 06 Design System, no browser
 node tools/test_appui.mjs         # layout on 11 tabs x 4 widths x 2 themes
 node tools/test_safearea.mjs      # notch / Dynamic Island / home indicator
+node tools/test_qr.mjs            # QR version/ECC arithmetic + the public projection
+node tools/test_labels.mjs        # the label sheet, measured and rasterised
 node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab
 node tools/shoot_ui.mjs --out .ui-shots --inset portrait   # ...with a simulated island
 cd "03 App" && firebase emulators:exec --only firestore \

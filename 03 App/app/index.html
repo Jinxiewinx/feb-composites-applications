@@ -737,6 +737,19 @@
     position: sticky; bottom: -22px; z-index: 1; background: var(--surface);
     padding: 10px 0; margin-bottom: -10px; }
 
+  /* ---- label builder ---- */
+  /* The list is capped and scrolls rather than growing the modal: by March there
+     are a few hundred labelable records, and a modal taller than the viewport
+     puts the Preview button out of reach on a laptop. The .foot above is sticky
+     for the same reason. */
+  .chk { display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; }
+  .chk input { flex: 0 0 auto; }
+  .lbpick { margin-top: 14px; }
+  .lblist { max-height: 34vh; overflow: auto; border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 4px 8px; background: var(--surface-2); }
+  .lblist .chk { border-top: 1px solid var(--line); }
+  .lblist .chk:first-child { border-top: none; }
+
   /* ---- documents ---- */
   .doccat { margin-bottom: 8px; }
   .doclist { display: flex; flex-direction: column; }
@@ -2140,6 +2153,11 @@
      it still verifies the bytes are the reviewed ones. -->
 <script src="vendor/purify.min.js"
         integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu"></script>
+<!-- qrcode-generator 1.4.4, MIT. No integrity hash: unlike purify this was
+     never loaded remotely, it was vendored from npm and the sourceMappingURL
+     comment stripped, so the bytes differ from any published artefact by
+     design. See the header of vendor/qrcode.min.js. -->
+<script src="vendor/qrcode.min.js"></script>
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="resins.js"></script>
@@ -2163,6 +2181,7 @@
 <script src="people.js"></script>
 <script src="reports.js"></script>
 <script src="print.js"></script>
+<script src="labels.js"></script>
 <script type="module" src="fb.js"></script>
 <script>render();</script>
 </body>

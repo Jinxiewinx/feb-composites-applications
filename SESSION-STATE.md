@@ -9,8 +9,82 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-02
-Status: **Mobile layout fixed for populated records, re-landed after a
+Last updated: 2026-08-03
+Status: **Printed labels ship (2026-08-03).** Stage 2 of the identification and
+traceability plan: every physical thing can now be given a 4 x 1 inch label with
+a QR that resolves to its record. New `app/labels.js` + `app/vendor/qrcode.min.js`,
+label CSS appended to `print.css`, Label buttons on work orders and parts, bulk
+builder under Reports. New suites `tools/test_qr.mjs` (69) and
+`tools/test_labels.mjs` (32). Full suite green: 298 app / 988 app-UI / 490
+detail-UI / 55 sanitizer / 23 design-system / 30 safe-area / 13 print mobile.
+Not yet deployed, and the routing that makes the QR resolve to anything is stage 3
+(see below) -- until that lands, a scanned code 404s.
+
+## Labels: the four things worth knowing (2026-08-03)
+
+**1. The number is 29, and uppercase is why.**
+`HTTPS://FEB-COMPOSITES.WEB.APP/Q/MOLD-SN6-004` is 45 characters. In QR
+alphanumeric mode that fits version 3 (29 modules) at error-correction level Q,
+25% recovery. In byte mode the same string needs version 4 (33 modules) and only
+gets level M, 15%. QR alphanumeric covers only `0-9 A-Z space $%*+-./:`, so one
+lowercase letter, one `?utm=`, or a `#hash` route costs a version AND an ECC
+level -- and the printed label looks identical, it just scans worse once it has
+resin on it. `test_qr.mjs` asserts `getModuleCount() === 29` exactly. That single
+assertion is the whole guard.
+
+The same arithmetic caps an ID at 14 characters (47 - 30 host - 3 for `/Q/`).
+Everything fits except a coupon, `PNL-SN6-006-C03` at 15, which is why coupon
+labels are text-only -- and 12 mm tape could not hold a QR anyway (8 mm of print
+height is below version 1 with a quiet zone). `labelHtml()` drops the QR rather
+than silently printing a denser one.
+
+**2. qrcode-generator does NOT auto-detect alphanumeric mode.** `addData()`
+defaults to Byte. The plan assumed auto-detection and was wrong; a five-line node
+check caught it before any code was written around it. Always pass
+`'Alphanumeric'` explicitly.
+
+**3. Three bugs the DOM could not see, and how each was caught.**
+
+- *The sheet mounted and was invisible.* `mountSheet()` puts the sheet in
+  `#printroot` but does NOT reveal it: the screen-side switch is
+  `body.previewing #app { display: none }`, and every caller adds that class
+  itself (`print.js:409`, `:422`, `drawings.js:1188`). Without it every DOM
+  assertion passed -- element present, sized, `checkVisibility()` true -- and the
+  user saw the page they were already on. Caught by looking at a screenshot.
+- *The FEB tag clipped mid-glyph.* `overflow: hidden` was on the flex ROW, so a
+  long footer cut the tag instead of truncating the text before it. Every
+  "does anything overflow its cell" check passed, because the clip happened
+  inside the row's own box. The ellipsis belongs on the text span. Caught by
+  looking at a screenshot; now asserted three ways.
+- *The QR could be a blank white square.* An `<svg>` with a malformed `d` passes
+  `checkVisibility()`, reports a perfect box, and paints nothing. So
+  `test_labels.mjs` rasterises each code to a canvas and asserts the dark-pixel
+  fraction is 0.30-0.60 (a real code is ~45%, blank is 0%, a black box is 100%).
+  **Pixels are the only honest check for a QR.** This is the SESSION-STATE
+  "layout is not paint" lesson one level further on: paint is not correctness.
+
+Separately, the codes were verified end to end by decoding them with jsQR, an
+independent decoder, at 300 dpi: all five test IDs read back byte-identical. jsQR
+is not a repo dependency, so that check was one-off rather than in the suite; the
+in-suite guard is the path-to-module-matrix round-trip in `test_qr.mjs`.
+
+**4. Two things that are constraints, not preferences.**
+Label CSS lives in `print.css`, never `index.html`, because `downloadSheet()`
+(`print.js:378`) fetches `print.css` and inlines it -- anything in index.html
+vanishes from every saved sheet, and a saved sheet on a phone at RFS with no wifi
+is the case that matters. And `labelSheetHtml()` must never reuse
+`fitSheetHtml()`, `LAYOUTS` or `MAX_PAGES`: those exist to squeeze a work order
+into two pages via a nine-rung ladder and mean nothing for a fixed grid.
+
+**Still to do**, in plan order: stage 3 (the `/Q/**` hosting rewrite, `q.html`
+public scan landing, the `pub` mirror collection and its rules, hash routing and
+pending-link replay); stage 4 (the `molds`, `items` and `lots` collections, and
+the `localId()` fix that MUST land in the same commit -- it scans
+`-SN6-(\d+)$` across a whole collection and will mint colliding IDs once one
+collection holds several prefixes, and only on the offline path); stage 5 (scan
+actions and lot capture); and the CS-001 Rev C / CS-013 Rev C standards work.
+
+Previously: **Mobile layout fixed for populated records, re-landed after a
 desktop regression (2026-08-02).** The first attempt shipped a CSS rule that
 made the ticket page's whole left rail render blank on desktop; it was reverted
 within the hour and re-landed without that one change. Read "The regression"

@@ -93,7 +93,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "labels.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.

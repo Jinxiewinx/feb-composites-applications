@@ -743,6 +743,7 @@ function renderPartDetail() {
     <div class="toolbar no-print">
       <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
       <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
+      ${labelBtn("parts", p.id)}
       ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
       <span class="mdnav no-print">
         <button class="sm" title="Previous part (↑)" onclick="movePartSelection(-1)">${icon("chevronLeft", 14)}</button>

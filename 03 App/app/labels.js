@@ -1,0 +1,469 @@
+/* labels.js — printed identity for physical things.
+ *
+ * WHY THIS EXISTS
+ * The SN5 part tracker had no ID column, so a part's *name string* was its
+ * primary key, and the strings didn't even agree between sheets (STERING COVER
+ * in one, STEERING COVER in the other). Molds sat in the RFS container for
+ * weeks with nobody sure whose they were (PP-10). Seventeen tensile CSVs
+ * identify a specimen by a trailing integer in the filename and nothing else.
+ *
+ * So: every physical thing gets a 4x1 inch label carrying its ID, its name,
+ * the fact that actually identifies it (the layup stack for a part, the
+ * sealing record for a mold), and a QR that resolves to the record.
+ *
+ * THE ONE NUMBER THIS FILE IS BUILT AROUND: 29.
+ * HTTPS://FEB-COMPOSITES.WEB.APP/Q/MOLD-SN6-004 is 45 characters. Encoded as
+ * BYTES that needs QR version 4 (33 modules). Encoded as ALPHANUMERIC it fits
+ * version 3 (29 modules) *and* has room for error-correction level Q, 25%
+ * recovery, instead of M's 15%. Same physical size, a whole ECC level better,
+ * for free — which on a label that gets resin and mold release on it is the
+ * whole argument.
+ *
+ * That is why every URL here is UPPERCASE. QR alphanumeric mode covers only
+ * 0-9 A-Z space $ % * + - . / : — no lowercase, no # ? = & _. One lowercase
+ * letter silently costs a version and an ECC level. Scheme and host are
+ * case-insensitive per RFC 3986 and our IDs are already uppercase, so nothing
+ * is lost. tools/test_qr.mjs asserts getModuleCount() === 29 exactly, so the
+ * day someone adds ?utm= or switches to a #hash route, the suite says so.
+ *
+ * And note: qrcode-generator does NOT auto-detect alphanumeric mode. addData()
+ * defaults to Byte. We pass 'Alphanumeric' explicitly, after validating the
+ * charset ourselves, because the library's own error for a bad character is
+ * literally `undefined`.
+ */
+
+/* ---------- the URL ---------- */
+
+const SCAN_HOST = "HTTPS://FEB-COMPOSITES.WEB.APP";
+const SCAN_PATH = "/Q/";
+// QR alphanumeric charset, ISO/IEC 18004 table 5. Anything outside this drops
+// the encoder into byte mode.
+const QR_ALNUM = /^[0-9A-Z $%*+\-./:]*$/;
+
+/* THE CHARACTER BUDGET, which is a hard constraint on the ID grammar and not
+ * just a property of this file.
+ *
+ * QR version 3 at ECC Q holds 47 alphanumeric characters. The host is 30 and
+ * "/Q/" is 3, so an ID has 14 characters before the code jumps to version 4.
+ *
+ *   47 - 30 - 3 = 14
+ *
+ * MOLD-SN6-004 is 12, and every other prefix in the grammar is shorter. The one
+ * thing that busts it is a coupon, PNL-SN6-006-C03 at 15 — which is fine,
+ * because coupons are text-only on 12mm tape and never carry a QR at all (there
+ * is no room for one: 8mm of print height cannot hold a version 1 code with its
+ * quiet zone). This is asserted in tools/test_qr.mjs so that the day someone
+ * adds a longer prefix, or puts a QR on a coupon, the suite says so instead of
+ * every label quietly getting denser.
+ */
+const QR_ID_BUDGET = 47 - SCAN_HOST.length - SCAN_PATH.length;   // = 14
+
+function scanUrl(id) { return SCAN_HOST + SCAN_PATH + String(id || "").toUpperCase(); }
+function fitsQrBudget(id) { return String(id || "").length <= QR_ID_BUDGET; }
+
+/* ---------- QR ---------- */
+
+// Below this the code stops being readable by a phone and starts being
+// decoration. 29 modules + 8 of quiet zone = 37; at 14mm that's 0.38mm per
+// module, already under the 0.4mm floor. A too-small QR looks perfectly fine
+// on screen and simply does not scan in the world, which is why this is a
+// throw and not a console.warn.
+const QR_MIN_MM = 14;
+
+/* One QR as a self-contained inline <svg>.
+ *
+ * Self-contained matters: print.js sheetFileHtml() copies innerHTML and inlines
+ * only CSS, so a saved label sheet on a phone at RFS with no wifi has no
+ * vendor/qrcode.min.js next to it. Nothing here may be a <script>, an <image>,
+ * or an xlink:href.
+ *
+ * One merged <path>, not N <rect>s: a 29x29 grid as rects is ~420 elements per
+ * label, so a 20-up sheet is 8,400 DOM nodes and a saved file in the megabytes.
+ * Run-length-merging horizontal runs gets one label to about 2KB.
+ *
+ * The quiet zone lives INSIDE the viewBox. Printers clip to the element box, so
+ * a quiet zone implemented as a CSS margin disappears in the saved file, and a
+ * QR with no quiet zone is the most common home-made-label failure there is.
+ */
+function qrSvg(text, sizeMm, cls) {
+  const t = String(text || "");
+  if (!QR_ALNUM.test(t)) {
+    throw new Error(`qrSvg: "${t}" has characters outside QR alphanumeric mode. ` +
+      `Uppercase it, and drop any # ? = & _ — see the header of labels.js.`);
+  }
+  if (!(sizeMm >= QR_MIN_MM)) {
+    throw new Error(`qrSvg: ${sizeMm}mm is below the ${QR_MIN_MM}mm floor; the code would not scan.`);
+  }
+  if (typeof qrcode !== "function") throw new Error("qrSvg: vendor/qrcode.min.js not loaded.");
+
+  const q = qrcode(0, "Q");          // 0 = auto version, Q = 25% recovery
+  q.addData(t, "Alphanumeric");
+  q.make();
+
+  const n = q.getModuleCount();
+  const QUIET = 4;                   // modules, per ISO/IEC 18004
+  const box = n + QUIET * 2;
+
+  // Merge horizontal runs of dark modules into one path segment each.
+  let d = "";
+  for (let r = 0; r < n; r++) {
+    let run = 0;
+    for (let c = 0; c <= n; c++) {
+      const dark = c < n && q.isDark(r, c);
+      if (dark) { run++; continue; }
+      if (run) { d += `M${c - run + QUIET} ${r + QUIET}h${run}v1h-${run}z`; run = 0; }
+    }
+  }
+
+  // xmlns is not needed for inline SVG (the HTML parser implies it) but IS
+  // needed the moment the markup leaves an HTML document: pasted into a data
+  // URL, saved as a .svg, or handed to a print shop. 34 bytes to make the code
+  // a portable artefact instead of a fragment.
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="lbl-qr${cls ? " " + cls : ""}" ` +
+    `width="${sizeMm}mm" height="${sizeMm}mm" ` +
+    `viewBox="0 0 ${box} ${box}" shape-rendering="crispEdges" role="img" ` +
+    `aria-label="scan code for ${esc(t)}"><rect width="${box}" height="${box}" fill="#fff"/>` +
+    `<path d="${d}" fill="#000"/></svg>`;
+}
+
+/* ---------- what the label says ---------- */
+
+/* The public projection: the ONLY fields an unauthenticated scanner may see.
+ *
+ * Shared with the label renderer on purpose, so the printed label and the
+ * public scan card can never disagree about what an object is. It is also the
+ * security boundary — Firestore rules cannot filter fields, only whole
+ * documents, so this function is what keeps layup stacks and people's names off
+ * a public URL. firestore.rules mirrors this list in a hasOnly() clause; if you
+ * add a key here, add it there too or the write is rejected.
+ *
+ * Never add: any human name or email, layupStack/steps/qualityChecks/bom,
+ * anything from budget, any firebasestorage.googleapis.com URL (a download URL
+ * is a bearer credential and works regardless of storage.rules), or unbounded
+ * free text like comments.
+ */
+function pubProjection(coll, o) {
+  if (!o || !o.id) return null;
+  const cls = labelClass(coll, o);
+  if (!cls) return null;                       // tickets, budget, docs: not physical
+  return {
+    id: o.id,
+    cls,
+    name: o.partName || o.name || o.label || "",
+    status: pubStatus(coll, o),
+    location: o.location || o.moldLocation || "",
+    wo: o.workOrderId || o.wo || (coll === "workOrders" ? o.id : "") || "",
+    rev: o.revision || o.rev || "",
+    note: "",
+    updatedAt: o.updatedAt || ""
+  };
+}
+
+// The class word. Mandatory on every label and always larger than the code,
+// because "PART P-SN6-007" and "TICKET PROJ-SN6-007" can never be confused at
+// 7pt on a greasy label while the bare codes can.
+function labelClass(coll, o) {
+  const byColl = { workOrders: "WORK ORDER", parts: "PART", stock: "BOARD", molds: "MOLD" };
+  if (coll === "items" || coll === "lots") return String(o.cls || "").toUpperCase() || null;
+  return byColl[coll] || null;
+}
+
+function pubStatus(coll, o) {
+  if (coll === "parts") return o.layupProgress || o.moldProgress || "";
+  return o.status || o.stage || "";
+}
+
+/* ---------- one label ---------- */
+
+/* 101.6 x 25.4 mm (Avery 5161), which is also a 24mm tape label to within
+ * 1.4mm — so one layout drives both the sheet path we have today and the
+ * thermal path after the printer arrives. The fallback is the same design on
+ * worse stock, not a degraded design.
+ *
+ * Vertical budget: 25.4mm less 2mm margin top and bottom = 21.4mm. Five lines
+ * at 5.6/4.2/3.4/3.1/3.1mm fills 19.4mm. There is no room for a masthead bar at
+ * this height, so the FEB mark is a 6.5pt tag on the last line.
+ *
+ * Line 3 is the one this whole system exists for. On a part or panel it is the
+ * layup stack in CS-002 shorthand ("6X 195 TWILL + .125 NOMEX"), which is the
+ * literal question PP-09 records nobody being able to answer. On a mold it is
+ * the sealing record, which is the equivalent question for a tool. It is set in
+ * bold at 8.5pt rather than dropped to the 7pt tier for that reason.
+ */
+function labelHtml(coll, o, opts) {
+  opts = opts || {};
+  const p = pubProjection(coll, o);
+  if (!p) return "";
+  const L = labelLines(coll, o, p);
+  // No QR when the caller says so, or when the ID is too long to stay at
+  // version 3 (coupons). Silently dropping to a denser code would be worse:
+  // the label would look identical and scan worse.
+  const qr = (opts.noQr || !fitsQrBudget(o.id)) ? "" : qrSvg(scanUrl(o.id), opts.qrMm || 21.4);
+
+  return `<div class="lbl" data-id="${esc(o.id)}" data-cls="${esc(p.cls)}">
+    <div class="lbl-txt">
+      <div class="lbl-r1"><span class="lbl-id">${esc(o.id)}</span><span class="lbl-name">${esc(L.name)}</span></div>
+      <div class="lbl-r2">${esc(L.key)}</div>
+      <div class="lbl-r3">${esc(L.mid)}</div>
+      <div class="lbl-r4"><span>${esc(L.foot)}</span><span class="lbl-feb">FEB</span></div>
+    </div>
+    <div class="lbl-code">${qr}</div>
+  </div>`;
+}
+
+/* The stack, in the ~40 characters line 3 affords.
+ *
+ * `stackNote` on the retro SN5 work orders is prose, not a stack: it reads
+ * `tracker shorthand: "195 88 .125 NOMEX" — ply order/orientations not recorded
+ * (retro)`. Printed whole it fills the most valuable line on the label with the
+ * word "shorthand" and truncates before the part anyone needs. The useful
+ * content is the quoted fragment, so take that when it is there.
+ *
+ * Failing that, build from the real plies and collapse runs: five plies of
+ * 195 twill print as "5X 195 TWILL", which is the CS-002 shorthand the team
+ * already writes by hand.
+ */
+function stackLine(o) {
+  const quoted = String(o.stackNote || "").match(/"([^"]+)"/);
+  if (quoted) return quoted[1].toUpperCase();
+
+  const plies = (o.layupStack || []).map(l => String(l.material || "").trim()).filter(Boolean);
+  if (plies.length) {
+    const runs = [];
+    for (const m of plies) {
+      const last = runs[runs.length - 1];
+      if (last && last.m === m) last.n++; else runs.push({ m, n: 1 });
+    }
+    return runs.map(r => (r.n > 1 ? `${r.n}X ` : "") + r.m).join(" + ").toUpperCase();
+  }
+  return String(o.stackNote || "").toUpperCase();
+}
+
+// Per-class content. Everything is already uppercase on the label, so these
+// build plain strings and the CSS does no text-transform (transform would lie
+// about the width at layout time and overflow: hidden would clip the wrong
+// amount).
+function labelLines(coll, o, p) {
+  const j = (...a) => a.filter(x => x !== "" && x != null).join(" · ");
+  const up = s => String(s || "").toUpperCase();
+
+  if (coll === "molds") {
+    return {
+      name: up(o.name || o.partName),
+      key: j(o.sealedDate ? `SEALED ${o.sealedDate}` : "", o.sealedBy ? up(o.sealedBy) : "",
+             o.uses != null ? `USES ${String(o.uses).padStart(2, "0")}` : "", o.rev ? `REV ${up(o.rev)}` : ""),
+      mid: j(o.density ? `${o.density} PCF` : "", up(o.layers), up(o.sealingType)),
+      // Short because it competes with board and location for one 7pt line, and
+      // the full rule lives in CS-001. "40MM" is the number someone needs while
+      // holding a roll of tacky tape; the reasoning is not.
+      foot: j(up(o.board), up(o.location), "KEEP-OUT 40MM")
+    };
+  }
+  if (coll === "parts" || (coll === "items" && (o.cls === "CP" || o.cls === "PNL"))) {
+    return {
+      name: up(o.partName || o.name),
+      key: up(o.layupSchedule || o.stack || ""),                 // the PP-09 answer
+      mid: j(up(o.layupType || o.process), up(o.mold || o.moldRef), up(o.workOrderId || o.wo)),
+      foot: j(o.laidOn ? `LAID ${o.laidOn}` : "", up(o.by), o.weightG ? `${o.weightG}G` : "", up(o.subteam))
+    };
+  }
+  if (coll === "lots") {
+    return {
+      name: up(o.name || o.material),
+      key: j(up(o.ratio), up(o.role)),
+      mid: j(o.vendorLot ? `LOT ${up(o.vendorLot)}` : "", o.openedOn ? `OPENED ${o.openedOn}` : ""),
+      foot: j(o.receivedOn ? `RECD ${o.receivedOn}` : "", o.expiresOn ? `EXP ${o.expiresOn}` : "", up(o.location))
+    };
+  }
+  if (coll === "workOrders") {
+    return {
+      name: up(o.partName),
+      key: stackLine(o),
+      // humanProcess() turns MoldInfusion into "Mold infusion". Without it the
+      // label prints the raw enum, which is how the seed data reads.
+      mid: j(up(typeof humanProcess === "function" ? humanProcess(o.processType) : o.processType),
+             up(o.mold && o.mold.moldId), o.revision ? `REV ${up(o.revision)}` : ""),
+      foot: j(o.createdDate ? `OPENED ${o.createdDate}` : "", up(o.subteam), up(o.status))
+    };
+  }
+  // stock (BRD) and anything else: dimensions are the identity
+  return {
+    name: up(o.label || o.name || p.cls),
+    key: j(up(o.kind), o.density ? `${o.density} PCF` : ""),
+    mid: j(o.len && o.wid ? `${o.len} X ${o.wid} X ${o.thk || "?"}` : "", o.qty ? `QTY ${o.qty}` : ""),
+    foot: j(up(o.origin || o.originLegacy), up(o.location || o.label))
+  };
+}
+
+/* ---------- a sheet of them ---------- */
+
+/* Avery 5161: 1 x 4 in, 20 per sheet, 2 columns x 10 rows.
+ * Avery 5522 WeatherProof polyester: 1-1/3 x 4 in, 14 per sheet, 2 x 7.
+ *
+ * Deliberately does NOT use print.js's fitSheetHtml(), LAYOUTS or MAX_PAGES.
+ * Those exist to squeeze a work order into two pages via a nine-rung layout
+ * ladder and mean nothing for a fixed grid. This calls mountSheet() directly,
+ * the same way drawings.js does for multi-page drawings.
+ */
+const LABEL_GRIDS = {
+  "5161": { cols: 2, rows: 10, w: 4, h: 1, left: 0.15625, top: 0.5, pitchX: 4.1875, pitchY: 1, name: "Avery 5161 · 1 x 4 in · 20 up" },
+  "5522": { cols: 2, rows: 7, w: 4, h: 1 + 1 / 3, left: 0.15625, top: 0.5, pitchX: 4.1875, pitchY: 1 + 1 / 3, name: "Avery 5522 WeatherProof · 1-1/3 x 4 in · 14 up" }
+};
+
+/* Browsers silently apply "Fit to page" scaling, which shifts every label on
+ * the sheet by a few millimetres and ruins registration on $30 polyester. A
+ * 100mm bar someone can put a steel rule against is ten seconds and catches it.
+ */
+function calibrationCellHtml() {
+  return `<div class="lbl lbl-cal">
+    <div class="lbl-calbar"><span class="lbl-caltick"></span><span class="lbl-caltick"></span><span class="lbl-caltick"></span>
+      <span class="lbl-caltick"></span><span class="lbl-caltick"></span><span class="lbl-caltick"></span>
+      <span class="lbl-caltick"></span><span class="lbl-caltick"></span><span class="lbl-caltick"></span><span class="lbl-caltick"></span></div>
+    <div class="lbl-calnote">MEASURE ME — must be exactly 100 mm.<br>If not, set printer scaling to 100% / Actual Size.</div>
+  </div>`;
+}
+
+/* recs: [{coll, o}]. skip: leave N cells blank at the start so a part-used
+ * sheet gets consumed instead of binned. calibrate: burn one cell on the ruler.
+ */
+function labelSheetHtml(recs, opts) {
+  opts = opts || {};
+  const g = LABEL_GRIDS[opts.grid || "5161"];
+  const per = g.cols * g.rows;
+  const qrMm = opts.grid === "5522" ? 27 : 21.4;
+
+  const cells = [];
+  for (let i = 0; i < (opts.skip || 0); i++) cells.push("");
+  if (opts.calibrate !== false) cells.push(calibrationCellHtml());
+  for (const r of recs) cells.push(labelHtml(r.coll, r.o, { qrMm }));
+
+  const pages = [];
+  for (let i = 0; i < cells.length; i += per) {
+    const slice = cells.slice(i, i + per);
+    const inner = slice.map((html, k) => {
+      const col = k % g.cols, row = Math.floor(k / g.cols);
+      const x = g.left + col * g.pitchX, y = g.top + row * g.pitchY;
+      return `<div class="label-cell" style="left:${x}in;top:${y}in;width:${g.w}in;height:${g.h}in">${html}</div>`;
+    }).join("");
+    pages.push(`<div class="ws-page label-sheet" data-grid="${esc(opts.grid || "5161")}">${inner}</div>`);
+  }
+  // Same .wsheet wrapper print.js uses, so the --hair/--heavy/--shade vars and
+  // the box-sizing reset apply here too. .labels only adds the grid geometry.
+  return `<div class="wsheet labels">${pages.join("")}</div>`;
+}
+
+function openLabelPreview(recs, opts) {
+  const html = labelSheetHtml(recs, opts);
+  const g = LABEL_GRIDS[(opts && opts.grid) || "5161"];
+  mountSheet(html, true, `${recs.length} label${recs.length === 1 ? "" : "s"} · ${g.name}`, `labels-${today()}`);
+  /* mountSheet() puts the sheet in #printroot but does NOT reveal it: the
+     screen-side switch is `body.previewing #app { display: none }`, and every
+     caller adds that class itself (print.js:409 and :422, drawings.js:1188).
+     Without this line the sheet mounts correctly, every DOM assertion passes,
+     and the user sees the page they were already on. */
+  document.body.classList.add("previewing");
+}
+
+// One button, four call sites (work orders, parts, stock, molds), so the markup
+// can't drift between them.
+function labelBtn(coll, id) {
+  return `<button class="ib" onclick="printOneLabel('${esc(coll)}','${esc(id)}')" title="Print a 4x1 label">${icon("print", 15)} Label</button>`;
+}
+
+function printOneLabel(coll, id) {
+  const o = recById(coll, id);
+  if (!o) { toast("Record not found.", "error"); return; }
+  openLabelPreview([{ coll, o }]);
+}
+
+/* ---------- batch: a sheet of labels for a set of records ----------
+ *
+ * The start-position picker is the feature that pays here. Avery 5161 is 20 up,
+ * so printing three labels onto a fresh sheet throws away seventeen. Being able
+ * to say "start at cell 8" means a part-used sheet gets finished instead of
+ * binned, which roughly halves the real cost per label on the paper path.
+ */
+
+// Which collections can produce a label at all, in the order a person would
+// think of them. Tickets and budget are absent on purpose: they are not
+// physical objects, which is also what keeps PROJ- codes off a label sheet
+// where they could be misread as P-.
+const LABELABLE = [
+  ["molds", "Molds"],
+  ["parts", "Parts"],
+  ["workOrders", "Work orders"],
+  ["stock", "Tooling board"],
+  ["items", "Panels & items"],
+  ["lots", "Material lots"],
+];
+
+let LB = { coll: "parts", picked: {}, skip: 0, grid: "5161", cal: true };
+
+function openLabelBuilder(coll) {
+  LB = { coll: coll || "parts", picked: {}, skip: 0, grid: "5161", cal: true };
+  openModal(labelBuilderHtml());
+}
+
+function labelBuilderHtml() {
+  const avail = LABELABLE.filter(([c]) => (DB[c] || []).length);
+  if (!avail.length) return `<h3>Labels</h3><p class="muted">Nothing to label yet.</p>
+    <div class="foot"><button onclick="closeModal()">Close</button></div>`;
+  if (!avail.some(([c]) => c === LB.coll)) LB.coll = avail[0][0];
+
+  const rows = (DB[LB.coll] || []).slice()
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const n = Object.values(LB.picked).filter(Boolean).length;
+  const per = LABEL_GRIDS[LB.grid].cols * LABEL_GRIDS[LB.grid].rows;
+  const used = n + LB.skip + (LB.cal ? 1 : 0);
+
+  return `<h3>Print labels</h3>
+  <div class="field"><label>What</label>
+    <select onchange="LB.coll=this.value;LB.picked={};lbRefresh()">
+      ${avail.map(([c, lab]) => `<option value="${c}" ${c === LB.coll ? "selected" : ""}>${esc(lab)} (${(DB[c] || []).length})</option>`).join("")}
+    </select></div>
+  <div class="field"><label>Stock</label>
+    <select onchange="LB.grid=this.value;lbRefresh()">
+      ${Object.entries(LABEL_GRIDS).map(([k, g]) => `<option value="${k}" ${k === LB.grid ? "selected" : ""}>${esc(g.name)}</option>`).join("")}
+    </select></div>
+  <div class="field"><label>Start at cell</label>
+    <input type="number" min="1" max="${per}" value="${LB.skip + 1}"
+      onchange="LB.skip=Math.max(0,Math.min(${per - 1},(parseInt(this.value,10)||1)-1));lbRefresh()">
+    <div class="muted tny">Leave blank cells at the top so a part-used sheet gets finished instead of binned.</div>
+  </div>
+  <label class="chk"><input type="checkbox" ${LB.cal ? "checked" : ""} onchange="LB.cal=this.checked;lbRefresh()">
+    Include the 100 mm calibration bar <span class="muted tny">(catches the browser's silent "Fit to page" scaling)</span></label>
+  <div class="lbpick">
+    <div class="toolbar no-print" style="margin:6px 0">
+      <button class="sm" onclick="lbAll(true)">Select all</button>
+      <button class="sm" onclick="lbAll(false)">None</button>
+      <span class="muted" style="margin-left:auto;align-self:center">${n} selected · ${Math.ceil(Math.max(used, 1) / per)} sheet${used > per ? "s" : ""}</span>
+    </div>
+    <div class="lblist">${rows.map(o => `<label class="chk"><input type="checkbox" ${LB.picked[o.id] ? "checked" : ""}
+      onchange="LB.picked['${esc(o.id)}']=this.checked;lbRefresh()"> <b>${esc(o.id)}</b>
+      <span class="muted">${esc(o.partName || o.name || o.label || "")}</span></label>`).join("")}</div>
+  </div>
+  <div class="foot">
+    <button onclick="closeModal()">Cancel</button>
+    <button class="primary" ${n ? "" : "disabled"} onclick="lbPrint()">Preview ${n || ""} label${n === 1 ? "" : "s"}</button>
+  </div>`;
+}
+
+// Re-render in place. The modal is rebuilt rather than diffed, which is what
+// every other picker in the app does; the list is short enough that it is free.
+function lbRefresh() {
+  const m = document.querySelector("#modal .modal");
+  if (m) m.innerHTML = labelBuilderHtml();
+}
+function lbAll(on) {
+  (DB[LB.coll] || []).forEach(o => { LB.picked[o.id] = on; });
+  lbRefresh();
+}
+function lbPrint() {
+  const recs = (DB[LB.coll] || [])
+    .filter(o => LB.picked[o.id])
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    .map(o => ({ coll: LB.coll, o }));
+  if (!recs.length) return;
+  closeModal();
+  openLabelPreview(recs, { skip: LB.skip, grid: LB.grid, calibrate: LB.cal });
+}
