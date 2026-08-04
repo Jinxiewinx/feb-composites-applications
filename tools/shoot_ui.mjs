@@ -97,8 +97,9 @@ const STATES = [
    the single-tab mode already answers better. Kept as a literal list rather
    than read out of the running page, so a tab silently disappearing from TABS
    shows up as a missing file instead of a shorter, quietly-passing run. */
-const ALL_TABS = ["dashboard", "workorders", "parts", "stock", "projects",
-  "timeline", "weekplan", "budget", "documents", "reports", "people"];
+const ALL_TABS = ["dashboard", "workorders", "parts", "stock", "molds", "lots",
+  "items", "projects", "timeline", "weekplan", "budget", "documents", "reports",
+  "people"];
 const SWEEP = TAB === "all";
 /* The record id lookup below only knows two archives, so a sweep takes the
    list states and leaves detail to a targeted run. */

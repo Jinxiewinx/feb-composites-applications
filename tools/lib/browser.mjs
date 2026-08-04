@@ -15,7 +15,8 @@ import { execSync } from "node:child_process";
 export const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "03 App", "app");
 
 const MIME = {
-  ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+  ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
+  ".pdf": "application/pdf",
   ".json": "application/json", ".stl": "model/stl", ".woff2": "font/woff2",
   ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
 };

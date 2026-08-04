@@ -1,0 +1,362 @@
+/* make_mockups.mjs — annotated real screenshots for the READMEs.
+ *
+ * The 2026-07-28 mockup set was hand-composed concept art: a caption strip, a
+ * white card, an annotation footer, and invented data. It looked great and
+ * could never be updated, because there was no source — only the PNG. This
+ * replaces that convention with the same framing around a screenshot of the
+ * REAL app, seeded with the same fixtures the tests use. The captions live in
+ * the SHOTS table below, so regenerating after a UI change is one command:
+ *
+ *   node tools/make_mockups.mjs              # everything
+ *   node tools/make_mockups.mjs --only labels,scan   # a subset, by id
+ *   node tools/make_mockups.mjs --date 20260803      # override the date stamp
+ *
+ * Output goes straight into the folders the READMEs reference:
+ *   03 App/design/<id>-mockup-<date>.png     the app tour
+ *   07 CFD PDF Viewer/design/…               the viewer
+ *   08 Website/design/…                      the public site
+ *   06 Design System/…                       the style guide
+ *
+ * It is a camera plus a picture frame, not a test — it asserts nothing beyond
+ * "the seed loaded". Needs Playwright, same as shoot_ui.mjs, and skips loudly
+ * without it.
+ */
+
+import { mkdir, readFile } from "node:fs/promises";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { serveApp, serveDir, loadChromium, skipMessage, APP_ROOT } from "./lib/browser.mjs";
+import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function arg(name, dflt) {
+  const i = process.argv.indexOf("--" + name);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
+}
+const DATE = arg("date", new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+const ONLY = arg("only", "").split(",").map(s => s.trim()).filter(Boolean);
+
+/* ---------- the shot list ----------
+ * kind:
+ *   app   — boot the seeded app, run `js` in the page, shoot the viewport
+ *   q     — the public scan landing page, phone-sized, render() driven directly
+ *   cfd   — the CFD viewer with both sample reports loaded, one view per shot
+ *   site  — the built team website
+ *   guide — the design-system style guide
+ * badge/title/note are the annotation chrome. vh is the viewport height of the
+ * raw capture (1440 wide for desktop, 393 for phone).
+ */
+const SHOTS = [
+  { id: "dashboard", kind: "app", badge: 1, vh: 1000,
+    js: `setTab("dashboard");`,
+    title: "Dashboard · the week, read-only",
+    note: "The landing page owns no data. Left column is what to act on (your open items, what is blocked, the grouped deadline list); the rail is orientation (this week, the season, curing, money). Every row is a link into the tab it came from." },
+  { id: "workorders", kind: "app", badge: 2, vh: 1000,
+    js: `setTab("workorders");`,
+    title: "Work orders · the part board",
+    note: "Every manufacturing job is a work order with a status and a subteam. This list is the Monday-meeting board; the filters up top are the meeting agenda." },
+  { id: "workorder-detail", kind: "app", badge: 3, vh: 1500,
+    js: `setTab("workorders"); openRecord("workorders", __WO__);`,
+    title: "A work order · steps, buy-offs, cure holds",
+    note: "The traveler lives here: layup stack, BOM, and steps signed off with a name and a timestamp. Buying off an infusion asks which resin and which lots went in, and the demould step then stays locked until the cure hold has run. It prints to a two-page hand-fillable sheet." },
+  { id: "parts", kind: "app", badge: 4, vh: 1200,
+    js: `setTab("parts"); openRecord("parts", __PART__);`,
+    title: "Parts · the season tracker, split view",
+    note: "Every part down the left, the selected one beside it, so opening a part never destroys the list. Each stage is a row of steps you click directly; arrow keys walk the index and 1/2/3 advance the stages." },
+  { id: "stock", kind: "app", badge: 5, vh: 1100,
+    js: `setTab("stock");`,
+    title: "Stock · tooling board and the mold stack planner",
+    note: "A full sheet and an offcut are the same kind of record, so remnants come back into stock. The planner takes a mold STL, picks boards that waste the least, splits at the ShopSabre depth limit, and prints a numbered cut list with a dimensioned drawing set." },
+  { id: "molds", kind: "app", badge: 6, vh: 1000,
+    js: `setTab("molds");`,
+    title: "Molds · a mold is a record, not a rumor",
+    note: "Stage, home location, sealing record, and how many parts have been pulled off it. The work orders and parts that used it are a live join, so “what has this mold made” is a lookup instead of a Slack ask." },
+  { id: "materials", kind: "app", badge: 7, vh: 1000,
+    js: `setTab("lots");`,
+    title: "Materials · rolls, lots, consumables",
+    note: "Fabric rolls and their offcuts, resin and hardener lots: vendor lot number, received / opened / expiry, mix ratio, and where it lives. An offcut is a roll with a parent, so remnants stay traceable." },
+  { id: "items", kind: "app", badge: 8, vh: 1000,
+    js: `setTab("items");`,
+    title: "Items · panels, jigs, bins",
+    note: "A test panel carries its layup stack, the coupon range cut from it, and which lots went in. That is what turns a tensile CSV from a number in a filename into a record." },
+  { id: "tickets", kind: "app", badge: 9, vh: 1100,
+    js: `setTab("projects");`,
+    title: "Tickets · everything that is not a part",
+    note: "R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, cross-links to parts and work orders, and a comment thread with rich text and photo attachments." },
+  { id: "timeline", kind: "app", badge: 10, vh: 1000,
+    js: `setTab("timeline");`,
+    title: "Timeline · stations by week",
+    note: "Weeks are columns, the seven stations are rows, so “when is the ShopSabre free” is one horizontal scan. A slot here is the plan, not a booking; the machine is reserved on the RFS site." },
+  { id: "weekplan", kind: "app", badge: 11, vh: 1100,
+    js: `setTab("weekplan");`,
+    title: "Weekly plan · days by subteam",
+    note: "The same schedule cut the other way: what happens each day, by which car group, plus a per-person rollup pulled from ticket due dates and assignments." },
+  { id: "budget", kind: "app", badge: 12, vh: 1000,
+    js: `setTab("budget");`,
+    title: "Budget · purchases through reimbursement",
+    note: "Submitted, Ordered, Reimbursed, with a season total and a flag on anything over $50. On a phone, “scan receipt” opens the camera and attaches the photo to the purchase." },
+  { id: "documents", kind: "app", badge: 13, vh: 1100,
+    js: `setTab("documents");`,
+    title: "Documents · one shelf for everything",
+    note: "Datasheets, CS standards and printables, filterable by type, plus the team shelf: the Google Docs people keep asking for, pinned once. Paste a Drive URL anywhere and the app reads the real title and offers an inline preview." },
+  { id: "reports", kind: "app", badge: 14, vh: 1000,
+    js: `setTab("reports");`,
+    title: "Reports · exports, status board, labels",
+    note: "Per-dataset CSV export, a printable Monday status board, and the bulk label builder with a start-cell picker so a part-used Avery sheet gets finished instead of binned." },
+  { id: "people", kind: "app", badge: 15, vh: 1000,
+    js: `setTab("people");`,
+    title: "People · who is carrying what",
+    note: "The roster with roles and each person's live assignments across parts, tickets and work orders. Sub-tickets fold into their parent, so breaking work down does not make you look busier." },
+  { id: "labels", kind: "app", badge: 16, vh: 1150,
+    js: `openLabelPreview(
+           DB.molds.slice(0, 3).map(o => ({ coll: "molds", o }))
+             .concat(DB.parts.slice(0, 8).map(o => ({ coll: "parts", o })))
+             .concat(DB.lots.slice(0, 4).map(o => ({ coll: "lots", o }))),
+           { grid: "5161" });`,
+    title: "Labels · every physical thing gets one",
+    note: "4 × 1 inch, Avery 20-up: the ID, the fact that identifies the thing, and a QR that resolves to the record. The first cell is a 100 mm calibration bar, because browsers silently “fit to page” and polyester sheets cost real money." },
+  { id: "scan", kind: "q", badge: 17, vh: 700,
+    title: "Scanning · a plain camera, no account",
+    note: "Pointing any phone at a label opens the public nameplate: what the object is, what stage, where it lives. No sign-in and no app install, because the person asking is often not on the roster. Names, costs and files stay behind the login." },
+
+  { id: "cfd-panels", kind: "cfd", badge: 1, vh: 1000, view: "Panels",
+    dir: "07 CFD PDF Viewer/design",
+    title: "Panels · the same plot from every report",
+    note: "The indexer finds and names every plot in each Fluent report, so one named panel can be pulled out of all of them, cropped and scaled identically. The eye does the comparing." },
+  { id: "cfd-overlay", kind: "cfd", badge: 2, vh: 1000, view: "Overlay",
+    dir: "07 CFD PDF Viewer/design",
+    title: "Overlay · two reports on top of each other",
+    note: "Blend, a draggable swipe divider, or a per-pixel difference map with a percent-changed readout. Two identical reports read exactly 0.00%, which is what makes the number trustworthy." },
+  { id: "cfd-summary", kind: "cfd", badge: 3, vh: 1000, view: "Summary",
+    dir: "07 CFD PDF Viewer/design",
+    title: "Summary · the numbers before the plots",
+    note: "Mesh counts, solver settings, iterations and residuals from every open report in one table, changed values highlighted. Often answers the question before you look at a single contour." },
+
+  { id: "website-home", kind: "site", badge: 1, vh: 1100,
+    dir: "08 Website/design",
+    title: "The public site · sponsors and recruits",
+    note: "Built on the same design system as the app, plain HTML and CSS. Photos are placeholders and the application form is not wired yet; the README has the list." },
+
+  { id: "styleguide-light", kind: "guide", badge: 1, vh: 1300, theme: "light",
+    dir: "06 Design System",
+    title: "The design system · light",
+    note: "Color, type and spacing tokens plus the component library, extracted from the app so the next FEB tool starts on-brand. tools/test_designsystem.mjs keeps this and the app from drifting apart." },
+  { id: "styleguide-dark", kind: "guide", badge: 2, vh: 1300, theme: "dark",
+    dir: "06 Design System",
+    title: "The design system · dark",
+    note: "The same tokens re-pointed for dark. Every surface, chip and status color changes with the theme; printing always comes out black on white regardless." },
+];
+
+/* ---------- the fb.js stand-in (same shape as shoot_ui.mjs) ---------- */
+const STUB = `
+window.fb = {
+  state: "ready",
+  user: { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" },
+  roster: { role: "lead", name: "Simon Starbuck", email: "simon@berkeley.edu" },
+  rosterCheckFailed: false,
+  save: async () => {}, del: async () => {}, mutateField: async () => {}, appendTo: async () => {},
+  upload: async () => ({ url: "", path: "", name: "", size: 0, type: "" }), deleteFile: async () => {},
+  allocId: async () => "X-1", importMany: async () => {},
+  rosterAll: async () => [], rosterSet: async () => {}, rosterDelete: async () => {},
+  notify: async () => {}, markNotifRead: async () => {},
+  signOut: async () => {}, refreshRoster: async () => {},
+  getConfig: async () => null, setConfig: async () => {},
+};
+window.__seedError = null;
+async function seed(coll, file, pick) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(file);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const json = await res.json();
+      const arr = pick ? pick(json) : json;
+      if (!Array.isArray(arr) || !arr.length) throw new Error(file + " parsed but held no records");
+      window.onFbData(coll, arr);
+      return;
+    } catch (e) {
+      window.__seedError = String((e && e.message) || e);
+      window.onFbData(coll, []);
+      await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
+    }
+  }
+}
+await seed("parts", "sn5-parts.json");
+await seed("workOrders", "sn5-work-orders.json", j => Array.isArray(j) ? j : (j.workOrders || []));
+await seed("schedule", "sn5-schedule.json");
+await seed("stock", "sn5-stock.json");
+${APPLY_FIXTURES}
+window.__fixturesReady = true;
+window.onFbChange("ready");
+`;
+
+/* ---------- the picture frame ----------
+ * Approximates the 2026-07-28 concept-art chrome: numbered navy badge, all-caps
+ * caption, white card with a soft shadow on a pale blue-grey field, and a blue
+ * annotation footer. The screenshot goes in as a data URI so the wrapper needs
+ * no server and leaves no file behind.
+ */
+function frameHtml(shot, pngB64, phone) {
+  return `<!doctype html><meta charset="utf-8"><style>
+  * { margin: 0; box-sizing: border-box; }
+  body { background: #e9eef5; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: ${phone ? 560 : 1240}px; margin: 0 auto; padding: 26px 30px 34px; }
+  .cap { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+  .badge { flex: none; width: 26px; height: 26px; border-radius: 50%; background: #0f2d52; color: #fff;
+           font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .cap span { font-size: 13px; font-weight: 700; letter-spacing: .09em; color: #3d4a5c; text-transform: uppercase; }
+  .card { background: #fff; border-radius: 14px; overflow: hidden;
+          box-shadow: 0 10px 30px rgba(15,45,82,.12), 0 2px 6px rgba(15,45,82,.08); }
+  .card img { display: block; width: 100%; }
+  .note { margin-top: 16px; background: #dce8f8; border-radius: 8px; padding: 13px 17px;
+          color: #1d4f91; font-size: 14.5px; line-height: 1.55; }
+  </style>
+  <div class="wrap">
+    <div class="cap"><div class="badge">${shot.badge}</div><span>${shot.title}</span></div>
+    <div class="card"><img src="data:image/png;base64,${pngB64}"></div>
+    <div class="note">${shot.note}</div>
+  </div>`;
+}
+
+/* ---------- go ---------- */
+const chromium = await loadChromium();
+if (!chromium) { console.log(skipMessage("the mockups")); process.exit(0); }
+
+const shots = ONLY.length ? SHOTS.filter(s => ONLY.includes(s.id)) : SHOTS;
+const unknown = ONLY.filter(id => !SHOTS.some(s => s.id === id));
+if (unknown.length) { console.error("unknown --only ids: " + unknown.join(", ")); process.exit(1); }
+
+/* Default records for the two detail shots: first id in each archive, same
+   trick as shoot_ui.mjs, so a reseed never strands a hardcoded id. */
+const partsJson = JSON.parse(await readFile(join(APP_ROOT, "sn5-parts.json"), "utf8"));
+const woJsonRaw = JSON.parse(await readFile(join(APP_ROOT, "sn5-work-orders.json"), "utf8"));
+const woJson = Array.isArray(woJsonRaw) ? woJsonRaw : (woJsonRaw.workOrders || []);
+const PART_ID = (partsJson[0] || {}).id || "";
+const WO_ID = (woJson[0] || {}).id || "";
+
+const browser = await chromium.launch();
+const written = [];
+const problems = [];
+
+/* One server per root, started lazily and shut down at the end. */
+const servers = {};
+async function portFor(kind) {
+  const roots = {
+    app: null, // serveApp
+    q: null,
+    cfd: join(REPO, "07 CFD PDF Viewer", "app"),
+    site: join(REPO, "08 Website", "site"),
+    guide: join(REPO, "06 Design System"),
+  };
+  const key = kind === "q" ? "app" : kind;
+  if (!servers[key]) {
+    servers[key] = key === "app" ? await serveApp({}) : await serveDir(roots[key], {});
+  }
+  return servers[key].port;
+}
+
+async function rawShot(shot) {
+  const phone = shot.kind === "q";
+  const vw = phone ? 393 : 1440;
+  const ctx = await browser.newContext({
+    viewport: { width: vw, height: shot.vh },
+    deviceScaleFactor: 2,
+    isMobile: phone,
+    hasTouch: phone,
+  });
+  const port = await portFor(shot.kind);
+  try {
+    const page = await ctx.newPage();
+    page.on("pageerror", e => problems.push(`${shot.id}: page error — ${String(e).slice(0, 160)}`));
+
+    if (shot.kind === "app") {
+      await ctx.route("**/fb.js", r => r.fulfill({ body: STUB, contentType: "text/javascript" }));
+      await ctx.addInitScript(`try { localStorage.setItem("feb-theme", "light"); } catch (e) {}`);
+      await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
+      /* fb.state is "ready" on the stub's first line, long before the seeds and
+         fixtures have landed, the trap test_detailui.mjs documents. Wait on the
+         flag the fixtures set LAST, or the shot photographs a half-seeded
+         database (and the labels shot finds no DB.molds at all). */
+      await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+      const seedError = await page.evaluate("window.__seedError || null");
+      if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
+      const js = shot.js
+        .replace("__WO__", JSON.stringify(WO_ID))
+        .replace("__PART__", JSON.stringify(PART_ID));
+      await page.evaluate(js);
+      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+      await page.waitForFunction(
+        () => !/Loading documents/.test(document.getElementById("main").textContent),
+        null, { timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(400);
+    } else if (shot.kind === "q") {
+      /* q.html reads the ID off location.pathname (/Q/<ID>); the plain static
+         server has no rewrite, so serve it at that path explicitly. Then feed
+         render() a fixture directly, the same way test_q_landing.mjs does,
+         instead of standing up a fake Firestore. */
+      const qHtml = await readFile(join(APP_ROOT, "q.html"), "utf8");
+      await ctx.route("**/Q/*", r => r.fulfill({ body: qHtml, contentType: "text/html" }));
+      await page.goto(`http://127.0.0.1:${port}/Q/MOLD-SN6-004`, { waitUntil: "load" });
+      await page.waitForTimeout(300);
+      await page.evaluate(`render({
+        id: "MOLD-SN6-004", cls: "MOLD", name: "Undertray diffuser mold",
+        stage: "Sealed", location: "RFS · Rack B2", wo: "WO-SN6-011", rev: "A"
+      })`);
+      await page.waitForTimeout(200);
+    } else if (shot.kind === "cfd") {
+      await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
+      await page.setInputFiles("#filepick", [
+        join(REPO, "07 CFD PDF Viewer", "DP_22.pdf"),
+        join(REPO, "07 CFD PDF Viewer", "DP_22_variant.pdf"),
+      ]);
+      /* Indexing two reports takes a few seconds; the tab bar only fills once
+         the first document is in. Wait for the view tab, click it, then give
+         the canvases a beat to paint. */
+      await page.waitForFunction(
+        () => document.querySelectorAll("#tabs button").length >= 4, null, { timeout: 60000 });
+      await page.getByRole("button", { name: shot.view, exact: true }).click();
+      await page.waitForTimeout(2500);
+    } else if (shot.kind === "site") {
+      await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
+      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+      await page.waitForTimeout(600);
+    } else if (shot.kind === "guide") {
+      await page.goto(`http://127.0.0.1:${port}/styleguide.html`, { waitUntil: "load" });
+      await page.evaluate(t => document.documentElement.setAttribute("data-theme", t), shot.theme);
+      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+      await page.waitForTimeout(400);
+    }
+
+    return await page.screenshot({ fullPage: false });
+  } finally {
+    await ctx.close();
+  }
+}
+
+for (const shot of shots) {
+  const png = await rawShot(shot);
+  const phone = shot.kind === "q";
+  const frame = frameHtml(shot, png.toString("base64"), phone);
+  const fctx = await browser.newContext({
+    viewport: { width: phone ? 620 : 1300, height: 800 },
+    deviceScaleFactor: 2,
+  });
+  const fpage = await fctx.newPage();
+  await fpage.setContent(frame, { waitUntil: "load" });
+  const outDir = join(REPO, shot.dir || "03 App/design");
+  await mkdir(outDir, { recursive: true });
+  const file = join(outDir, `${shot.id}-mockup-${DATE}.png`);
+  await fpage.screenshot({ path: file, fullPage: true });
+  await fctx.close();
+  written.push(file.slice(REPO.length + 1));
+  console.log("  " + file.slice(REPO.length + 1));
+}
+
+await browser.close();
+for (const s of Object.values(servers)) s.server.close();
+
+console.log(`${written.length} mockups written`);
+if (problems.length) {
+  console.log(`\n${problems.length} page error${problems.length === 1 ? "" : "s"} while shooting:`);
+  [...new Set(problems)].slice(0, 10).forEach(p => console.log("  " + p));
+}
