@@ -168,6 +168,36 @@ console.log("\nleaks");
   await page.close();
 }
 
+/* ---------- 4b. no relative URLs ----------
+ *
+ * This page is served at /Q/<ID> by a hosting rewrite, so EVERY relative URL on
+ * it resolves one directory deep: "./firebase-config.js" becomes
+ * "/Q/firebase-config.js", which the same rewrite cheerfully answers with
+ * q.html itself. The import then "succeeds" against a lump of HTML,
+ * FIREBASE_CONFIG never gets set, and every scan reports "couldn't reach the
+ * database" while the network is completely fine.
+ *
+ * That shipped, and was only caught by loading the deployed page — the local
+ * test server registers exact paths and has no wildcard rewrite, so it cannot
+ * reproduce it. Hence a source-level check instead of a behavioural one: no
+ * relative src, href or import anywhere in the file.
+ */
+console.log("\nabsolute URLs only (the rewrite serves this page from /Q/)");
+{
+  const src = Q_HTML;
+  const rel = [];
+  for (const m of src.matchAll(/(?:src|href)="(?!https?:|\/|#|data:|mailto:)([^"]+)"/g)) rel.push(m[1]);
+  for (const m of src.matchAll(/import\("(?!https?:|\/)([^"]+)"\)/g)) rel.push(m[1]);
+  ok(rel.length === 0, "no relative src/href/import survives being served from /Q/<ID>", rel.join(" | "));
+
+  // And prove the trap is real rather than theoretical: a relative fetch from
+  // this page resolves into the rewritten namespace.
+  const { page } = await open("P-SN6-007", { mode: "offline" });
+  const resolved = await page.evaluate(() => new URL("./firebase-config.js", location.href).pathname);
+  eq(resolved, "/Q/firebase-config.js", "a relative URL really does resolve under /Q/");
+  await page.close();
+}
+
 /* ---------- 5. the way back into the app ---------- */
 console.log("\nopen in the app");
 {

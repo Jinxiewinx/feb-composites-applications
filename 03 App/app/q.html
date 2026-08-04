@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FEB Composites — scan</title>
-<link rel="icon" href="favicon.svg">
+<link rel="icon" href="/favicon.svg">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#003262">
 
@@ -187,7 +187,14 @@ async function load() {
       import("https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js"),
     ]);
-    await import("./firebase-config.js").catch(() => {});
+    /* ABSOLUTE, not "./". This page is served at /Q/<ID> by a hosting rewrite,
+       so a relative URL resolves to /Q/firebase-config.js — which the same
+       rewrite happily answers with q.html itself. The import then "succeeds"
+       against a lump of HTML, FIREBASE_CONFIG never gets set, and every scan
+       reports "couldn't reach the database" while the network is perfectly
+       fine. Only reproducible on the deployed host; the local test server has
+       no rewrite. */
+    await import("/firebase-config.js").catch(() => {});
     const cfg = window.FIREBASE_CONFIG;
     if (!cfg || !cfg.projectId) throw new Error("not configured");
 
