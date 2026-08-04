@@ -5,10 +5,27 @@ composites tracks over a season, not just work orders. Everyone signs in with
 email and password, and the Firestore database is shared, updating live for the
 whole team. Set your photo by clicking your avatar at top right.
 
+This file is the app's manual. In order: [the tabs](#the-tabs), then
+[labels](#labels) and [scanning](#scanning), [how access
+works](#how-access-works), [what a buy-off is](#what-a-buy-off-is-and-isnt),
+[files and photos](#files-photos-and-watchers), [project
+setup](#one-time-project-setup) for standing the Firebase project up again,
+[day-to-day care](#day-to-day), [cost](#cost), [local development and
+testing](#local-development-and-testing), and the [file
+map](#files). If you are here to run it locally, jump straight to local
+development; if you are the next lead, read `../../HANDOFF.md` first.
+
+The screenshots through this file regenerate with
+`node tools/make_mockups.mjs`, so if one looks stale, rerun that.
+
 ## The tabs
 
-Dashboard is one grouped list, not a wall of tables. Two numbers at the top —
-what's assigned to you, and what's blocked — then everything open, bucketed
+### Dashboard
+
+![Dashboard: act on the left, orientation in the rail](../design/dashboard-mockup-20260803.png)
+
+Dashboard is one grouped list, not a wall of tables. Two numbers at the top,
+what's assigned to you and what's blocked, then everything open, bucketed
 Late / This week / Next two weeks / Later / No date, with each item appearing
 exactly once. It's read-only, and every row links into the tab it came from.
 
@@ -18,7 +35,7 @@ used to count both: on the SN5 archive, 51 dated records describing 29 physical
 objects, which overstated "behind schedule" by about 40%. They're paired through
 the same `linkedCounterpart()` the Parts tab uses, the earlier of the two dates
 is shown so a merge can never under-report lateness, and both owners are kept.
-An ambiguous name merges nothing — two rows beat a wrong merge that silently
+An ambiguous name merges nothing: two rows beat a wrong merge that silently
 deletes somebody's deadline. A part with no work order is never merged away;
 work happening with no traveler is worth seeing.
 
@@ -35,20 +52,29 @@ is sticky, because orientation is exactly the thing that should stay put while
 you read. Below 1101px it drops beneath the list; between 700 and 1100 it goes
 two-up so the stage bars don't stretch into decorative rules.
 
-The season is three bars — CAD, Mold, Layup — counted over **all** parts, not the
+The season is three bars (CAD, Mold, Layup) counted over **all** parts, not the
 open ones the Parts tab counts. Different question, so different denominator:
 here it's how much of the car exists, there it's what's left to do. Both bars say
 which they are, and the counts are printed as words underneath because the amber
 and green sit close enough together to be hard work for a red-green colourblind
 reader.
 
-Every block wears a different surface on purpose — raised card, bare alert, big
-white card, flat bordered card, recessed panel, amber tint, gold rail, hairline —
-so the page stops reading as one texture where nothing outranks anything.
+Every block wears a different surface on purpose (raised card, bare alert, big
+white card, flat bordered card, recessed panel, amber tint, gold rail,
+hairline) so the page stops reading as one texture where nothing outranks anything.
+
+### Work Orders
+
+![A work order: steps, buy-offs, cure holds, the printable traveler](../design/workorder-detail-mockup-20260803.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
-stamped with who signed them, blocker enforcement, and a printable hand-fillable
-sheet.
+stamped with who signed them, blocker enforcement, enforced cure holds (the
+numbers live in `resins.js`, each signed off by a lead), and a printable
+hand-fillable sheet that is always exactly two pages.
+
+### Parts
+
+![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260803.png)
 
 Parts is last season's Part Tracker reborn. Each part carries three parallel
 progress stages (CAD, Mold, Layup) plus subteam, layup type and schedule,
@@ -57,17 +83,17 @@ engineers, target weight, and a layup deadline.
 Above 900px it is a split: an index of every part down the left, the selected
 part beside it. Opening a part no longer destroys the list and going back no
 longer destroys the part, so you can work down your own parts without the page
-swapping under you — `↑`/`↓` or `j`/`k` walk the index, `1`/`2`/`3` advance CAD,
+swapping under you: `↑`/`↓` or `j`/`k` walk the index, `1`/`2`/`3` advance CAD,
 Mold and Layup on whatever is open, `/` searches and `esc` clears. With nothing
 selected the right pane is the season instead: how the open parts are spread
 across the three stages, and who owns what is behind. Below 900px it collapses to
-the older shape — the index is the page, tapping opens the part, back returns.
+the older shape: the index is the page, tapping opens the part, back returns.
 
 Each stage is a row of its own enum, and you set it by clicking the step you
 want. There is no edit mode for progress, because advancing a stage is the thing
 people do most and it used to cost five interactions. Moving forward one step
 writes immediately and leaves an undo; moving backwards, declaring a part flat,
-or skipping steps asks first and names what it would skip — this is a live shared
+or skipping steps asks first and names what it would skip; this is a live shared
 database, so the surprising directions are the ones that get a confirmation.
 
 A stage that hasn't started reads grey, never amber. That sounds obvious, but it
@@ -76,12 +102,28 @@ so `"Not Started"` sat at index 1 and coloured itself as in-progress. Progress
 colour is derived from what a value *means* now, never from where it sits in an
 array.
 
+### Stock
+
+![Stock: the board inventory and the mold stack planner](../design/stock-mockup-20260803.png)
+
+Stock is the tooling-board inventory and the mold stack planner. A full 4×8
+sheet and an offcut are the same kind of record, so remnants come back into
+stock instead of piling up. The planner takes a mold STL (or a typed
+rectangular block), picks board thicknesses that waste the least, splits tall
+molds at the ShopSabre's cut-depth limit, prints a numbered cut list and a
+dimensioned engineering drawing set, shows the mold sitting inside translucent
+stock in a rotatable 3D view, and exports the planned blocks back out as STL
+so CAM can use them as the stock body. Three sample molds ship with the app,
+so it can be tried without exporting anything from Fusion.
+
+### Tickets
+
 Tickets is a jira-style tracker holding two kinds: projects (R&D, process fixes,
 outreach, and they can have sub-tickets) and issues (a production
 nonconformance, which needs a work order, a disposition and a documented root
 cause before it can close). Create from a modal with assignee and related-part
-pickers and a due date, then drag cards across the board — To Do, In Progress,
-Collecting Data, On Hold, Done, Cancelled — or use list view. Sub-tickets appear
+pickers and a due date, then drag cards across the board (To Do, In Progress,
+Collecting Data, On Hold, Done, Cancelled) or use list view. Sub-tickets appear
 on both, in their own status column, labelled with the ticket they belong to:
 breaking work down should make it more visible, not less.
 
@@ -92,9 +134,11 @@ comment thread with rich text and image attachments.
 Back goes back. Records cross-link constantly, and following a chip from one
 ticket to another used to dump you at the board when you pressed the button,
 because it always meant "the list". It now returns one step along the trail you
-actually took and says which record it's returning to, across tabs — open a
+actually took and says which record it's returning to, across tabs: open a
 ticket from a part and Back says the part. Picking a tab from the sidebar ends
 the trail, since that's "take me elsewhere" rather than a step.
+
+### Timeline and Weekly Plan
 
 Timeline is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
@@ -104,6 +148,12 @@ week" finds it in a long season. On a phone the grid becomes one card per week
 listing only what is booked, with finished weeks folded behind a button so this
 week is the first thing on screen. Undated weeks from the SN5 import sit in a
 collapsed archive below the live schedule rather than at the bottom of it.
+
+Weekly Plan is the same schedule cut the other way: one card per day, split by
+car group, saying what happens and who is at RFS, plus a per-person weekly
+rollup pulled from ticket due dates and manual assignments.
+
+### Budget, People, Documents
 
 Budget runs purchase requests through Submitted, Ordered and Reimbursed, with the
 season total, an open-orders subtotal, and a flag on anything over $50.
@@ -115,6 +165,10 @@ Documents bundles in every reference doc. The 25 manufacturer datasheets and our
 CS standards and pain-points all open as PDFs in-app, with the standards rendered
 from markdown by pandoc and the .docx still downloadable, plus the shop
 printables. Anyone can upload a doc.
+
+### Molds, Materials, Items
+
+![Molds: stage, home location, sealing record, parts pulled](../design/molds-mockup-20260803.png)
 
 Molds, Materials and Items are the physical world, added with printed labels.
 A **mold** used to exist only as free text inside one work order, so two work
@@ -131,6 +185,8 @@ identity was a trailing integer in a filename.
 All three run on one schema in `app/shop.js`. Three near-identical tabs written
 three times would drift, and the mobile behaviour would drift with them.
 
+### Reports
+
 Reports does per-dataset CSV export for parts, work orders, projects and budget,
 plus a one-click printable Monday-meeting status board, and it is where you print
 labels in bulk. A lead also gets three one-off migrations there: **Find molds in
@@ -141,6 +197,8 @@ edge that `sn5-parts.json` never had, on exact one-to-one name matches only; and
 **Rebuild scan mirror** re-publishes the public nameplates.
 
 ## Labels
+
+![The label sheet: IDs, key facts, QR codes, and the calibration bar](../design/labels-mockup-20260803.png)
 
 Every physical thing gets a 4 x 1 inch label carrying its ID, its name, the fact
 that actually identifies it, and a QR code that resolves to the record. On a part
@@ -172,6 +230,8 @@ hold even a version 1 code with its quiet zone.
 
 ## Scanning
 
+![The public nameplate: what a phone camera opens, signed out](../design/scan-mockup-20260803.png)
+
 Scanning a label with a plain phone camera goes to `/Q/<ID>`, which Firebase
 Hosting rewrites to `q.html`. That page works **with no account and no signal**.
 The ID is in the URL, so it paints before any network call (measured at about
@@ -184,8 +244,8 @@ Working without an account is the point. A Jacobs staffer needs to know whose
 mold is blocking the container, and adding them to the roster to answer that is
 absurd.
 
-**How that is safe.** Firestore rules cannot filter fields — `allow read` is
-all-or-nothing per document — so the public page cannot read the real records.
+**How that is safe.** Firestore rules cannot filter fields (`allow read` is
+all-or-nothing per document), so the public page cannot read the real records.
 It reads a separate `pub/<ID>` mirror carrying nine whitelisted fields: id,
 class, name, stage, location, work order, revision, a note, and a timestamp.
 Everything on it is already printed on the physical label. `pubProjection()` in
@@ -198,8 +258,8 @@ against the emulator, including the regression that matters most: that
 anonymous caller.
 
 `fb.save()` and `fb.del()` keep the mirror in step. A mirror failure only warns
-to the console, deliberately — telling someone their save failed when it did not
-is worse than a stale nameplate — and a lead can re-publish everything with
+to the console, deliberately: telling someone their save failed when it did not
+is worse than a stale nameplate. And a lead can re-publish everything with
 **Rebuild scan mirror** under Reports. That also covers records that predate the
 feature and writes that bypass `save()` (`mutateField`, `appendTo`).
 
@@ -247,7 +307,7 @@ traveler too, `lotSource` included and unflattering.
 **Routing.** The app had none before this. Navigation is still the in-memory
 `view` object; `syncUrl()` mirrors it into the hash with `replaceState`, never
 `pushState`, because `NAV_STACK` is a referrer trail and browser history is
-chronological — reconciling them would either make Back lie or break `navBack`.
+chronological; reconciling them would either make Back lie or break `navBack`.
 A pending deep link waits up to six seconds for its record to arrive, because
 `fb.state` reaching `"ready"` only means auth is done and the collection
 snapshots land afterwards. Giving up early was the first version, and it dumped
@@ -323,7 +383,7 @@ before the stack can be frozen, the CAD attached or linked before a mold design
 review, a written note on the machining and drop-test steps. Press Buy off
 without it and the app says what is missing and gives you the button that fixes
 it. A lead can sign anyway, and it costs a sentence that lands in the event log
-next to what was missing — the same bargain as overriding a cure hold, and for
+next to what was missing, the same bargain as overriding a cure hold, and for
 the same reason: a gate nobody can pass gets worked around outside the app,
 which is worse, because then it isn't written down anywhere.
 
@@ -342,7 +402,7 @@ Overriding it costs a sentence, which lands in the part's own notes.
 Native CAD uploads to the Files section on a ticket, a work order or a part:
 STEP, STP, SLDPRT, SLDASM, IGES, X_T, 3MF, F3D, DXF, DWG and STL, up to 50 MB
 (everything else stays at 10 MB). `storage.rules` checks the *extension* as well
-as the content type, because a browser has no MIME type for a `.SLDPRT` — it
+as the content type, because a browser has no MIME type for a `.SLDPRT`; it
 arrives as `application/octet-stream`, and allowing that on its own would allow
 any binary under any name. The type is still checked, and that's the actual
 security condition: nothing writable here can be served as something the
@@ -350,7 +410,7 @@ browser will render, which is what would turn an upload into stored XSS against
 the whole team.
 
 A linked Drive document still satisfies every check that wants "the CAD", and
-usually it's the better answer — a STEP file in the app is a copy, while the
+usually it's the better answer: a STEP file in the app is a copy, while the
 Drive link is the thing everyone else can open and edit.
 
 That's much better than typed initials, but be honest about
@@ -394,7 +454,7 @@ traveler prints a work order's notes; an issue can't close with an empty root
 cause) keep a plain copy in step with the markup.
 
 Clicking a photo opens it full screen without leaving the app. The arrows walk
-every photo on that record — the Files grid and the comment thread as one set —
+every photo on that record (the Files grid and the comment thread as one set),
 and the download button saves it with its real filename. Swipe works too, on the
 steps where it isn't being confused with panning a photo you've pinched into.
 
@@ -433,13 +493,13 @@ in a graduated senior's personal account.
    gcloud storage buckets update gs://feb-composites.firebasestorage.app --cors-file=cors.json
    ```
 
-   **`firebase deploy` does not do this** — it pushes hosting and rules, and CORS
+   **`firebase deploy` does not do this.** It pushes hosting and rules, and CORS
    is bucket configuration, so a deploy alone will not fix it. Without the rule
    the Stock tab's 3D view shows the stock blocks with no mold inside them: the
    browser blocks the `fetch()` of the stored mesh before it is even sent.
    Nothing else in the app notices, because every other Storage URL here is used
    by `<img src>` or `<a href>`, and those need no CORS at all. If you see blocks
-   and no mold, the viewer now says so underneath itself — that message is the
+   and no mold, the viewer now says so underneath itself; that message is the
    one to act on.
 4. Project settings, Your apps, the `</>` web option, register an app, then copy
    the config values into `firebase-config.js` here, replacing the demo values.
@@ -504,7 +564,7 @@ Tests, from `SN6 Resources/`:
 ```
 node tools/test_app.mjs           # app logic across all tabs (DOM stub + fake backend)
 node tools/test_designsystem.mjs  # app CSS vs 06 Design System, no browser
-node tools/test_appui.mjs         # layout on 11 tabs x 4 widths x 2 themes
+node tools/test_appui.mjs         # layout on every tab x 4 widths x 2 themes
 node tools/test_safearea.mjs      # notch / Dynamic Island / home indicator
 node tools/test_qr.mjs            # QR version/ECC arithmetic + the public projection
 node tools/test_labels.mjs        # the label sheet, measured and rasterised
@@ -531,26 +591,26 @@ comment silently eats the next rule and the fix you just made does nothing.
 side, no tap target is under 40px where there is a thumb, no text drops below
 11px, nothing sticky hides behind the topbar, every surface actually changes
 colour between light and dark, and `main` is using the window it was given.
-960 checks, because eleven tabs at four widths in two themes is the only way a
+Hundreds of checks, because every tab at four widths in two themes is the only way a
 check on Parts also covers Weekly Plan.
 
-`shoot_ui.mjs` is a camera, not a test — it asserts nothing. It boots the real
+`shoot_ui.mjs` is a camera, not a test: it asserts nothing. It boots the real
 app with `fb.js` stubbed at the route, the SN5 archives seeded and
 `tools/lib/fixtures.mjs` filling in the four collections that have no archive,
 then writes `<label>-<state>-<width>-<theme>.png` at 1920, 1440, 900 and 393 in
 both themes. `--tab all` sweeps every tab, list state only; naming one tab
 gives you list, list-with-completed, detail and detail-in-edit for it. It
 resolves the app relative to itself rather than the cwd, so running it inside a
-git worktree photographs that worktree — which is how four competing Parts
+git worktree photographs that worktree, which is how four competing Parts
 designs were shot under identical conditions and compared frame for frame.
 
-Without `tools/lib/fixtures.mjs` five of the eleven tabs photograph as empty
+Without `tools/lib/fixtures.mjs` half the tabs photograph as empty
 states, because `loadArchive()` only seeds work orders, parts, schedule and
 stock. An empty tab is the one state a density audit learns nothing from.
 
 **Two rules for anything new that touches a screen edge**, because the app draws
 under the status bar deliberately (`viewport-fit=cover`, standalone PWA,
-translucent status bar — that is what lets the topbar meet the Dynamic Island
+translucent status bar; that is what lets the topbar meet the Dynamic Island
 instead of sitting under a white letterbox):
 
 1. Use the `--sa-t` / `--sa-r` / `--sa-b` / `--sa-l` tokens, never `env()`
@@ -564,7 +624,7 @@ instead of sitting under a white letterbox):
 Read the images with `.claude/agents/ui-reviewer.md`, a read-only reviewer that
 scores a screen 0–5 on eight axes (scan speed, signal-to-ink, colour semantics,
 interaction cost, wayfinding, hierarchy, responsive integrity, house fidelity)
-and passes only at no-axis-below-3 and average ≥4 — the same bar as the `simon`
+and passes only at no-axis-below-3 and average ≥4, the same bar as the `simon`
 reviewer in `00 Agent/`. Worth running before any UI change lands: the string
 assertions in `test_app.mjs` will happily pass a screen that draws every fact
 twice, and did.
@@ -610,7 +670,7 @@ Regenerate bundled data when the sources change:
 | `fb.js` | The only file that imports Firebase (auth, per-collection sync, writes, file upload) |
 | `firebase-config.js` | Project config, as `window.FIREBASE_CONFIG` |
 | `docs/` | Bundled reference docs and the generated `manifest.json` |
-| `sn5-work-orders.json` `sn5-parts.json` `sn5-schedule.json` `sn5-stock.json` | Retro SN5 archives, the seeds for "Load SN5 archive". The stock one is the board rack SN5 left behind — the stack planner picks thicknesses from what you own, so on a fresh project it has nothing to plan against until this is loaded |
+| `sn5-work-orders.json` `sn5-parts.json` `sn5-schedule.json` `sn5-stock.json` | Retro SN5 archives, the seeds for "Load SN5 archive". The stock one is the board rack SN5 left behind; the stack planner picks thicknesses from what you own, so on a fresh project it has nothing to plan against until this is loaded |
 | `../firestore.rules` | Server-side access control, the actual security |
 | `../storage.rules` | File-upload access control |
 | `../firebase.json`, `../.firebaserc` | Hosting, rules and emulator config |
