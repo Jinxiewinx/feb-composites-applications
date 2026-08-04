@@ -175,8 +175,45 @@ test_print_mobile REPORTS it rather than asserting it (asserting would read as a
 regression this feature did not cause). The next thing added to a step row has
 nowhere to go, and the fix then is a real one, not another rung.
 
-**Still to do**: the CS-001 Rev C / CS-013 Rev C standards work, and a deploy of
-the molds/items/lots rules blocks.
+## The standards caught up (2026-08-03, stage 6)
+
+Seven documents revised. CS-001 is **out of "outlined"** for the first time.
+
+- **CS-001 Rev C** — the whole point. §7 written in full: printing and the
+  calibration check, where each of thirteen object classes gets its label, the
+  three mold identification layers, pair-print relocation for parts, what the
+  label says per class, mixed-pot marking, the zero-cost packing-tape path and
+  the printer-broke-before-comp fallback. §6 now carries the two keep-out rules
+  (working surface, 40 mm from the flange seal band) plus a ban on
+  silicone-adhesive tape anywhere in the shop. §5 no longer claims "nothing that
+  needs ordering approval" — that stopped being true the moment a printer
+  entered the plan.
+- **CS-013 Rev C** — new §4.1, the ID grammar, which had no controlling
+  document at all: the prefix table, four rules (an ID names a physical object
+  never a job; never reused; a re-laid part is a NEW part with `supersedes`; a
+  remachined mold keeps its ID), the 14-character cap the QR imposes, and dates
+  as fields never ID segments. §7.2 gains lot capture and the mold record.
+- **CS-003 Rev C** — glue-up mark in paint marker on two adjacent side faces.
+- **CS-004 Rev C** — new §7.5 Identify, the last step after every wet operation.
+- **CS-005 Rev D** — engrave the mold ID before releasing the vacuum, while the
+  setup still exists. This is the record of record.
+- **CS-011 Rev C** — §7.3's "can't yet enforce the storage map" is now resolved;
+  locations are records with labels.
+- **CS-002 Rev C** — the coupon suffix, and writing coupon IDs on the panel
+  BEFORE the first cut.
+- **CS-012 Rev C** — §7.8, the printer as a standing purchase request with the
+  payback argument and why both the cheaper and dearer options were rejected.
+
+The $5 finding worth repeating: **a standard Sharpie is IPA-soluble**, and the
+process wipes with ≥90% IPA at every stage of CS-004 and CS-009. Every hand mark
+in the shop is being erased by the shop's own cleaning step. Oil-based paint
+marker, today, no approval needed.
+
+Rebuilt with `tools/.venv/bin/python tools/build_docx.py --all`, manifest
+refreshed (42 docs, 16 standards to PDF), `check_traceability.py` passes.
+
+**Still to do**: nothing in the plan. Open asks for Simon are in the summary
+below.
 
 Previously, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
 the `localId()` fix that MUST land in the same commit -- it scans
