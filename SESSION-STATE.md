@@ -76,9 +76,43 @@ is the case that matters. And `labelSheetHtml()` must never reuse
 `fitSheetHtml()`, `LAYOUTS` or `MAX_PAGES`: those exist to squeeze a work order
 into two pages via a nine-rung ladder and mean nothing for a fixed grid.
 
-**Still to do**, in plan order: stage 3 (the `/Q/**` hosting rewrite, `q.html`
-public scan landing, the `pub` mirror collection and its rules, hash routing and
-pending-link replay); stage 4 (the `molds`, `items` and `lots` collections, and
+## Scanning works (2026-08-03, stage 3)
+
+`/Q/<ID>` -> `q.html` -> the public nameplate, and "Open in the app" -> `/#/<ID>`.
+New: hosting rewrites, `app/q.html`, the `pub` rules block, `pubSync`/`pubPublish`
+in fb.js, routing in core.js, "Rebuild scan mirror" under Reports. New suites
+`tools/test_route.mjs` (37), `tools/test_q_landing.mjs` (30),
+`tools/test_pub_rules.mjs` (29, emulator).
+
+**The bug the routing test caught, which the plan had wrong.** `fb.state`
+reaching `"ready"` does NOT mean the data is there: it means auth and the roster
+check are done, and the collection snapshots arrive afterwards, each triggering
+another render. The first implementation consumed the pending link on the first
+ready render, found an empty DB every time, and dumped every scan into the search
+box. It now waits up to `PENDING_GRACE_MS` (6s) for the record to turn up, with a
+scheduled wake-up so the give-up path still runs if no further snapshot arrives.
+The test deliberately waits out the real 6s rather than shortening it: a test that
+shrinks the window passes against the broken version.
+
+**Three more things worth keeping.**
+
+- `fb.importMany()` cannot write the mirror. It stamps `updatedBy: <email>`,
+  which the `hasOnly()` clause rejects AND which is exactly what must never be
+  published. `fb.publishPub()` exists for that reason and adds nothing.
+- `q.html` is a CLASSIC script, not `type="module"`. Dynamic `import()` works in
+  both, and global scope is what lets the test drive `render()` directly instead
+  of standing up a fake Firestore.
+- A hanging request is the normal RFS failure, not a refused one: the wifi
+  associates and nothing comes back. Without the 5s watchdog the page said
+  "Looking this up..." forever. Caught by a test asserting the page eventually
+  says something true.
+
+**Deployed** to feb-composites.web.app, hosting AND firestore rules (the `pub`
+block is new, so rules had to go too; that is the exception to `--only hosting`,
+and it was verified with test_pub_rules against the emulator first). The team has
+NOT been told; that is still an ask.
+
+**Still to do**, in plan order: stage 4 (the `molds`, `items` and `lots` collections, and
 the `localId()` fix that MUST land in the same commit -- it scans
 `-SN6-(\d+)$` across a whole collection and will mint colliding IDs once one
 collection holds several prefixes, and only on the offline path); stage 5 (scan

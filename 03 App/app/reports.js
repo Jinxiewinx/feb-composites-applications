@@ -50,6 +50,7 @@ function renderReports() {
     <button onclick="exportCSV('projects')">Tickets</button>
     <button onclick="exportCSV('budget')">Budget</button>
     <button onclick="openLabelBuilder()">${icon("print", 15)} Labels</button>
+    ${isLead() ? `<button onclick="rebuildScanMirror()" title="Re-publish the public scan nameplates for every physical record">Rebuild scan mirror</button>` : ""}
     <button class="primary" style="margin-left:auto" onclick="window.print()">Print status board</button>
   </div>
   <div class="card">
@@ -65,4 +66,54 @@ function renderReports() {
     <h3>Budget</h3>
     <p>Season spend <b>$${spend.toFixed(0)}</b> · ${openOrders} open purchase${openOrders === 1 ? "" : "s"}.</p>
   </div>`;
+}
+
+/* Rebuild every public scan nameplate.
+ *
+ * fb.save() mirrors a record into `pub` as it goes, but three cases slip past
+ * that and there is no way to notice any of them from inside the app:
+ *
+ *   1. records that existed before labels were a feature — the whole SN5
+ *      archive, and everything created in SN6 up to today;
+ *   2. writes that never go through save(): fb.mutateField() (step buy-offs)
+ *      and fb.appendTo() (comment and update logs) both write straight to the
+ *      document;
+ *   3. any window where the pub write was rejected — mid-rules-deploy, or an
+ *      offline queue that was dropped. pubSync() only warns to the console on
+ *      failure, deliberately, because a mirror failure must never surface as a
+ *      save failure.
+ *
+ * So the mirror is allowed to drift, and this is the thing that pays for it.
+ * Lead-only, because it writes once per physical record and there is no reason
+ * for anyone else to run it.
+ */
+async function rebuildScanMirror() {
+  if (!isLead()) return;
+  if (typeof pubProjection !== "function") { toast("labels.js not loaded.", "error"); return; }
+
+  const recs = [];
+  for (const coll of ["molds", "workOrders", "parts", "stock", "items", "lots"]) {
+    for (const o of DB[coll] || []) {
+      const p = pubProjection(coll, o);
+      if (p) recs.push(p);
+    }
+  }
+  if (!recs.length) { toast("Nothing to publish yet."); return; }
+
+  const ok = await confirmAsync(
+    `Re-publish ${recs.length} public scan nameplate${recs.length === 1 ? "" : "s"}?\n\n` +
+    `Each one carries only the ID, class, name, stage, location and work order — ` +
+    `the same facts already printed on the physical label. No names, no layup stacks, no files.`,
+    { ok: "Publish", danger: false });
+  if (!ok) return;
+
+  toast(`Publishing ${recs.length}…`);
+  try {
+    // publishPub, not importMany: importMany stamps updatedBy with an email,
+    // which the /pub rules reject and which must never be published anyway.
+    await fb.publishPub(recs);
+    toast(`${recs.length} scan nameplate${recs.length === 1 ? "" : "s"} published.`);
+  } catch (e) {
+    toast("Couldn't publish: " + (e && e.message || e), "error");
+  }
 }

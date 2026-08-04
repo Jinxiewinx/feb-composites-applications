@@ -150,6 +150,48 @@ Everything in the grammar fits except a coupon, `PNL-SN6-006-C03` at 15, which i
 why coupon labels are text-only: 12 mm tape has 8 mm of print height and cannot
 hold even a version 1 code with its quiet zone.
 
+## Scanning
+
+Scanning a label with a plain phone camera goes to `/Q/<ID>`, which Firebase
+Hosting rewrites to `q.html`. That page works **with no account and no signal**.
+The ID is in the URL, so it paints before any network call (measured at about
+16 ms with Firestore hanging); if the lookup succeeds it adds the name, stage,
+location and work order; if it does not, it says so plainly after five seconds
+rather than spinning forever. There is an "Open in the app" button that deep
+links to `/#/<ID>`.
+
+Working without an account is the point. A Jacobs staffer needs to know whose
+mold is blocking the container, and adding them to the roster to answer that is
+absurd.
+
+**How that is safe.** Firestore rules cannot filter fields — `allow read` is
+all-or-nothing per document — so the public page cannot read the real records.
+It reads a separate `pub/<ID>` mirror carrying nine whitelisted fields: id,
+class, name, stage, location, work order, revision, a note, and a timestamp.
+Everything on it is already printed on the physical label. `pubProjection()` in
+`labels.js` builds it, and a `hasOnly()` clause in `firestore.rules` rejects any
+write carrying anything else, so a bug in the projection cannot publish a layup
+stack or somebody's email. `get` is public; `list` stays behind the roster, so
+the collection cannot be dumped. `tools/test_pub_rules.mjs` checks all of that
+against the emulator, including the regression that matters most: that
+`workOrders`, `parts`, `roster` and `budget` are all **still** 403 to an
+anonymous caller.
+
+`fb.save()` and `fb.del()` keep the mirror in step. A mirror failure only warns
+to the console, deliberately — telling someone their save failed when it did not
+is worse than a stale nameplate — and a lead can re-publish everything with
+**Rebuild scan mirror** under Reports. That also covers records that predate the
+feature and writes that bypass `save()` (`mutateField`, `appendTo`).
+
+**Routing.** The app had none before this. Navigation is still the in-memory
+`view` object; `syncUrl()` mirrors it into the hash with `replaceState`, never
+`pushState`, because `NAV_STACK` is a referrer trail and browser history is
+chronological — reconciling them would either make Back lie or break `navBack`.
+A pending deep link waits up to six seconds for its record to arrive, because
+`fb.state` reaching `"ready"` only means auth is done and the collection
+snapshots land afterwards. Giving up early was the first version, and it dumped
+every scan into the search box.
+
 Cross-links are everywhere: click a chip to jump to the related record. A part's
 layup stack and its linked work order's stack stay in sync, so edit either one.
 
@@ -405,10 +447,14 @@ node tools/test_appui.mjs         # layout on 11 tabs x 4 widths x 2 themes
 node tools/test_safearea.mjs      # notch / Dynamic Island / home indicator
 node tools/test_qr.mjs            # QR version/ECC arithmetic + the public projection
 node tools/test_labels.mjs        # the label sheet, measured and rasterised
+node tools/test_route.mjs         # deep links, incl. a link arriving before the data
+node tools/test_q_landing.mjs     # the public scan page, offline and leak-checked
 node tools/shoot_ui.mjs --out .ui-shots --tab all   # PNGs of every tab
 node tools/shoot_ui.mjs --out .ui-shots --inset portrait   # ...with a simulated island
 cd "03 App" && firebase emulators:exec --only firestore \
   --project demo-feb-work-orders "node '../tools/test_wo_rules.mjs'"
+cd "03 App" && firebase emulators:exec --only firestore \
+  --project demo-feb-work-orders "node '../tools/test_pub_rules.mjs'"
 ```
 
 `test_designsystem.mjs` is the one that keeps this stylesheet honest. `06 Design

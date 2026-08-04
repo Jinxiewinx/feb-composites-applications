@@ -106,6 +106,56 @@ const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "d
 // counter-allocated, so it has no prefix.
 const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK" };
 
+/* ---- the public mirror ----
+
+   `pub/<ID>` is the only thing in this database an unauthenticated person can
+   read, and it exists because someone holding a labelled mold needs to know
+   what it is without an account — a Jacobs staffer working out whose mold is
+   blocking the container, a mech tech at comp, a member whose phone is not
+   signed in. It is a MIRROR built from a whitelist, never the record itself.
+
+   It has to be a mirror because FIRESTORE RULES CANNOT FILTER FIELDS. `allow
+   read` is all-or-nothing per document, so any rule that let a scanner see
+   workOrders/WO-SN6-118.id would also hand them layupStack, every
+   steps[].buyoff.name and every comment. The projection is the security
+   boundary, and it lives in pubProjection() in labels.js so that the printed
+   label and the public card can never disagree about what an object is.
+
+   `pub` is deliberately NOT in COLLECTIONS below: it is write-only from the
+   app's point of view, and listing it would open a full-collection snapshot at
+   boot for no benefit. */
+function pubSync(coll, obj) {
+  try {
+    if (typeof pubProjection !== "function") return;   // labels.js not loaded
+    const p = pubProjection(coll, obj);
+    if (!p) return;                                     // not a physical thing
+    setDoc(doc(db, "pub", p.id), p).catch(pubWarn);
+  } catch (e) { pubWarn(e); }
+}
+
+/* A mirror failure must never surface as a save failure. Toasting "save failed"
+   when the record saved perfectly well is worse than a stale nameplate, so this
+   only warns. The drift that buys is paid for by the lead-only "Rebuild scan
+   mirror" action in reports.js, which also covers the two cases save() cannot
+   see: records that predate this feature, and records changed through
+   mutateField() or appendTo(), which bypass save() entirely. */
+function pubWarn(e) { console.warn("pub mirror not updated (the record itself saved fine):", e && e.message || e); }
+
+/* Bulk republish, for the lead-only "Rebuild scan mirror" action.
+
+   Deliberately NOT importMany(): that stamps every document with `updatedAt`
+   and `updatedBy: <email>`, and `updatedBy` is (a) rejected by the hasOnly()
+   clause on /pub, so the whole batch would fail, and (b) precisely the kind of
+   thing that must never appear on a public URL. The mirror is written exactly
+   as the projection produces it and with nothing added. */
+async function pubPublish(recs) {
+  for (let i = 0; i < recs.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const p of recs.slice(i, i + 400)) batch.set(doc(db, "pub", p.id), p);
+    await batch.commit();
+  }
+}
+
 const unsubs = {}; // collection name -> onSnapshot unsub
 
 const fb = {
@@ -140,13 +190,19 @@ const fb = {
     if (field) {
       const val = JSON.parse(JSON.stringify(obj[field] ?? null)); // strip undefined etc.
       await updateDoc(ref, { [field]: val, ...stamp });
+      pubSync(coll, obj);
       return;
     }
     const clean = JSON.parse(JSON.stringify(obj));
     delete clean.updatedAt; delete clean.updatedBy;
     await setDoc(ref, { ...clean, ...stamp });
+    pubSync(coll, obj);
   },
-  async del(coll, id) { await deleteDoc(doc(db, coll, id)); },
+  async del(coll, id) {
+    await deleteDoc(doc(db, coll, id));
+    // A public nameplate outliving its record is worse than a missed delete.
+    deleteDoc(doc(db, "pub", id)).catch(pubWarn);
+  },
 
   // Concurrency-safe edit of one field via a transaction: reads the CURRENT
   // server value, applies mutator(freshValue) → newValue, writes it. Two people
@@ -183,6 +239,10 @@ const fb = {
       return `${prefix}-SN6-${String(n).padStart(3, "0")}`;
     });
   },
+
+  // Republish every public scan nameplate. See pubPublish() above for why this
+  // is not importMany().
+  async publishPub(recs) { await pubPublish(recs); },
 
   // Bulk write (seed load / JSON import). Overwrites by id; chunked under the
   // 500-writes-per-batch limit.

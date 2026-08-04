@@ -2,6 +2,14 @@
   "hosting": {
     "public": "app",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"],
+    "rewrites": [
+      {
+        "//": "Scan landing. A printed QR encodes HTTPS://FEB-COMPOSITES.WEB.APP/Q/<ID> — uppercase, because QR alphanumeric mode has no lowercase and staying inside it keeps the code at 29 modules with 25% error correction instead of 33 modules with 15%. Hosting globs are case-sensitive, so both cases are listed: the uppercase one is what every label carries, the lowercase one catches a code someone typed or OCR'd by hand. Deliberately namespaced under /Q/ rather than a bare /** rewrite, which would swallow every 404 in the app.",
+        "source": "/Q/**",
+        "destination": "/q.html"
+      },
+      { "source": "/q/**", "destination": "/q.html" }
+    ],
     "headers": [
       {
         "//": "Always revalidate app code so a deploy shows up immediately instead of hiding behind a stale browser cache (the 1-hour default bit us during setup). Data is live regardless; this only affects the HTML/JS/JSON shell.",

@@ -300,7 +300,7 @@ function navBack(fallback) {
   const prev = NAV_STACK.pop();
   const to = prev || fallback || { tab: view.tab, mode: "list", id: null };
   view = { ...view, ...to, edit: false };
-  render();
+  render(); syncUrl();
 }
 function openRecord(tab, id) {
   // Opening the same record you are already on is not a move, so it must not
@@ -308,7 +308,139 @@ function openRecord(tab, id) {
   const here = navHere();
   if (!(here.tab === tab && here.mode === "detail" && here.id === id)) navPush(here);
   view = { ...view, tab, mode: "detail", id, edit: false };
-  closeDrawer(); render();
+  closeDrawer(); render(); syncUrl();
+}
+
+/* ---------- URL routing ----------
+
+   The app had no routing at all until printed labels needed somewhere to land:
+   no location.hash, no pushState, no URLSearchParams anywhere. Navigation was
+   purely the in-memory `view` above. A scanned QR goes to /Q/<ID>, q.html shows
+   the public nameplate, and its "Open in the app" link is /#/<ID> — which only
+   means anything if this exists.
+
+   replaceState, NEVER pushState. NAV_STACK above is a REFERRER TRAIL ("back to
+   the thing that sent me here") with its own rules: setTab() clears it,
+   openRecord() suppresses self-pushes, navBack() has a fallback. Browser
+   history is a CHRONOLOGICAL stack. They are different ideas, and making the
+   browser Back button drive one of them would either make Back lie or break
+   navBack. With replaceState the URL always describes where you are — so it is
+   shareable, refreshable and scannable — and the Back button leaves the app,
+   which is exactly what it did before this landed. Nothing regresses.
+   replaceState also fires neither popstate nor hashchange, so there is no
+   self-trigger guard to get subtly wrong. */
+
+// Prefix -> collection. Mirrors ID_PREFIX in fb.js, which this file cannot see
+// (fb.js is the app's only ES module and keeps its constants module-scoped).
+// tools/test_route.mjs checks the two stay in step.
+const ID_TO_COLL = {
+  WO: "workOrders", P: "parts", PROJ: "projects", BUY: "budget",
+  DOC: "documents", BRD: "stock", STK: "stock",
+};
+function tabForId(id) {
+  const pfx = (String(id || "").toUpperCase().match(/^([A-Z]+)-/) || [])[1];
+  const coll = ID_TO_COLL[pfx];
+  if (!coll) return null;
+  const t = TABS.find(t => t.coll === coll);
+  return t ? t.id : null;
+}
+
+/* Read at file-scope load, which is early enough: index.html's
+   `<script>render()</script>` runs after this file, so nothing there needs to
+   change. Mirrored into sessionStorage so the link also survives a reload or a
+   password-reset detour, neither of which keeps the hash. */
+let PENDING_LINK = (() => {
+  // Guarded because this file also runs headless in tools/test_app.mjs, whose
+  // DOM stub has no location and no sessionStorage. Reading either at file
+  // scope without a guard throws before a single test runs.
+  if (typeof location === "undefined") return "";
+  const m = String(location.hash || "").match(/^#\/([A-Za-z0-9-]+)/);
+  const v = m ? m[1].toUpperCase() : "";
+  try {
+    if (v) sessionStorage.setItem("feb-pending-link", v);
+    return v || sessionStorage.getItem("feb-pending-link") || "";
+  } catch { return v; }        // Safari private mode, or no storage at all
+})();
+
+/* Redeemed from render(), and it has to WAIT FOR DATA rather than fire once.
+   `fb.state` reaching "ready" only means auth and the roster check are done:
+   the collection snapshots arrive afterwards, on their own schedule, each one
+   triggering another render. So the first ready render has an empty DB, and a
+   version of this that consumed the link there would find no record every time
+   and dump every scan into the search box. That is exactly what the first run
+   of tools/test_route.mjs caught.
+
+   So: keep the link until the record turns up, or until the grace window below
+   expires. One shot once it does resolve — cleared before the view changes — or
+   a re-render mid-edit would yank the user back here. */
+const PENDING_GRACE_MS = 6000;
+let PENDING_SINCE = 0;
+let PENDING_TIMER = null;
+
+function consumePendingLink() {
+  if (!PENDING_LINK) return false;
+  const id = PENDING_LINK;
+  const tab = tabForId(id);
+
+  // An unknown prefix can never resolve, so there is nothing to wait for.
+  if (!tab) { clearPendingLink(); return false; }
+
+  const rec = recById(TABS.find(t => t.id === tab).coll, id);
+  if (rec) {
+    clearPendingLink();
+    navClear();               // an arrival is not a step in a trail
+    view = { ...view, tab, mode: "detail", id, edit: false };
+    return true;
+  }
+
+  // Not here yet. Wait — the snapshot for this collection may still be in
+  // flight — but not forever, and schedule one wake-up so the giving-up path
+  // runs even if no further snapshot ever arrives.
+  if (!PENDING_SINCE) {
+    PENDING_SINCE = Date.now();
+    if (typeof setTimeout === "function" && !PENDING_TIMER) {
+      PENDING_TIMER = setTimeout(() => { PENDING_TIMER = null; if (PENDING_LINK) render(); }, PENDING_GRACE_MS + 50);
+    }
+    return false;
+  }
+  if (Date.now() - PENDING_SINCE < PENDING_GRACE_MS) return false;
+
+  /* Gave up. A well-formed ID for a record that is not here: another season, a
+     roster that cannot see it, or a label printed before the record was saved.
+     Land on the right tab with the code already in the search box, which is a
+     better answer than a blank detail page for a record that does not exist. */
+  clearPendingLink();
+  view = { ...view, tab, mode: "list", id: null, q: id };
+  if (typeof toast === "function") toast(`No record ${id} here — searching for it.`, "error");
+  return true;
+}
+
+function clearPendingLink() {
+  PENDING_LINK = "";
+  PENDING_SINCE = 0;
+  if (PENDING_TIMER) { clearTimeout(PENDING_TIMER); PENDING_TIMER = null; }
+  try { sessionStorage.removeItem("feb-pending-link"); } catch { /* private mode */ }
+}
+
+/* Mirror `view` into the URL. Detail pages get /#/<ID> so the address bar
+   always holds something scannable and shareable; a list gets /#/<tab>. */
+function syncUrl() {
+  if (typeof history === "undefined" || !history.replaceState || typeof location === "undefined") return;
+  const frag = view.mode === "detail" && view.id ? "#/" + view.id : "#/" + view.tab;
+  if (location.hash !== frag) history.replaceState(null, "", frag);
+}
+
+/* The one case replaceState cannot cover: the hash changing from OUTSIDE the
+   app, which is a scan link tapped while the app is already open, or a pasted
+   URL. Our own replaceState never fires this event, so there is no loop. */
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("hashchange", () => {
+    const m = String(location.hash || "").match(/^#\/([A-Za-z0-9-]+)/);
+    if (!m) return;
+    const id = m[1].toUpperCase();
+    const tab = tabForId(id);
+    if (tab && recById(TABS.find(t => t.id === tab).coll, id)) openRecord(tab, id);
+  });
 }
 
 /* ---------- shared layup-stack viz + editor (parts + work orders) ---------- */
@@ -925,7 +1057,7 @@ function setTab(id) {
   navClear();
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false };
   closeDrawer();
-  render();
+  render(); syncUrl();
 }
 function tabLabel() { const t = TABS.find(t => t.id === view.tab); return t ? t.label : ""; }
 function renderSidebar() {
@@ -1179,6 +1311,11 @@ function render() {
   if (st === "loading") { el.innerHTML = `<div class="card">Connecting…</div>`; return; }
   if (st === "signedout") { el.innerHTML = renderLogin(); return; }
   if (st === "pending") { el.innerHTML = renderPending(); return; }
+  /* A scan link waiting since page load, redeemed the first time we get here
+     with data. It has to be here and not at boot: on first paint fb.state is
+     "loading" and DB is empty, so there is no record to open yet. It rewrites
+     `view` in place, so it must run before the tab is picked below. */
+  if (PENDING_LINK && consumePendingLink()) syncUrl();
   if (view.mode === "roster") { el.innerHTML = renderRoster(); return; }
   const tab = TABS.find(t => t.id === view.tab) || TABS[0];
   el.innerHTML = tab.render();

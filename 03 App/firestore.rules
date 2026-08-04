@@ -79,5 +79,45 @@ service cloud.firestore {
       allow read: if onRoster();
       allow create, update: if isLead();
     }
+
+    /* pub/<ID> = the public nameplate for one physical object, and THE ONLY
+       THING IN THIS DATABASE AN UNAUTHENTICATED PERSON CAN READ.
+
+       It exists because someone holding a labelled mold needs to know what it
+       is without an account: a Jacobs staffer working out whose mold is
+       blocking the container, a mech tech at comp, a member whose phone isn't
+       signed in. Scanning a QR must not end at a login wall.
+
+       It is a MIRROR, written by the app from a whitelist, never the record
+       itself. That is forced, not chosen: Firestore rules cannot filter fields,
+       only whole documents, so opening any read on workOrders would also hand
+       out layupStack, every steps[].buyoff.name and every comment. The
+       projection is the security boundary and it lives in pubProjection() in
+       app/labels.js.
+
+       `get` and not `read`: someone holding an ID gets that one document, but
+       `list` stays behind the roster so nobody can dump the collection and
+       learn how many molds exist or what the season's part list is.
+
+       hasOnly() is the belt-and-braces. If a future refactor of
+       pubProjection() ever spreads the whole object by accident, the write is
+       rejected by the server rather than silently publishing a layup stack.
+       Keep this list in sync with pubProjection() — they are two halves of one
+       contract, and tools/test_pub_rules.mjs checks both.
+
+       delete is onRoster(), deliberately looser than every other collection
+       here (elsewhere it is isLead()). A public nameplate outliving its record
+       is worse than a member being able to remove one, and fb.del() has to be
+       able to clean up on the same path any member can delete on. */
+    match /pub/{id} {
+      allow get: if true;
+      allow list: if onRoster();
+      allow create, update: if onRoster()
+        && request.resource.data.id == id
+        && request.resource.data.keys().hasOnly([
+             'id', 'cls', 'name', 'status', 'location', 'wo', 'rev', 'note', 'updatedAt'
+           ]);
+      allow delete: if onRoster();
+    }
   }
 }
