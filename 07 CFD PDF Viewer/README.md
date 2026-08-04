@@ -7,6 +7,19 @@ Load two or more design points. The reports scroll together, every named plot is
 matched across them, and you can put the same contour side by side or lay one
 over the other to see what actually moved.
 
+![Panels view: the same named plot from every open report](design/cfd-panels-mockup-20260803.png)
+
+## Try it in two commands
+
+Two sample reports ship in this folder: `DP_22.pdf` (a real Fluent export) and
+`DP_22_variant.pdf` (a perturbed copy, so the comparison views have something
+to find; regenerate it with `npm run variant` if it is missing).
+
+```
+npm run serve
+open http://localhost:8123/index.html    # then drop both PDFs onto the window
+```
+
 ## What it does
 
 Pages view puts one report per column, scrolling together. Unlock the toggle to
@@ -24,9 +37,13 @@ Difference computes the per-pixel change, amplified, and tells you what fraction
 of the panel moved. Two identical reports read exactly 0.00%, so the number is
 trustworthy.
 
+![Overlay view: two reports on top of each other](design/cfd-overlay-mockup-20260803.png)
+
 Summary skips the pictures. Mesh counts, solver settings, iterations, inlet
 velocity and final residuals from every report in one table, with changed values
 highlighted. Often this answers the question before you look at a plot at all.
+
+![Summary view: the numbers from every report, changed values highlighted](design/cfd-summary-mockup-20260803.png)
 
 Search covers plot names and the full document text. Typing `vc3` finds
 `velo-car-3`, and picking a result moves every report to it at once.
@@ -63,7 +80,7 @@ page run identical code.
 
 ```
 npm run build:mac      # .dmg and .zip in dist/
-npm run build:win      # dist/win-unpacked/ — a runnable Windows x64 folder
+npm run build:win      # dist/win-unpacked/, a runnable Windows x64 folder
 ```
 
 The macOS build is verified: it produces a 115 MB .dmg and .zip, and the packaged
@@ -72,8 +89,8 @@ right-click then Open, or Gatekeeper will refuse it.
 
 **Windows.** `build:win` produces `dist/win-unpacked/`, a folder with
 `FEB CFD Viewer.exe` and its libraries. Zip that folder and send it; the
-recipient unzips and runs the .exe. The whole folder has to stay together — the
-.exe needs the DLLs next to it — so send the zip, not the .exe alone. It targets
+recipient unzips and runs the .exe. The whole folder has to stay together (the
+.exe needs the DLLs next to it), so send the zip, not the .exe alone. It targets
 x64, which is what nearly every Windows PC runs (not ARM Windows). It is
 unsigned, so Windows SmartScreen shows "Windows protected your PC" on first run;
 click **More info** then **Run anyway**.

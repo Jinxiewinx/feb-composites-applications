@@ -5,7 +5,11 @@ recruits. Static HTML, CSS, and one JavaScript file. No framework, no build for
 the pages themselves, no data fetching.
 
 Built from the design handoff in `design_handoff_team_website/`, on the design
-system in `../06 Design System/`.
+system in `../06 Design System/`. It has never been deployed; see
+[Deploying](#deploying) for what shipping it takes, and
+[Still to do](#still-to-do) for what needs a human first.
+
+![The home page](design/website-home-mockup-20260803.png)
 
 ## Run it
 

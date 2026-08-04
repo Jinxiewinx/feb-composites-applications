@@ -1,5 +1,9 @@
 # Handoff: FEB Team Website
 
+> **Archival.** This is the design handoff as it was delivered, kept for
+> reference. The site it describes has been built and lives in `../site/`;
+> see `../README.md`. Nothing links here and nothing needs doing here.
+
 ## Overview
 Public website for Formula Electric at Berkeley (FSAE Electric team). Audiences: sponsors and new recruits. Tone: playful-technical — copy reads like shop-floor engineering docs (work orders, travelers, build logs) but stays friendly. Includes scroll animations and a set of easter eggs.
 

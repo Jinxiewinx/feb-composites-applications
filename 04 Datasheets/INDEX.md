@@ -24,3 +24,10 @@ TDS = technical datasheet (how to use it, numbers to design to). SDS = safety da
 - General Sealants tacky tape (contact them directly per their rep).
 - Easy Composites 3D-core infusion foam, 2-in-1 mesh/peel-ply, spiral wrap — EC datasheet URLs follow the `media.easycomposites.co.uk/datasheets/EC-TDS-*.pdf` pattern.
 - The **SN5 Stock Order Google Sheet** (Ansh, 2025-10-20, Slack file F09MGLVKQBX) holds the itemized Easy Composites baskets — the single best source for exact SKUs bought; open in Drive.
+
+## Adding a datasheet
+
+Drop the PDF in this folder, add a row above (product, files, which CS standard
+cites it), then run `python3 tools/gen_docs_manifest.py` from the repo root so
+the app's Documents tab picks it up. If a standard starts citing it, run
+`python3 tools/check_traceability.py` too.

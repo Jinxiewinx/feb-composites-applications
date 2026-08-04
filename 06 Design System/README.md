@@ -8,7 +8,17 @@ looks like it belongs to the same team.
 
 It was extracted from the SN6 app's stylesheet (`03 App/app/index.html`). The
 app is still the source of truth for anything that hasn't been lifted into
-`components.css` yet.
+`components.css` yet, and `tools/test_designsystem.mjs` (run from the repo
+root, about a second) is the only thing holding the two copies together. If it
+fails, the fix is nearly always in the app; this folder is the published copy.
+
+![The style guide, light theme](styleguide-light-mockup-20260803.png)
+
+![The style guide, dark theme](styleguide-dark-mockup-20260803.png)
+
+If you have a local `ds-bundle/` folder at the repo root, that is a packaged
+copy of this system for dropping into another codebase. It is not tracked in
+git; this folder is where changes happen, and any bundle follows.
 
 ## Files
 
