@@ -324,7 +324,7 @@ document.addEventListener("keydown", invKeydown);
 let INV_RX_N = 0;
 function invRxRow() {
   const i = INV_RX_N++;
-  return `<div class="grid rx-row" style="grid-template-columns: 1fr 2fr 1fr; gap: 6px">
+  return `<div class="grid" data-rx-row style="grid-template-columns: 1fr 2fr 1fr; gap: 6px">
     <select id="rx-cls-${i}">
       <option value="FAB">Fabric</option><option value="RSN">Resin / hardener</option><option value="CON" selected>Consumable</option>
     </select>

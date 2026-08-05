@@ -9,6 +9,36 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-04 (evening)
+Status: **Storage map + sidebar regroup + Schedule merge ship (2026-08-04).**
+Simon picked, from three design rounds: the full location-first Inventory
+(map of cards by site, contents pages, delivery wizard, §6 chemical chips,
+Confirm-contents walk stamp), the grouped sidebar (Tickets top, Dashboard
+still landing, BUILD/PLANNING/TEAM headers, hairline dividers in the rail),
+and Timeline+Weekly Plan -> one Schedule tab behind a stations/week toggle.
+Eleven visible tabs; items/lots/weekplan ids live on as hidden aliases
+normalised by render() (the stock pattern, now used four times). Fields only,
+NO rules deploy: BIN gains site/locKind/flam/walkedAt/By, lots gain
+hazard/lowFlag, boards gain location; newShopRec(tab, cls, preset) births
+located records; Kind changes touching BIN are refused (id prefix is what
+scanning trusts); lotSource select finally offers "partial". labelLines gains
+the BIN shelf-label branch; pubProjection resolves BIN- ids to shelf names on
+public nameplates. New app/inventory.js (~370 lines + wizard).
+
+Session traps: openLabelPreview inside the delivery wizard must be
+try/caught (no QR vendor lib in the node harness, and a failed preview must
+not read as a failed delivery — records are already saved); the harness
+allocId fake now honors the class argument (it minted "undefined-" ids for
+multi-class collections); design-system "every class defined" check flags
+LITERAL classes only, so `pill ${dynamic}` passes where `pill Cancelled`
+fails (.pill.Cancelled has no CSS rule; use OnHold for red).
+
+Two things only Simon can do: walk the shop once entering real BIN records
+with sites (the map is only as real as the shelves entered), and the standing
+open items from HANDOFF.md. Team still not told about any of this.
+
+Previous status follows.
+
 Last updated: 2026-08-04
 Status: **Stock and Molds merged into one tab (2026-08-04).** Simon picked the
 Parts-style master-detail split from three agent-designed directions, with the

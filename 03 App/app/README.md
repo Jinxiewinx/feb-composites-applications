@@ -165,9 +165,16 @@ actually took and says which record it's returning to, across tabs: open a
 ticket from a part and Back says the part. Picking a tab from the sidebar ends
 the trail, since that's "take me elsewhere" rather than a step.
 
-### Timeline and Weekly Plan
+### Schedule
 
-Timeline is the production schedule as a station by week grid: stations are the
+One tab, two views behind a toggle (the Tickets board/list idiom): the
+season by station, and the week by person. They were separate Timeline and
+Weekly Plan tabs until 2026-08; they always rendered the same schedule
+records, and old links to either still land in the right view.
+
+![Schedule: the season by station](../design/schedule-mockup-20260804.png)
+
+The season view is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
 station that week. Every write leaves an undo bar, because it changes a schedule
 the whole team reads. The current week is called out in gold, and "Jump to this
@@ -176,8 +183,8 @@ listing only what is booked, with finished weeks folded behind a button so this
 week is the first thing on screen. Undated weeks from the SN5 import sit in a
 collapsed archive below the live schedule rather than at the bottom of it.
 
-Weekly Plan is the same schedule cut the other way: one card per day, split by
-car group, saying what happens and who is at RFS, plus a per-person weekly
+The week view is the same schedule cut the other way: one card per day, split
+by car group, saying what happens and who is at RFS, plus a per-person weekly
 rollup pulled from ticket due dates and manual assignments.
 
 ### Budget, People, Documents
@@ -193,19 +200,37 @@ CS standards and pain-points all open as PDFs in-app, with the standards rendere
 from markdown by pandoc and the .docx still downloadable, plus the shop
 printables. Anyone can upload a doc.
 
-### Materials and Items
+### Inventory
 
-Materials and Items are the rest of the physical world, added with printed
-labels. **Materials** holds fabric rolls and offcuts, resin and hardener
-lots, and consumables, which is what makes "which roll went into this panel"
-answerable at all. **Items** holds test panels, jigs and storage bins; a
-panel carries its stack, its coupon range and its lot references, which is
-the fix for tensile data whose only identity was a trailing integer in a
-filename.
+![Inventory: the storage map](../design/inventory-mockup-20260804.png)
 
-Both run on the same schema engine as the mold record (`app/shop.js`).
-Near-identical tabs written separately would drift, and the mobile behaviour
-would drift with them.
+Inventory is the storage map, and it absorbed the Items and Materials tabs.
+The default view is one card per storage location (shelf, rack, cabinet,
+bin), grouped by CS-011 site, each showing a live summary of its contents
+and its problems: expired lots, resin and hardener sharing a shelf, a
+flammable lot outside the rated cabinet (§6 as warning chips), things
+flagged running low, and how long since anyone confirmed the shelf. A dashed
+"No location" card collects everything unhoused, with parts carrying legacy
+free-text locations counted honestly.
+
+![A shelf's contents page](../design/inventory-contents-mockup-20260804.png)
+
+Tap a card, or scan the shelf's own front-edge label, and you are on its
+contents page: every mold, board, panel, jig, lot and part that lives there,
+each with a Move button. **Add here** creates a record already located.
+**Move here** scans the label on each thing you are putting down, the
+inverse of the Move flow. **Receive a delivery** stocks a whole order in one
+pass (pick the shelf once, one line per thing, batch labels at the end).
+**Confirm contents** stamps who walked the shelf and when, which is CS-011
+§7.1's monthly stock walk as one tap per location. The Items-list and
+Materials-list toggles keep the old flat tables.
+
+The records themselves are unchanged: **materials** are fabric rolls and
+offcuts, resin and hardener lots, and consumables, which is what makes
+"which roll went into this panel" answerable; **items** are test panels
+(stack, coupon range, lot references: the fix for tensile data whose only
+identity was a filename), jigs, and the storage locations. All of it runs on
+the same schema engine as the mold record (`app/shop.js`).
 
 ### Reports
 

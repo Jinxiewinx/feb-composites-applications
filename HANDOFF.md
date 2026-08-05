@@ -55,6 +55,11 @@ In rough priority order:
 
 ## The rhythm
 
+**Monthly: walk the shop.** CS-011 §7.1's stock walk is built into the app
+now: open Inventory, and on each shelf's page tap **Confirm contents** after
+checking the list against reality. The map shows how long since each shelf
+was walked, and §8's "molds in home locations" number falls out of it.
+
 **Monthly: back up.** Backup button in the app header, save the JSON into the
 season's Drive folder. Firestore is reliable, but a plain file in Drive is the
 backup nobody can lock you out of, and it is also the only version history the

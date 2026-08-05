@@ -49,21 +49,22 @@ architecture live in `03 App/app/README.md`; this is the short tour.
 
 ![Dashboard: your open items, what is blocked, deadlines and budget at a glance](03%20App/design/dashboard-mockup-20260803.png)
 
-Thirteen tabs, in the order they appear:
+Eleven tabs, grouped in the sidebar by who is asking (Tickets and Dashboard
+up top, then Build, Planning, and Team):
 
-- **Dashboard:** your open items, what is blocked, the deadline list, this week and the money. Read-only; every row links into the tab it came from.
+- **Tickets:** a jira-style tracker for everything that is not a part: R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, rich-text comments with photos. First in the sidebar because "what am I working on" is the question most people bring.
+- **Dashboard:** your open items, what is blocked, the deadline list, this week and the money. Read-only; every row links into the tab it came from. Still the page you land on.
 - **Work Orders:** the manufacturing traveler: layup stack, BOM, step buy-offs stamped with who signed, blocker steps, and enforced cure holds backed by the datasheets in `resins.js`. Prints to a hand-fillable sheet that is always exactly two pages.
 - **Parts:** the season tracker as a split view: every part down the left, the selected one beside it, each stage a row of steps you click. Arrow keys walk the list; `1`/`2`/`3` advance the stages.
 - **Molds:** molds, stack plans and tooling boards as one split view: the rail indexes all three, the pane shows the selected record. A mold carries stage, home location, sealing record and parts pulled, with its plan's drawings and exports on it. The planner takes a mold STL, picks boards, splits at the ShopSabre depth limit, prints a numbered cut list, and creates the mold record at "Designed".
-- **Materials:** fabric rolls and their offcuts, resin and hardener lots, consumables. Lot numbers, received/opened/expiry dates, mix ratios, locations.
-- **Items:** test panels, jigs and bins. A panel carries its layup stack, its coupon range and which lots went in.
-- **Tickets:** a jira-style tracker for everything that is not a part: R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, rich-text comments with photos.
-- **Timeline:** the production schedule as a station-by-week grid, so "when is the ShopSabre free" is one horizontal scan.
-- **Weekly Plan:** the same schedule by day and subteam, plus a per-person task rollup.
+- **Inventory:** the storage map. One card per shelf, rack and bin, grouped by site, each showing what is on it and what is wrong with it (expired lots, resin and hardener together, flammables outside the rated cabinet, unhoused things). A shelf's page adds records already located, moves things in by scan, receives a whole delivery in one pass, and confirms contents for the monthly stock walk. Test panels, jigs, fabric rolls, resin lots and consumables all live here.
+- **Schedule:** the production schedule, two views behind a toggle: the season as a station-by-week grid ("when is the ShopSabre free" is one horizontal scan) and the week by day, subteam and person.
 - **Budget:** purchases through Submitted, Ordered and Reimbursed, with a receipt-scan button on phones.
 - **Documents:** datasheets, CS standards and printables in one filterable shelf, plus pinned Google Docs. Paste a Drive URL anywhere in the app and it resolves the title and offers a preview, with no Google sign-in.
 - **Reports:** CSV exports, a printable Monday status board, and the bulk label builder.
 - **People:** the roster with roles and each person's live assignments.
+
+![Inventory: the storage map, one card per shelf with contents and warnings](03%20App/design/inventory-mockup-20260804.png)
 
 ![Parts: the index of every part beside the selected one, each stage a row of steps](03%20App/design/parts-mockup-20260803.png)
 

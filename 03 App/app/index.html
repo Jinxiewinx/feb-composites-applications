@@ -1237,7 +1237,12 @@
   .loccard.lc-nowhere { border-style: dashed; border-color: var(--warn-border); background: var(--warn-bg); }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
-  @media (max-width: 640px) { .locgrid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .locgrid { grid-template-columns: 1fr; }
+    /* The id crowds the name into "UT …" on a phone; the row opens the record,
+       which shows it. Names beat ids at this width. */
+    .invrow > .tny { display: none; }
+  }
   .pmini { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-top: 1px solid var(--line);
     border-radius: var(--radius); cursor: pointer; }
   .pmini:hover { background: var(--hover); }
