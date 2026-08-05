@@ -291,6 +291,7 @@ function moldsBoardPane(b) {
         <div class="f"><label>Density</label><div class="ro">${esc(b.density)} lb/ft³</div></div>
         <div class="f"><label>Quantity</label><div class="ro">${esc(b.qty || 1)}</div></div>
         <div class="f"><label>Area</label><div class="ro">${boardAreaM2(b).toFixed(2)} m²</div></div>
+        <div class="f"><label>Stored at</label><div class="ro">${b.location ? shopRefChip(String(b.location)) : "—"}</div></div>
         ${b.origin ? `<div class="f"><label>From</label><div class="ro">${esc(b.origin)}</div></div>` : ""}
       </div>
       ${usedBy.length ? `<h3>Molds cut from this board</h3>

@@ -138,6 +138,11 @@ function boardModal(b) {
       <option value="remnant" ${e.kind === "remnant" ? "selected" : ""}>Offcut</option>
     </select></div>
     <div class="field"><label>Quantity</label><input id="bd-qty" value="${esc(e.qty || 1)}"></div>
+    <div class="field"><label>Stored at</label><select id="bd-location">
+      <option value="">—</option>
+      ${(DB.items || []).filter(b2 => b2.cls === "BIN" && b2.stage !== "Retired").map(b2 =>
+        `<option value="${esc(b2.id)}" ${e.location === b2.id ? "selected" : ""}>${esc(b2.name || b2.id)}</option>`).join("")}
+    </select></div>
     <div class="field"><label>From (offcuts only)</label><input id="bd-origin" value="${esc(e.origin || "")}" placeholder="work order or mold it came off"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitBoard(${b ? `'${esc(b.id)}'` : "null"})">${b ? "Save" : "Add"}</button></div>
   `);
@@ -163,6 +168,7 @@ function readBoardForm() {
     label: String(val("bd-label")).trim(),
     density: Number(val("bd-density")) || 30,
     origin: String(val("bd-origin")).trim(),
+    location: String(val("bd-location")).trim(),
   };
 }
 async function submitBoard(id) {

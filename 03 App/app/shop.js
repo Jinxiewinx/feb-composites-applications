@@ -79,6 +79,15 @@ const SHOP = {
       ["name", "Name", "text"],
       ["stage", "Stage", "select", null],
       ["location", "Location", "rec:BIN"],
+      /* BIN-only (see SHOP_FIELDS_BY_CLASS): the storage-map fields. `site`
+         is CS-011 §7.3's vocabulary as a dropdown; `locKind` and `flam` feed
+         the §6 chemical-storage warnings; walkedAt/By are stamped by the
+         Confirm-contents button and editable here so a lead can correct one. */
+      ["site", "Site", "select", ["", "RFS container", "Jacobs basement", "Flammables cabinet", "Dry sealed bin", "General Box", "Other"]],
+      ["locKind", "Type", "select", ["", "shelf", "rack", "cabinet", "bin", "box", "fridge"]],
+      ["flam", "Rated for flammables", "select", ["", "Yes"]],
+      ["walkedAt", "Contents last confirmed", "date"],
+      ["walkedBy", "Confirmed by", "text"],
       ["stack", "Layup stack", "text"],           // PNL: the PP-09 answer
       ["session", "Laid in session", "text"],
       ["laidOn", "Laid up on", "date"],
@@ -88,7 +97,10 @@ const SHOP = {
       ["fabricLots", "Fabric lot(s)", "rec:FAB"],
       ["resinLot", "Resin lot", "rec:RSN"],
       ["hardenerLot", "Hardener lot", "rec:RSN"],
-      ["lotSource", "Lot record", "select", ["scanned", "inferred", "recalled", "unknown"]],
+      // "partial" belongs here: workorders.js's readLotFields() has produced it
+      // since lot capture shipped, but this select never offered it, so editing
+      // a panel silently destroyed the honest half-scanned state.
+      ["lotSource", "Lot record", "select", ["scanned", "inferred", "recalled", "partial", "unknown"]],
     ],
   },
   lots: {
@@ -114,6 +126,11 @@ const SHOP = {
       ["location", "Home location", "rec:BIN"],
       ["parentId", "Cut from roll", "rec:FAB"],   // an offcut is a roll with a parent
       ["qty", "Quantity left", "text"],
+      /* `hazard` drives the §6 chemical chips on the storage map; `lowFlag`
+         is an honest manual "running low" toggle — qty is free text, so a
+         numeric min-stock would be pretending precision we don't have. */
+      ["hazard", "Hazard", "select", ["", "flammable"]],
+      ["lowFlag", "Running low", "select", ["", "Yes — reorder"]],
     ],
   },
 };
@@ -138,7 +155,7 @@ function shopClassLabel(spec, cls) {
 
 /* ---------- create / delete ---------- */
 
-async function newShopRec(tab, cls) {
+async function newShopRec(tab, cls, preset) {
   const spec = shopSpec(tab);
   if (!spec) return;
   const use = cls || shopClasses(spec)[0].cls;
@@ -146,7 +163,9 @@ async function newShopRec(tab, cls) {
   // counter; single-class ones pass null and use ID_PREFIX.
   const id = await allocId(spec.coll, spec.classes ? use : null);
   if (!id) return;
-  const o = { id, name: "", stage: shopClasses(spec).find(c => c.cls === use).stage[0], createdBy: myEmail() };
+  // `preset` is how "Add here" on the storage map births a record already
+  // located: {location: "BIN-…"} spread in before the first save.
+  const o = { id, name: "", stage: shopClasses(spec).find(c => c.cls === use).stage[0], createdBy: myEmail(), ...(preset || {}) };
   if (spec.classes) o.cls = use;
   DB[spec.coll].push(o);
   save(spec.coll, o);
@@ -168,6 +187,16 @@ function updShop(tab, key, val) {
   const spec = shopSpec(tab);
   const o = shopById(spec.coll, view.id);
   if (!o) return;
+  /* A record's id carries its class prefix, and scanning trusts the prefix:
+     quickMoveScan accepts only BIN-. A JIG turned into a BIN would keep its
+     JIG- id and be a shelf no scan can target. Kind changes touching BIN are
+     refused; recreate the record instead. Other class flips (PNL<->JIG,
+     FAB<->CON) keep working — their stale prefix routes to the same tab. */
+  if (key === "cls" && (val === "BIN" || o.cls === "BIN") && val !== o.cls) {
+    toast("A storage location's id is what its scan label points at — make a new record instead of converting this one.", "error");
+    render();
+    return;
+  }
   o[key] = val;
   save(spec.coll, o, key);
   // Stage and class drive the pill and the available stages, so both need a
@@ -286,9 +315,16 @@ function shopRefChip(id) {
    and prev/next walk the rail. The DEFAULT output is byte-identical to before
    the option existed — Materials and Items call this bare, have no test
    coverage, and must not move. */
+/* `opts.embedded` renders inside a merged tab's pane. `back` and `move` name
+   the host's selection callbacks (defaults are the Molds tab's, so existing
+   calls are unchanged); `move: null` drops the prev/next arrows for hosts
+   without a walkable rail, like the storage map. */
 function renderShopDetail(tab, opts) {
   const spec = shopSpec(tab);
   const emb = !!(opts && opts.embedded);
+  const back = (opts && opts.back) || "clearMoldsSelection";
+  const move = opts && "move" in opts ? opts.move : "moveMoldsSelection";
+  const backLabel = (opts && opts.backLabel) || navBackLabel(spec);
   const o = shopById(spec.coll, view.id);
   if (!o) { view.mode = "list"; return renderShopList(tab); }
   const E = view.edit;
@@ -297,7 +333,7 @@ function renderShopDetail(tab, opts) {
   return `
   <div class="toolbar no-print">
     ${emb
-      ? `<button class="ib" onclick="clearMoldsSelection()">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`
+      ? `<button class="ib" onclick="${back}()">${icon("chevronLeft", 16)} ${esc(backLabel)}</button>`
       : `<button class="ib" onclick="navBack({tab:'${tab}',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`}
     <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
     ${labelBtn(spec.coll, o.id)}
@@ -307,9 +343,9 @@ function renderShopDetail(tab, opts) {
           lead-only (firestore.rules enforces that server-side) and still
           behind a confirm. The board detail page works the same way. */""}
     ${isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
-    ${emb ? `<span class="mdnav no-print">
-      <button class="sm" title="Previous (↑)" onclick="moveMoldsSelection(-1)">${icon("chevronLeft", 14)}</button>
-      <button class="sm" title="Next (↓)" onclick="moveMoldsSelection(1)">${icon("chevronRight", 14)}</button>
+    ${emb && move ? `<span class="mdnav no-print">
+      <button class="sm" title="Previous (↑)" onclick="${move}(-1)">${icon("chevronLeft", 14)}</button>
+      <button class="sm" title="Next (↓)" onclick="${move}(1)">${icon("chevronRight", 14)}</button>
     </span>` : ""}
   </div>
   ${/* The two bench actions, above the fold and outside edit mode. Someone
@@ -424,10 +460,10 @@ function shopRefOptions(what, cur) {
 const SHOP_FIELDS_BY_CLASS = {
   PNL: ["name", "stage", "location", "stack", "session", "laidOn", "thicknessMm", "coupons", "wo", "fabricLots", "resinLot", "hardenerLot", "lotSource"],
   JIG: ["name", "stage", "location", "wo"],
-  BIN: ["name", "stage"],
-  FAB: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty"],
-  RSN: ["name", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "location", "qty"],
-  CON: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "qty"],
+  BIN: ["name", "stage", "site", "locKind", "flam", "walkedAt", "walkedBy"],
+  FAB: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "lowFlag"],
+  RSN: ["name", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "location", "qty", "hazard", "lowFlag"],
+  CON: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "qty", "hazard", "lowFlag"],
 };
 function shopFieldApplies(spec, cls, key) {
   const allowed = SHOP_FIELDS_BY_CLASS[cls];
