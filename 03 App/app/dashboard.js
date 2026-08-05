@@ -380,7 +380,7 @@ function dashWeek() {
   if (!booked.length) {
     return `<div class="card dashweek">
       <h3>This week at RFS <span class="muted nocaps">— week of ${esc(week.weekOf)}</span></h3>
-      <button class="dg-more" onclick="setTab('timeline')">Nothing booked yet — open the schedule</button>
+      <button class="dg-more" onclick="view.schedView='stations';setTab('timeline')">Nothing booked yet — open the schedule</button>
     </div>`;
   }
   return `<div class="card dashweek">
@@ -395,7 +395,7 @@ function dashWeek() {
         </div>`;
       }).join("")}
     </div>
-    <button class="dg-more" onclick="setTab('timeline')">Open the schedule</button>
+    <button class="dg-more" onclick="view.schedView='stations';setTab('timeline')">Open the schedule</button>
   </div>`;
 }
 

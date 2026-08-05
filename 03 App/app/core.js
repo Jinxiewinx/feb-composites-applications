@@ -1087,8 +1087,10 @@ const TABS = [
   { id: "molds", label: "Molds", ic: "molds", coll: "molds", grp: "build", tip: "Molds — molds, stack plans and tooling board", render: () => renderMoldsTab() },
   { id: "lots", label: "Materials", ic: "inventory", coll: "lots", grp: "build", tip: "Materials — fabric rolls, resin lots, consumables", render: () => renderShop("lots") },
   { id: "items", label: "Items", ic: "layers", coll: "items", grp: "build", tip: "Items — test panels, jigs, storage locations", render: () => renderShop("items") },
-  { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", grp: "planning", tip: "Timeline — the season, station by week", render: () => renderTimeline() },
-  { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", grp: "planning", tip: "Weekly Plan — who does what, day by day", render: () => renderWeekPlan() },
+  { id: "timeline", label: "Schedule", ic: "timeline", coll: "schedule", grp: "planning", tip: "Schedule — the season by station, or the week by person", render: () => renderSchedule() },
+  /* Hidden alias: Weekly Plan merged into Schedule as its week view. Old
+     #/weekplan links and stored notifications land there. */
+  { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", grp: "planning", hidden: true, render: () => { view.tab = "timeline"; view.schedView = "week"; return renderSchedule(); } },
   { id: "budget", label: "Budget", ic: "budget", coll: "budget", grp: "planning", tip: "Budget — purchases through reimbursement", render: () => renderBudget() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, grp: "team", tip: "Documents — datasheets, standards, printables", render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, grp: "team", tip: "Reports — exports, print boards, labels", render: () => renderReports() },
@@ -1369,6 +1371,7 @@ function render() {
      sidebar so the Molds entry lights up, and mode/id survive so a routed
      BRD- lands selected in the rail. */
   if (view.tab === "stock") view.tab = "molds";
+  if (view.tab === "weekplan") { view.tab = "timeline"; view.schedView = "week"; }
   renderSidebar();
   renderTopbar();
   const el = document.getElementById("main");

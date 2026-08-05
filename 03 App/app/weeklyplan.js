@@ -255,7 +255,7 @@ function carCardHtml(week, car) {
 function renderWeekPlan() {
   const weeks = weekPlanWeeks();
   if (!weeks.length) {
-    return `<div class="card">No dated weeks yet. Add one from <button onclick="setTab('timeline')">Timeline</button> first — Weekly Plan is a second view over the same schedule.</div>`;
+    return `<div class="card">No dated weeks yet. Add one in <button onclick="view.schedView='stations';render()">the season view</button> first; this is a second view over the same schedule.</div>`;
   }
   const weekId = (view.wpWeek && weekById(view.wpWeek) && weekById(view.wpWeek).weekOf) ? view.wpWeek : defaultWeekId(weeks);
   const week = weekById(weekId);

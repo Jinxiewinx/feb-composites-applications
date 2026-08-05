@@ -326,6 +326,22 @@ function timelineGrid(weeks, opts) {
   </div></div>`;
 }
 
+/* ---------- Schedule: one tab, two views (2026-08-04) ----------
+   Timeline (season by station) and Weekly Plan (week by person) render the
+   same `schedule` collection and were separate tabs with a cross-link between
+   them. They are now one "Schedule" tab behind this toggle, the same shape as
+   Tickets' board/list. The `weekplan` tab id lives on as a hidden alias so
+   old links and stored notifications land on the week view. */
+function renderSchedule() {
+  const week = view.schedView === "week";
+  const seg = (on, label, js) => `<button class="ib ${on ? "primary" : ""}" ${on ? "" : `onclick="${js}"`}>${label}</button>`;
+  const toggle = `<div class="toolbar no-print">
+    ${seg(!week, "Season by station", "view.schedView='stations';render()")}
+    ${seg(week, "Week by person", "view.schedView='week';render()")}
+  </div>`;
+  return toggle + (week ? renderWeekPlan() : renderTimeline());
+}
+
 function renderTimeline() {
   const lead = isLead();
   const all = DB.schedule.slice();

@@ -125,7 +125,7 @@ await t("pending → roster-wait", () => { fb.state = "pending"; fb.user = { uid
 
 console.log("shell + sidebar:");
 signInAsLead();
-await t("ready shows sidebar nav + Documents, dashboard default", () => { render(); assert(view.tab === "dashboard"); assert(sidebar.innerHTML.includes("Work Orders") && sidebar.innerHTML.includes("Parts") && sidebar.innerHTML.includes("Timeline") && sidebar.innerHTML.includes("Budget") && sidebar.innerHTML.includes("Documents")); });
+await t("ready shows sidebar nav + Documents, dashboard default", () => { render(); assert(view.tab === "dashboard"); assert(sidebar.innerHTML.includes("Work Orders") && sidebar.innerHTML.includes("Parts") && sidebar.innerHTML.includes("Schedule") && sidebar.innerHTML.includes("Budget") && sidebar.innerHTML.includes("Documents")); });
 await t("lead topbar has Backup/Restore/Archive/Roster + avatar", () => { assert(topbar.innerHTML.includes("Load SN5 archive") && topbar.innerHTML.includes("Roster") && topbar.innerHTML.includes("Restore") && topbar.innerHTML.includes("Simon · lead") && topbar.innerHTML.includes("avatar")); });
 await t("setTab switches active sidebar item", () => { setTab("parts"); assert(view.tab === "parts"); assert(sidebar.innerHTML.includes("sb-item active")); assert(main.innerHTML.includes("New Part")); });
 await t("member topbar hides Load-archive/Restore/Roster", () => {
@@ -1364,7 +1364,7 @@ await t("weekPlanWeeks excludes undated retro weeks (nothing to derive a grid fr
 await t("renderWeekPlan shows a guidance card when there are no dated weeks yet", () => {
   DB.schedule = [];
   const html = renderWeekPlan();
-  assert(/Timeline/.test(html) && !html.includes("<table"), "points at Timeline instead of an empty grid: " + html);
+  assert(/season view/.test(html) && !html.includes("<table"), "points at the season view instead of an empty grid: " + html);
 });
 await t("personTicketsThisWeek scopes to the week's date range, the person, and open status; no subteam grouping anywhere in the render", () => {
   DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }]; // Mon 2026-08-24
@@ -2624,6 +2624,20 @@ await t("every visible tab has a unique icon and a purpose tooltip", () => {
   const ics = vis.map(t => t.ic);
   assert(new Set(ics).size === ics.length, "no icon collisions: " + ics.join(","));
   vis.forEach(t => assert(t.tip && t.tip.includes("—"), t.id + " carries a tooltip blurb"));
+});
+
+await t("Schedule is one tab with two views, and #/weekplan still lands on the week view", () => {
+  view = { ...view, tab: "timeline", mode: "list", id: null, schedView: "stations" };
+  render();
+  assert(main.innerHTML.includes("Season by station") && main.innerHTML.includes("Week by person"), "the toggle renders");
+  view.schedView = "week"; render();
+  assert(main.innerHTML.includes("Week by person"), "week view renders under the same tab");
+  // The alias: old links and stored notifications carry the weekplan id.
+  view = { ...view, tab: "weekplan", schedView: "stations" };
+  render();
+  assert(view.tab === "timeline" && view.schedView === "week", "weekplan normalises to Schedule's week view");
+  const row = TABS.find(t => t.id === "weekplan");
+  assert(row && row.hidden, "and stays out of the sidebar");
 });
 
 console.log("molds & stock, one tab:");
