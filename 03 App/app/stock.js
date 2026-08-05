@@ -343,6 +343,8 @@ function uploadMold() {
   openModal(`
     <h2>Plan a mold</h2>
     <div class="field"><label>Name</label><input id="ml-name" placeholder="e.g. UT nose plug"></div>
+    <div class="field"><label>Board density (lb/ft³)</label><select id="ml-density">${DENSITIES.map(d => `<option ${d === 30 ? "selected" : ""}>${d}</option>`).join("")}</select>
+      <span class="muted tny">Cut lists pack blanks onto boards of this density.</span></div>
     <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
       <option value="box">dimensions (X &times; Y &times; Z)</option>
       <option value="stl">an STL file &mdash; beta</option>
@@ -403,6 +405,7 @@ async function submitMold() {
   const name = String(val("ml-name")).trim();
   const isBox = val("ml-src") !== "stl";
   const auto = val("ml-mode") !== "manual";
+  const density = Number(val("ml-density")) || 30;
 
   let thkMm = null;
   if (!auto) {
@@ -413,8 +416,8 @@ async function submitMold() {
     }
     thkMm = list.map(v => toMm({ value: v, unit: tUnit }));
   }
-  const available = stockThicknessesMm();
-  if (auto && !available.length) { toast("Add some board stock first — the planner picks thicknesses from what you actually have.", "error"); return; }
+  const available = stockThicknessesMm(density);
+  if (auto && !available.length) { toast(`No ${density} lb board stock on the rack — the planner picks thicknesses from what you actually have. Add boards, or pick the other density.`, "error"); return; }
 
   const prog = document.getElementById("ml-progress");
   const setProg = m => { if (prog) prog.textContent = m; };
@@ -479,6 +482,7 @@ async function submitMold() {
     if (!id) return;
     const raw = {
       id, name: name || sourceName, source: sourceName, sourceBytes,
+      density,
       unit: isBox ? "mm" : (val("ml-unit") === "in" ? "in" : "mm"),
       thicknessesMm: result.composition || thkMm, bounds: result.bounds,
       layers: result.layers, sections: result.sections || [],
@@ -511,12 +515,36 @@ async function submitMold() {
         notes.push("The 3D view couldn't be saved, so this plan shows blocks only. The blanks and cut list are unaffected.");
       }
     }
+    /* The plan is born attached to a mold record, at "Designed". Before this,
+       a stack plan was an island a free-text name deep, and the mold record —
+       the thing CS-003 §7.2's sign-off wants to hang off — only appeared after
+       machining, back-filled. The mold is created first so the plan can carry
+       the link before its one save. Non-fatal: if the id allocation fails
+       (offline against an exhausted local counter), the plan still saves and
+       the pane offers "Create mold from this plan" later. */
+    let moldId = "";
+    try {
+      moldId = (await allocId("molds")) || "";
+      if (moldId) {
+        const m = {
+          id: moldId, name: plan.name, stage: "Designed",
+          density: String(density),
+          layers: (plan.thicknessesMm || []).length ? `${plan.thicknessesMm.length} layers` : "",
+          createdBy: myEmail(),
+        };
+        (DB.molds = DB.molds || []).push(m);
+        save("molds", m);
+        plan.moldId = moldId;
+      }
+    } catch (e) { moldId = ""; }
     (DB.stackplans = DB.stackplans || []).push(plan);
     save("stackplans", plan);
     closeModal();
-    view = { ...view, tab: "stock", mode: "plan", id };
+    view = moldId
+      ? { ...view, tab: "molds", mode: "detail", id: moldId }
+      : { ...view, tab: "molds", mode: "detail", id };
     render();
-    toast(notes.length ? notes[0] : "Mold sliced.");
+    toast(notes.length ? notes[0] : (moldId ? `Mold sliced — ${plan.name} created at “Designed”.` : "Mold sliced."));
   } catch (e) {
     setProg("");
     toast(e.message || "Slicing failed.", "error");
@@ -641,7 +669,7 @@ function renderStackPlan() {
   const nSec = sectionCount(p);
   return `
   <div class="toolbar no-print">
-    <button class="ib" onclick="view={...view,mode:'list',id:null};render()">${icon("chevronLeft", 16)} All stock</button>
+    <button class="ib" onclick="view={...view,mode:'list',id:null};render()">${icon("chevronLeft", 16)} All molds</button>
     <button class="ib" onclick="openDrawings('${esc(p.id)}')">${icon("print", 15)} Drawings</button>
     ${nSec === 1
       ? `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',0)">${icon("download", 15)} Export stock STL</button>`

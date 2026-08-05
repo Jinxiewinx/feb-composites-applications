@@ -1064,8 +1064,12 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, render: () => renderDashboard() },
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
-  { id: "stock", label: "Stock", ic: "layers", coll: "stock", render: () => renderStock() },
-  { id: "molds", label: "Molds", ic: "parts", coll: "molds", render: () => renderShop("molds") },
+  /* `stock` survives as a hidden alias of the merged Molds tab: #/stock links,
+     stored notification links, scanned BRD-/STK- codes and the test literals
+     all resolve through this row's id and coll. render() normalises the tab id
+     before painting, so the row's own render never actually runs. */
+  { id: "stock", label: "Stock", ic: "layers", coll: "stock", hidden: true, render: () => { view.tab = "molds"; return renderMoldsTab(); } },
+  { id: "molds", label: "Molds", ic: "parts", coll: "molds", render: () => renderMoldsTab() },
   { id: "lots", label: "Materials", ic: "documents", coll: "lots", render: () => renderShop("lots") },
   { id: "items", label: "Items", ic: "layers", coll: "items", render: () => renderShop("items") },
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
@@ -1096,7 +1100,7 @@ function renderSidebar() {
   el.innerHTML = `
     <div class="sb-brand" onclick="setTab('dashboard')" title="Home">${febMark(26)}<span class="sb-brand-txt">FEB <span>Composites</span></span></div>
     <div class="sb-nav">
-      ${TABS.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.label)}" onclick="setTab('${t.id}')">
+      ${TABS.filter(t => !t.hidden).map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.label)}" onclick="setTab('${t.id}')">
         <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
       </button>`).join("")}
     </div>
@@ -1285,6 +1289,11 @@ function searchAll(q) {
   // by ticket id. Matches the id+label pattern already used for work orders/parts.
   DB.projects.forEach(p => { if ((p.id + " " + (p.title || "")).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Ticket"); });
   DB.budget.forEach(b => { if ((b.item || "").toLowerCase().includes(q)) add("budget", b.id, b.item || b.id, "Purchase"); });
+  (DB.molds || []).forEach(m => { if ((m.id + " " + (m.name || "")).toLowerCase().includes(q)) add("molds", m.id, m.name || m.id, "Mold " + m.id); });
+  (DB.stock || []).forEach(b => { if ((b.id + " " + (b.label || "") + " " + (b.origin || "")).toLowerCase().includes(q)) add("stock", b.id, b.label || b.id, "Tooling board " + b.id); });
+  (DB.stackplans || []).forEach(p => { if ((p.id + " " + (p.name || "")).toLowerCase().includes(q)) add("stock", p.id, p.name || p.id, "Stack plan " + p.id); });
+  (DB.items || []).forEach(o => { if ((o.id + " " + (o.name || "")).toLowerCase().includes(q)) add("items", o.id, o.name || o.id, "Item " + o.id); });
+  (DB.lots || []).forEach(o => { if ((o.id + " " + (o.name || "") + " " + (o.vendorLot || "")).toLowerCase().includes(q)) add("lots", o.id, o.name || o.id, "Material lot " + o.id); });
   DB.users.forEach(u => { if (((u.name || "") + " " + u.email).toLowerCase().includes(q)) add("people", u.email, u.name || u.email, "Person"); });
   (typeof allDocs === "function" ? allDocs() : []).forEach(d => { if ((d.title || "").toLowerCase().includes(q)) out.push({ tab: "documents", docSrc: d.src, uploaded: d.uploaded, label: d.title, sub: "Document · " + d.category }); });
   return out.slice(0, 40);
@@ -1335,6 +1344,12 @@ function markAllNotifsRead() {
 // Overridden meaningfully in dashboard.js once watchers exist; safe default here.
 function watchedUnreadCount() { return typeof unreadWatched === "function" ? unreadWatched() : 0; }
 function render() {
+  /* Stock merged into Molds (2026-08): the `stock` tab id keeps resolving —
+     old #/stock links, notification links and BRD-/STK- routing all pass
+     through it — but what paints is the merged tab. Normalised before the
+     sidebar so the Molds entry lights up, and mode/id survive so a routed
+     BRD- lands selected in the rail. */
+  if (view.tab === "stock") view.tab = "molds";
   renderSidebar();
   renderTopbar();
   const el = document.getElementById("main");

@@ -234,10 +234,28 @@ function dismissShopUndo() { SHOP_UNDO = null; render(); }
 function shopUndoBar() {
   const u = SHOP_UNDO;
   if (!u) return "";
+  /* Gluing a stack is the one moment offcuts exist and are known — the saw is
+     still out and the remnant is in someone's hand. A dismissible offer on the
+     undo bar, never a gate: a prompt that fires where it makes no sense is the
+     one people learn to dismiss (same reasoning as lot capture). */
+  const offcut = u.coll === "molds" && u.to === "Board glued"
+    ? `<button class="sm" onclick="logOffcutFromMold('${esc(u.id)}')">Log offcuts</button>` : "";
   return `<div class="undobar no-print">
     <span class="ub-i">${icon("check", 15)}</span>
     <span class="ub-t"><b>${esc(u.name)}</b> → <b>${esc(u.to)}</b> (was ${esc(u.from)}) — saved for everyone.</span>
+    ${offcut}
     <button class="sm" onclick="undoShopStage()">Undo</button>
     <button class="sm ib" onclick="dismissShopUndo()">${icon("x", 14)}</button>
   </div>`;
+}
+/* Pre-filled offcut entry: kind=remnant, origin=the mold. boardModal has no
+   preset parameter, so the two fields are set after it opens — same pattern
+   quickMoveScan uses to fill its input. */
+function logOffcutFromMold(moldId) {
+  if (typeof boardModal !== "function") return;
+  boardModal(null);
+  const kind = document.getElementById("bd-kind");
+  const origin = document.getElementById("bd-origin");
+  if (kind) kind.value = "remnant";
+  if (origin) origin.value = moldId;
 }

@@ -295,11 +295,16 @@ function labelLines(coll, o, p) {
       foot: j(o.createdDate ? `OPENED ${o.createdDate}` : "", up(o.subteam), up(o.status))
     };
   }
-  // stock (BRD) and anything else: dimensions are the identity
+  // stock (BRD) and anything else: dimensions are the identity. A real board
+  // stores each dimension as {value, unit} (stock.js stores as-entered); the
+  // raw object printed "[object Object]" on the label, which the old flat-
+  // number test fixture could not see. Format through fmtDim and keep the
+  // passthrough for legacy flat numbers.
+  const dim = d => d == null ? "" : (typeof d === "object" ? fmtDim(d) : String(d));
   return {
     name: up(o.label || o.name || p.cls),
     key: j(up(o.kind), o.density ? `${o.density} PCF` : ""),
-    mid: j(o.len && o.wid ? `${o.len} X ${o.wid} X ${o.thk || "?"}` : "", o.qty ? `QTY ${o.qty}` : ""),
+    mid: j(o.len && o.wid ? `${dim(o.len)} X ${dim(o.wid)} X ${dim(o.thk) || "?"}` : "", o.qty ? `QTY ${o.qty}` : ""),
     foot: j(up(o.origin || o.originLegacy), up(o.location || o.label))
   };
 }

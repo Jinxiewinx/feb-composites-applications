@@ -281,8 +281,14 @@ function shopRefChip(id) {
 
 /* ---------- detail ---------- */
 
-function renderShopDetail(tab) {
+/* `opts.embedded` renders the same card inside the merged Molds tab's right
+   pane: the back button clears the selection instead of popping the nav trail,
+   and prev/next walk the rail. The DEFAULT output is byte-identical to before
+   the option existed — Materials and Items call this bare, have no test
+   coverage, and must not move. */
+function renderShopDetail(tab, opts) {
   const spec = shopSpec(tab);
+  const emb = !!(opts && opts.embedded);
   const o = shopById(spec.coll, view.id);
   if (!o) { view.mode = "list"; return renderShopList(tab); }
   const E = view.edit;
@@ -290,10 +296,16 @@ function renderShopDetail(tab) {
 
   return `
   <div class="toolbar no-print">
-    <button class="ib" onclick="navBack({tab:'${tab}',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>
+    ${emb
+      ? `<button class="ib" onclick="clearMoldsSelection()">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`
+      : `<button class="ib" onclick="navBack({tab:'${tab}',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`}
     <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
     ${labelBtn(spec.coll, o.id)}
     ${E && isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
+    ${emb ? `<span class="mdnav no-print">
+      <button class="sm" title="Previous (↑)" onclick="moveMoldsSelection(-1)">${icon("chevronLeft", 14)}</button>
+      <button class="sm" title="Next (↓)" onclick="moveMoldsSelection(1)">${icon("chevronRight", 14)}</button>
+    </span>` : ""}
   </div>
   ${/* The two bench actions, above the fold and outside edit mode. Someone
         standing at a shelf with gloves on should not have to press Edit, find
@@ -318,6 +330,7 @@ function renderShopDetail(tab) {
     <h3>Details</h3>
     <div class="grid">${spec.f.map(f => shopFld(spec, tab, o, f, c)).join("")}</div>
 
+    ${tab === "molds" && typeof moldPlanSection === "function" ? moldPlanSection(o) : ""}
     ${tab === "molds" ? moldUses(o) : ""}
 
     <h3>Notes</h3>

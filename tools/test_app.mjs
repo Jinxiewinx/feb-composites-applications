@@ -79,7 +79,7 @@ globalThis.fb = {
   async upload(path, file) { calls.push(["upload", path]); return { url: "https://x/" + path, path, name: (file && file.name) || "f", size: 100, type: (file && file.type) || "" }; },
   async deleteFile(path) { calls.push(["deleteFile", path]); },
   async del(coll, id) { calls.push(["del", coll, id]); },
-  async allocId(coll) { counters[coll] = (counters[coll] || 0) + 1; const id = `${({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK"})[coll]}-SN6-${String(counters[coll]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
+  async allocId(coll) { counters[coll] = (counters[coll] || 0) + 1; const id = `${({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]}-SN6-${String(counters[coll]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
   async importMany(coll, arr) { calls.push(["importMany", coll, arr.length]); },
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
@@ -93,7 +93,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "labels.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "labels.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
@@ -2440,6 +2440,9 @@ await t("mm and inch boards both land in the same on-hand bucket by real size", 
 await t("deleting a board is lead-only in the UI and drops it from the list", async () => {
   DB.stock = []; fillBoard(); await submitBoard(null);
   const id = DB.stock[0].id;
+  // The delete control moved from the old list rows onto the board's detail
+  // pane when Stock merged into Molds; select the board to see it.
+  view = { ...view, tab: "molds", mode: "detail", id };
   render();
   assert(main.innerHTML.includes("delBoard"), "a lead should see the delete control");
   delBoard(id); confirmProceed();
@@ -2589,6 +2592,124 @@ await t("CRITICAL a plan is always storable — contours thin until it fits", ()
   assert(JSON.stringify(plan).length <= 900000, "must end under the Firestore ceiling");
   assert(notes.length === 1, "and must say that detail was lost");
   assert(plan.layers.every(L => L.blanks.length === 1), "blanks are never dropped — they are what gets cut");
+});
+
+console.log("molds & stock, one tab:");
+
+await t("planning a mold creates the mold record, linked, and lands on it", async () => {
+  seedStock(); DB.stackplans = []; DB.molds = [];
+  fillMold({ name: "adopt test plug" });
+  await submitMold();
+  assert(DB.stackplans.length === 1, "a plan should be saved: " + lastToast);
+  assert(DB.molds.length === 1, "the mold record should exist from day one of design");
+  const m = DB.molds[0], p = DB.stackplans[0];
+  assert(m.stage === "Designed", "born at Designed, not back-filled after machining: " + m.stage);
+  assert(p.moldId === m.id, "the plan carries the link (child points at parent)");
+  assert(p.density === 30, "plan.density is finally written, so blanksFromPlans stops guessing");
+  assert(view.tab === "molds" && view.mode === "detail" && view.id === m.id,
+    "landing on the mold, the record the CS-003 sign-off hangs off");
+});
+
+await t("the merged rail shows molds, plans and boards as three groups", async () => {
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fSub: "", fRetired: false, fNoHome: false };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Stack plans") && h.includes("Boards"), "group headers present");
+  assert(h.includes(DB.molds[0].id), "the auto-created mold is a rail row");
+  assert(h.includes("BRD-0"), "boards are rail rows");
+  assert(h.includes("m²"), "the boards group header carries the on-hand area");
+});
+
+await t("a BRD- id opens a real board detail page (the old dead end)", async () => {
+  const b = DB.stock[0];
+  DB.molds[0].board = b.id;
+  openRecord("stock", b.id);
+  assert(view.tab === "molds", "the hidden stock tab normalises to the merged tab");
+  const h = main.innerHTML;
+  assert(h.includes("editBoard"), "the modal is still the editor, one click away");
+  assert(h.includes("Molds cut from this board"), "the reverse join boards never had");
+  assert(h.includes(DB.molds[0].id) || h.includes(esc(DB.molds[0].name || "")), "naming the mold cut from it");
+});
+
+await t("an STK- id opens the plan pane, wearing its owning mold", async () => {
+  const p = DB.stackplans[0];
+  openRecord("stock", p.id);
+  const h = main.innerHTML;
+  assert(h.includes("Blanks to cut"), "the plan page renders inside the pane");
+  assert(h.includes(p.moldId), "the owning mold is named and linked");
+});
+
+await t("an unlinked plan can be adopted: create a mold from it", async () => {
+  const p = DB.stackplans[0];
+  const owner = p.moldId;
+  p.moldId = "";
+  await createMoldFromPlan(p.id);
+  assert(p.moldId && p.moldId !== owner, "a fresh mold was created and linked");
+  const m = DB.molds.find(m => m.id === p.moldId);
+  assert(m && m.stage === "Designed", "adopted at Designed");
+  p.moldId = owner;   // restore for later tests
+});
+
+await t("global search finds molds, boards and stack plans", () => {
+  const ids = q => searchAll(q).map(r => r.id);
+  assert(ids(DB.molds[0].id.toLowerCase()).includes(DB.molds[0].id), "a mold by id");
+  assert(ids("brd-0").includes("BRD-0"), "a board by id");
+  assert(ids(DB.stackplans[0].id.toLowerCase()).includes(DB.stackplans[0].id), "a plan by id");
+});
+
+await t("a board label prints its dimensions, not [object Object]", () => {
+  const lines = labelLines("stock", DB.stock[0], { cls: "BOARD" });
+  assert(!JSON.stringify(lines).includes("[object"), "the {value,unit} dims are formatted");
+  assert(lines.mid.includes("96") && lines.mid.includes("48"), "and legible: " + lines.mid);
+});
+
+await t("keyboard: arrows walk the rail across group boundaries, 1 advances the mold", () => {
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fSub: "" };
+  render();
+  const ev = k => ({ key: k, target: { tagName: "DIV" }, preventDefault() {} });
+  assert(moldsKeydown(ev("ArrowDown")) === "next", "down selects the first row");
+  const first = view.id;
+  assert(first, "something is selected");
+  // Walk far enough to cross from molds into plans/boards.
+  for (let i = 0; i < 10; i++) moldsKeydown(ev("j"));
+  assert(view.id !== first, "j kept walking");
+  // Select the mold and advance it one named stage.
+  view = { ...view, mode: "detail", id: DB.molds[0].id };
+  const before = DB.molds[0].stage;
+  assert(moldsKeydown(ev("1")) === "stage", "1 routes to quickAdvance");
+  assert(DB.molds[0].stage !== before, "the stage moved: " + DB.molds[0].stage);
+  assert(shopUndoBar().includes("undoShopStage"), "with the same undo bar as the button");
+  undoShopStage();
+  assert(DB.molds[0].stage === before, "and undo restores it");
+});
+
+await t("embedded shop detail is opt-in; Materials and Items keep the bare shape", () => {
+  DB.lots = [{ id: "FAB-SN6-001", cls: "FAB", name: "195 twill", stage: "Sealed" }];
+  view = { ...view, tab: "lots", mode: "detail", id: "FAB-SN6-001", edit: false };
+  const bare = renderShopDetail("lots");
+  assert(bare.includes("navBack"), "bare detail keeps the nav-trail back button");
+  assert(!bare.includes("mdnav") && !bare.includes("clearMoldsSelection"), "and none of the rail plumbing");
+  view = { ...view, tab: "molds", mode: "detail", id: DB.molds[0].id };
+  const emb = renderShopDetail("molds", { embedded: true });
+  assert(emb.includes("clearMoldsSelection") && emb.includes("mdnav"), "embedded swaps back for clear + prev/next");
+});
+
+await t("the mold detail carries its plan's artifacts; the 3D view stays on the plan", () => {
+  view = { ...view, tab: "molds", mode: "detail", id: DB.molds[0].id, edit: false };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Stack plan"), "the linked plan section renders");
+  assert(h.includes("openDrawings") && h.includes("exportSectionStl"), "drawings and STL export inline");
+  assert(!h.includes("mv-canvas"), "the WebGL viewer is not double-mounted here");
+});
+
+await t("setTab('stock') still works and paints the merged tab (legacy links, tests)", () => {
+  setTab("stock");
+  assert(view.tab === "molds", "normalised");
+  assert(tabForId("BRD-0") === "stock" && tabForId("STK-001") === "stock" && tabForId("MOLD-SN6-001") === "molds",
+    "routing prefixes unchanged, so scans and chips resolve as before");
+  const visible = TABS.filter(t => !t.hidden).map(t => t.id);
+  assert(!visible.includes("stock") && visible.includes("molds"), "one sidebar entry, thirteen tabs");
 });
 
 console.log("stock STL export + 3D view:");
