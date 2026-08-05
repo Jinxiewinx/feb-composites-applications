@@ -104,6 +104,11 @@ const ICONS = {
   workorders: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M9 12h6M9 16h6"/>',
   parts: '<path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
   layers: '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  // A mold: a block with a part-shaped cavity. Shares no strokes with `parts`
+  // (the cube), which it collided with in the sidebar until 2026-08-04.
+  molds: '<path d="M3 4v13a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V4"/><path d="M7 4v5a5 5 0 0 0 10 0V4"/>',
+  // An open storage bin, for the Inventory tab.
+  inventory: '<path d="M2 5h20v4H2z"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
   projects: '<rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/>',
   timeline: '<path d="M3 5h11M3 12h18M3 19h8"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -1052,33 +1057,42 @@ function pickerField(id) { return `<div class="picker" id="pk-${id}">${pickerBod
 /* Order = sidebar order. render() is resolved at click time, after every tab
    script has loaded. Add a tab by adding a row here + its renderX().
 
-   Grouped by what you are doing, roughly in the order a job moves:
-     overview          Dashboard
-     the build         Work Orders -> Parts -> Stock   (jobs, what they make,
-                                                        what they are made from)
-     planning          Projects -> Timeline -> Calendar
-     money             Budget
-     reference         Documents -> Reports
-     admin             People                          (rarely opened, so last) */
+   Grouped by who is asking, in frequency order (2026-08-04 redesign):
+     today       Tickets (what am I working on), Dashboard (what's happening)
+     BUILD       Work Orders -> Parts -> Molds -> Inventory
+                 (jobs, what they make, what they're made on, what they're
+                  made from and where it lives)
+     PLANNING    Schedule -> Budget      (Monday meetings and the lead)
+     TEAM        Documents -> Reports -> People   (reference and admin)
+   `grp` keys into GROUPS below; the header renders whenever a group has a
+   label. `tip` is the tooltip a first-year hovers, and the whole first-run
+   orientation budget. Hidden rows are routing aliases whose ids live on in
+   old links and stored notifications; render() normalises them. */
+const GROUPS = [
+  { id: "today", label: "" },
+  { id: "build", label: "Build" },
+  { id: "planning", label: "Planning" },
+  { id: "team", label: "Team" },
+];
 const TABS = [
-  { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, render: () => renderDashboard() },
-  { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", render: () => renderWorkOrders() },
-  { id: "parts", label: "Parts", ic: "parts", coll: "parts", render: () => renderParts() },
+  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", tip: "Tickets — tasks, issues and who owns them", render: () => renderProjects() },
+  { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, grp: "today", tip: "Dashboard — the team-wide picture", render: () => renderDashboard() },
+  { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", grp: "build", tip: "Work Orders — the manufacturing travelers", render: () => renderWorkOrders() },
+  { id: "parts", label: "Parts", ic: "parts", coll: "parts", grp: "build", tip: "Parts — every part's CAD, mold and layup progress", render: () => renderParts() },
   /* `stock` survives as a hidden alias of the merged Molds tab: #/stock links,
      stored notification links, scanned BRD-/STK- codes and the test literals
      all resolve through this row's id and coll. render() normalises the tab id
      before painting, so the row's own render never actually runs. */
-  { id: "stock", label: "Stock", ic: "layers", coll: "stock", hidden: true, render: () => { view.tab = "molds"; return renderMoldsTab(); } },
-  { id: "molds", label: "Molds", ic: "parts", coll: "molds", render: () => renderMoldsTab() },
-  { id: "lots", label: "Materials", ic: "documents", coll: "lots", render: () => renderShop("lots") },
-  { id: "items", label: "Items", ic: "layers", coll: "items", render: () => renderShop("items") },
-  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", render: () => renderProjects() },
-  { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", render: () => renderTimeline() },
-  { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", render: () => renderWeekPlan() },
-  { id: "budget", label: "Budget", ic: "budget", coll: "budget", render: () => renderBudget() },
-  { id: "documents", label: "Documents", ic: "documents", coll: null, render: () => renderDocuments() },
-  { id: "reports", label: "Reports", ic: "reports", coll: null, render: () => renderReports() },
-  { id: "people", label: "People", ic: "people", coll: null, render: () => renderPeople() },
+  { id: "stock", label: "Stock", ic: "layers", coll: "stock", grp: "build", hidden: true, render: () => { view.tab = "molds"; return renderMoldsTab(); } },
+  { id: "molds", label: "Molds", ic: "molds", coll: "molds", grp: "build", tip: "Molds — molds, stack plans and tooling board", render: () => renderMoldsTab() },
+  { id: "lots", label: "Materials", ic: "inventory", coll: "lots", grp: "build", tip: "Materials — fabric rolls, resin lots, consumables", render: () => renderShop("lots") },
+  { id: "items", label: "Items", ic: "layers", coll: "items", grp: "build", tip: "Items — test panels, jigs, storage locations", render: () => renderShop("items") },
+  { id: "timeline", label: "Timeline", ic: "timeline", coll: "schedule", grp: "planning", tip: "Timeline — the season, station by week", render: () => renderTimeline() },
+  { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", grp: "planning", tip: "Weekly Plan — who does what, day by day", render: () => renderWeekPlan() },
+  { id: "budget", label: "Budget", ic: "budget", coll: "budget", grp: "planning", tip: "Budget — purchases through reimbursement", render: () => renderBudget() },
+  { id: "documents", label: "Documents", ic: "documents", coll: null, grp: "team", tip: "Documents — datasheets, standards, printables", render: () => renderDocuments() },
+  { id: "reports", label: "Reports", ic: "reports", coll: null, grp: "team", tip: "Reports — exports, print boards, labels", render: () => renderReports() },
+  { id: "people", label: "People", ic: "people", coll: null, grp: "team", tip: "People — the roster and who carries what", render: () => renderPeople() },
 ];
 function activeColl() { const t = TABS.find(t => t.id === view.tab); return t ? t.coll : null; }
 function setTab(id) {
@@ -1100,9 +1114,14 @@ function renderSidebar() {
   el.innerHTML = `
     <div class="sb-brand" onclick="setTab('dashboard')" title="Home">${febMark(26)}<span class="sb-brand-txt">FEB <span>Composites</span></span></div>
     <div class="sb-nav">
-      ${TABS.filter(t => !t.hidden).map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.label)}" onclick="setTab('${t.id}')">
+      ${GROUPS.map(g => {
+        const rows = TABS.filter(t => !t.hidden && t.grp === g.id);
+        if (!rows.length) return "";
+        return `${g.label ? `<div class="sb-hd" aria-hidden="true"><span>${esc(g.label)}</span></div>` : ""}${
+          rows.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.tip || t.label)}" onclick="setTab('${t.id}')">
         <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
-      </button>`).join("")}
+      </button>`).join("")}`;
+      }).join("")}
     </div>
     <button class="sb-toggle no-print" title="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}"
       aria-label="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}" aria-pressed="${rail}" onclick="toggleRail()">
@@ -1363,7 +1382,10 @@ function render() {
      `view` in place, so it must run before the tab is picked below. */
   if (PENDING_LINK && consumePendingLink()) syncUrl();
   if (view.mode === "roster") { el.innerHTML = renderRoster(); return; }
-  const tab = TABS.find(t => t.id === view.tab) || TABS[0];
+  // Explicit dashboard fallback: TABS[0] is Tickets since the 2026-08 reorder,
+  // and an unknown tab landing on someone's personal task list would be a
+  // quiet behavior change. Unknown tabs land on the shared picture.
+  const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
   el.innerHTML = tab.render();
   labelListTables();
   /* Timeline scrolls sideways along the season, and innerHTML above just reset

@@ -149,6 +149,14 @@
   .feb-mark { flex: none; }
   .ico { display: inline-block; vertical-align: middle; flex: none; }
   .sb-nav { display: flex; flex-direction: column; padding: 6px 8px; gap: 2px; flex: 1; }
+  /* Group headers between nav sections (the .pgrouphd idiom, recolored for
+     the navy sidebar). In the collapsed 56px rail the text has no room, so
+     the header degrades to a centered hairline: the grouping survives as
+     rhythm. aria-hidden — it is presentation, the buttons carry the names. */
+  .sb-hd { margin: 10px 3px 3px; padding: 0 8px; font-size: 10.5px; font-weight: 800; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--sb-text); opacity: .55; }
+  html.rail .sb-hd { margin: 8px 14px 6px; border-top: 1px solid var(--sb-hover); height: 0; padding: 0; overflow: hidden; }
+  html.rail .sb-hd span { display: none; }
   .sb-item { position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 7px; color: var(--sb-text); cursor: pointer; font-size: 13.5px; font-weight: 500; border: none; background: none; text-align: left; width: 100%; transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
   .sb-item:hover { background: var(--sb-hover); color: #fff; }
   .sb-item.active { background: var(--sb-active); color: #fff; font-weight: 600; }

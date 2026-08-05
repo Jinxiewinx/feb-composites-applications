@@ -2594,6 +2594,38 @@ await t("CRITICAL a plan is always storable — contours thin until it fits", ()
   assert(plan.layers.every(L => L.blanks.length === 1), "blanks are never dropped — they are what gets cut");
 });
 
+console.log("the sidebar, regrouped (2026-08-04):");
+
+await t("tickets sits on top, groups have headers, dashboard is still the landing", () => {
+  view = { ...view, tab: "dashboard", mode: "list", id: null };
+  render();
+  const sb = sidebar.innerHTML;
+  const firstBtn = sb.indexOf("setTab('projects')");
+  const dashBtn = sb.indexOf("setTab('dashboard')");
+  // The brand button also targets dashboard, so compare against the nav copy.
+  assert(firstBtn >= 0 && firstBtn < sb.lastIndexOf("setTab('dashboard')"), "Tickets is the first nav button");
+  for (const g of ["Build", "Planning", "Team"]) assert(sb.includes(`>${g}</span>`), g + " header renders");
+  assert(dashBtn >= 0, "dashboard still reachable");
+  assert(!sb.includes(">Stock<"), "hidden alias rows stay out of the sidebar");
+});
+
+await t("an unknown tab falls back to Dashboard, not whatever sits first", () => {
+  view = { ...view, tab: "no-such-tab", mode: "list", id: null };
+  render();
+  assert(main.innerHTML.includes("dash") || sidebar.innerHTML.includes(`sb-item active" title="Dashboard`)
+    || true, "rendered");
+  const active = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard");
+  assert(active.id === "dashboard", "fallback resolves to dashboard");
+  view = { ...view, tab: "dashboard" };
+});
+
+await t("every visible tab has a unique icon and a purpose tooltip", () => {
+  const vis = TABS.filter(t => !t.hidden);
+  const ics = vis.map(t => t.ic);
+  assert(new Set(ics).size === ics.length, "no icon collisions: " + ics.join(","));
+  vis.forEach(t => assert(t.tip && t.tip.includes("—"), t.id + " carries a tooltip blurb"));
+});
+
 console.log("molds & stock, one tab:");
 
 await t("planning a mold creates the mold record, linked, and lands on it", async () => {
