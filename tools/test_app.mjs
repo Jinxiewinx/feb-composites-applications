@@ -2772,6 +2772,34 @@ await t("old items/lots links and scans land on Inventory", () => {
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
 
+await t("receive a delivery: one shelf, several records, all located and dated", async () => {
+  seedInventory();
+  invReceive("BIN-SN6-001");
+  const bin = document.getElementById("rx-bin");
+  if (bin) bin.value = "BIN-SN6-001";
+  const n0 = document.getElementById("rx-name-0"), c0 = document.getElementById("rx-cls-0"), l0 = document.getElementById("rx-lot-0");
+  if (n0) n0.value = "VB160 bagging film"; if (c0) c0.value = "CON"; if (l0) l0.value = "24C-1001";
+  const n1 = document.getElementById("rx-name-1"), c1 = document.getElementById("rx-cls-1");
+  if (n1) n1.value = "IN2 resin 5kg"; if (c1) c1.value = "RSN";
+  const before = DB.lots.length;
+  await invReceiveSubmit();
+  const made = DB.lots.slice(before);
+  assert(made.length === 2, "two named rows became two records (blank rows skipped): " + made.length);
+  assert(made.every(o => o.location === "BIN-SN6-001" && o.receivedOn && o.stage === "Sealed"), "located, dated, sealed");
+  assert(made[0].vendorLot === "24C-1001", "vendor lot carried");
+  assert(made.some(o => o.id.startsWith("CON-")) && made.some(o => o.id.startsWith("RSN-")), "per-class ids");
+});
+
+await t("a shelf label says what it is; a scanned mold's nameplate names the shelf", () => {
+  seedInventory();
+  const bin = shopById("items", "BIN-SN6-001");
+  const lines = labelLines("items", bin, { cls: "STORAGE" });
+  assert(lines.key === "STORAGE" && lines.name.includes("RESIN SHELF"), "BIN branch: " + JSON.stringify(lines));
+  assert(lines.mid.includes("RFS CONTAINER"), "site on the label");
+  const pub = pubProjection("molds", DB.molds[0]);
+  assert(pub.location === "Dry fabric bin", "BIN id resolved to the shelf name: " + pub.location);
+});
+
 console.log("molds & stock, one tab:");
 
 await t("planning a mold creates the mold record, linked, and lands on it", async () => {

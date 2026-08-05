@@ -315,5 +315,70 @@ function invKeydown(e) {
 }
 document.addEventListener("keydown", invKeydown);
 
-/* Placeholder until the receive-a-delivery wizard lands (next commit). */
-function invReceive(binId) { toast("Receiving arrives in the next update — use Add here for now.", "info"); void binId; }
+/* ---------- receive a delivery ----------
+ * An Easy Composites order lands as rolls + jugs + consumables at once, and
+ * stocking it used to be N trips through the class picker. Pick the shelf
+ * once, one line per thing, and every record is born located and dated; the
+ * batch then offers its labels in one sheet. Ids are allocated serially on
+ * purpose — the shared counter is the whole point of allocId. */
+let INV_RX_N = 0;
+function invRxRow() {
+  const i = INV_RX_N++;
+  return `<div class="grid rx-row" style="grid-template-columns: 1fr 2fr 1fr; gap: 6px">
+    <select id="rx-cls-${i}">
+      <option value="FAB">Fabric</option><option value="RSN">Resin / hardener</option><option value="CON" selected>Consumable</option>
+    </select>
+    <input id="rx-name-${i}" placeholder="what is it">
+    <input id="rx-lot-${i}" placeholder="vendor lot #">
+  </div>`;
+}
+function invReceive(binId) {
+  INV_RX_N = 0;
+  const bins = invActiveBins();
+  openModal(`
+    <h2>Receive a delivery</h2>
+    <p class="muted tny">One line per thing in the box. Everything lands on the shelf you pick, dated today, sealed.</p>
+    <div class="field"><label>Onto</label><select id="rx-bin">
+      <option value="">—</option>
+      ${bins.map(b => `<option value="${esc(b.id)}" ${binId === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}
+    </select></div>
+    <div id="rx-rows">${invRxRow()}${invRxRow()}${invRxRow()}</div>
+    <div class="no-print" style="margin: 6px 0"><button class="sm" onclick="document.getElementById('rx-rows').insertAdjacentHTML('beforeend', invRxRow())">+ another line</button></div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="invReceiveSubmit()">Add them</button>
+    </div>`);
+}
+async function invReceiveSubmit() {
+  const val = k => (document.getElementById(k) || {}).value || "";
+  const loc = val("rx-bin");
+  if (!loc) { toast("Pick the shelf the delivery goes onto.", "error"); return; }
+  const rows = [];
+  for (let i = 0; i < INV_RX_N; i++) {
+    const name = String(val("rx-name-" + i)).trim();
+    if (!name) continue;
+    rows.push({ cls: val("rx-cls-" + i) || "CON", name, vendorLot: String(val("rx-lot-" + i)).trim() });
+  }
+  if (!rows.length) { toast("Nothing to add — name at least one thing.", "error"); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  const made = [];
+  for (const r of rows) {
+    const id = await allocId("lots", r.cls);
+    if (!id) break;
+    const o = { id, cls: r.cls, name: r.name, vendorLot: r.vendorLot, stage: "Sealed",
+      receivedOn: today, location: loc, createdBy: myEmail() };
+    (DB.lots = DB.lots || []).push(o);
+    save("lots", o);
+    made.push(o);
+  }
+  closeModal();
+  toast(`${made.length} record${made.length === 1 ? "" : "s"} received onto ${(shopById("items", loc) || {}).name || loc}.`);
+  view = { ...view, tab: "inventory", mode: "detail", id: loc, edit: false };
+  render();
+  // The batch's labels, one sheet, while the box is still open. Non-fatal:
+  // the records are already saved, and a preview that cannot draw its QRs
+  // must not read as a failed delivery.
+  if (made.length && typeof openLabelPreview === "function") {
+    try { openLabelPreview(made.map(o => ({ coll: "lots", o }))); } catch (e) { /* labels print later */ }
+  }
+}

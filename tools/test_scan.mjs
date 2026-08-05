@@ -316,7 +316,7 @@ console.log("\nbefore any lots exist");
   await page.waitForTimeout(300);
   const t = await page.evaluate(() => ({
     selects: !!document.getElementById("lotResin"),
-    says: /Materials/.test(document.querySelector("#modal .modal").innerText),
+    says: /Inventory/.test(document.querySelector("#modal .modal").innerText),
   }));
   eq(t.selects, false, "no empty dropdowns are shown");
   eq(t.says, true, "it says where to add lots instead");

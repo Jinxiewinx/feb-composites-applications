@@ -151,7 +151,17 @@ function pubProjection(coll, o) {
     cls,
     name: o.partName || o.name || o.label || "",
     status: pubStatus(coll, o),
-    location: o.location || o.moldLocation || "",
+    /* Resolve a BIN- id to the shelf's NAME: the public nameplate a scanned
+       mold shows should say "Resin shelf A", not "BIN-SN6-002". Falls back to
+       the raw value for legacy free text or an unknown id. */
+    location: (() => {
+      const v = o.location || o.moldLocation || "";
+      if (String(v).startsWith("BIN-")) {
+        const b = (typeof DB === "object" && (DB.items || []).find(x => x.id === v)) || null;
+        return b && b.name ? b.name : v;
+      }
+      return v;
+    })(),
     wo: o.workOrderId || o.wo || (coll === "workOrders" ? o.id : "") || "",
     rev: o.revision || o.rev || "",
     note: "",
@@ -282,6 +292,16 @@ function labelLines(coll, o, p) {
       key: j(up(o.ratio), up(o.role)),
       mid: j(o.vendorLot ? `LOT ${up(o.vendorLot)}` : "", o.openedOn ? `OPENED ${o.openedOn}` : ""),
       foot: j(o.receivedOn ? `RECD ${o.receivedOn}` : "", o.expiresOn ? `EXP ${o.expiresOn}` : "", up(o.location))
+    };
+  }
+  if (coll === "items" && o.cls === "BIN") {
+    /* The front-edge shelf label CS-001 §7.10 asks for. Before this branch a
+       BIN fell through to the board layout and printed mostly blank lines. */
+    return {
+      name: up(o.name),
+      key: "STORAGE",
+      mid: j(up(o.site), up(o.locKind), o.flam === "Yes" ? "FLAMMABLES OK" : ""),
+      foot: o.walkedAt ? `CONTENTS CONFIRMED ${o.walkedAt}` : "SCAN TO SEE CONTENTS"
     };
   }
   if (coll === "workOrders") {
