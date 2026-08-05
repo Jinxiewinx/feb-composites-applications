@@ -79,7 +79,7 @@ globalThis.fb = {
   async upload(path, file) { calls.push(["upload", path]); return { url: "https://x/" + path, path, name: (file && file.name) || "f", size: 100, type: (file && file.type) || "" }; },
   async deleteFile(path) { calls.push(["deleteFile", path]); },
   async del(coll, id) { calls.push(["del", coll, id]); },
-  async allocId(coll) { counters[coll] = (counters[coll] || 0) + 1; const id = `${({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]}-SN6-${String(counters[coll]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
+  async allocId(coll, cls) { const key = cls || coll; counters[key] = (counters[key] || 0) + 1; const pfx = cls || ({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]; const id = `${pfx}-SN6-${String(counters[key]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
   async importMany(coll, arr) { calls.push(["importMany", coll, arr.length]); },
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
@@ -2671,11 +2671,13 @@ await t("a storage location's kind cannot be converted (scan labels trust the pr
 });
 
 await t("BIN records carry the storage-map fields; lots carry hazard and low", () => {
-  assert(SHOP_FIELDS_BY_CLASS.BIN.includes("site") && SHOP_FIELDS_BY_CLASS.BIN.includes("flam")
-    && SHOP_FIELDS_BY_CLASS.BIN.includes("walkedAt"), "BIN fields");
-  assert(SHOP_FIELDS_BY_CLASS.RSN.includes("hazard") && SHOP_FIELDS_BY_CLASS.RSN.includes("lowFlag"), "RSN fields");
-  assert(!SHOP_FIELDS_BY_CLASS.PNL.includes("site"), "panels don't grow shelf fields");
-  const lotSrc = SHOP.items.f.find(f => f[0] === "lotSource")[3];
+  // Via shopFieldApplies/shopSpec: the tables themselves are consts, invisible
+  // across the harness eval boundary (the SHOP_UNDO lesson).
+  const items = shopSpec("items"), lots = shopSpec("lots");
+  for (const k of ["site", "flam", "walkedAt"]) assert(shopFieldApplies(items, "BIN", k), "BIN has " + k);
+  for (const k of ["hazard", "lowFlag"]) assert(shopFieldApplies(lots, "RSN", k), "RSN has " + k);
+  assert(!shopFieldApplies(items, "PNL", "site"), "panels don't grow shelf fields");
+  const lotSrc = items.f.find(f => f[0] === "lotSource")[3];
   assert(lotSrc.includes("partial"), "the lotSource select finally offers the value workorders.js writes");
 });
 
