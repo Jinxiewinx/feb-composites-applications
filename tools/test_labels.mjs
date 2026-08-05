@@ -68,8 +68,12 @@ const RECS = [
       ratio: "100 : 30 BY WEIGHT", vendorLot: "24C-0918", openedOn: "2026-09-02",
       receivedOn: "2026-08-28", expiresOn: "2027-08-28", location: "CHEMICAL BARREL" } },
   { coll: "stock", o: {
+      // The REAL shape: stock.js stores each dimension as {value, unit}. The
+      // old flat numbers here are why the "[object Object]" label shipped —
+      // the fixture couldn't fail the way production data did.
       id: "BRD-SN6-002", label: "RACK A TOP SHELF", kind: "sheet", density: 30,
-      len: 96, wid: 48, thk: 2, qty: 1 } },
+      len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" },
+      thk: { value: 2, unit: "in" }, qty: 1 } },
   { coll: "workOrders", o: {
       id: "WO-SN6-031", partName: "UT INLET", revision: "A", status: "In Progress",
       processType: "infusion", subteam: "AERO", createdDate: "2026-09-10",

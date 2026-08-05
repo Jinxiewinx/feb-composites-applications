@@ -8,10 +8,11 @@ Two versions live here.
 
 `app/` is the hosted, multi-user app, live at https://feb-composites.web.app.
 Everyone signs in with email and password, and a shared Firestore database on
-the free tier backs fourteen tabs (Dashboard, Work Orders, Parts, Stock, Molds,
+the free tier backs thirteen tabs (Dashboard, Work Orders, Parts, Molds,
 Materials, Items, Tickets, Timeline, Weekly Plan, Budget, Documents, Reports,
 People) that update live for the whole team, plus printed QR labels and a
-public scan page. This is the day-to-day tool. The full manual, setup, deploy
+public scan page. Molds also holds the tooling-board inventory and the mold
+stack planner, which used to be a separate Stock tab. This is the day-to-day tool. The full manual, setup, deploy
 and the data model are in `app/README.md`.
 
 `work-orders.html` is the original single-file work-order tool. No server, no

@@ -102,19 +102,46 @@ so `"Not Started"` sat at index 1 and coloured itself as in-progress. Progress
 colour is derived from what a value *means* now, never from where it sits in an
 array.
 
-### Stock
+### Molds
 
-![Stock: the board inventory and the mold stack planner](../design/stock-mockup-20260803.png)
+![Molds: molds, plans and boards on one screen](../design/molds-mockup-20260804.png)
 
-Stock is the tooling-board inventory and the mold stack planner. A full 4×8
-sheet and an offcut are the same kind of record, so remnants come back into
-stock instead of piling up. The planner takes a mold STL (or a typed
-rectangular block), picks board thicknesses that waste the least, splits tall
-molds at the ShopSabre's cut-depth limit, prints a numbered cut list and a
-dimensioned engineering drawing set, shows the mold sitting inside translucent
-stock in a rotatable 3D view, and exports the planned blocks back out as STL
-so CAM can use them as the stock body. Three sample molds ship with the app,
-so it can be tried without exporting anything from Fusion.
+Molds holds the whole physical inventory of mold-making, merged from what
+used to be two tabs (Stock and Molds) into one Parts-style split: a
+persistent rail of three groups (molds, stack plans, tooling boards) on the
+left, the selected record on the right. Arrow keys or j/k walk the rail, `1`
+advances the selected mold one named stage with the same undo bar as the
+button, `/` searches, esc goes back. On a phone it collapses to
+list-then-detail, exactly like Parts.
+
+A **mold** used to exist only as free text inside one work order, so two work
+orders using the same mold held two copies of the truth and its location was
+wrong the moment anybody moved it. Now it is a record with its own stage,
+home location, sealing date and a count of parts pulled off it; the work
+orders and parts that used it are a live join, and its stack plan's exploded
+view, blanks table, drawings and STL export sit right on it.
+
+A **board** is the raw material: a full 4×8 sheet and an offcut are the same
+kind of record, so remnants come back into stock instead of piling up.
+Boards have real detail pages now, which is where a scanned BRD- label and
+the mold's "Cut from board" chip land.
+
+**Plan a mold** takes an STL (or a typed rectangular block), picks board
+thicknesses that waste the least, splits tall molds at the ShopSabre's
+cut-depth limit, prints a numbered cut list and a dimensioned engineering
+drawing set, shows the mold sitting inside translucent stock in a rotatable
+3D view, and exports the planned blocks back out as STL so CAM can use them
+as the stock body. Planning also creates the mold record itself, at
+"Designed", with the plan linked to it, so the record exists from day one of
+design instead of being back-filled after machining. Three sample molds ship
+with the app, so the planner can be tried without exporting anything from
+Fusion.
+
+![Molds: the season view when nothing is selected](../design/molds-overview-mockup-20260804.png)
+
+With nothing selected, the right pane is the season: where the live molds
+sit across the stages, the board on hand by thickness and density, and
+whether the planned blanks actually fit the rack.
 
 ### Tickets
 
@@ -166,24 +193,19 @@ CS standards and pain-points all open as PDFs in-app, with the standards rendere
 from markdown by pandoc and the .docx still downloadable, plus the shop
 printables. Anyone can upload a doc.
 
-### Molds, Materials, Items
+### Materials and Items
 
-![Molds: stage, home location, sealing record, parts pulled](../design/molds-mockup-20260803.png)
+Materials and Items are the rest of the physical world, added with printed
+labels. **Materials** holds fabric rolls and offcuts, resin and hardener
+lots, and consumables, which is what makes "which roll went into this panel"
+answerable at all. **Items** holds test panels, jigs and storage bins; a
+panel carries its stack, its coupon range and its lot references, which is
+the fix for tensile data whose only identity was a trailing integer in a
+filename.
 
-Molds, Materials and Items are the physical world, added with printed labels.
-A **mold** used to exist only as free text inside one work order, so two work
-orders using the same mold held two copies of the truth and `mold.location` was
-wrong on one of them the moment anybody moved it. Now it is a record with its own
-stage, home location, sealing date and a count of parts pulled off it, and the
-work orders and parts that used it are listed on it as a live join. **Materials**
-holds fabric rolls and offcuts, resin and hardener lots, and consumables, which
-is what makes "which roll went into this panel" answerable at all. **Items**
-holds test panels, jigs and storage bins; a panel carries its stack, its coupon
-range and its lot references, which is the fix for tensile data whose only
-identity was a trailing integer in a filename.
-
-All three run on one schema in `app/shop.js`. Three near-identical tabs written
-three times would drift, and the mobile behaviour would drift with them.
+Both run on the same schema engine as the mold record (`app/shop.js`).
+Near-identical tabs written separately would drift, and the mobile behaviour
+would drift with them.
 
 ### Reports
 
@@ -495,7 +517,7 @@ in a graduated senior's personal account.
 
    **`firebase deploy` does not do this.** It pushes hosting and rules, and CORS
    is bucket configuration, so a deploy alone will not fix it. Without the rule
-   the Stock tab's 3D view shows the stock blocks with no mold inside them: the
+   the Molds tab's 3D plan view shows the stock blocks with no mold inside them: the
    browser blocks the `fetch()` of the stored mesh before it is even sent.
    Nothing else in the app notices, because every other Storage URL here is used
    by `<img src>` or `<a href>`, and those need no CORS at all. If you see blocks

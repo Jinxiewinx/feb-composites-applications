@@ -104,7 +104,7 @@ function moldsRailItem(kind, o) {
     return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""}" id="pi-${esc(o.id)}" role="option" aria-selected="${sel}"
         title="${esc(o.id)} · ${esc(o.stage || "")}" onclick="${open}">
       <span class="pi-name">${esc(o.name || o.id)}</span>
-      <span class="pi-due">${o.location ? `<span class="tny muted">${esc(String(o.location).replace(/^BIN-/, ""))}</span>` : ""}</span>
+      <span class="pi-due">${o.location ? `<span class="tny muted">${esc(((n => n.length > 18 ? n.slice(0, 17) + "…" : n)((shopById("items", o.location) || {}).name || String(o.location))))}</span>` : ""}</span>
       <span class="pi-sub"><span class="prog3"><span class="sg ${moldStageMarkClass(o)}" title="${esc(o.stage || "")}"><b>M</b><i style="width:${moldStagePct(o)}%"></i></span></span><span class="tny">${esc(o.stage || "")}</span></span>
       <span class="pi-who">${Number(o.uses) ? `<span class="tny muted">${esc(o.uses)} uses</span>` : ""}</span>
     </div>`;

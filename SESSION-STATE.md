@@ -9,6 +9,35 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-04
+Status: **Stock and Molds merged into one tab (2026-08-04).** Simon picked the
+Parts-style master-detail split from three agent-designed directions, with the
+pipeline direction's auto-created mold record adopted and the entry named
+"Molds". New `app/molds.js` (~430 lines) transcribes parts.js's split: a rail
+of three groups (Molds / Stack plans / Boards), the selected record in the
+pane, the season view when nothing is picked; j/k walk, `1` advances via
+quickAdvance, `/` searches. Planning a mold now creates the MOLD- record at
+"Designed" and writes `plan.moldId` + `plan.density`; old plans get lead-only
+adoption actions on the plan pane. Boards got real detail pages, STK- ids
+resolve to the plan pane, searchAll covers molds/stock/stackplans/items/lots,
+the board label's "[object Object]" dims are fixed (formatter is local to
+labels.js because test_labels mounts it without stock.js). The `stock` TABS
+row survives hidden and render() normalises it, so #/stock, notifications,
+scans and every test literal keep resolving; collections/prefixes/rules
+untouched. renderShopDetail gained {embedded}; its bare output is asserted
+unchanged (first-ever shop.js coverage). test_app 298 -> 309; appui 1252,
+detailui 781+178, labels 32, scan 50, route 38, safearea 30, print 14 all
+green. Mockups regenerated (molds + molds-overview, 20260804); READMEs say
+thirteen tabs.
+
+Traps from this session: the harness allocId fake had no "molds" entry and
+minted "undefined-SN6-001"; SHOP_UNDO (a `let`) is invisible across the
+test-harness eval boundary, assert via shopUndoBar() instead; the mvMount
+double-mount risk is why the 3D viewer stays on the plan pane and the mold
+detail only inlines stackSvg/stackTable/actions.
+
+Previous status follows.
+
 Last updated: 2026-08-03 (evening)
 Status: **Documentation overhaul ships (2026-08-03).** Five commits: the
 mockups are now annotated REAL screenshots regenerable with

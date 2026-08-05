@@ -298,9 +298,11 @@ function labelLines(coll, o, p) {
   // stock (BRD) and anything else: dimensions are the identity. A real board
   // stores each dimension as {value, unit} (stock.js stores as-entered); the
   // raw object printed "[object Object]" on the label, which the old flat-
-  // number test fixture could not see. Format through fmtDim and keep the
-  // passthrough for legacy flat numbers.
-  const dim = d => d == null ? "" : (typeof d === "object" ? fmtDim(d) : String(d));
+  // number test fixture could not see. Formatted here rather than through
+  // stock.js's fmtDim, because test_labels mounts this file without stock.js.
+  const dim = d => d == null ? ""
+    : typeof d === "object" ? `${Math.round((d.value || 0) * 1000) / 1000}${d.unit === "mm" ? "MM" : "″"}`
+    : String(d);
   return {
     name: up(o.label || o.name || p.cls),
     key: j(up(o.kind), o.density ? `${o.density} PCF` : ""),
