@@ -47,13 +47,13 @@ with an email allowlist for the roster. It updates live for everyone and works
 on phones and tablets as well as desktop. The full manual, setup and
 architecture live in `03 App/app/README.md`; this is the short tour.
 
-![Dashboard: your open items, what is blocked, deadlines and budget at a glance](03%20App/design/dashboard-mockup-20260803.png)
+![Dashboard: the glance board: hero numbers over five compact modules](03%20App/design/dashboard-mockup-20260804.png)
 
-Eleven tabs, grouped in the sidebar by who is asking (Tickets and Dashboard
+Eleven tabs, grouped in the sidebar by who is asking (Dashboard and Tickets
 up top, then Build, Planning, and Team):
 
-- **Tickets:** a jira-style tracker for everything that is not a part: R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, rich-text comments with photos. First in the sidebar because "what am I working on" is the question most people bring.
-- **Dashboard:** your open items, what is blocked, the deadline list, this week and the money. Read-only; every row links into the tab it came from. Still the page you land on.
+- **Dashboard:** the glance board and the page you land on: a hero band (assigned to you, blocked, late, the money) over five compact modules: the deadline list, the season bars for parts and molds, the booked stations, shop status with severity dots, and new activity. Read-only; fits one projected screen; every element links into the tab it came from.
+- **Tickets:** a jira-style tracker for everything that is not a part: R&D, process fixes, bugs, outreach. Board or list, assignees, watchers, sub-tickets, rich-text comments with photos.
 - **Work Orders:** the manufacturing traveler: layup stack, BOM, step buy-offs stamped with who signed, blocker steps, and enforced cure holds backed by the datasheets in `resins.js`. Prints to a hand-fillable sheet that is always exactly two pages.
 - **Parts:** the season tracker as a split view: every part down the left, the selected one beside it, each stage a row of steps you click. Arrow keys walk the list; `1`/`2`/`3` advance the stages.
 - **Molds:** molds, stack plans and tooling boards as one split view: the rail indexes all three, the pane shows the selected record. A mold carries stage, home location, sealing record and parts pulled, with its plan's drawings and exports on it. The planner takes a mold STL, picks boards, splits at the ShopSabre depth limit, prints a numbered cut list, and creates the mold record at "Designed".

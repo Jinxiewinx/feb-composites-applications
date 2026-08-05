@@ -22,46 +22,29 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
-![Dashboard: act on the left, orientation in the rail](../design/dashboard-mockup-20260803.png)
+![Dashboard: the glance board](../design/dashboard-mockup-20260804.png)
 
-Dashboard is one grouped list, not a wall of tables. Two numbers at the top,
-what's assigned to you and what's blocked, then everything open, bucketed
-Late / This week / Next two weeks / Later / No date, with each item appearing
-exactly once. It's read-only, and every row links into the tab it came from.
+The landing page is a glance board: a hero band holding the page's only
+large numerals (assigned to you, blocked, late, and the unreimbursed money
+at its right end) over five compact modules, so a projected 1440x900 shows
+the whole team state with no scrolling. Read-only; every element links into
+the tab it came from.
 
-A part and its work order are one row, not two. They're the same object seen
-twice, the part being the spec and the work order the traveler, and the page
-used to count both: on the SN5 archive, 51 dated records describing 29 physical
-objects, which overstated "behind schedule" by about 40%. They're paired through
-the same `linkedCounterpart()` the Parts tab uses, the earlier of the two dates
-is shown so a merge can never under-report lateness, and both owners are kept.
-An ambiguous name merges nothing: two rows beat a wrong merge that silently
-deletes somebody's deadline. A part with no work order is never merged away;
-work happening with no traveler is worth seeing.
+The modules: **Up next** is one grouped deadline list, an item in exactly
+one bucket, with a part and its work order merged into one row (the SN5
+archive proved the double-counting overstated "behind" by about 40%); Late
+and This week render open, and the quieter buckets fold to one summary line
+each. **Season** is the stage bars for all parts plus the molds pipeline,
+counts printed as words for colourblind safety. **This week at RFS** lists
+only the booked stations, with the free count in the header. **Shop
+status** merges what is blocked, what is curing (a clock time, never a
+countdown), and the Inventory tab's warnings (expired lots, chemical rule
+violations, running low, unhoused) into one severity-dotted list; a clean
+shop reads a single "All clear" line rather than an absent box. **New
+activity** shows the tickets you watch that changed, capped at four.
 
-Three sections appear only when they have something to say: what's blocked (an
-unsigned blocker step that's actually in the way, with whose signature releases
-it), what's curing and when it comes out of the mold, and what's booked at RFS
-this week. Curing shows a clock time rather than a countdown, so it never goes
-stale between renders.
-
-Two columns on a wide screen, split on what you can act on versus what tells you
-where you are. Main column: the two counts, what's blocked, the list. Right rail:
-this week at RFS, the season, what's curing, what changed, what's owed. The rail
-is sticky, because orientation is exactly the thing that should stay put while
-you read. Below 1101px it drops beneath the list; between 700 and 1100 it goes
-two-up so the stage bars don't stretch into decorative rules.
-
-The season is three bars (CAD, Mold, Layup) counted over **all** parts, not the
-open ones the Parts tab counts. Different question, so different denominator:
-here it's how much of the car exists, there it's what's left to do. Both bars say
-which they are, and the counts are printed as words underneath because the amber
-and green sit close enough together to be hard work for a red-green colourblind
-reader.
-
-Every block wears a different surface on purpose (raised card, bare alert, big
-white card, flat bordered card, recessed panel, amber tint, gold rail,
-hairline) so the page stops reading as one texture where nothing outranks anything.
+Empty states shrink the page instead of padding it, and nothing that
+renders empty on the team's own archive sits above the fold.
 
 ### Work Orders
 

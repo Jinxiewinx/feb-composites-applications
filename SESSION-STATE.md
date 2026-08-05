@@ -9,6 +9,33 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-04 (night)
+Status: **Dashboard round three ships: the glance board (2026-08-04).**
+Simon: too much space for too little, New activity overflowing its box,
+keep the season graphic, Dashboard back above Tickets. Two design agents;
+he picked the rethink. Now: a hero band (Assigned/Blocked/Late at the full
+32px + money at its right end) over a three-column module grid (Up next
+with folded quiet buckets; Season = parts bars + moldsStageBar, extracted
+from moldsOverview; Week at RFS booked-only; Shop status = blocked + curing
++ inventory warnings as severity dots, one "All clear" line when clean; New
+activity capped at 4). Fits 1440x900 projected, no scroll. The overflow bug
+died structurally: the 3-col rail table (min-content > 304px box, raw email
+token, nowrap phone rules, missing minmax) is stacked rows + whoLabel now;
+regression test asserts a resolved name and no "@". Dashboard is TABS[0]
+again with the explicit landing fallback kept. dashsplit/dashrail/
+stationgrid/dashblocked/dashcuring CSS deleted; heroband/glance-grid/gmod/
+srow/sdot added; phone hero is one row of three. Eyeballed 1440 light+dark
++ 393. test_app 329, appui 1244, detailui 781, designsystem 23.
+
+Traps this round: the "keep lines 1-174" file split dropped DASH_BUCKETS/
+dashSort/groupHead (they lived BETWEEN the row renderers) — restore before
+wondering why nothing renders; the base .dashmoney width:100% outranks a
+single-class override (use .heroband .hb-money); .dashseason .dg-more was
+display:block so two footer links stacked as full-width rows until wrapped
+in .ds-links.
+
+Previous status follows.
+
 Last updated: 2026-08-04 (evening)
 Status: **Storage map + sidebar regroup + Schedule merge ship (2026-08-04).**
 Simon picked, from three design rounds: the full location-first Inventory

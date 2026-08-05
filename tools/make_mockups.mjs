@@ -51,7 +51,7 @@ const SHOTS = [
   { id: "dashboard", kind: "app", badge: 1, vh: 1000,
     js: `setTab("dashboard");`,
     title: "Dashboard · the week, read-only",
-    note: "The landing page owns no data. Left column is what to act on (your open items, what is blocked, the grouped deadline list); the rail is orientation (this week, the season, curing, money). Every row is a link into the tab it came from." },
+    note: "The glance board: a hero band (assigned to you, blocked, late, and the money) over five modules — the deadline list with quiet buckets folded, the season bars for parts and molds, the booked stations, shop status with severity dots, and new activity. One projected screen, no scrolling, every element a link." },
   { id: "workorders", kind: "app", badge: 2, vh: 1000,
     js: `setTab("workorders");`,
     title: "Work orders · the part board",
