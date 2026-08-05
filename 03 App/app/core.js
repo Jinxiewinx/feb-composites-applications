@@ -1085,8 +1085,13 @@ const TABS = [
      before painting, so the row's own render never actually runs. */
   { id: "stock", label: "Stock", ic: "layers", coll: "stock", grp: "build", hidden: true, render: () => { view.tab = "molds"; return renderMoldsTab(); } },
   { id: "molds", label: "Molds", ic: "molds", coll: "molds", grp: "build", tip: "Molds — molds, stack plans and tooling board", render: () => renderMoldsTab() },
-  { id: "lots", label: "Materials", ic: "inventory", coll: "lots", grp: "build", tip: "Materials — fabric rolls, resin lots, consumables", render: () => renderShop("lots") },
-  { id: "items", label: "Items", ic: "layers", coll: "items", grp: "build", tip: "Items — test panels, jigs, storage locations", render: () => renderShop("items") },
+  /* Inventory replaces the Items and Materials tabs (2026-08-04): the storage
+     map. Its coll is "items" and it sits BEFORE the hidden items alias, so
+     tabForId resolves PNL-/JIG-/BIN- ids here. FAB-/RSN-/CON- resolve through
+     the hidden lots alias, which render() normalises to this tab. */
+  { id: "inventory", label: "Inventory", ic: "inventory", coll: "items", grp: "build", tip: "Inventory — what we have and where it lives", render: () => renderInventory() },
+  { id: "items", label: "Items", ic: "layers", coll: "items", grp: "build", hidden: true, render: () => { view.tab = "inventory"; return renderInventory(); } },
+  { id: "lots", label: "Materials", ic: "layers", coll: "lots", grp: "build", hidden: true, render: () => { view.tab = "inventory"; return renderInventory(); } },
   { id: "timeline", label: "Schedule", ic: "timeline", coll: "schedule", grp: "planning", tip: "Schedule — the season by station, or the week by person", render: () => renderSchedule() },
   /* Hidden alias: Weekly Plan merged into Schedule as its week view. Old
      #/weekplan links and stored notifications land there. */
@@ -1372,6 +1377,7 @@ function render() {
      BRD- lands selected in the rail. */
   if (view.tab === "stock") view.tab = "molds";
   if (view.tab === "weekplan") { view.tab = "timeline"; view.schedView = "week"; }
+  if (view.tab === "items" || view.tab === "lots") view.tab = "inventory";
   renderSidebar();
   renderTopbar();
   const el = document.getElementById("main");

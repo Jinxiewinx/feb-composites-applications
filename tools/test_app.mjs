@@ -93,7 +93,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "labels.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "labels.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
@@ -2692,6 +2692,84 @@ await t("a board can say where it is stored", async () => {
   assert(boardModal.toString().includes("bd-location") || true, "modal offers it");
   DB.stock[0].location = "BIN-SN6-001";
   assert(DB.stock[0].location === "BIN-SN6-001", "board carries a rec:BIN location");
+});
+
+console.log("the storage map:");
+
+function seedInventory() {
+  DB.items = [
+    { id: "BIN-SN6-001", cls: "BIN", name: "Resin shelf A", stage: "Active", site: "RFS container", locKind: "shelf" },
+    { id: "BIN-SN6-002", cls: "BIN", name: "Dry fabric bin", stage: "Active", site: "Jacobs basement", flam: "" },
+    { id: "PNL-SN6-001", cls: "PNL", name: "Panel C01-12", stage: "Cured", location: "BIN-SN6-002" },
+  ];
+  DB.lots = [
+    { id: "RSN-SN6-001", cls: "RSN", name: "IN2 resin", role: "resin", stage: "Open", location: "BIN-SN6-001" },
+    { id: "RSN-SN6-002", cls: "RSN", name: "AT30 hardener", role: "hardener", stage: "Open", location: "BIN-SN6-001", hazard: "flammable" },
+    { id: "FAB-SN6-001", cls: "FAB", name: "195 twill", stage: "Sealed", location: "", lowFlag: "Yes — reorder" },
+    { id: "CON-SN6-001", cls: "CON", name: "peel ply", stage: "Open", location: "BIN-SN6-001", expiresOn: "2020-01-01" },
+  ];
+  DB.molds = [{ id: "MOLD-SN6-001", name: "UT inlet", stage: "Sealed", location: "BIN-SN6-002" }];
+  DB.stock = [{ id: "BRD-1", label: "rack A", kind: "sheet", density: 30, qty: 1,
+    len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" }, location: "BIN-SN6-002" }];
+  DB.parts = DB.parts || [];
+}
+
+await t("the contents join answers 'what is on this shelf', boards and molds included", () => {
+  seedInventory();
+  const idx = invIndex();
+  const shelfA = idx.by.get("BIN-SN6-001"), binB = idx.by.get("BIN-SN6-002");
+  assert(shelfA.resin.length === 2 && shelfA.consumables.length === 1, "shelf A holds the chemicals");
+  assert(binB.molds.length === 1 && binB.boards.length === 1 && binB.panels.length === 1, "bin B holds mold, board, panel");
+  assert(idx.un.fabric.length === 1, "the unlocated roll is unhoused");
+});
+
+await t("the chemical and freshness warnings fire where CS-011 says they should", () => {
+  seedInventory();
+  const idx = invIndex();
+  const w = invLocWarnings(shopById("items", "BIN-SN6-001"), idx.by.get("BIN-SN6-001"));
+  const texts = w.map(x => x.text).join(" | ");
+  assert(/resin \+ hardener together/.test(texts), "§6 separation: " + texts);
+  assert(/flammable — not a rated location/.test(texts), "§6 flammables: " + texts);
+  assert(/1 expired/.test(texts), "expiry: " + texts);
+  const w2 = invLocWarnings(shopById("items", "BIN-SN6-002"), idx.by.get("BIN-SN6-002"));
+  assert(w2.length === 0, "the clean bin stays clean");
+});
+
+await t("the map renders sites, cards, and the No-location card; a tap opens contents", () => {
+  seedInventory();
+  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "map" };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("RFS container") && h.includes("Jacobs basement"), "site headers");
+  assert(h.includes("Resin shelf A") && h.includes("resin + hardener together"), "card + warning");
+  assert(h.includes("No location"), "the unhoused card");
+  selectInvRec("BIN-SN6-002");
+  const c = main.innerHTML;
+  assert(c.includes("UT inlet") && c.includes("rack A") && c.includes("Panel C01-12"), "contents rows");
+  assert(c.includes("Confirm contents") && c.includes("Move here"), "the bench actions");
+});
+
+await t("Add here births a located record; Confirm contents stamps the walk", async () => {
+  seedInventory();
+  view = { ...view, tab: "inventory", mode: "detail", id: "BIN-SN6-002" };
+  await newShopRec("lots", "CON", { location: "BIN-SN6-002" });
+  const rec = DB.lots.find(o => o.cls === "CON" && o.location === "BIN-SN6-002");
+  assert(rec, "created already located");
+  invConfirmContents("BIN-SN6-002");
+  const b = shopById("items", "BIN-SN6-002");
+  assert(b.walkedAt && b.walkedBy, "walk stamped: " + b.walkedAt + " by " + b.walkedBy);
+});
+
+await t("old items/lots links and scans land on Inventory", () => {
+  seedInventory();
+  setTab("items");
+  assert(view.tab === "inventory", "items normalises");
+  setTab("lots");
+  assert(view.tab === "inventory", "lots normalises");
+  assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
+  assert(TABS.filter(t => !t.hidden).length === 11, "eleven visible tabs");
+  openRecord("lots", "RSN-SN6-001");
+  assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
 
 console.log("molds & stock, one tab:");

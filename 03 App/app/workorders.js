@@ -665,7 +665,7 @@ function lotFieldsHtml(prior) {
   const any = (DB.lots || []).length;
   if (!any) {
     return `<p class="gate"><span class="gi">!</span><span>No material lots exist yet, so this layup
-      can't record which roll and which jug went in. Add them under <b>Materials</b> and label the
+      can't record which roll and which jug went in. Add them under <b>Inventory</b> and label the
       containers; then this asks one question instead of nobody being able to answer it in March.</span></p>`;
   }
   return `<h3 style="margin-bottom:2px">Which lots went in</h3>
@@ -699,7 +699,7 @@ function scanLotInto(key, cls) {
     onCode: id => {
       const sel = document.getElementById(key);
       if (sel && [...sel.options].some(o => o.value === id)) { sel.value = id; LOT_SCANNED[key] = true; }
-      else toast(`${id} isn't in Materials yet.`, "error");
+      else toast(`${id} isn't in Inventory yet.`, "error");
     },
   });
 }

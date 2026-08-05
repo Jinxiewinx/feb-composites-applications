@@ -164,7 +164,7 @@ function quickMove(coll, id) {
         ${bins.map(b => `<option value="${esc(b.id)}" ${o.location === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}
       </select></div>
     ${bins.length ? "" : `<p class="gate"><span class="gi">!</span><span>No storage locations exist yet.
-      Add them under Items as <b>Storage location</b>, print their labels, and stick one on each shelf.</span></p>`}
+      Add them on the Inventory tab with <b>+ Location</b>, print their labels, and stick one on each shelf.</span></p>`}
     <div class="foot">
       <button onclick="closeModal()">Cancel</button>
       <button onclick="quickMoveScan('${esc(coll)}','${esc(id)}')">${icon("search", 15)} Scan the shelf</button>

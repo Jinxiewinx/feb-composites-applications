@@ -1220,6 +1220,24 @@
   .sb-seg.st-na { background: var(--retro); }
   .sb-nums { margin-top: 4px; }
   .sb-nums .mid { color: var(--amber); } .sb-nums .done { color: var(--ok); } .sb-nums .na { color: var(--retro); }
+  /* ---------- the Inventory storage map ---------- */
+  .locgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin: 10px 0 18px; }
+  .loccard { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 13px 14px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
+    color: var(--ink); font: inherit; transition: box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .loccard:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
+  .loccard .lc-hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .loccard .lc-name { font-weight: 700; font-size: 14px; }
+  .loccard .lc-flam { color: var(--amber); }
+  .loccard .lc-body { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .loccard .lc-warn { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+  .loccard .lc-warn.bad { color: var(--bad); }
+  .loccard .lc-warn.warn { color: var(--amber); }
+  .loccard .lc-foot { margin-top: auto; }
+  .loccard.lc-nowhere { border-style: dashed; border-color: var(--warn-border); background: var(--warn-bg); }
+  .inv-site .pgrouphd { position: static; margin-top: 14px; }
+  .invrow .sm { flex: none; }
+  @media (max-width: 640px) { .locgrid { grid-template-columns: 1fr; } }
   .pmini { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-top: 1px solid var(--line);
     border-radius: var(--radius); cursor: pointer; }
   .pmini:hover { background: var(--hover); }
@@ -2209,6 +2227,7 @@
 <script src="shop.js"></script>
 <script src="scan.js"></script>
 <script src="molds.js"></script>
+<script src="inventory.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>
