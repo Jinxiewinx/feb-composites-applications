@@ -172,33 +172,9 @@ function curingNow() {
   return out.sort((a, b) => (a.hold.msLeft || 0) - (b.hold.msLeft || 0));
 }
 
-function itemRow(it) {
-  const dd = daysUntil(it.date);
-  // Each branch supplies exactly one closing paren — the old version baked a
-  // ")" into the future-date branch AND appended a trailing one whenever
-  // dd >= 0, double-closing it ("(3d))"), while the late branch got none at all.
-  const paren = dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d";
-  const when = it.date ? esc(it.date) + (dd != null ? ` <span class="muted">(${paren})</span>` : "") : '<span class="muted">no date</span>';
-  return `<tr>
-    <td><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${parentLine(it.parent)}</td>
-    <td class="tny">${esc(it.who || "—")}</td>
-    <td class="${dd != null && dd < 0 ? "warn" : ""}">${when}</td>
-  </tr>`;
-}
-function itemTable(list, emptyMsg) {
-  if (!list.length) return `<p class="muted">${emptyMsg}</p>`;
-  return `<table class="list dash"><tr><th>Item</th><th>Who</th><th>Deadline</th></tr>${list.map(itemRow).join("")}</table>`;
-}
-
 /* ---------- one list, grouped ----------
-   The page used to draw deadlineItems() three times — "Your open items",
-   "Behind schedule", "Upcoming 14 days" — with the same three columns and
-   filters that overlap by construction. Your own late part appeared in two of
-   them; if it was also due this week, three. Reading the page meant diffing
-   three tables to work out they were the same two rows.
-
-   One list instead, bucketed FIRST-MATCH-WINS so an item appears exactly once,
-   and ordered by what you would act on first. */
+   One list, bucketed FIRST-MATCH-WINS so an item appears exactly once, and
+   ordered by what you would act on first. */
 const DASH_BUCKETS = [
   { id: "late", label: "Late", test: (dd) => dd != null && dd < 0 },
   { id: "week", label: "This week", test: (dd) => dd != null && dd >= 0 && dd <= 7 },
@@ -217,8 +193,7 @@ function dashSort(a, b) {
     || String(a.label).localeCompare(String(b.label));
 }
 /* The count is the biggest type in the group, and it is a real control: it
-   scrolls nothing, it is the heading. `.bignum` at its published 32px, which
-   the page never used because .stat-tile clamps it to 22. */
+   scrolls nothing, it is the heading. */
 function groupHead(label, n, cls) {
   return `<div class="dgrouphd">
     <span class="bignum ${cls || ""}">${n}</span>
@@ -226,28 +201,37 @@ function groupHead(label, n, cls) {
   </div>`;
 }
 
+/* ---------- rows ----------
+   One stacked-row renderer for every module. The old dashboard drew 3-column
+   tables, which is what broke the rail: a table's min-content width is the sum
+   of its columns', and a 3-col table with a pill, a kind tag and a raw email
+   cannot fit a 304px box (the "new activity" overflow). Stacked rows have one
+   min-content: the longest word, and .srow-meta ellipsises. */
+function dashRow(it) {
+  const dd = daysUntil(it.date);
+  const paren = dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d";
+  const when = it.date
+    ? `<span class="${dd != null && dd < 0 ? "warn" : ""}">${esc(it.date)}${dd != null ? ` (${paren})` : ""}</span>`
+    : "no date";
+  return `<div class="srow">
+    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${parentLine(it.parent)}</span>
+    <span class="srow-meta">${esc(it.who || "—")} · ${when}</span>
+  </div>`;
+}
 
 /* ---------- the page ----------
-   ORDER IS THE ARGUMENT HERE. Two things decided it.
-
-   Nothing that renders empty on the team's own archive may sit above the fold.
-   All 26 seeded work orders are retro and all 11 seeded weeks are undated, so
-   "what is blocked", "what is curing" and "what is booked this week" are all
-   blank until a live SN6 season starts. Each of them is therefore a CONDITIONAL
-   section, and the always-populated things — a count, and the list — carry the
-   top of the page. A tile can honestly read 0; a 250px empty section at the top
-   of a landing page just reads as a broken app.
-
-   And the fold is 683px on a phone once the topbar and the safe areas are paid
-   for, which is about five stacked rows. So the phone gets the two numbers, what
-   is stopping work, and the start of the list; everything else is below it or
-   behind a media query. */
+   Round three: the glance board. A hero band (the page's only large numerals)
+   over a three-column module grid, so a projected 1440x900 shows the whole
+   team state with no scrolling. Empty states SHRINK the page: Shop status
+   collapses to one all-clear line, the week module to one button, activity
+   disappears. Round one died of addition and round two of loose packing; the
+   guards here are a hard module cap, <=5 visible rows each, one numeral
+   scale, and one shared header treatment. */
 function renderDashboard() {
   const items = mergedDeadlineItems();
   const open = items.filter(i => !i.done);
   const mine = open.filter(i => i.mine).sort(dashSort);
   const team = open.filter(i => !i.mine).sort(dashSort);
-  const late = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
 
   const blocked = blockedNow();
   const curing = curingNow();
@@ -257,29 +241,17 @@ function renderDashboard() {
   const openOrders = DB.budget.filter(b => b.status !== "Reimbursed");
   const openSum = openOrders.reduce((s, b) => s + num(b.cost), 0);
 
-  /* Nothing assigned to you falls through to the team's work rather than an
-     empty card. A member with a quiet week is the common case, and "Nothing is
-     assigned to you" above three more empty sections is a page that looks
-     broken — the answer to "what should I do" is then the team's list, which is
-     what a person with nothing on them actually wants to see. */
   const showTeam = view.dashTeam == null ? !mine.length : !!view.dashTeam;
   const list = showTeam ? mine.concat(team).sort(dashSort) : mine;
+  const late = list.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
   const teamLate = team.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
 
-  /* Two columns, split on ACT versus ORIENT. The main column is what you can do
-     something about right now — how much is on you, what is stopping work, and
-     the list itself. The rail is what tells you where you are: the week, the
-     season, what the clock is doing, what changed, what is owed.
-
-     One grid, one DOM. Below 1100px the rail simply follows the list, because
-     the list is the thing you came for and orientation can wait a scroll. */
   return `
-  <div class="dashsplit">
-    <div class="dashmain">
-      ${dashTiles(mine.length, blocked.length)}
-      ${blocked.length ? dashBlocked(blocked) : ""}
-      <div class="card dashlist">
-        <h2>${showTeam ? "Everything open" : "Your work"}</h2>
+  ${dashHero(mine.length, blocked.length, late.length, openSum, openOrders.length)}
+  <div class="glance-grid">
+    <div class="gcol">
+      <div class="card dashlist" id="dash-list">
+        <div class="gmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>
         ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
         ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
         ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
@@ -288,137 +260,149 @@ function renderDashboard() {
         }</button>` : ""}
       </div>
     </div>
-    <aside class="dashrail" aria-label="Where the season stands">
-      ${dashWeek()}
+    <div class="gcol">
       ${dashSeason()}
-      ${curing.length ? dashCuring(curing) : ""}
-      ${watched.length ? dashWatched(watched) : ""}
-      <button class="dashmoney" onclick="setTab('budget')">
-        <span class="dm-n">$${openSum.toFixed(0)}</span>
-        <span class="dm-l">unreimbursed${openOrders.length ? ` · ${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"}` : ""}</span>
-      </button>
-    </aside>
+      ${dashWeek()}
+    </div>
+    <div class="gcol">
+      ${dashShopStatus(blocked, curing)}
+      ${watched.length ? dashActivity(watched) : ""}
+    </div>
   </div>`;
 }
 
-/* Two numbers, as real buttons in real cards.
-   They were .stat-tile, which clamps .bignum from its published 32px down to
-   22 and sits on --surface-2 at about 3% contrast against the canvas — so the
-   page opened with three barely-there boxes. .card gives the shadow, the line
-   and the full 32px; <button> gives the 40px touch floor, keyboard focus, and
-   membership of the tap-target assertion that .stat-tile never had.
-
-   "Season spend" is gone. A running total with no cap, no target and no trend
-   prompts no decision: nobody does anything different at $4,400 than at $4,312.
-   Blocked replaces it — the freshest data in the app, signed in the shop. */
-function dashTiles(nMine, nBlocked) {
-  return `<div class="stat-row dashtiles">
-    <button class="card" onclick="document.getElementById('dash-list').scrollIntoView({block:'start'})">
+/* The hero band: the three numbers the whole page hangs off, at the full
+   published 32px (round two's tiles clamped them to 22), with the money
+   hairline as the band's quiet right end. Red only when nonzero. */
+function dashHero(nMine, nBlocked, nLate, openSum, nOrders) {
+  return `<div class="heroband">
+    <button class="card hb-tile" onclick="document.getElementById('dash-list').scrollIntoView({block:'start'})">
       <span class="bignum">${nMine}</span>
       <span class="stat-label">Assigned to you</span>
     </button>
-    <button class="card" onclick="${nBlocked ? "document.getElementById('dash-blocked').scrollIntoView({block:'start'})" : "setTab('workorders')"}">
+    <button class="card hb-tile" onclick="${nBlocked ? "document.getElementById('dash-status').scrollIntoView({block:'start'})" : "setTab('workorders')"}">
       <span class="bignum ${nBlocked ? "bad" : ""}">${nBlocked}</span>
       <span class="stat-label">Blocked</span>
+    </button>
+    <button class="card hb-tile" onclick="document.getElementById('dash-list').scrollIntoView({block:'start'})">
+      <span class="bignum ${nLate ? "bad" : ""}">${nLate}</span>
+      <span class="stat-label">Late</span>
+    </button>
+    <button class="dashmoney hb-money" onclick="setTab('budget')">
+      <span class="dm-n">$${openSum.toFixed(0)}</span>
+      <span class="dm-l">unreimbursed${nOrders ? ` · ${nOrders} open purchase${nOrders === 1 ? "" : "s"}` : ""}</span>
     </button>
   </div>`;
 }
 
-/* .gate.blocked, the app's existing "you cannot proceed" bar. Deliberately NOT
-   `.step .gate` — that selector is what syncHoldTick() watches to arm a
-   60-second re-render, and arming it on the landing page would rebuild #main
-   under your thumb every minute. */
-function dashBlocked(blocked) {
-  return `<div class="card dashblocked" id="dash-blocked">
-    <h3>Blocked <span class="muted nocaps">— nothing moves on these until someone signs</span></h3>
-    ${blocked.map(b => `<p class="gate blocked"><span class="gi">✕</span><span>
-      ${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)}
-      <b>${esc(stripCS(b.step.title))}</b> is unsigned.
-      <span class="muted">Step ${b.step.seq} of ${esc(b.wo.id)}${b.wo.moldEngineer ? " · " + esc(b.wo.moldEngineer) : ""}</span>
-    </span></p>`).join("")}
+/* Shop status: everything wrong in the physical shop, one severity-dotted
+   list. Blocked gates (red), cure clocks (amber, clock time never countdown —
+   see curingNow), and the Inventory tab's own warning arithmetic (expired,
+   chemical rule violations, running low, unhoused). The flagship is the empty
+   state: a clean shop renders ONE line, because "the shop is fine" is real
+   information at a Monday meeting, and never a missing box. */
+function dashShopStatus(blocked, curing) {
+  const rows = [];
+  const dot = c => `<span class="sdot ${c}"></span>`;
+  blocked.forEach(b => rows.push(`<div class="srow">${dot("bad")}<span class="sr-main">
+    ${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)} <b>${esc(stripCS(b.step.title))}</b> unsigned</span>
+    <span class="srow-meta">step ${b.step.seq}${b.wo.moldEngineer ? " · " + esc(b.wo.moldEngineer) : ""}</span></div>`));
+  curing.forEach(c => rows.push(`<div class="srow">${dot("warn")}<span class="sr-main">
+    ${chip("workOrders", c.wo.id, c.wo.partName || c.wo.id)} <span class="cure-at">ready ${esc(c.hold.readyAt)}</span></span>
+    <span class="srow-meta">${c.hold.resin ? esc(c.hold.resin.label) : "resin not recorded"}${
+      typeof holdIsCold === "function" && holdIsCold(c.hold) ? " · shop is cold, it will run long" : ""}</span></div>`));
+
+  let footer = "";
+  if (typeof invIndex === "function") {
+    const idx = invIndex();
+    const lots = (DB.lots || []).filter(o => o.stage !== "Empty");
+    const expired = lots.filter(lotExpired).length;
+    const low = lots.filter(o => o.lowFlag).length;
+    let chem = 0;
+    invActiveBins().forEach(b => {
+      chem += invLocWarnings(b, idx.by.get(b.id) || invEmptyBucket())
+        .filter(w => w.cls === "bad" && !/expired/.test(w.text)).length;
+    });
+    const unhoused = invBucketCount(idx.un);
+    const inv = (n, cls, label, go) => { if (n) rows.push(`<div class="srow">${dot(cls)}<span class="sr-main">
+      <button class="chip" onclick="${go}">${n} ${label}</button></span></div>`); };
+    inv(expired, "bad", `expired lot${expired === 1 ? "" : "s"}`, "view.invFlag='reorder';setTab('inventory')");
+    inv(chem, "bad", `chemical storage warning${chem === 1 ? "" : "s"}`, "setTab('inventory')");
+    inv(low, "warn", "running low", "view.invFlag='reorder';setTab('inventory')");
+    inv(unhoused, "warn", "unhoused (no location)", "setTab('inventory')");
+    const bins = invActiveBins();
+    if (bins.length) {
+      const ages = bins.map(b => invDaysSince(b.walkedAt));
+      const overdue = ages.some(a => a == null || a > INV_WALK_STALE_DAYS);
+      const oldest = ages.every(a => a != null) ? Math.max(...ages) : null;
+      footer = `<div class="srow-meta gmod-foot">${overdue ? "stock walk overdue" : `walked ${oldest}d ago`}${
+        (DB.stackplans || []).some(p => !p.moldId) ? ` · ${(DB.stackplans || []).filter(p => !p.moldId).length} stack plans unlinked` : ""}</div>`;
+    }
+  }
+
+  const body = rows.length
+    ? rows.join("")
+    : `<div class="srow">${dot("ok")}<span class="sr-main">All clear — nothing blocked, curing or flagged</span></div>`;
+  return `<div class="card dashstatus" id="dash-status">
+    <div class="gmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
+    ${body}${footer}
   </div>`;
 }
 
-// A clock time, never a countdown — see curingNow().
-function dashCuring(curing) {
-  return `<div class="card dashcuring">
-    <h3>Curing <span class="muted nocaps">— don't drive out for these before they're ready</span></h3>
-    ${curing.map(c => `<div class="curerow">
-      ${chip("workOrders", c.wo.id, c.wo.partName || c.wo.id)}
-      <span class="cure-at">ready ${esc(c.hold.readyAt)}</span>
-      <span class="tny muted">${c.hold.resin ? esc(c.hold.resin.label) : "resin not recorded"}${
-        typeof holdIsCold === "function" && holdIsCold(c.hold) ? " · shop is cold, it will run long" : ""}</span>
-    </div>`).join("")}
-  </div>`;
-}
-
-function dashWatched(watched) {
+/* New activity, rebuilt as stacked rows — the structural fix for the overflow
+   Simon reported: the old 3-column table could not fit the rail, and its third
+   column printed the raw editor email. Real names via userName(), one row per
+   ticket, capped. */
+function dashActivity(watched) {
+  const shown = watched.slice(0, 4);
   return `<div class="card dashwatched">
-    <h3><span class="unread-dot"></span> New activity <span class="muted nocaps">— tickets you watch</span></h3>
-    <table class="list dash"><tr><th>Ticket</th><th>Status</th><th>Last activity</th></tr>
-      ${watched.map(p => `<tr><td><span class="kind">${isIssue(p) ? "Issue" : "Ticket"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</td>
-        <td><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span></td>
-        <td class="tny">${fmtWhen(p.updatedAt)} by ${esc(p.updatedBy || "?")}</td></tr>`).join("")}
-    </table>
+    <div class="gmod-hd"><span><span class="unread-dot"></span> New activity</span><span class="gh-n">tickets you watch</span></div>
+    ${shown.map(p => `<div class="srow">
+      <span class="sr-main"><span class="kind">${isIssue(p) ? "Issue" : "Ticket"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</span>
+      <span class="srow-meta"><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span>
+        ${fmtWhen(p.updatedAt)} by ${esc(whoLabel(p.updatedBy) || "?")}</span>
+    </div>`).join("")}
+    ${watched.length > shown.length ? `<button class="dg-more" onclick="setTab('projects')">All watched — ${watched.length}</button>` : ""}
   </div>`;
 }
 
-/* This week at RFS. The Monday-meeting artifact: seven stations, what is booked
-   in each. Renders only when a dated week contains today, so it is never an
-   empty box — all 11 archive weeks are undated, and a hero that is blank on the
-   team's own data is the anti-pattern this page is being rebuilt to remove.
-   On a phone the grid collapses to the booked stations only (CSS), because
-   seven rows of mostly "open" is six screens of nothing. */
+/* This week at RFS: the booked stations only. Seven rows of the word "open"
+   is an empty grid with a heading — the count in the header carries the free
+   stations, which is what the phone CSS always did and desktop now matches. */
 function dashWeek() {
   if (typeof weekPlanWeeks !== "function" || typeof STATIONS === "undefined") return "";
   const week = weekPlanWeeks().find(w => weekContains(w, today()));
   if (!week) return "";
   const booked = STATIONS.filter(([k]) => String(week[k] || "").trim());
-  // Seven rows of the word "open" is not a schedule, it is an empty grid with a
-  // heading. When nothing is booked the honest render is one line that says so
-  // and offers the fix.
+  const open = `onclick="view.schedView='stations';setTab('timeline')"`;
   if (!booked.length) {
     return `<div class="card dashweek">
-      <h3>This week at RFS <span class="muted nocaps">— week of ${esc(week.weekOf)}</span></h3>
-      <button class="dg-more" onclick="view.schedView='stations';setTab('timeline')">Nothing booked yet — open the schedule</button>
+      <div class="gmod-hd"><span>This week at RFS</span><span class="gh-n">wk of ${esc(week.weekOf)}</span></div>
+      <button class="dg-more" ${open}>Nothing booked yet — open the schedule</button>
     </div>`;
   }
   return `<div class="card dashweek">
-    <h3>This week at RFS <span class="muted nocaps">— week of ${esc(week.weekOf)} · ${booked.length} of ${STATIONS.length} stations booked</span></h3>
-    <div class="stationgrid">
-      ${STATIONS.map(([k, label]) => {
-        const v = String(week[k] || "").trim();
-        const part = v ? recById("parts", v) : null;
-        return `<div class="stn ${v ? "on" : "off"}">
-          <span class="stn-l">${esc(label)}</span>
-          <span class="stn-v">${v ? (part ? chip("parts", part.id, part.partName || part.id) : esc(v)) : '<span class="muted">open</span>'}</span>
-        </div>`;
-      }).join("")}
-    </div>
-    <button class="dg-more" onclick="view.schedView='stations';setTab('timeline')">Open the schedule</button>
+    <div class="gmod-hd"><span>This week at RFS</span><span class="gh-n">${booked.length} of ${STATIONS.length} booked</span></div>
+    ${booked.map(([k, label]) => {
+      const v = String(week[k]).trim();
+      const part = recById("parts", v);
+      return `<div class="srow"><span class="sr-main"><span class="stn-l">${esc(label)}</span>
+        ${part ? chip("parts", part.id, part.partName || part.id) : esc(v)}</span></div>`;
+    }).join("")}
+    <button class="dg-more" ${open}>Open the schedule</button>
   </div>`;
 }
 
-/* Where the season stands. Three bars, one per stage, reusing the Parts
-   overview's own idiom rather than inventing a picture for the landing page —
-   .stagebreak / .sb-bar / .sb-seg / .sb-nums already exist and are already
-   read correctly by this team.
-
-   The denominator is ALL parts, not the open ones the Parts tab counts, and the
-   heading says so. On this page the question is how much of the car exists, so
-   the bars only ever move forward across a season; on Parts the question is
-   what is left to do, so finished parts leave the denominator. Both are right
-   for their own page and they legitimately disagree, which is why neither is
-   allowed to be unlabelled.
-
-   The counts are printed as words underneath, always. The amber/green
-   adjacency sits at the edge of what is separable for a red-green colourblind
-   reader, so the numbers are the encoding and the bar is the summary. */
+/* The Season panel, the page's centerpiece and the graphic Simon asked to
+   keep: the parts stage bars (all-parts denominator, counts printed as words
+   for colourblind safety — both documented decisions from round two) plus the
+   molds pipeline via the same moldsStageBar() the Molds tab renders. */
 function dashSeason() {
   const parts = DB.parts || [];
   if (!parts.length || typeof PART_STAGES === "undefined") return "";
+  const liveMolds = (DB.molds || []).filter(m => m.stage !== "Retired");
   return `<section class="dashseason">
-    <h3>Season <span class="muted nocaps">— all ${parts.length} parts</span></h3>
+    <div class="gmod-hd"><span>Season</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
     ${PART_STAGES.map(st => {
       const b = stageBreakdown(st.key, st.vals, parts);
       const tot = b["st-0"] + b["st-mid"] + b["st-done"] + b["st-na"] || 1;
@@ -429,11 +413,15 @@ function dashSeason() {
         <div class="sb-nums tny"><span class="done">${b["st-done"]} done</span>${b["st-mid"] ? ` · <span class="mid">${b["st-mid"]} under way</span>` : ""}${b["st-0"] ? ` · <span class="muted">${b["st-0"]} to start</span>` : ""}${b["st-na"] ? ` · <span class="na">${b["st-na"]} n/a</span>` : ""}</div>
       </div>`;
     }).join("")}
-    <button class="dg-more" onclick="setTab('parts')">Open Parts</button>
+    ${liveMolds.length && typeof moldsStageBar === "function" ? `<div class="ds-molds">${moldsStageBar(liveMolds)}</div>` : ""}
+    <div class="ds-links"><button class="dg-more" onclick="setTab('parts')">Parts</button><button class="dg-more" onclick="setTab('molds')">Molds</button></div>
   </section>`;
 }
 
-/* The list. One row per thing, each thing in exactly one bucket. */
+/* The list: one row per thing, each in exactly one bucket. Late and This week
+   render open (Late keeps the big-numeral heading — THE number on the page);
+   the quieter buckets fold behind a disclosure with the count in the summary,
+   so a single "Later" item stops costing a 48px band. */
 function dashGroups(list) {
   const byBucket = new Map();
   list.forEach(it => {
@@ -441,27 +429,12 @@ function dashGroups(list) {
     if (!byBucket.has(k)) byBucket.set(k, []);
     byBucket.get(k).push(it);
   });
-  /* The header row is emitted ONCE, on the first group that has rows. It used
-     to be per group: four ~40px ITEM/WHO/DEADLINE bands inside one card, three
-     of them introducing a single row. That is the opposite of dense. Later
-     groups still carry a header for the responsive collapse and for screen
-     readers — core.js's labelListTables() reads row 0's <th> to build each
-     cell's data-label — but it is hidden visually. */
-  let first = true;
-  return `<div id="dash-list">${DASH_BUCKETS.map(b => {
+  return `<div>${DASH_BUCKETS.map(b => {
     const rows = byBucket.get(b.id);
     if (!rows || !rows.length) return "";
-    const headCls = first ? "" : " class=\"vh\"";
-    first = false;
-    /* Undated work is real but it is not news, and there is a lot of it — the
-       SN5 import alone carries eight parts with no deadline and no owner. It
-       goes last and it goes folded, so it stops being the tallest thing on a
-       page whose subject is what happens next. <details> rather than a view
-       flag: nothing here needs to survive a render, and the disclosure
-       triangle is a control every browser already gets right. */
     const head = groupHead(b.label, rows.length, b.id === "late" ? "bad" : "");
-    const table = `<table class="list dash"><tr${headCls}><th>Item</th><th>Who</th><th>Deadline</th></tr>${rows.map(itemRow).join("")}</table>`;
-    if (b.id !== "nodate") return head + table;
-    return `<details class="dg-fold"><summary>${head}</summary>${table}</details>`;
+    const body = rows.map(dashRow).join("");
+    if (b.id === "late" || b.id === "week") return head + body;
+    return `<details class="dg-fold"><summary>${head}</summary>${body}</details>`;
   }).join("")}</div>`;
 }

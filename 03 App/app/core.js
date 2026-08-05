@@ -1075,8 +1075,8 @@ const GROUPS = [
   { id: "team", label: "Team" },
 ];
 const TABS = [
-  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", tip: "Tickets — tasks, issues and who owns them", render: () => renderProjects() },
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, grp: "today", tip: "Dashboard — the team-wide picture", render: () => renderDashboard() },
+  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", tip: "Tickets — tasks, issues and who owns them", render: () => renderProjects() },
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", grp: "build", tip: "Work Orders — the manufacturing travelers", render: () => renderWorkOrders() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", grp: "build", tip: "Parts — every part's CAD, mold and layup progress", render: () => renderParts() },
   /* `stock` survives as a hidden alias of the merged Molds tab: #/stock links,
@@ -1391,9 +1391,8 @@ function render() {
      `view` in place, so it must run before the tab is picked below. */
   if (PENDING_LINK && consumePendingLink()) syncUrl();
   if (view.mode === "roster") { el.innerHTML = renderRoster(); return; }
-  // Explicit dashboard fallback: TABS[0] is Tickets since the 2026-08 reorder,
-  // and an unknown tab landing on someone's personal task list would be a
-  // quiet behavior change. Unknown tabs land on the shared picture.
+  // Explicit dashboard fallback, kept even now Dashboard is TABS[0] again:
+  // the landing behavior should never depend on array order.
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
   el.innerHTML = tab.render();
   labelListTables();

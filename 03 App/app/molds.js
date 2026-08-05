@@ -197,6 +197,21 @@ function renderMoldsRail() {
 }
 
 /* ---------- the season view (nothing selected) ---------- */
+/* One stagebreak bar for the live molds, MOLD_STAGE order with Retired off
+   the track. Two callers: the Molds season pane and the Dashboard's Season
+   panel. Extracted rather than duplicated so the two can never disagree. */
+function moldsStageBar(liveMolds) {
+  const live = liveMolds || (DB.molds || []).filter(m => m.stage !== "Retired");
+  const counts = MOLD_STAGE.slice(0, -1).map(s => live.filter(m => m.stage === s).length);
+  const tot = counts.reduce((a, b) => a + b, 0) || 1;
+  const segCls = i => i === 0 ? "st-0" : i >= MOLD_STAGE.length - 2 ? "st-done" : "st-mid";
+  return `<div class="stagebreak">
+    <div class="sb-label">Molds</div>
+    <div class="sb-bar">${counts.map((n, i) => n ? `<span class="sb-seg ${segCls(i)}" style="width:${(n / tot) * 100}%" title="${n} ${esc(MOLD_STAGE[i])}"></span>` : "").join("")}</div>
+    <div class="sb-nums tny">${counts.map((n, i) => n ? `<span class="${i === 0 ? "muted" : i >= MOLD_STAGE.length - 2 ? "done" : "mid"}">${n} ${esc(MOLD_STAGE[i].toLowerCase())}</span>` : "").filter(Boolean).join(" · ") || '<span class="muted">no live molds</span>'}</div>
+  </div>`;
+}
+
 function moldsOverview() {
   const molds = DB.molds || [];
   const live = molds.filter(m => m.stage !== "Retired");
@@ -210,14 +225,8 @@ function moldsOverview() {
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
 
   // Where the live molds stand, MOLD_STAGE order — the parts-tab bar idiom.
-  const counts = MOLD_STAGE.slice(0, -1).map(s => live.filter(m => m.stage === s).length);
-  const tot = counts.reduce((a, b) => a + b, 0) || 1;
-  const segCls = i => i === 0 ? "st-0" : i >= MOLD_STAGE.length - 2 ? "st-done" : "st-mid";
-  const stageBar = `<div class="stagebreak">
-    <div class="sb-label">Molds</div>
-    <div class="sb-bar">${counts.map((n, i) => n ? `<span class="sb-seg ${segCls(i)}" style="width:${(n / tot) * 100}%" title="${n} ${esc(MOLD_STAGE[i])}"></span>` : "").join("")}</div>
-    <div class="sb-nums tny">${counts.map((n, i) => n ? `<span class="${i === 0 ? "muted" : i >= MOLD_STAGE.length - 2 ? "done" : "mid"}">${n} ${esc(MOLD_STAGE[i].toLowerCase())}</span>` : "").filter(Boolean).join(" · ") || '<span class="muted">no live molds</span>'}</div>
-  </div>`;
+  // Shared with the Dashboard's Season panel, so it lives in its own function.
+  const stageBar = moldsStageBar(live);
 
   /* Enough board for what is planned? The same math as the cut list's header,
      summarised to one sentence — the full per-board diagrams stay behind the

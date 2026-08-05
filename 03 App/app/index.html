@@ -1428,53 +1428,63 @@
   /* Tiles are buttons now, so the button chrome has to be undone; .card supplies
      the surface. Padding is tighter than a normal card because the numeral is
      doing the work. */
-  /* Two columns: what you can act on, and what tells you where you are. The
-     rail is fixed-width rather than fractional so the list keeps a readable
-     measure as the window grows — at 1fr 1fr a 1920 screen gave a 700px rail
-     holding three short bars. Collapses to one column at 1100, list first. */
-  .dashsplit { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
-  @media (min-width: 1101px) { .dashsplit { grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; } }
-  /* Siblings further apart than children: block-to-block was 14px while
-     group-to-group INSIDE the list card was 18px, so the card stopped reading
-     as one container. Blocks now breathe more than the things inside them. */
-  .dashmain { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
-  /* Sticky, because orientation is exactly the content that should stay put
-     while you read the list. It also fixes the 1920 case where the rail's
-     content ended 500px above the list's and the column read as having run
-     out rather than as being secondary. */
-  .dashrail { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-  @media (min-width: 1101px) {
-    .dashrail {
-      position: sticky; top: calc(var(--topbar-h) + 14px);
-      max-height: calc(100vh - var(--topbar-h) - 28px); overflow: auto;
-      scrollbar-width: thin;
-    }
+  /* ---- the glance board (round three) ----
+     A hero band (the page's only large numerals) over a three-column module
+     grid, so a projected 1440x900 shows the whole team state with no scroll.
+     The left column (the list) gets the wider track; empty states shrink
+     modules rather than padding them. */
+  .heroband { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .heroband .hb-tile {
+    display: block; text-align: left; margin: 0; flex: 0 1 190px; min-width: 140px;
+    padding: 12px 16px; font: inherit; cursor: pointer;
   }
-  /* Between the rail collapsing and a phone, the rail blocks became 780px bands
-     holding one button, three 10px bars and a line of text — a full-width
-     10px bar is a decorative rule, not a gauge. Two up instead. */
-  @media (min-width: 701px) and (max-width: 1100px) {
-    .dashrail { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
-    .dashmoney { grid-column: 1 / -1; }
+  .heroband .hb-tile:hover { border-color: var(--accent); background: var(--card); }
+  .heroband .bignum { display: block; line-height: 1.1; font-size: 32px; }
+  .heroband .bignum.bad { color: var(--bad); }
+  .heroband .stat-label { display: block; }
+  /* .heroband .hb-money outranks the base .dashmoney width:100%, which
+     otherwise wraps the money onto its own row. */
+  .heroband .hb-money { width: auto; margin-left: auto; align-self: center; border-top: none; flex: 0 1 auto; }
+  /* On a phone the three numbers share one row — three stacked 90px cards
+     spent the whole first screen saying three digits. */
+  @media (max-width: 700px) {
+    .heroband { gap: 8px; }
+    .heroband .hb-tile { flex: 1 1 0; min-width: 0; padding: 10px 12px; }
+    .heroband .bignum { font-size: 24px; }
+    .heroband .hb-money { flex: 1 1 100%; margin-left: 0; }
   }
 
-  /* Capped, and packed to the left. At `1fr` each tile stretched to half the
-     content box, so a one-digit number floated in an 800px card with a acre of
-     nothing beside it — the numerals are the point, not the boxes. */
-  /* .stat-row.dashtiles, not .dashtiles: the ≥1500 block below re-points
-     .stat-row to minmax(190px, 1fr), and at equal specificity the later rule
-     wins — so on a 1920 screen the two tiles stretched to 600px each and a
-     single digit sat in the middle of nothing. Two classes outrank one at any
-     width. */
-  .stat-row.dashtiles { grid-template-columns: repeat(auto-fit, minmax(150px, 210px)); justify-content: start; margin-bottom: 0; }
-  .dashtiles .card {
-    display: block; text-align: left; width: 100%; margin: 0;
-    padding: 12px 14px; font: inherit; cursor: pointer;
+  .glance-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (min-width: 1101px) { .glance-grid { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); } }
+  @media (min-width: 701px) and (max-width: 1100px) {
+    .glance-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .glance-grid .gcol:first-child { grid-column: 1 / -1; }
   }
-  .dashtiles .card:hover { border-color: var(--accent); background: var(--card); }
-  .dashtiles .bignum { display: block; line-height: 1.15; font-size: 22px; }
-  .dashtiles .bignum.bad { color: var(--bad); }
-  .dashtiles .stat-label { display: block; }
+  .gcol { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  /* One header treatment for every module, so the grid reads as rhythm: the
+     name, and the count right-aligned. */
+  .gmod-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+  .gmod-hd > span:first-child { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .gmod-hd .gh-n { font-size: 11px; color: var(--faint); white-space: nowrap; }
+  .gmod-foot { padding-top: 7px; margin-top: 4px; border-top: 1px solid var(--line); }
+
+  /* The stacked row every module shares. One min-content (the longest word),
+     a meta line that ellipsises — the shape that CANNOT overflow a narrow
+     module the way the old three-column rail table did. */
+  .srow { position: relative; display: flex; flex-direction: column; gap: 1px; padding: 6px 0; border-top: 1px solid var(--line); min-width: 0; }
+  .srow:first-of-type { border-top: none; }
+  .sr-main { min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .srow-meta { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .srow-meta .status { font-size: 11px; padding: 1px 8px; margin-right: 4px; vertical-align: middle; }
+  /* Severity dots exist only in Shop status; only there do rows indent. */
+  .dashstatus .srow { padding-left: 16px; }
+  .sdot { position: absolute; left: 0; top: 12px; width: 8px; height: 8px; border-radius: 50%; }
+  .sdot.bad { background: var(--bad); }
+  .sdot.warn { background: var(--amber); }
+  .sdot.ok { background: var(--ok); }
+  .dashstatus { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-md); padding: 13px 15px; box-shadow: none; }
+  .ds-molds { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
 
   /* The group heading IS the count. .bignum at its published 32px — the size
      the design system ships and the page never used. */
@@ -1533,14 +1543,12 @@
   /* BLOCKED — no card. It interrupts the column rather than sitting in it,
      because a red bar inside a white box reads as a section about problems
      rather than as a problem. */
-  .dashblocked { display: flex; flex-direction: column; gap: 8px; }
-  .dashblocked .gate { margin: 0; }
 
   /* THE RAIL — smaller heading, quieter surface, tighter rhythm than the main
      column. These are readouts, not workspaces. */
-  .dashrail .card, .dashrail .dashseason, .dashrail .dashmoney { font-size: 13px; }
-  .dashrail h3 { margin-top: 0; }
-  .dashrail .dg-more { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
+  /* Modules are readouts, not workspaces: one size down from the list. */
+  .gcol .card, .gcol .dashseason { font-size: 13px; }
+  .gcol .dg-more { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
 
   /* THIS WEEK — a card, but flat: no shadow, a stronger border instead. It is
      the one rail block that is a list of things, so it keeps card structure
@@ -1563,26 +1571,21 @@
      near-black, sitting directly beside "THIS WEEK AT RFS" at 12px uppercase
      muted. Two adjacent rail blocks with unrelated heading treatments, and the
      accidental one was the louder. */
-  .dashseason h3 {
-    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--muted); margin: 0 0 8px;
-  }
   /* The track has to differ from the panel it sits on, or a bar that does not
      sum to 100% reads as truncated rather than partial. --fill would have been
      the same value as this panel in both themes. */
-  .dashseason .sb-bar { background: var(--border-2); }
+  .dashseason .sb-bar { background: var(--border-2); height: 14px; }
   .dashseason .stagebreak { margin: 9px 0; }
   .dashseason .stagebreak:last-of-type { margin-bottom: 0; }
   .dashseason .sb-label { font-size: 11px; }
   /* A text row, not a filled button. Inside a recessed panel a white button was
      the loudest thing in the rail, for the least important action in it. */
-  .dashseason .dg-more { background: none; border-color: transparent; padding: 8px 0 0; margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0; }
-  .dashseason .dg-more:hover { background: none; border-color: transparent; border-top-color: var(--border-2); }
+  .dashseason .ds-links { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--line); }
+  .dashseason .dg-more { display: inline-block; width: auto; background: none; border-color: transparent; padding: 8px 14px 0 0; margin-top: 0; border-radius: 0; }
+  .dashseason .dg-more:hover { background: none; border-color: transparent; color: var(--ink); }
 
   /* CURING — the app's amber, because this is the same "waiting on something"
      state the cure banner inside a work order already uses. */
-  .dashcuring { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: var(--r-md); padding: 13px 15px; box-shadow: none; }
-  .dashcuring .curerow { margin: 6px 0 0; border-top-color: var(--warn-border); }
 
   /* NEW ACTIVITY — the gold rail, which is what gold means everywhere else in
      this app: unread, yours, now. */
@@ -1612,17 +1615,13 @@
   .curerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--line); }
   .curerow:first-of-type { border-top: none; }
   .cure-at { font-family: var(--font-display); font-weight: 700; color: var(--brand-ink); }
-  .dashwatched h3 .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  .dashwatched .gmod-hd .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
 
   /* Seven stations, two columns on a laptop. */
   /* Two columns, never four. At auto-fit a wide screen gave four narrow ones,
      which wrapped "ShopSabre slot 1" onto two lines and put a 118px label next
      to a 60px value. Seven stations read as 4 + 3 down two columns. */
-  .stationgrid { display: grid; grid-template-columns: 1fr; gap: 2px 26px; }
-  @media (min-width: 901px) { .stationgrid { grid-template-columns: 1fr 1fr; } }
-  .stn { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); min-height: 38px; }
-  .stn-l { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); flex: none; width: 128px; }
-  .stn-v { min-width: 0; }
+  .stn-l { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); flex: none; width: 110px; }
 
 
   .glance { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -1798,21 +1797,16 @@
        need no captions, and the two together are the whole row. */
     .dashlist table.list td:nth-child(2)::before,
     .dashlist table.list td:nth-child(3)::before,
-    .dashwatched table.list td:nth-child(2)::before,
-    .dashwatched table.list td:nth-child(3)::before { display: none; }
     /* Flex, not inline-block: two inline-blocks at 39% and 60% still wrapped,
        because the whitespace between the two <td>s in the markup is a real
        space and 39 + 60 + that is over 100. Flex has no such gap, and
        margin-left:auto pins the date to the right edge whatever its length. */
-    .dashlist table.list tr, .dashwatched table.list tr {
+    .dashlist table.list tr {
       display: flex; flex-wrap: wrap; align-items: baseline; padding: 9px 12px; margin-bottom: 8px;
     }
-    .dashlist table.list td:first-child, .dashwatched table.list td:first-child { flex: 0 0 100%; }
+    .dashlist table.list td:first-child { flex: 0 0 100%; }
     .dashlist table.list td:nth-child(2), .dashlist table.list td:nth-child(3),
-    .dashwatched table.list td:nth-child(2), .dashwatched table.list td:nth-child(3) {
-      padding: 3px 0; text-align: left; white-space: nowrap;
-    }
-    .dashlist table.list td:nth-child(3), .dashwatched table.list td:nth-child(3) { margin-left: auto; }
+    .dashlist table.list td:nth-child(3) { margin-left: auto; }
 
     /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
        rather than blowing out their card. */
@@ -1992,7 +1986,6 @@
     /* Two tiles, one row. Two classes, to match the specificity of the base
        rule that caps them at 210px — with one class this lost and the tiles
        stacked one per row, eating the top of the phone screen. */
-    .stat-row.dashtiles { grid-template-columns: 1fr 1fr; }
     .dgrouphd { margin: 14px 0 4px; }
     .dgrouphd .bignum { font-size: 24px; }
     /* Four at-a-glance tiles at a 70px floor still fit on one line at 393, so

@@ -1700,18 +1700,20 @@ await t("one grouped list, and every item appears in exactly one group", () => {
   assert((listOnly.match(/SOON PART/g) || []).length === 1, "listed once, not once per filter: " + listOnly);
   assert(/dg-label">This week/.test(html), "and it is grouped by when it is due: " + html);
 });
-await t("the two hero numbers are real buttons, and season spend is gone", () => {
+await t("the hero band: three real buttons at 32px scale, money at its right end", () => {
   DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
   setTab("dashboard");
   const html = main.innerHTML;
-  assert(html.includes('class="stat-row dashtiles"'), "has a tile row");
-  assert(/<button class="card"[^>]*>\s*<span class="bignum">1<\/span>\s*<span class="stat-label">Assigned to you/.test(html),
-    "one item is Simon's, and the tile is a button so its size is finally measured: " + html.slice(0, 600));
-  assert(/<span class="stat-label">Blocked/.test(html), "the second tile is Blocked, the freshest data in the app");
+  assert(html.includes('class="heroband"'), "has the hero band");
+  assert(/<span class="bignum">1<\/span>\s*<span class="stat-label">Assigned to you/.test(html),
+    "one item is Simon's, and the tile is a button so its size is measured: " + html.slice(0, 600));
+  assert(/<span class="stat-label">Blocked/.test(html), "Blocked is the second number");
+  assert(/<span class="stat-label">Late/.test(html), "Late is the third — the page's headline exception");
   // A running total with no cap, no target and no trend prompts no decision.
   assert(!/Season spend/.test(html), "season spend is not a number anyone acts on");
   // Unreimbursed money IS: its correct value is zero, so it needs no denominator.
-  assert(/\$120<\/span>\s*<span class="dm-l">unreimbursed/.test(html), "the rail carries what is owed: " + html.slice(-900));
+  assert(/\$120<\/span>\s*<span class="dm-l">unreimbursed/.test(html), "the band carries what is owed: " + html.slice(-900));
+  assert(html.includes('class="glance-grid"'), "and the module grid follows");
 });
 /* One row per physical thing. A part and its work order are the same object
    seen twice, and the page counted both. On the SN5 archive that inflated
@@ -1827,12 +1829,13 @@ await t("a sub-ticket whose parent was deleted still renders", () => {
   assert(main.innerHTML.includes("Orphan"), "the ticket is still listed, it just loses the context line");
   assert(!main.innerHTML.includes("part of"), "and doesn't claim a parent it can't name");
 });
-await t("itemRow closes exactly one paren per case, future/late/today (regression: used to double-close future dates and never close late ones)", () => {
-  const soonRow = itemRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
+await t("dashRow closes exactly one paren per case, future/late/today (regression: the old table row used to double-close future dates and never close late ones)", () => {
+  const soonRow = dashRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
   assert(/\(3d\)/.test(soonRow) && !/\(3d\)\)/.test(soonRow), "future date: single close paren: " + soonRow);
-  const lateRow = itemRow({ date: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
+  const lateRow = dashRow({ date: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
   assert(/\(5d late\)/.test(lateRow), "late date gets its closing paren too: " + lateRow);
-  const todayRow = itemRow({ date: today(), kind: "Part", coll: "parts", id: "x", label: "x" });
+  assert(lateRow.includes('class="warn"'), "a late date reads red");
+  const todayRow = dashRow({ date: today(), kind: "Part", coll: "parts", id: "x", label: "x" });
   assert(/\(today\)/.test(todayRow), "today: " + todayRow);
 });
 await t("isMine: exact name/first/email match, NOT shared-first-name overmatch", () => {
@@ -1872,6 +1875,52 @@ await t("dashboard Watched card uses the new colored .status pill, not the old f
   // two visual answers to "what type of record is this" on one screen. The
   // Tickets tab keeps .kindbadge, where Project-vs-Issue is the point.
   assert(html.includes('<span class="kind">Issue</span>'), "one micro-tag idiom on this page, not two: " + html.slice(0, 400));
+});
+
+await t("new activity prints a NAME, never a raw email (the overflow bug's regression test)", () => {
+  DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  DB.projects = [{ id: "TKT-D4", kind: "project", title: "watched thing", status: "In Progress",
+    watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
+  const html = renderDashboard();
+  const act = html.slice(html.indexOf("New activity"));
+  assert(act.includes("Nick Jepsen"), "resolved through whoLabel/userName");
+  assert(!act.includes("nick@berkeley.edu"), "the unbreakable email token is gone");
+  assert(!/<table/.test(act.slice(0, act.indexOf("</div></div>"))) || !act.includes('class="list dash"'),
+    "and it is stacked rows, not the 3-column table that could not fit the module");
+});
+
+await t("shop status merges blocked + curing + inventory, with severity dots", () => {
+  DB.items = [{ id: "BIN-SN6-001", cls: "BIN", name: "Resin shelf", stage: "Active" }];
+  DB.lots = [
+    { id: "RSN-D1", cls: "RSN", name: "old resin", role: "resin", stage: "Open", location: "BIN-SN6-001", expiresOn: "2020-01-01" },
+    { id: "RSN-D2", cls: "RSN", name: "hardener", role: "hardener", stage: "Open", location: "BIN-SN6-001" },
+    { id: "CON-D1", cls: "CON", name: "tape", stage: "Open", lowFlag: "Yes — reorder" },
+  ];
+  const html = renderDashboard();
+  const st = html.slice(html.indexOf('id="dash-status"'));
+  assert(st.includes("expired lot"), "expired surfaces");
+  assert(st.includes("chemical storage warning"), "the §6 violation surfaces");
+  assert(st.includes("running low"), "low surfaces");
+  assert(st.includes('class="sdot bad"') && st.includes('class="sdot warn"'), "severity dots carry the color");
+});
+
+await t("a clean shop reads ALL CLEAR on one line, never a missing box", () => {
+  DB.items = []; DB.lots = []; DB.stackplans = []; DB.workOrders = []; DB.projects = [];
+  const html = renderDashboard();
+  const st = html.slice(html.indexOf('id="dash-status"'));
+  assert(st.includes("All clear"), "the module never disappears: " + st.slice(0, 300));
+  assert(st.includes('class="sdot ok"'), "with the green dot");
+});
+
+await t("quiet buckets fold; Late and This week stay open", () => {
+  const mk = (id, dd) => ({ id, partName: id, layupDeadline: new Date(Date.now() + dd * 86400000).toISOString().slice(0, 10), moldEngineer: "X" });
+  DB.parts = [mk("P-L", -3), mk("P-W", 2), mk("P-S", 10), mk("P-LT", 30)];
+  DB.workOrders = []; DB.projects = [];
+  const html = renderDashboard();
+  const list = html.slice(html.indexOf('id="dash-list"'));
+  const lateAt = list.indexOf(">Late<"), foldAt = list.indexOf("dg-fold");
+  assert(lateAt >= 0 && foldAt > lateAt, "Late renders before any fold");
+  assert((list.match(/dg-fold/g) || []).length >= 2, "Next two weeks and Later fold: " + (list.match(/dg-fold/g) || []).length);
 });
 
 console.log("cross-links + backup:");
@@ -2596,16 +2645,16 @@ await t("CRITICAL a plan is always storable — contours thin until it fits", ()
 
 console.log("the sidebar, regrouped (2026-08-04):");
 
-await t("tickets sits on top, groups have headers, dashboard is still the landing", () => {
+await t("dashboard sits on top again, groups have headers, tickets is second", () => {
   view = { ...view, tab: "dashboard", mode: "list", id: null };
   render();
   const sb = sidebar.innerHTML;
-  const firstBtn = sb.indexOf("setTab('projects')");
-  const dashBtn = sb.indexOf("setTab('dashboard')");
-  // The brand button also targets dashboard, so compare against the nav copy.
-  assert(firstBtn >= 0 && firstBtn < sb.lastIndexOf("setTab('dashboard')"), "Tickets is the first nav button");
+  // The brand button also targets dashboard, so compare against the LAST
+  // dashboard occurrence (the nav copy) versus the tickets button.
+  const dashNav = sb.lastIndexOf("setTab('dashboard')");
+  const tickets = sb.indexOf("setTab('projects')");
+  assert(dashNav >= 0 && tickets > dashNav, "Dashboard precedes Tickets in the nav (2026-08-04 round three)");
   for (const g of ["Build", "Planning", "Team"]) assert(sb.includes(`>${g}</span>`), g + " header renders");
-  assert(dashBtn >= 0, "dashboard still reachable");
   assert(!sb.includes(">Stock<"), "hidden alias rows stay out of the sidebar");
 });
 
