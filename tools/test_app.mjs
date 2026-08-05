@@ -2703,6 +2703,24 @@ await t("the mold detail carries its plan's artifacts; the 3D view stays on the 
   assert(!h.includes("mv-canvas"), "the WebGL viewer is not double-mounted here");
 });
 
+await t("a lead can delete a shop record without hunting for edit mode first", async () => {
+  // The bug as reported: an item could be retired but "not deleted" — the
+  // Delete button existed but hid behind Edit. It must be one click from the
+  // record, for a lead, in read mode.
+  DB.items = [{ id: "JIG-SN6-001", cls: "JIG", name: "trim jig", stage: "Retired", createdBy: "a@b.c" }];
+  view = { ...view, tab: "items", mode: "detail", id: "JIG-SN6-001", edit: false };
+  render();
+  assert(main.innerHTML.includes("delShopRec"), "Delete visible in read mode for a lead");
+  const wasLead = fb.roster.role;
+  fb.roster = { ...fb.roster, role: "member" };
+  render();
+  assert(!main.innerHTML.includes("delShopRec"), "and absent for a member (rules deny it server-side anyway)");
+  fb.roster = { ...fb.roster, role: wasLead };
+  delShopRec("items", "JIG-SN6-001"); confirmProceed();
+  assert(DB.items.length === 0, "deleting removes it locally");
+  assert(calls.some(c => c[0] === "del" && c[1] === "items" && c[2] === "JIG-SN6-001"), "and server-side");
+});
+
 await t("setTab('stock') still works and paints the merged tab (legacy links, tests)", () => {
   setTab("stock");
   assert(view.tab === "molds", "normalised");

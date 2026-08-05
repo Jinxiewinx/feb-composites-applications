@@ -301,7 +301,12 @@ function renderShopDetail(tab, opts) {
       : `<button class="ib" onclick="navBack({tab:'${tab}',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`}
     <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
     ${labelBtn(spec.coll, o.id)}
-    ${E && isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
+    ${/* Visible to a lead WITHOUT pressing Edit first. It used to hide behind
+          edit mode, and the observable result was "you can retire an item but
+          not delete it" — the button existed and nobody could find it. Still
+          lead-only (firestore.rules enforces that server-side) and still
+          behind a confirm. The board detail page works the same way. */""}
+    ${isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
     ${emb ? `<span class="mdnav no-print">
       <button class="sm" title="Previous (↑)" onclick="moveMoldsSelection(-1)">${icon("chevronLeft", 14)}</button>
       <button class="sm" title="Next (↓)" onclick="moveMoldsSelection(1)">${icon("chevronRight", 14)}</button>
