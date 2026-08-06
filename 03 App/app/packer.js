@@ -178,16 +178,71 @@ function packBoard(board, parts, opts) {
   return { placed: r.placed, cuts: r.cuts, leftover: usable, unplaced: r.remaining };
 }
 
+/* ============================================================================
+   WHICH BOARD TO OPEN
+   ============================================================================
+   The old rule was "smallest first, take anything that fits", on the theory
+   that offcuts should be spent before sheets. It half-filled the rack: it would
+   open a 33x19 offcut for one blank, mark it used, and never come back.
+
+   Simon, on why a big board is worth more: "offcuts and large boards are
+   essentially the same to us, just at different sizes, larger boards just tend
+   to be more valuable as we can cut the large things first." So there is no
+   sheet/offcut category to reason about, only size — and the reason to prefer
+   the small board is OPTION VALUE. A big board is the only thing that can hold
+   a big blank; spending one on small blanks destroys that.
+
+   That is the whole cost function, and it needs no tuning constants:
+
+     consumedArea = boardArea - (usable leftover)   material actually spent
+     optionLoss   = boardArea - (biggest leftover)  largest blank it could
+                                                    still have held, destroyed
+     cost         = (consumedArea + optionLoss) / placedArea
+
+   Everything is mm², so cost reads as "millimetres of board burned per
+   millimetre of blank delivered". A 300x200 blank costs 7.3 on a 4x8 sheet and
+   3.05 on a 600x400 board, so the small board wins — the old policy's INTENT,
+   in pure size terms. And when only the 4x8 can hold a 1500x900 blank it is
+   the only candidate that places anything, so option value never turns into a
+   refusal to cut.
+
+   Consumed area alone, without the option term, says opening a 4x8 for one
+   blank is nearly free — true on paper, because guillotine cuts do leave two
+   big usable rectangles, and false on the rack, where those offcuts are
+   awkward and multiply. */
+function boardCost(board, r) {
+  const placedArea = r.placed.reduce((n, p) => n + p.w * p.h, 0);
+  if (placedArea <= 0) return Infinity;
+  const boardArea = board.w * board.h;
+  let leftoverArea = 0, biggest = 0;
+  for (const o of r.leftover) {           // already filtered to >= MIN_REMNANT_MM
+    const a = o.w * o.h;
+    leftoverArea += a;
+    if (a > biggest) biggest = a;
+  }
+  return ((boardArea - leftoverArea) + (boardArea - biggest)) / placedArea;
+}
+
+/* Trial-packing every board against every blank is O(boards x blanks^2). Fine
+   at shop scale (60 blanks, 20 rack rows is ~3e5 operations) and not fine if
+   somebody batches a whole season. Past the budget, score only the smallest
+   few boards that can still hold the largest thing left — a narrower search,
+   never a silent one: `degraded` comes back on the result. */
+const TRIAL_BUDGET = 2e6;
+const TRIAL_FALLBACK = 4;
+
 /* Pack every blank across the whole stock list.
 
    `blanks`  [{ id, w, h, thickness, density, label }]
-   `boards`  [{ id, len, wid, thk, density, qty, kind, label }]  (mm)
+   `boards`  [{ id, len, wid, thk, density, qty, label }]  (mm)
    Returns per-board plans, leftovers to write back, and any shortfall. */
 function packAll(blanks, boards, opts) {
   opts = opts || {};
   const tol = opts.thicknessTol == null ? 0.5 : opts.thicknessTol;
+  const rotate = opts.allowRotate !== false;
   const plans = [];
   const shortfall = [];
+  let degraded = false;
   // Bucket by what can physically substitute for what: a blank can only come
   // from a board of the same thickness, and density is not interchangeable
   // (CS-004 — 60lb seals better, and you cannot swap it in silently).
@@ -197,36 +252,71 @@ function packAll(blanks, boards, opts) {
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(b);
   }
-  // Expand quantities into individual boards, smallest first (spend offcuts).
+  // Expand quantities into individual boards. Sorted smallest-first and by id
+  // so the representative picked below is the same one on every run.
   const pool = [];
   for (const bd of boards) {
     for (let i = 0; i < (bd.qty || 1); i++) {
-      pool.push({ src: bd, w: bd.len, h: bd.wid, thk: bd.thk, density: bd.density || 30, kind: bd.kind, unit: i });
+      pool.push({ src: bd, w: bd.len, h: bd.wid, thk: bd.thk, density: bd.density || 30, unit: i });
     }
   }
-  pool.sort((a, b) => (a.w * a.h) - (b.w * b.h));
+  pool.sort((a, b) => (a.w * a.h - b.w * b.h)
+    || String(a.src.id).localeCompare(String(b.src.id)) || (a.unit - b.unit));
 
   for (const [k, wanted] of buckets) {
     let todo = wanted.slice();
     const [thkKey, densKey] = k.split("|");
-    for (const board of pool) {
-      if (!todo.length) break;
-      if (board.used) continue;
-      if (Math.round(board.thk / tol) !== +thkKey) continue;
-      if (String(board.density) !== densKey) continue;
-      const r = packBoard(board, todo, opts);
-      if (!r.placed.length) continue;
-      board.used = true;
-      todo = r.unplaced;
+    const usable = () => pool.filter(bd => !bd.used
+      && Math.round(bd.thk / tol) === +thkKey && String(bd.density) === densKey);
+
+    while (todo.length) {
+      /* Identical units are interchangeable, so only one of each SIZE is worth
+         trial-packing. This is Simon's "we only care about xyz and density"
+         applied to the algorithm, and on a real rack it collapses the candidate
+         set to a handful. */
+      const reps = new Map();
+      for (const bd of usable()) {
+        const key = `${Math.round(bd.w * 10)}x${Math.round(bd.h * 10)}`;
+        if (!reps.has(key)) reps.set(key, bd);
+      }
+      let cands = [...reps.values()];
+      if (!cands.length) break;
+
+      if (cands.length * todo.length * todo.length > TRIAL_BUDGET) {
+        degraded = true;
+        const big = todo.reduce((m, p) => Math.max(m, p.w, p.h), 0);
+        const canHold = cands.filter(bd => Math.max(bd.w, bd.h) >= big);
+        cands = (canHold.length ? canHold : cands).slice(0, TRIAL_FALLBACK);
+      }
+
+      let best = null;
+      for (const bd of cands) {
+        const r = packBoard(bd, todo, opts);
+        if (!r.placed.length) continue;
+        const cost = boardCost(bd, r);
+        // Strictly better only, then the tiebreaks, so two runs agree. `cands`
+        // is already in smallest-then-id order, which settles the last one.
+        if (!best) { best = { bd, r, cost }; continue; }
+        const d = cost - best.cost;
+        if (d < -1e-9) best = { bd, r, cost };
+        else if (d <= 1e-9 && r.cuts.length < best.r.cuts.length) best = { bd, r, cost };
+      }
+      // Nothing on the rack fits what is left: this is a purchase, not a failure.
+      if (!best) break;
+
+      best.bd.used = true;
+      todo = best.r.unplaced;
       plans.push({
-        board, placed: r.placed, cuts: r.cuts, leftover: r.leftover,
-        thickness: board.thk, density: board.density,
+        board: best.bd, placed: best.r.placed, cuts: best.r.cuts,
+        // boardId on every leftover, so whatever eventually writes offcuts back
+        // into inventory knows which board each came off.
+        leftover: best.r.leftover.map(o => ({ ...o, boardId: best.bd.src.id })),
+        thickness: best.bd.thk, density: best.bd.density, cost: best.cost,
       });
     }
-    // Nothing left on the rack that fits: this is a purchase, not a failure.
     for (const p of todo) shortfall.push(p);
   }
-  return { plans, shortfall, boardsUsed: plans.length };
+  return { plans, shortfall, boardsUsed: plans.length, degraded };
 }
 
 /* Human-readable cut sequence for one board. The saw operator reads this top to
@@ -253,5 +343,5 @@ function utilisation(plans) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { packBoard, packAll, cutSequence, utilisation, fitIn, KERF_MM, MIN_REMNANT_MM };
+  module.exports = { packBoard, packAll, cutSequence, utilisation, fitIn, boardCost, KERF_MM, MIN_REMNANT_MM };
 }

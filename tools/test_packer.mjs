@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const src = readFileSync(join(root, "packer.js"), "utf8").replace(/"use strict";\n/, "");
 globalThis.__P = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,KERF_MM,MIN_REMNANT_MM});");
+(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,boardCost,KERF_MM,MIN_REMNANT_MM});");
 const P = globalThis.__P;
 
 const IN = 25.4;
@@ -139,14 +139,48 @@ t("the same board and the same blanks give the same plan twice", () => {
 });
 
 console.log("stock policy:");
-t("offcuts are spent before fresh sheets", () => {
-  const boards = [
-    sheet(8 * 12 * IN, 4 * 12 * IN, { id: "SHEET", kind: "sheet" }),
-    sheet(600, 400, { id: "OFFCUT", kind: "remnant" }),
-  ];
+/* There is no sheet-vs-offcut category any more. Simon: "offcuts and large
+   boards are essentially the same to us, just at different sizes, larger boards
+   just tend to be more valuable as we can cut the large things first." So these
+   are all size arguments. */
+t("a small blank does not open a big sheet while a board that fits it well is on the rack", () => {
+  const boards = [sheet(8 * 12 * IN, 4 * 12 * IN, { id: "SHEET" }), sheet(600, 400, { id: "SMALL" })];
   const r = P.packAll([blank("small", 300, 200)], boards, {});
   assert(r.plans.length === 1, "one board should do it");
-  assert(r.plans[0].board.src.id === "OFFCUT", "a fresh sheet must not be opened while an offcut fits");
+  assert(r.plans[0].board.src.id === "SMALL", "burning a big board on a small blank destroys the only thing that can hold a big one");
+});
+t("but the only board big enough is opened, however big it is", () => {
+  // Option value must never turn into a refusal to cut.
+  const boards = [sheet(600, 400, { id: "SMALL" }), sheet(2438, 1219, { id: "SHEET" })];
+  const r = P.packAll([blank("long", 1500, 900)], boards, {});
+  assert(r.shortfall.length === 0, "it fits somewhere, so it must be planned");
+  assert(r.plans[0].board.src.id === "SHEET", "only the sheet can hold it");
+});
+t("a second board is not opened when one board holds everything", () => {
+  /* The old smallest-first rule opened the snug board for one blank, then
+     reached for the roomy one anyway for the other two — two boards and an
+     extra cut, and the snug board gone off the rack for nothing. */
+  const boards = [sheet(1100, 300, { id: "SNUG" }), sheet(1000, 1000, { id: "ROOMY" })];
+  const r = P.packAll([0, 1, 2].map(i => blank("s" + i, 900, 250)), boards, {});
+  assert(r.shortfall.length === 0, "all three fit");
+  assert(r.plans.length === 1 && r.plans[0].board.src.id === "ROOMY",
+    "one board should do all three, got " + r.plans.map(p => p.board.src.id).join("+"));
+});
+t("a board that places nothing costs infinity", () => {
+  // So it can never be chosen, and the caller falls through to shortfall
+  // rather than opening a board and getting nothing off it.
+  const bd = { w: 1100, h: 300 };
+  assert(P.boardCost(bd, P.packBoard(bd, [blank("x", 5000, 5000)], {})) === Infinity,
+    "nothing placed means no cost per blank to speak of");
+  assert(Number.isFinite(P.boardCost(bd, P.packBoard(bd, [blank("a", 900, 250)], {}))),
+    "and a real pack has a real cost");
+});
+t("leftovers say which board they came off", () => {
+  // One line, so whatever eventually writes offcuts back into inventory knows
+  // the parent board. Nothing consumes it yet.
+  const r = P.packAll([blank("a", 300, 200)], [sheet(1000, 800, { id: "PARENT" })], {});
+  assert(r.plans[0].leftover.length > 0, "a 1000x800 board minus a 300x200 blank leaves usable board");
+  assert(r.plans[0].leftover.every(o => o.boardId === "PARENT"), "every leftover names its parent");
 });
 t("a blank only comes from a board of matching thickness and density", () => {
   const boards = [
@@ -170,6 +204,31 @@ t("leftovers below the minimum useful remnant are scrap, not ledger entries", ()
   const r = P.packBoard({ w: 1000, h: 1000 }, [blank("a", 960, 960)], {});
   assert(r.leftover.every(o => o.w >= P.MIN_REMNANT_MM && o.h >= P.MIN_REMNANT_MM),
     "a 20mm sliver is not an offcut anybody will retrieve");
+});
+
+console.log("the real rack:");
+t("a batch across the SN5 rack does not regress", () => {
+  /* Two molds' worth of blanks against sn5-stock.json. The numbers are what the
+     smallest-first packer produced on 2026-08-05, measured and pinned here so a
+     later rewrite has to beat them rather than quietly give some of it back.
+     Cut count is the number to watch; utilisation is NOT, because a big board's
+     remainder comes back to the rack as smaller boards and utilisation counts
+     that as loss. */
+  const stock = JSON.parse(readFileSync(join(root, "sn5-stock.json"), "utf8"));
+  const mm = d => d.unit === "mm" ? d.value : d.value * IN;
+  const boards = stock.map(b => ({
+    id: b.id, len: mm(b.len), wid: mm(b.wid), thk: mm(b.thk),
+    density: b.density, qty: b.qty,
+  }));
+  const spec = [["NOSE L1", 560, 340, 2], ["NOSE L2", 520, 320, 2], ["NOSE L3", 470, 300, 2],
+    ["DIFF L1", 900, 420, 1.5], ["DIFF L2", 860, 400, 1.5], ["DIFF L3", 800, 380, 1.5],
+    ["DIFF L4", 700, 340, 1.5], ["SIDE L1", 300, 200, 2], ["SIDE L2", 280, 180, 2]];
+  const r = P.packAll(spec.map(([id, w, h, t]) => ({ id, w, h, thickness: t * IN, density: 30 })), boards, {});
+  const cuts = r.plans.reduce((n, p) => n + p.cuts.length, 0);
+  assert(r.shortfall.length === 0, "this rack holds all of it; a shortfall means something broke");
+  assert(r.boardsUsed <= 4, "opened " + r.boardsUsed + " boards, the old packer opened 4");
+  assert(cuts <= 18, cuts + " cuts, the old packer needed 18");
+  assert(!r.degraded, "a nine-blank batch is nowhere near the trial budget");
 });
 
 console.log("output:");
