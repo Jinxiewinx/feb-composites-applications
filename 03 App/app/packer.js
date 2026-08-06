@@ -27,12 +27,17 @@
    structural, not checked afterwards.
 
    ============================================================================
-   POLICY: spend offcuts before sheets
+   POLICY: open the board that costs least, counting what it costs you later
    ============================================================================
-   Boards are tried smallest-first. The pile of remnants is only worth keeping
-   if something actually consumes it, and Simon confirmed they keep pieces down
-   to about 4 x 10 inches. Reaching for a fresh 4x8 while a usable offcut sits
-   on the rack is how the rack fills up. */
+   There is no sheet-vs-offcut category here. Simon: "offcuts and large boards
+   are essentially the same to us, just at different sizes, larger boards just
+   tend to be more valuable as we can cut the large things first." So every
+   board is just a size, and the reason to reach for the small one is OPTION
+   VALUE — a big board is the only thing that can hold a big blank. See
+   boardCost() below for the whole rule; it needs no tuning constants.
+
+   Pieces are kept down to about 4 x 10 inches (MIN_REMNANT_MM), so a leftover
+   above that is credited back rather than counted as loss. */
 
 const KERF_MM = 3.175;          // 1/8in saw blade
 const MIN_REMNANT_MM = 101.6;   // 4in — Simon: "we have had small like 4 x 10 inch pieces"
@@ -342,6 +347,98 @@ function utilisation(plans) {
   return total ? used / total : 0;
 }
 
+/* ============================================================================
+   WHAT A WHOLE MOLD COSTS
+   ============================================================================
+   slicer.js picks the layer thicknesses, and until now it scored them by blank
+   VOLUME plus a flat per-layer penalty — a proxy that cannot see the rack. Thin
+   boards always win on volume alone, so the penalty was the only thing stopping
+   it handing the shop eight glue joints, and its own comment admitted the
+   constant was a guess.
+
+   This is the honest version: score a candidate stack by actually packing its
+   blanks onto the boards we own. It lives here, not in slicer.js, because
+   slicer.js is pure geometry with no dependencies and that is what lets
+   test_slicer.mjs eval it standalone. slicer.js takes this as an injected
+   opts.score and never imports it.
+
+   THE EXCHANGE RATE. Everything is in mm³ of board except one number, which is
+   in a unit a person can argue with over a table:
+
+     JOINT_WORTH_SHEETS = 0.25 — one glue joint is worth up to a quarter of a
+     4x8 sheet of 1in board.
+
+   A glue joint is a 4h clamp cycle under CS-003 §7.3, so it is genuinely
+   expensive and the old penalty priced it too low. Calibration, so this can be
+   retuned with a reason rather than by feel: on the undertray diffuser sample,
+   choosing 3+3+3+1in (3 joints) over 1.5x5+2in (5 joints) costs 8.2e6 mm³ more
+   board to save 2 joints, so anything above 0.054 sheets flips it. 0.25 clears
+   that with room, and still refuses to waste a whole extra sheet to save fewer
+   than four joints. Move it if somebody has glued a season's worth and
+   disagrees.
+
+   THE SHORTFALL CHARGE IS LOAD-BEARING. packAll opens zero boards when nothing
+   fits, so without charging for what could not be cut, a stack that cannot be
+   built at all scores as free and wins every time. */
+const JOINT_WORTH_SHEETS = 0.25;
+const SHEET_LEN_MM = 96 * 25.4;
+const SHEET_WID_MM = 48 * 25.4;
+const SHEET_AREA_MM2 = SHEET_LEN_MM * SHEET_WID_MM;
+const SHEET_REF_MM3 = SHEET_AREA_MM2 * 25.4;   // a 4x8 sheet of 1in board
+
+/* Flatten a sliced stack into the blanks a cut list would ask for. Same shape
+   and the same L1a / L1b naming as stock.js's blanksFromPlans, which is what
+   drawings.js's blankLabel matches. */
+function blanksFromLayers(layers, density, tag) {
+  const out = [];
+  (layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
+    id: `${tag ? tag + " " : ""}L${i + 1}${(L.blanks.length > 1 ? String.fromCharCode(97 + k) : "")}`,
+    w: b.x1 - b.x0, h: b.y1 - b.y0,
+    thickness: L.thickness, density: density || 30,
+  })));
+  return out;
+}
+
+/* What this stack would cost to actually cut, on the rack we actually have.
+   `boards` empty (nobody has entered stock yet) falls back to the volume
+   heuristic and says so through usedRack, so planning still works on an empty
+   rack — which is the state every new season starts in. */
+function moldCost(layers, boards, opts) {
+  opts = opts || {};
+  const density = opts.density || 30;
+  const jointRate = opts.jointWorthSheets == null ? JOINT_WORTH_SHEETS : opts.jointWorthSheets;
+  const joints = Math.max(0, (layers || []).length - 1);
+  const jointCost = joints * jointRate * SHEET_REF_MM3;
+  const blanks = blanksFromLayers(layers, density);
+
+  if (!boards || !boards.length) {
+    let vol = 0;
+    for (const b of blanks) vol += b.w * b.h * b.thickness;
+    return { usedRack: false, boardsOpened: 0, joints, shortfall: [], mustBuySheets: 0, cost: vol + jointCost };
+  }
+
+  const r = packAll(blanks, boards, opts);
+  let spent = 0;
+  for (const p of r.plans) {
+    const area = p.board.w * p.board.h;
+    let back = 0;
+    for (const o of p.leftover) back += o.w * o.h;
+    spent += (area - back) * p.thickness;   // board consumed, crediting what returns to the rack
+  }
+  // Anything that did not fit has to be bought. At least a whole sheet each,
+  // because that is how board is sold.
+  let mustBuySheets = 0;
+  for (const s of r.shortfall) {
+    mustBuySheets += Math.max(1, Math.ceil((s.w * s.h) / SHEET_AREA_MM2));
+    spent += Math.max(1, Math.ceil((s.w * s.h) / SHEET_AREA_MM2)) * SHEET_AREA_MM2 * s.thickness;
+  }
+  return {
+    usedRack: true, boardsOpened: r.boardsUsed, joints,
+    shortfall: r.shortfall, mustBuySheets, cost: spent + jointCost,
+  };
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { packBoard, packAll, cutSequence, utilisation, fitIn, boardCost, KERF_MM, MIN_REMNANT_MM };
+  module.exports = { packBoard, packAll, cutSequence, utilisation, fitIn, boardCost,
+    blanksFromLayers, moldCost, KERF_MM, MIN_REMNANT_MM, JOINT_WORTH_SHEETS, SHEET_AREA_MM2, SHEET_REF_MM3 };
 }

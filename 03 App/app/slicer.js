@@ -654,6 +654,15 @@ function compositionCandidates(heightMm, thicknesses, opts) {
   const avail = [...new Set(thicknesses)].filter(t => t > 0).sort((a, b) => b - a);
   if (!avail.length) return [];
   const maxOver = opts.maxOvershoot == null ? avail[0] : opts.maxOvershoot;
+  /* How many boards of each thickness the rack actually holds. Without this,
+     a rack with ONE 3in sheet is happily offered a 3+3 stack, and the problem
+     only surfaces later as a shortfall on a different screen. Absent, supply is
+     unlimited — which is the right answer when nobody has entered stock yet. */
+  const supply = opts.supply || null;
+  const cap = supply
+    ? avail.map(t => Number(supply[Math.round(t * 10) / 10]) || 0)
+    : avail.map(() => Infinity);
+  const used = avail.map(() => 0);
   const found = [];
   const seen = new Set();
   (function walk(start, sum, picked) {
@@ -667,9 +676,10 @@ function compositionCandidates(heightMm, thicknesses, opts) {
     }
     if (picked.length >= maxLayers) return;
     for (let i = start; i < avail.length; i++) {
-      picked.push(avail[i]);
+      if (used[i] >= cap[i]) continue;
+      picked.push(avail[i]); used[i]++;
       walk(i, sum + avail[i], picked);
-      picked.pop();
+      picked.pop(); used[i]--;
     }
   })(0, 0, []);
   // Least overshoot first, then fewest boards: both are real costs (wasted
@@ -749,6 +759,14 @@ function planMold(tris, availableThicknessesMm, opts) {
   const bounds = meshBounds(tris);
   const height = bounds.z1 - bounds.z0;
   const cands = compositionCandidates(height, availableThicknessesMm, opts);
+  /* How a candidate is judged. The default is the volume heuristic below, which
+     cannot see the rack; the app injects packer.js's moldCost instead, which
+     scores by actually packing the blanks onto the boards we own. Injected
+     rather than imported so slicer.js stays pure geometry with no dependencies
+     — that is what lets test_slicer.mjs eval it standalone. */
+  const score = typeof opts.score === "function"
+    ? opts.score
+    : (layers => compositionScore(layers, opts.layerPenalty));
   if (!cands.length) {
     throw new Error(`No combination of the board thicknesses you have on the rack reaches ${(height / 25.4).toFixed(2)}in. Add thicker stock, or add more of what you have.`);
   }
@@ -757,7 +775,7 @@ function planMold(tris, availableThicknessesMm, opts) {
   for (const comp of cands) {
     try {
       const r = sliceMold(tris, comp, { ...opts, simplifyEps: opts.scoreEps == null ? 1 : opts.scoreEps });
-      const v = compositionScore(r.layers, opts.layerPenalty);
+      const v = score(r.layers);
       if (v < bestVol) { bestVol = v; best = r; bestComp = comp; }
     } catch (e) { errors.push(e); }
   }
@@ -768,6 +786,7 @@ function planMold(tris, availableThicknessesMm, opts) {
   const final = sliceMold(tris, bestComp, opts);
   final.composition = bestComp;
   final.considered = cands.length;
+  final.cost = bestVol;
   final.boardVolumeMm3 = boardVolume(final.layers);
   return final;
 }

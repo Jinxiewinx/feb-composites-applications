@@ -394,6 +394,37 @@ t("a two-spike mold gives two blanks on the upper layers and one below", () => {
   assert(out.warnings.length === 0, "no warnings: " + out.warnings.join("; "));
 });
 
+console.log("choosing the boards:");
+t("a stack is never proposed out of board the rack does not hold", () => {
+  /* compositionCandidates used to enumerate DISTINCT thicknesses and ignore how
+     many of each you own, so a rack with one 3in sheet was happily offered a
+     3+3 stack. The problem then surfaced much later, on a different screen, as
+     a shortfall. */
+  const IN = 25.4;
+  const loose = S.compositionCandidates(6 * IN, [3 * IN], {});
+  assert(loose.some(c => c.length === 2), "with unlimited supply, 3+3 is on the table");
+  const tight = S.compositionCandidates(6 * IN, [3 * IN], { supply: { 76.2: 1 } });
+  assert(tight.every(c => c.filter(t => Math.abs(t - 3 * IN) < 0.05).length <= 1),
+    "one 3in sheet cannot make a two-layer 3in stack");
+});
+t("no supply given means unlimited, because a new season starts with an empty rack", () => {
+  const IN = 25.4;
+  const c = S.compositionCandidates(4 * IN, [2 * IN], {});
+  assert(c.length > 0 && c[0].length === 2, "2+2 should still be offered when stock is unknown");
+});
+t("how a stack is judged can be swapped out, and defaults to board volume", () => {
+  /* slicer.js stays pure geometry; the app injects packer.js's moldCost so the
+     choice is scored against the real rack. Asserted here so the seam does not
+     rot: a scorer that says "fewest layers wins" must actually win. */
+  const IN = 25.4;
+  const tris = frustum(120, 60, 0, 4 * IN);
+  const fewest = S.planMold(tris, [1 * IN, 2 * IN], { score: L => L.length });
+  assert(fewest.layers.length === 2, "the injected scorer decides, got " + fewest.layers.length + " layers");
+  const dflt = S.planMold(tris, [1 * IN, 2 * IN], {});
+  assert(dflt.layers.length >= 2, "and the default still returns a real plan");
+  assert(Number.isFinite(fewest.cost), "the winning score is reported so the UI can explain it");
+});
+
 console.log("CONTAINMENT — the property that matters:");
 t("CRITICAL every triangle, clipped to its slab, lies inside one of that layer's blanks", () => {
   const molds = {

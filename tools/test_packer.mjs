@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const src = readFileSync(join(root, "packer.js"), "utf8").replace(/"use strict";\n/, "");
 globalThis.__P = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,boardCost,KERF_MM,MIN_REMNANT_MM});");
+(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,boardCost,blanksFromLayers,moldCost,KERF_MM,MIN_REMNANT_MM,SHEET_REF_MM3});");
 const P = globalThis.__P;
 
 const IN = 25.4;
@@ -245,6 +245,46 @@ t("a batch across the SN5 rack does not regress", () => {
   assert(r.boardsUsed <= 4, "opened " + r.boardsUsed + " boards, the old packer opened 4");
   assert(cuts <= 18, cuts + " cuts, the old packer needed 18");
   assert(!r.degraded, "a nine-blank batch is nowhere near the trial budget");
+});
+
+console.log("what a whole stack costs:");
+const layer = (thk, ...boxes) => ({ thickness: thk, blanks: boxes.map(([w, h]) => ({ x0: 0, y0: 0, x1: w, y1: h })) });
+t("blanks come off a sliced stack with cut-list names", () => {
+  const b = P.blanksFromLayers([layer(IN, [300, 200]), layer(IN, [300, 200], [100, 100])], 30);
+  assert(b.length === 3, "three blanks over two layers");
+  assert(b[0].id === "L1", "a lone blank on a layer needs no letter");
+  assert(b[1].id === "L2a" && b[2].id === "L2b", "two on a layer are a and b, matching drawings.js");
+  assert(b.every(x => x.density === 30 && x.thickness === IN), "thickness and density ride along");
+});
+t("an extra glue joint has to pay for itself", () => {
+  // Thin boards always win on VOLUME alone — each layer's blank only has to
+  // cover its own slab — so without a joint charge the planner hands the shop
+  // eight glue-ups and a 4h clamp each (CS-003 §7.3).
+  const boards = [{ id: "S", len: 8 * 12 * IN, wid: 4 * 12 * IN, thk: IN, density: 30, qty: 12 }];
+  const thin = [1, 2, 3, 4].map(() => layer(IN, [400, 300]));
+  const thick = [1, 2].map(() => layer(IN, [400, 300]));
+  const a = P.moldCost(thin, boards, { density: 30 });
+  const b = P.moldCost(thick, boards, { density: 30 });
+  assert(a.joints === 3 && b.joints === 1, "joints are layers minus one");
+  assert(b.cost < a.cost, "fewer, thicker layers should win once joints are priced");
+});
+t("CRITICAL a stack that cannot be cut is not free", () => {
+  /* packAll opens zero boards when nothing fits, so without charging for the
+     shortfall an unbuildable stack scores as costing nothing and wins every
+     time. This is the assertion that stops the planner recommending board
+     nobody owns. */
+  const boards = [{ id: "S", len: 600, wid: 400, thk: IN, density: 30, qty: 1 }];
+  const fits = P.moldCost([layer(IN, [300, 200])], boards, { density: 30 });
+  const cannot = P.moldCost([layer(IN, [3000, 2000])], boards, { density: 30 });
+  assert(cannot.mustBuySheets >= 1, "what did not fit has to be bought");
+  assert(cannot.shortfall.length === 1, "and is named, so the warning can say what to order");
+  assert(cannot.cost > fits.cost, "an unbuildable stack must never be the cheap option");
+});
+t("an empty rack still scores, and says it was guessing", () => {
+  // Every season starts with no board entered. Planning must still work.
+  const r = P.moldCost([layer(IN, [400, 300]), layer(IN, [400, 300])], [], { density: 30 });
+  assert(r.usedRack === false, "it must admit the rack was not consulted");
+  assert(r.cost > 0 && Number.isFinite(r.cost), "and still return a usable number");
 });
 
 console.log("output:");
