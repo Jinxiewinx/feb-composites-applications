@@ -1059,9 +1059,16 @@ function pickerField(id) { return `<div class="picker" id="pk-${id}">${pickerBod
 
    Grouped by who is asking, in frequency order (2026-08-04 redesign):
      today       Tickets (what am I working on), Dashboard (what's happening)
-     BUILD       Work Orders -> Parts -> Molds -> Inventory
-                 (jobs, what they make, what they're made on, what they're
-                  made from and where it lives)
+     BUILD       Parts -> Work Orders -> Molds -> Inventory
+                 Parent first, because that is the order the data runs in and
+                 the order the work happens in: you create the part, then the
+                 run that makes it. A part is the thing the car needs; a work
+                 order is one run at making it; a mold is what it gets pulled
+                 off; inventory is what it is made from and where that lives.
+                 (Parts led this group from 2026-08-05. Work Orders was first
+                 while the WO was the only real record; now the part owns the
+                 spec and its runs hang off it, so the sidebar reads the way
+                 the records point.)
      PLANNING    Schedule -> Budget      (Monday meetings and the lead)
      TEAM        Documents -> Reports -> People   (reference and admin)
    `grp` keys into GROUPS below; the header renders whenever a group has a
@@ -1077,8 +1084,8 @@ const GROUPS = [
 const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, grp: "today", tip: "Dashboard — the team-wide picture", render: () => renderDashboard() },
   { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", tip: "Tickets — tasks, issues and who owns them", render: () => renderProjects() },
-  { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", grp: "build", tip: "Work Orders — the manufacturing travelers", render: () => renderWorkOrders() },
-  { id: "parts", label: "Parts", ic: "parts", coll: "parts", grp: "build", tip: "Parts — every part's CAD, mold and layup progress", render: () => renderParts() },
+  { id: "parts", label: "Parts", ic: "parts", coll: "parts", grp: "build", tip: "Parts — every part, its mold, its stack and its runs", render: () => renderParts() },
+  { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", grp: "build", tip: "Work Orders — one run at making a part", render: () => renderWorkOrders() },
   /* `stock` survives as a hidden alias of the merged Molds tab: #/stock links,
      stored notification links, scanned BRD-/STK- codes and the test literals
      all resolve through this row's id and coll. render() normalises the tab id
