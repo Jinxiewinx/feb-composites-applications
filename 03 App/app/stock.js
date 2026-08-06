@@ -52,63 +52,54 @@ function boardAreaM2(b) {
 // interchangeable stock, which is exactly the bucket the packer will use.
 function thkKey(b) { return `${Math.round(toMm(b.thk) * 10) / 10}mm · ${b.density} lb`; }
 
-/* ---------- list ---------- */
-function renderStock() {
-  if (view.mode === "plan") return renderStackPlan();
-  if (view.mode === "cuts") return renderCutList();
-  const D = DB.stock || [];
-  const q = (view.q || "").toLowerCase();
-  const rows = D
-    .filter(b => !q || (b.label || "").toLowerCase().includes(q) || b.id.toLowerCase().includes(q))
-    .sort((a, b) => (toMm(a.thk) - toMm(b.thk)) || a.id.localeCompare(b.id));
+/* ---------- boards, grouped by size ----------
+   Simon: "we don't need each of them being their own item as we really only
+   care about xyz and density." So the rack READS as one row per size with a
+   quantity, which is how anybody standing in front of it would describe it.
 
-  const buckets = {};
-  D.forEach(b => { buckets[thkKey(b)] = (buckets[thkKey(b)] || 0) + boardAreaM2(b); });
-
-  const plans = (DB.stackplans || []).slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
-
-  return `
-  <div class="toolbar no-print">
-    <button class="primary" onclick="newBoard()">+ Add board</button>
-    <button onclick="uploadMold()">${icon("parts", 15)} Plan a mold</button>
-    ${(DB.stackplans||[]).length ? `<button onclick="view={...view,mode:'cuts',cutSel:''};render()">${icon("print", 15)} Cut list</button>` : ""}
-  </div>
-  ${plans.length ? `<div class="card">
-    <h3>Mold stack plans <span class="muted">(${plans.length})</span></h3>
-    <table class="list">
-      <tr><th>Mold</th><th>Layers</th><th>Blocks</th><th>By</th><th>When</th></tr>
-      ${plans.map(p => `<tr onclick="view={...view,mode:'plan',id:'${esc(p.id)}'};render()">
-        <td><b>${esc(p.name)}</b>${(p.warnings || []).length ? ` ${icon("warning", 13)}` : ""}</td>
-        <td>${p.layers.length}</td>
-        <td>${p.layers.reduce((n, L) => n + L.blanks.length, 0)}</td>
-        <td class="tny">${esc(p.by || "")}</td>
-        <td class="tny">${fmtWhen(p.ts)}</td>
-      </tr>`).join("")}
-    </table>
-  </div>` : ""}
-  <div class="filters no-print">
-    <input id="searchbox" placeholder="search label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
-    <span class="muted" style="align-self:center">${rows.length} of ${D.length} boards</span>
-  </div>
-  ${D.length === 0 ? `<div class="card">No board stock recorded yet. <b>Add board</b> for each sheet and offcut on the rack at RFS — that list is what the stack planner cuts from${isLead() ? ", or <b>Load SN5 archive</b> to start from the rack SN5 left behind" : ""}.</div>` : `
-  <div class="card">
-    <h3>On hand</h3>
-    <div class="grid">
-      ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} m²</div></div>`).join("")}
-    </div>
-  </div>`}
-  <table class="list">
-    <tr><th>Board</th><th>Length</th><th>Width</th><th>Thickness</th><th>Density</th><th>Qty</th><th></th></tr>
-    ${rows.map(b => `<tr onclick="editBoard('${esc(b.id)}')">
-      <td><b>${esc(b.label || b.id)}</b>${b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}</td>
-      <td>${fmtDim(b.len)}</td>
-      <td>${fmtDim(b.wid)}</td>
-      <td>${fmtDim(b.thk)}</td>
-      <td>${esc(b.density)} lb/ft³</td>
-      <td>${esc(b.qty || 1)}</td>
-      <td>${isLead() ? `<button class="danger ib" title="Delete" onclick="event.stopPropagation();delBoard('${esc(b.id)}')">${icon("trash", 14)}</button>` : ""}</td>
-    </tr>`).join("")}
-  </table>`;
+   The documents still exist one per board, and that is deliberate: a BRD- id
+   carries a printed QR label that is physically stuck to a physical board, and
+   `mold.board` points at one. Merging two docs of the same size would orphan
+   every label already on the rack. So this is a display-time grouping, and the
+   individual boards, with their labels and locations, come back when a size row
+   is opened. */
+function boardSizeKey(b) {
+  const l = toMm(b.len), w = toMm(b.wid), t = toMm(b.thk);
+  if (![l, w, t].every(Number.isFinite)) return "?";
+  const r = v => Math.round(v * 10) / 10;
+  // Face dimensions are sorted, because tooling board has no grain and the
+  // packer turns blanks freely — a 48x96 and a 96x48 are the same stock.
+  return `${r(Math.max(l, w))}x${r(Math.min(l, w))}x${r(t)}|${Number(b.density) || 30}`;
+}
+function groupBoards(list) {
+  const m = new Map();
+  for (const b of (list || [])) {
+    const key = boardSizeKey(b);
+    if (!m.has(key)) {
+      const l = toMm(b.len), w = toMm(b.wid);
+      m.set(key, {
+        key, id: "SZ:" + key, lenMm: Math.max(l, w), widMm: Math.min(l, w),
+        thkMm: toMm(b.thk), density: Number(b.density) || 30, qty: 0, m2: 0, members: [],
+      });
+    }
+    const g = m.get(key);
+    g.qty += b.qty || 1;
+    g.m2 += boardAreaM2(b);
+    g.members.push(b);
+  }
+  return [...m.values()].sort((a, b) => (a.thkMm - b.thkMm)
+    || (b.lenMm * b.widMm - a.lenMm * a.widMm) || a.key.localeCompare(b.key));
+}
+function boardGroupByKey(key) {
+  return groupBoards(DB.stock || []).find(g => g.key === key) || null;
+}
+// mm is the geometry, inches is what the shop reads. Both, always.
+function fmtMm(mm) {
+  if (!Number.isFinite(mm)) return "—";
+  return `${Math.round(mm / 25.4 * 100) / 100}″`;
+}
+function groupLabel(g) {
+  return `${fmtMm(g.lenMm)} × ${fmtMm(g.widMm)} × ${fmtMm(g.thkMm)}`;
 }
 
 /* ---------- create / edit ---------- */
@@ -658,7 +649,7 @@ function exportSectionStl(planId, sectionIndex) {
 
 function renderStackPlan() {
   const p = planById(view.id);
-  if (!p) { view.mode = "list"; return renderStock(); }
+  if (!p) { view.mode = "list"; view.id = null; return moldsOverview(); }
   const h = p.bounds ? (p.bounds.z1 - p.bounds.z0) : 0;
   const nSec = sectionCount(p);
   return `

@@ -2727,16 +2727,39 @@ await t("a leftover is just a smaller board, and says where it came from", async
   assert(b.origin === "WO-SN6-004", "provenance should survive");
   assert(toMm(b.len) > 0 && toMm(b.wid) > 0, "it is measured like any other board");
 });
-await t("stock list renders, escapes labels, and shows an empty state", async () => {
+await t("the rack shows one row per size, and escapes labels where they appear", async () => {
   DB.stock = [];
-  view = { ...view, tab: "stock", mode: "list", q: "", fSub: "" }; render();
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fSub: "" }; render();
   assert(main.innerHTML.includes("No board stock recorded yet"), "empty state should explain what to do");
-  fillBoard({ label: '<img src=x onerror=alert(1)>' });
-  await submitBoard(null);
-  render();
-  // The payload text survives as inert text — what must NOT survive is a real tag.
+  // Two boards, same size, different labels: one rail row, quantity two.
+  fillBoard({ label: "rack A" }); await submitBoard(null);
+  fillBoard({ label: '<img src=x onerror=alert(1)>' }); await submitBoard(null);
+  const g = groupBoards(DB.stock);
+  assert(g.length === 1 && g[0].qty === 2, "same size is one row, got " + g.length + " rows");
+  view = { ...view, tab: "molds", mode: "list", id: null }; render();
+  assert(!main.innerHTML.includes("rack A"), "the rail lists sizes, not individual boards");
+  // The labels come back on the size pane, and must still be inert there.
+  view = { ...view, mode: "detail", id: g[0].id }; render();
+  assert(main.innerHTML.includes("rack A"), "the boards themselves are one click away");
   assert(!main.innerHTML.includes("<img src=x"), "board labels must never produce a live tag");
   assert(main.innerHTML.includes("&lt;img"), "the label should render as escaped text");
+});
+await t("a size is one row however the board was measured, and density splits it", async () => {
+  /* Tooling board has no grain and the packer turns blanks freely, so a 48x96
+     and a 96x48 are the same stock and must not show as two rows. Density is
+     not interchangeable (CS-004, 60lb seals better) so it always splits. */
+  DB.stock = [];
+  fillBoard({ len: "96", wid: "48" }); await submitBoard(null);
+  fillBoard({ len: "48", wid: "96" }); await submitBoard(null);
+  assert(groupBoards(DB.stock).length === 1, "the same sheet turned sideways is the same sheet");
+  assert(groupBoards(DB.stock)[0].qty === 2, "and the quantity adds up");
+  fillBoard({ len: "96", wid: "48", density: "60" }); await submitBoard(null);
+  assert(groupBoards(DB.stock).length === 2, "60lb board is a different stock, not more of the same");
+  // Units are stored as entered, so the key has to compare real size.
+  DB.stock = [];
+  fillBoard({ thk: "1", thkU: "in" }); await submitBoard(null);
+  fillBoard({ thk: "25.4", thkU: "mm" }); await submitBoard(null);
+  assert(groupBoards(DB.stock).length === 1, "one inch and 25.4mm are one thickness");
 });
 await t("mm and inch boards both land in the same on-hand bucket by real size", async () => {
   DB.stock = [];
@@ -3135,7 +3158,12 @@ await t("the merged rail shows molds, plans and boards as three groups", async (
   const h = main.innerHTML;
   assert(h.includes("Stack plans") && h.includes("Boards"), "group headers present");
   assert(h.includes(DB.molds[0].id), "the auto-created mold is a rail row");
-  assert(h.includes("BRD-0"), "boards are rail rows");
+  // Boards are rail rows BY SIZE, not one per document: Simon, "we don't need
+  // each of them being their own item as we really only care about xyz and
+  // density". The BRD- id still resolves, just not from here.
+  assert(!h.includes("BRD-0"), "individual board ids do not clutter the rail");
+  assert(h.includes(groupLabel(groupBoards(DB.stock)[0])), "a size is a rail row");
+  assert(h.includes("sizes"), "the boards group header counts sizes as well as boards");
   assert(h.includes("m²"), "the boards group header carries the on-hand area");
 });
 
