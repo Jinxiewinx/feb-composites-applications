@@ -71,6 +71,18 @@
 /* All internal geometry is in MILLIMETRES. */
 const MARGIN_MIN_MM = 25.4;   // 1in  — Simon: enough slop that a shifted glue-up still machines
 const MARGIN_MAX_MM = 50.8;   // 2in  — top of the band; also the merge inflation
+/* Blanks are sawn to a whole increment, not to the geometry. Simon: "for ease
+   of cutting, remember that humans are making this. Try to make the stock boxes
+   in incriments of 1/2 inch or something reasonably large so it's easier to
+   cut." Nobody at RFS is cutting 486.3 x 311.8; the margin is slop anyway, so
+   exactness that cannot be executed is worse than a slightly bigger blank.
+
+   Half an inch is the starting point — 1in if it still reads as fussy at the
+   saw. The number is not arbitrary in one respect: KERF_MM is exactly 1/8in,
+   a quarter of this, so with every blank a multiple of 1/2in every cut position
+   in the cut list lands on an eighth-inch mark measured from the edge of the
+   piece in hand. Every number on the printed sheet is findable on a tape. */
+const BLANK_QUANTUM_MM = 12.7;   // 1/2in
 /* Contour stitching tolerance — how far apart two segment ends can be and still
    count as the same corner.
 
@@ -440,9 +452,23 @@ function mergeToFixedPoint(islands, inflate) {
    optimizer's job in phase 2; its nesting and datum rules live in the design
    doc. Minimum applies on all four sides — a shifted glue-up needs slop
    everywhere, not on one edge. */
-function applyMargin(box, margin) {
+function applyMargin(box, margin, quantum) {
   const m = margin == null ? MARGIN_MIN_MM : margin;
-  return inflateBox(box, m);
+  const q = quantum == null ? BLANK_QUANTUM_MM : quantum;
+  const b = inflateBox(box, m);
+  /* Grown symmetrically, so the mold stays centred in its blank and the margin
+     added by rounding is shared between opposite edges rather than dumped on
+     one. Only the blank's SIZE is quantised; its datum offset is a machining
+     number, not something anybody measures with a tape. */
+  const gw = (quantizeUp(boxW(b), q) - boxW(b)) / 2;
+  const gh = (quantizeUp(boxH(b), q) - boxH(b)) / 2;
+  return { x0: b.x0 - gw, y0: b.y0 - gh, x1: b.x1 + gw, y1: b.y1 + gh };
+}
+/* Round UP to the next increment. Up, never down — this only ever adds margin,
+   so a quantised blank can never stop containing the mold. The epsilon absorbs
+   the float noise in a value that is already an exact multiple. */
+function quantizeUp(v, q) {
+  return q > 0 ? Math.ceil(v / q - 1e-6) * q : v;
 }
 
 /* ---------------- monotonicity ---------------- */
@@ -853,8 +879,8 @@ if (typeof module !== "undefined" && module.exports) {
     parseSTL, scaleTris, meshBounds, sliceAt, stitchContours, outerContours,
     polyArea, pointInPoly, bboxOf, unionBox, inflateBox, boxesOverlap, boxContains,
     boxW, boxH, mergeToFixedPoint, applyMargin, checkMonotone, simplify,
-    clipTriangleToSlab, sliceMold,
+    clipTriangleToSlab, sliceMold, quantizeUp,
     stitchRelaxed, splitBodies, boxTris, slabBoxes, compositionCandidates, compositionScore, sectionize, planMold, boardVolume,
-    MARGIN_MIN_MM, MARGIN_MAX_MM, WELD_TOL_MM, MAX_WELD_TOL_MM, DEDUPE_TOL_MM, SLICE_EPS_MM, MAX_CUT_DEPTH_MM,
+    MARGIN_MIN_MM, MARGIN_MAX_MM, BLANK_QUANTUM_MM, WELD_TOL_MM, MAX_WELD_TOL_MM, DEDUPE_TOL_MM, SLICE_EPS_MM, MAX_CUT_DEPTH_MM,
   };
 }

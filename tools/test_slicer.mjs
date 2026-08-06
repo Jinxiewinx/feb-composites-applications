@@ -20,7 +20,7 @@ const src = readFileSync(join(root, "slicer.js"), "utf8").replace(/"use strict";
 // invisible to this module. Hand them out through globalThis, the same trick
 // test_app.mjs uses for core.js's lexical bindings.
 globalThis.__S = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,checkMonotone,simplify,clipTriangleToSlab,sliceMold,stitchRelaxed,MARGIN_MIN_MM,MARGIN_MAX_MM,WELD_TOL_MM,MAX_WELD_TOL_MM,DEDUPE_TOL_MM,MAX_CUT_DEPTH_MM,splitBodies,boxTris,slabBoxes,planMold,compositionCandidates});");
+(0, eval)(src + "\n;Object.assign(globalThis.__S,{parseSTL,scaleTris,meshBounds,sliceAt,stitchContours,outerContours,polyArea,pointInPoly,bboxOf,inflateBox,boxesOverlap,boxContains,mergeToFixedPoint,applyMargin,quantizeUp,BLANK_QUANTUM_MM,checkMonotone,simplify,clipTriangleToSlab,sliceMold,stitchRelaxed,MARGIN_MIN_MM,MARGIN_MAX_MM,WELD_TOL_MM,MAX_WELD_TOL_MM,DEDUPE_TOL_MM,MAX_CUT_DEPTH_MM,splitBodies,boxTris,slabBoxes,planMold,compositionCandidates});");
 const S = globalThis.__S;
 
 /* ---------- mesh builders ----------
@@ -292,9 +292,28 @@ t("and the island-level rule this replaced really does produce the collision", (
 });
 
 console.log("margins and simplification:");
-t("margin applies on all four sides", () => {
+t("margin applies on all four sides — never less than asked, on any edge", () => {
   const b = S.applyMargin({ x0: 0, y0: 0, x1: 100, y1: 100 }, 25.4);
-  assert(b.x0 === -25.4 && b.y0 === -25.4 && b.x1 === 125.4 && b.y1 === 125.4, "a shifted glue-up needs slop everywhere");
+  assert(-b.x0 >= 25.4 - 1e-9 && -b.y0 >= 25.4 - 1e-9 && b.x1 - 100 >= 25.4 - 1e-9 && b.y1 - 100 >= 25.4 - 1e-9,
+    "a shifted glue-up needs slop everywhere");
+  // Rounding to the saw increment only ever ADDS, and adds evenly, so the mold
+  // stays centred rather than drifting toward one edge.
+  assert(Math.abs(-b.x0 - (b.x1 - 100)) < 1e-9 && Math.abs(-b.y0 - (b.y1 - 100)) < 1e-9,
+    "the rounding margin is shared between opposite edges");
+});
+t("blanks come out in whole saw increments, because a person cuts them", () => {
+  const q = S.BLANK_QUANTUM_MM;
+  const mult = v => Math.abs(v / q - Math.round(v / q)) < 1e-6;
+  for (const [w, h] of [[100, 100], [237.4, 61.9], [1, 1], [500, 300.05]]) {
+    const raw = { x0: 0, y0: 0, x1: w, y1: h };
+    const b = S.applyMargin(raw, 25.4);
+    const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+    assert(mult(bw) && mult(bh), `${w}x${h} gave ${bw.toFixed(3)}x${bh.toFixed(3)}, not a ${q}mm multiple`);
+    // Up, never down: a quantised blank can never stop containing the mold.
+    assert(bw >= w + 2 * 25.4 - 1e-9 && bh >= h + 2 * 25.4 - 1e-9, "rounding must not eat the margin");
+    assert(bw < w + 2 * 25.4 + q && bh < h + 2 * 25.4 + q, "and must not add a whole increment more than needed");
+  }
+  assert(S.quantizeUp(q * 3, q) === q * 3, "a value already on the mark does not jump to the next one");
 });
 t("simplification drops collinear noise but keeps the shape", () => {
   const pts = [];

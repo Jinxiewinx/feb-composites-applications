@@ -121,6 +121,22 @@ t("no blank ever costs more than two cuts", () => {
   assert(r.cuts.length <= 2 * r.placed.length,
     `${r.cuts.length} cuts for ${r.placed.length} blanks`);
 });
+t("every cut lands on an eighth-inch mark when the blanks are half-inch multiples", () => {
+  /* The payoff from quantising blanks in slicer.js. KERF_MM is exactly 1/8in
+     and BLANK_QUANTUM_MM is 1/2in, so positions — which are sums of blank
+     widths and kerfs measured from the edge of the piece in hand — can only
+     ever be eighth-inch multiples. Every number on the printed sheet is
+     findable on a tape. Break either constant and this test says so. */
+  const half = 12.7;
+  const parts = [[24, 12], [16, 10], [20, 14], [8, 8], [30, 6]]
+    .map(([w, h], i) => blank("h" + i, w * half, h * half));
+  const r = P.packBoard({ w: 96 * IN, h: 48 * IN }, parts, {});
+  assert(r.placed.length === parts.length, "all should fit on a 4x8");
+  for (const c of r.cuts) {
+    assert(Math.abs(c.at / P.KERF_MM - Math.round(c.at / P.KERF_MM)) < 1e-6,
+      `cut at ${c.at.toFixed(4)}mm is not an eighth-inch multiple`);
+  }
+});
 t("the split order is chosen, not fixed", () => {
   /* Four blanks that tile a 1220 square two-by-two. The old rule always split
      to keep the bigger single offcut, which here costs a cut it does not need;

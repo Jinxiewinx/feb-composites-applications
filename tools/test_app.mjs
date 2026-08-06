@@ -2828,8 +2828,12 @@ await t("a plain rectangular block can be typed in instead of an STL", async () 
   assert(DB.stackplans.length === 1, "a box should plan: " + lastToast);
   const p = DB.stackplans[0];
   const b = p.layers[0].blanks[0];
-  // 300x200 block + 25.4mm margin on all four sides.
-  assert(Math.abs((b.x1 - b.x0) - (300 + 2 * 25.4)) < 1, "blank should be the block plus margin, got " + (b.x1 - b.x0));
+  /* 300x200 block + 25.4mm margin on all four sides, then rounded UP to the
+     next half inch so somebody can find it on a tape: 350.8 -> 355.6. */
+  const w = b.x1 - b.x0;
+  assert(w >= 300 + 2 * 25.4 - 1e-9 && w < 300 + 2 * 25.4 + 12.7,
+    "blank should be the block plus margin, rounded up to the saw increment, got " + w);
+  assert(Math.abs(w / 12.7 - Math.round(w / 12.7)) < 1e-6, "and should be a whole half-inch, got " + w);
   assert(/block/i.test(p.source), "and should record that it came from typed dimensions");
 });
 await t("dimensions are the default source, STL is the opt-in", async () => {
