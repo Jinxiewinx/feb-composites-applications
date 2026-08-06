@@ -235,7 +235,7 @@ function renderInvContents(bin) {
     ${warns.map(w => `<div class="warn">${icon("warning", 14)} ${esc(w.text)}${w.text.includes("resin + hardener") ? " — CS-011 §6 wants them on separate shelves" : ""}</div>`).join("")}
     ${invBucketCount(bucket) === 0 ? `<p class="muted">Nothing recorded here yet.</p>` : ""}
     ${invGroup("Molds", bucket.molds.map(o => invRow("molds", o, `<span class="pill ${shopStageClass(shopSpec("molds"), o)}">${esc(o.stage || "—")}</span>`)).join(""))}
-    ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="pill ${o.kind === "remnant" ? "retro" : ""}">${o.kind === "remnant" ? "offcut" : "sheet"}</span>`)).join(""))}
+    ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="tny muted">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)}</span>`)).join(""))}
     ${invGroup("Test panels", bucket.panels.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""))}
     ${invGroup("Jigs", bucket.jigs.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""))}
     ${invGroup("Resin / hardener", lotRows(bucket.resin))}

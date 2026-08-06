@@ -248,14 +248,13 @@ function shopUndoBar() {
     <button class="sm ib" onclick="dismissShopUndo()">${icon("x", 14)}</button>
   </div>`;
 }
-/* Pre-filled offcut entry: kind=remnant, origin=the mold. boardModal has no
-   preset parameter, so the two fields are set after it opens — same pattern
-   quickMoveScan uses to fill its input. */
+/* Pre-filled leftover-board entry: origin = the mold it came off. A leftover
+   is not a separate kind of thing, just a smaller board, so the only thing
+   worth prefilling is where it came from. boardModal has no preset parameter,
+   so the field is set after it opens — same pattern quickMoveScan uses. */
 function logOffcutFromMold(moldId) {
   if (typeof boardModal !== "function") return;
   boardModal(null);
-  const kind = document.getElementById("bd-kind");
   const origin = document.getElementById("bd-origin");
-  if (kind) kind.value = "remnant";
   if (origin) origin.value = moldId;
 }

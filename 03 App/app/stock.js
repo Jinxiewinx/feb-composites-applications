@@ -59,7 +59,6 @@ function renderStock() {
   const D = DB.stock || [];
   const q = (view.q || "").toLowerCase();
   const rows = D
-    .filter(b => !view.fSub || b.kind === view.fSub)
     .filter(b => !q || (b.label || "").toLowerCase().includes(q) || b.id.toLowerCase().includes(q))
     .sort((a, b) => (toMm(a.thk) - toMm(b.thk)) || a.id.localeCompare(b.id));
 
@@ -88,11 +87,6 @@ function renderStock() {
     </table>
   </div>` : ""}
   <div class="filters no-print">
-    <select onchange="view.fSub=this.value;render()">
-      <option value="">All stock</option>
-      <option value="sheet" ${view.fSub === "sheet" ? "selected" : ""}>Full sheets</option>
-      <option value="remnant" ${view.fSub === "remnant" ? "selected" : ""}>Offcuts</option>
-    </select>
     <input id="searchbox" placeholder="search label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
     <span class="muted" style="align-self:center">${rows.length} of ${D.length} boards</span>
   </div>
@@ -104,7 +98,7 @@ function renderStock() {
     </div>
   </div>`}
   <table class="list">
-    <tr><th>Board</th><th>Length</th><th>Width</th><th>Thickness</th><th>Density</th><th>Qty</th><th>Kind</th><th></th></tr>
+    <tr><th>Board</th><th>Length</th><th>Width</th><th>Thickness</th><th>Density</th><th>Qty</th><th></th></tr>
     ${rows.map(b => `<tr onclick="editBoard('${esc(b.id)}')">
       <td><b>${esc(b.label || b.id)}</b>${b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}</td>
       <td>${fmtDim(b.len)}</td>
@@ -112,7 +106,6 @@ function renderStock() {
       <td>${fmtDim(b.thk)}</td>
       <td>${esc(b.density)} lb/ft³</td>
       <td>${esc(b.qty || 1)}</td>
-      <td><span class="pill ${b.kind === "remnant" ? "retro" : ""}">${b.kind === "remnant" ? "offcut" : "sheet"}</span></td>
       <td>${isLead() ? `<button class="danger ib" title="Delete" onclick="event.stopPropagation();delBoard('${esc(b.id)}')">${icon("trash", 14)}</button>` : ""}</td>
     </tr>`).join("")}
   </table>`;
@@ -133,17 +126,13 @@ function boardModal(b) {
     ${dimRow("wid", "Width", e.wid)}
     ${dimRow("thk", "Thickness", e.thk)}
     <div class="field"><label>Density</label><select id="bd-density">${DENSITIES.map(d => `<option ${String(e.density || 30) === String(d) ? "selected" : ""}>${d}</option>`).join("")}</select></div>
-    <div class="field"><label>Kind</label><select id="bd-kind">
-      <option value="sheet" ${e.kind !== "remnant" ? "selected" : ""}>Full sheet</option>
-      <option value="remnant" ${e.kind === "remnant" ? "selected" : ""}>Offcut</option>
-    </select></div>
     <div class="field"><label>Quantity</label><input id="bd-qty" value="${esc(e.qty || 1)}"></div>
     <div class="field"><label>Stored at</label><select id="bd-location">
       <option value="">—</option>
       ${(DB.items || []).filter(b2 => b2.cls === "BIN" && b2.stage !== "Retired").map(b2 =>
         `<option value="${esc(b2.id)}" ${e.location === b2.id ? "selected" : ""}>${esc(b2.name || b2.id)}</option>`).join("")}
     </select></div>
-    <div class="field"><label>From (offcuts only)</label><input id="bd-origin" value="${esc(e.origin || "")}" placeholder="work order or mold it came off"></div>
+    <div class="field"><label>Where it came from</label><input id="bd-origin" value="${esc(e.origin || "")}" placeholder="work order or mold it came off, if it is a leftover"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitBoard(${b ? `'${esc(b.id)}'` : "null"})">${b ? "Save" : "Add"}</button></div>
   `);
 }
@@ -162,9 +151,8 @@ function readBoardForm() {
   }
   const qty = Number(String(val("bd-qty")).trim() || "1");
   if (!Number.isFinite(qty) || qty < 1 || Math.floor(qty) !== qty) { toast("Quantity must be a whole number, 1 or more.", "error"); return null; }
-  const kind = val("bd-kind") === "remnant" ? "remnant" : "sheet";
   return {
-    ...out, qty, kind,
+    ...out, qty,
     label: String(val("bd-label")).trim(),
     density: Number(val("bd-density")) || 30,
     origin: String(val("bd-origin")).trim(),
@@ -587,7 +575,7 @@ function blanksFromPlans(plans) {
 }
 function boardsForPacking() {
   return (DB.stock || []).map(b => ({
-    id: b.id, label: b.label, kind: b.kind,
+    id: b.id, label: b.label,
     len: toMm(b.len), wid: toMm(b.wid), thk: toMm(b.thk),
     density: Number(b.density) || 30, qty: b.qty || 1,
   })).filter(b => Number.isFinite(b.len) && Number.isFinite(b.wid) && Number.isFinite(b.thk));
@@ -615,7 +603,7 @@ function renderCutList() {
       <ul>${res.shortfall.map(s => `<li>${esc(s.id)} — ${mmIn(s.w)} &times; ${mmIn(s.h)} at ${mmIn(s.thickness)} thick</li>`).join("")}</ul></div>` : ""}
   </div>
   ${res.plans.map((pl, i) => `<div class="card">
-    <h3>Board ${i + 1} — ${esc(pl.board.src.id)}${pl.board.src.label ? " · " + esc(pl.board.src.label) : ""} <span class="pill ${pl.board.kind === "remnant" ? "retro" : ""}">${pl.board.kind === "remnant" ? "offcut" : "sheet"}</span></h3>
+    <h3>Board ${i + 1} — ${esc(pl.board.src.id)}${pl.board.src.label ? " · " + esc(pl.board.src.label) : ""}</h3>
     <div class="muted tny">${mmIn(pl.board.w)} &times; ${mmIn(pl.board.h)} &times; ${mmIn(pl.thickness)} · ${pl.density} lb/ft³</div>
     ${cutDiagram(pl)}
     <table class="list">

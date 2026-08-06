@@ -76,7 +76,6 @@ function moldsRailRows() {
     .slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
 
   let boards = (DB.stock || [])
-    .filter(b => !view.fSub || b.kind === view.fSub)
     .filter(b => has(b))
     .slice().sort((a, b) => (toMm(a.thk) - toMm(b.thk)) || a.id.localeCompare(b.id));
 
@@ -123,7 +122,7 @@ function moldsRailItem(kind, o) {
   return `<div class="pitem ${sel ? "sel" : ""}" id="pi-${esc(o.id)}" role="option" aria-selected="${sel}"
       title="${esc(o.id)}" onclick="${open}">
     <span class="pi-name">${esc(o.label || o.id)}</span>
-    <span class="pi-due"><span class="pill tny ${o.kind === "remnant" ? "retro" : ""}">${o.kind === "remnant" ? "offcut" : "sheet"}</span></span>
+    <span class="pi-due"><span class="tny muted">${boardAreaM2(o).toFixed(2)} m²</span></span>
     <span class="pi-sub"><span class="tny">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)} · ${esc(o.density)} lb</span></span>
     <span class="pi-who">${(o.qty || 1) > 1 ? `<span class="tny muted">×${esc(o.qty)}</span>` : ""}</span>
   </div>`;
@@ -167,11 +166,6 @@ function renderMoldsRail() {
         <select title="Mold stage" onchange="view.fStatus=this.value;render()">
           <option value="">All stages</option>
           ${MOLD_STAGE.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
-        </select>
-        <select title="Board kind" onchange="view.fSub=this.value;render()">
-          <option value="">All boards</option>
-          <option value="sheet" ${view.fSub === "sheet" ? "selected" : ""}>Full sheets</option>
-          <option value="remnant" ${view.fSub === "remnant" ? "selected" : ""}>Offcuts</option>
         </select>
       </div>
     </div>
@@ -290,7 +284,7 @@ function moldsBoardPane(b) {
     </div>
     <div class="card" data-lbgroup="stock:${esc(b.id)}">
       <h2>${esc(b.label || b.id)}</h2>
-      <div class="muted">${esc(b.id)} · <span class="pill ${b.kind === "remnant" ? "retro" : ""}">${b.kind === "remnant" ? "offcut" : "sheet"}</span>${
+      <div class="muted">${esc(b.id)}${
         b.ts ? " · added " + fmtWhen(b.ts) : ""}${b.createdBy ? " by " + esc(b.createdBy) : ""}</div>
       <h3>Details</h3>
       <div class="grid">

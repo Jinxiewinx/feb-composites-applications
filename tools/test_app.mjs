@@ -2535,7 +2535,6 @@ await t("sn5-stock.json: a rack the planner can actually cut from", () => {
       assert(Number.isFinite(toMm(b[k])) && toMm(b[k]) > 0, `${b.id}.${k} converts`);
     }
     assert([30, 60].includes(b.density), `${b.id} density is a stocked grade`);
-    assert(["sheet", "remnant"].includes(b.kind), `${b.id} kind`);
     assert(Number.isInteger(b.qty) && b.qty >= 1, `${b.id} qty`);
   }
   // Ids sit in the SN5 namespace so they can't collide with BRD-SN6-### handed
@@ -2546,7 +2545,13 @@ await t("sn5-stock.json: a rack the planner can actually cut from", () => {
   DB.stock = s;
   const thk = stockThicknessesMm();
   assert(thk.length >= 3, "at least three thicknesses to choose between: " + JSON.stringify(thk));
-  assert(s.some(b => b.kind === "remnant"), "offcuts too — spending those first is the point of the cut list");
+  /* Leftovers are in there too, as ordinary boards. There is no sheet/offcut
+     field any more — Simon: "offcuts and large boards are essentially the same
+     to us, just at different sizes" — so the check is that the rack holds
+     something well under a full 4x8, which is what makes the packer's size
+     reasoning worth anything. */
+  assert(s.some(b => toMm(b.len) * toMm(b.wid) < 0.5 * (96 * 25.4) * (48 * 25.4)),
+    "leftovers too, or there is nothing for the packer to choose between");
 });
 await t("every sample mold offered in the modal is actually shipped", () => {
   // A dropdown entry pointing at a missing file fails as a silent fetch error
@@ -2709,13 +2714,18 @@ await t("quantity must be a whole number of boards", async () => {
   await submitBoard(null);
   assert(DB.stock.length === 0, "a fractional board is not a thing");
 });
-await t("offcuts and full sheets are the same object, differing only by kind", async () => {
+await t("a leftover is just a smaller board, and says where it came from", async () => {
+  /* There is no `kind` field. A board is its dimensions and its density; the
+     only thing that made an "offcut" different was being smaller, and that is
+     already in the numbers. `origin` survives because "came off the NOSECONE"
+     is a fact about a physical board, not a category. */
   DB.stock = [];
-  fillBoard({ kind: "remnant", len: "19", wid: "30", origin: "WO-SN6-004", label: "offcut" });
+  fillBoard({ len: "19", wid: "30", origin: "WO-SN6-004", label: "leftover" });
   await submitBoard(null);
   const b = DB.stock[0];
-  assert(b.kind === "remnant" && b.origin === "WO-SN6-004", "provenance should survive");
-  assert(toMm(b.len) > 0 && toMm(b.wid) > 0, "a remnant is measured like any board");
+  assert(b.kind === undefined, "no sheet/offcut category is written any more");
+  assert(b.origin === "WO-SN6-004", "provenance should survive");
+  assert(toMm(b.len) > 0 && toMm(b.wid) > 0, "it is measured like any other board");
 });
 await t("stock list renders, escapes labels, and shows an empty state", async () => {
   DB.stock = [];

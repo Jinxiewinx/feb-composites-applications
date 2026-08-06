@@ -325,7 +325,7 @@ function labelLines(coll, o, p) {
     : String(d);
   return {
     name: up(o.label || o.name || p.cls),
-    key: j(up(o.kind), o.density ? `${o.density} PCF` : ""),
+    key: o.density ? `${o.density} PCF` : "",
     mid: j(o.len && o.wid ? `${dim(o.len)} X ${dim(o.wid)} X ${dim(o.thk) || "?"}` : "", o.qty ? `QTY ${o.qty}` : ""),
     foot: j(up(o.origin || o.originLegacy), up(o.location || o.label))
   };
