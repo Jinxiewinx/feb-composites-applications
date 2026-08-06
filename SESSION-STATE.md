@@ -9,6 +9,53 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-05 (later)
+Status: **Cut lists that fill boards (2026-08-05).** Branch
+`mold-drawing-revamp`, eight more commits, all suites green (test_app 359,
+packer 24, slicer 38, appui 1244, detailui 781, safearea 30).
+
+Simon: avoid unnecessary cuts and fill each board; balance that against
+thicker boards meaning fewer glue lines; condense molds and stack plans
+("there should only be an option to make a mold"); condense boards ("we only
+care about xyz and density"). Then two corrections mid-flight: offcuts and
+big boards are the same thing at different sizes, big ones just more valuable
+because only they hold big blanks; and blanks must be round increments
+because humans cut them.
+
+Landed, in order: packBoard's recursion made pure; split order scored instead
+of guessed (lexicographic, near the root only); board selection replaced by
+`(consumed + optionLoss) / placedArea` — no tuning constants, encodes option
+value directly; blanks rounded up to 1/2in; `kind: sheet|remnant` deleted
+everywhere; the rack shown as one row per size; moldCost added to packer.js
+and injected into planMold as `opts.score`; supply-aware candidates; "Why
+these boards" on the plan page.
+
+Traps worth keeping:
+- **Utilisation is a misleading metric here** and I nearly shipped a plan
+  built on it. A big sheet's remainder comes back to the rack as smaller
+  boards; utilisation counts that as loss. The seed batch's "40%, 4 boards"
+  was largely CORRECT behaviour. Watch cut count and glue joints instead.
+  test_packer's regression floor says this in a comment.
+- **The shortfall charge in moldCost is load-bearing.** packAll opens ZERO
+  boards when nothing fits, so without charging for it an unbuildable stack
+  scores as free and wins every time. Has its own CRITICAL test.
+- **KERF_MM is exactly BLANK_QUANTUM_MM / 4** (1/8in vs 1/2in), so quantised
+  blanks put every cut position on an eighth-inch mark. Change either
+  constant and that property dies; there is a test.
+- Board DOCUMENTS deliberately do not merge. A BRD- id is on a printed label
+  stuck to a physical board. Grouping is display-time only.
+- slicer.js must keep zero dependencies (test_slicer evals it standalone), so
+  the cost function lives in packer.js and arrives as `opts.score`.
+
+Still open, and next: commit 8, the mold/plan merge — `currentPlanId` +
+`planHistory` on molds, one `currentPlanFor()` replacing three duplicated
+"newest by ts" scans (core.js:313, core.js:865, molds.js:368), Stack plans
+off the rail, one `+ Mold` button. Then, deliberately deferred: cut-list
+execution and writing leftovers back into inventory (packAll already tags
+each leftover with its `boardId` for exactly this).
+
+Previous status follows.
+
 Last updated: 2026-08-05
 Status: **Parts become the parent record (2026-08-05).** Branch
 `mold-drawing-revamp`, four commits, all 15 runnable suites green
