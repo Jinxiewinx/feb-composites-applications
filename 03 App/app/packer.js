@@ -49,70 +49,86 @@ function fitIn(part, w, h, allowRotate) {
   return null;
 }
 
-/* Pack as many parts as possible into one board, guillotine-only.
+/* Fill one free rectangle, guillotine-only.
 
-   Recursive: at each free rectangle, take the largest part that fits, put it in
-   the corner, then make ONE cut that separates it from the rest and recurse
-   into both children. Because every cut is taken across the current rectangle,
-   the result is guillotine-feasible by construction. */
+   Recursive: take the largest part that fits, put it in the corner, then make
+   ONE cut that separates it from the rest and recurse into both children.
+   Because every cut is taken across the current rectangle, the result is
+   guillotine-feasible by construction.
+
+   PURE. Nothing here mutates a caller's array — `remaining` goes in, a smaller
+   `remaining` comes out, and placements and cuts come back as fresh arrays.
+   That is what lets a caller evaluate two different splits of the same
+   rectangle and keep the better one; against shared closure state the first
+   trial would poison the second. */
+function packFill(x, y, w, h, depth, remaining, kerf, rotate) {
+  const nothing = { placed: [], cuts: [], leftover: [{ x, y, w, h }], remaining };
+  if (w <= 0 || h <= 0 || !remaining.length) return nothing;
+  // Largest part that fits here.
+  let idx = -1, fit = null;
+  for (let i = 0; i < remaining.length; i++) {
+    const f = fitIn(remaining[i], w, h, rotate);
+    if (f) { idx = i; fit = f; break; }
+  }
+  if (idx < 0) return nothing;
+  const part = remaining[idx];
+  const rest = remaining.slice(0, idx).concat(remaining.slice(idx + 1));
+  const here = { part, x, y, w: fit.w, h: fit.h, rotated: fit.rotated };
+
+  // Two ways to split what is left. Prefer the one that keeps the bigger
+  // single offcut whole, because a big rectangle is reusable and two thin
+  // strips are scrap.
+  const restW = w - fit.w - kerf;
+  const restH = h - fit.h - kerf;
+  const horizontalFirst = Math.max(restW * h, w * restH) === restW * h;
+
+  /* Record the cuts. The span of the SECOND cut depends on whether the first
+     one actually happened: if the leftover was thinner than the blade there
+     is nothing to separate, no cut is made, and the piece still in hand is
+     the full rectangle — so the second cut has to cross all of it, not just
+     the part. Getting this wrong prints a cut that stops halfway, which is
+     a notch, which a saw cannot do. */
+  const cuts = [];
+  let a, b;
+  if (horizontalFirst) {
+    const cutA = restW > 0;
+    if (cutA) cuts.push({ axis: "x", at: x + fit.w, from: y, to: y + h, depth });
+    a = { x: x + fit.w + kerf, y, w: restW, h };
+    // Whatever is still in hand after cut A: fit.w wide if it happened, else w.
+    const heldW = cutA ? fit.w : w;
+    if (restH > 0) cuts.push({ axis: "y", at: y + fit.h, from: x, to: x + heldW, depth: depth + 1 });
+    b = { x, y: y + fit.h + kerf, w: heldW, h: restH };
+  } else {
+    const cutA = restH > 0;
+    if (cutA) cuts.push({ axis: "y", at: y + fit.h, from: x, to: x + w, depth });
+    a = { x, y: y + fit.h + kerf, w, h: restH };
+    const heldH = cutA ? fit.h : h;
+    if (restW > 0) cuts.push({ axis: "x", at: x + fit.w, from: y, to: y + heldH, depth: depth + 1 });
+    b = { x: x + fit.w + kerf, y, w: restW, h: heldH };
+  }
+  /* Order matters and is load-bearing: this node's cuts, then A's subtree,
+     then B's. A pre-order walk of the tree is the order to make the cuts, and
+     B is filled from what A left, not from the original pile. */
+  const ra = packFill(a.x, a.y, a.w, a.h, depth + 2, rest, kerf, rotate);
+  const rb = packFill(b.x, b.y, b.w, b.h, depth + 2, ra.remaining, kerf, rotate);
+  return {
+    placed: [here].concat(ra.placed, rb.placed),
+    cuts: cuts.concat(ra.cuts, rb.cuts),
+    leftover: ra.leftover.concat(rb.leftover),
+    remaining: rb.remaining,
+  };
+}
+
+/* Pack as many parts as possible into one board. */
 function packBoard(board, parts, opts) {
   opts = opts || {};
   const kerf = opts.kerf == null ? KERF_MM : opts.kerf;
   const rotate = opts.allowRotate !== false;
-  const placed = [];
-  const cuts = [];
-  const remaining = parts.slice().sort((a, b) => (Math.max(b.w, b.h) - Math.max(a.w, a.h)) || (partArea(b) - partArea(a)));
+  const sorted = parts.slice().sort((a, b) => (Math.max(b.w, b.h) - Math.max(a.w, a.h)) || (partArea(b) - partArea(a)));
 
-  function fill(x, y, w, h, depth) {
-    if (w <= 0 || h <= 0 || !remaining.length) return { leftover: [{ x, y, w, h }] };
-    // Largest part that fits here.
-    let idx = -1, fit = null;
-    for (let i = 0; i < remaining.length; i++) {
-      const f = fitIn(remaining[i], w, h, rotate);
-      if (f) { idx = i; fit = f; break; }
-    }
-    if (idx < 0) return { leftover: [{ x, y, w, h }] };
-    const part = remaining.splice(idx, 1)[0];
-    placed.push({ part, x, y, w: fit.w, h: fit.h, rotated: fit.rotated });
-
-    // Two ways to split what is left. Prefer the one that keeps the bigger
-    // single offcut whole, because a big rectangle is reusable and two thin
-    // strips are scrap.
-    const restW = w - fit.w - kerf;
-    const restH = h - fit.h - kerf;
-    const horizontalFirst = Math.max(restW * h, w * restH) === restW * h;
-
-    /* Record the cuts. The span of the SECOND cut depends on whether the first
-       one actually happened: if the leftover was thinner than the blade there
-       is nothing to separate, no cut is made, and the piece still in hand is
-       the full rectangle — so the second cut has to cross all of it, not just
-       the part. Getting this wrong prints a cut that stops halfway, which is
-       a notch, which a saw cannot do. */
-    let a, b;
-    if (horizontalFirst) {
-      const cutA = restW > 0;
-      if (cutA) cuts.push({ axis: "x", at: x + fit.w, from: y, to: y + h, depth });
-      a = { x: x + fit.w + kerf, y, w: restW, h };
-      // Whatever is still in hand after cut A: fit.w wide if it happened, else w.
-      const heldW = cutA ? fit.w : w;
-      if (restH > 0) cuts.push({ axis: "y", at: y + fit.h, from: x, to: x + heldW, depth: depth + 1 });
-      b = { x, y: y + fit.h + kerf, w: heldW, h: restH };
-    } else {
-      const cutA = restH > 0;
-      if (cutA) cuts.push({ axis: "y", at: y + fit.h, from: x, to: x + w, depth });
-      a = { x, y: y + fit.h + kerf, w, h: restH };
-      const heldH = cutA ? fit.h : h;
-      if (restW > 0) cuts.push({ axis: "x", at: x + fit.w, from: y, to: y + heldH, depth: depth + 1 });
-      b = { x: x + fit.w + kerf, y, w: restW, h: heldH };
-    }
-    const ra = fill(a.x, a.y, a.w, a.h, depth + 2);
-    const rb = fill(b.x, b.y, b.w, b.h, depth + 2);
-    return { leftover: ra.leftover.concat(rb.leftover) };
-  }
-
-  const r = fill(0, 0, board.w, board.h, 0);
+  const r = packFill(0, 0, board.w, board.h, 0, sorted, kerf, rotate);
   const usable = r.leftover.filter(o => o.w >= MIN_REMNANT_MM && o.h >= MIN_REMNANT_MM);
-  return { placed, cuts, leftover: usable, unplaced: remaining };
+  return { placed: r.placed, cuts: r.cuts, leftover: usable, unplaced: r.remaining };
 }
 
 /* Pack every blank across the whole stock list.
