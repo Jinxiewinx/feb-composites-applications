@@ -385,9 +385,23 @@ function renderWODetail() {
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
     ${moldRows}
-    <h3 id="wo-stack">Layup stack${linkedPart ? ` <span class="muted" style="text-transform:none">· synced with part ${esc(linkedPart.id)}</span>` : ""} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
-    ${stackViz(wo.layupStack)}
-    ${E ? stackEditor("workOrders", wo.id) : ""}
+    ${(() => {
+      // The run's stack is what it actually laid. Say plainly whether that is
+      // still the part's plan or has diverged from it, and make the difference
+      // one click away rather than something you reconstruct by eye.
+      const drift = linkedPart ? stackDrift(linkedPart, wo) : { rows: {}, n: 0 };
+      const diverged = wo.stackSource === "asbuilt" && drift.n > 0;
+      const src = !linkedPart ? ""
+        : diverged
+          ? ` <span class="muted" style="text-transform:none">· as built on this run</span>`
+          : ` <span class="muted" style="text-transform:none">· follows the plan on ${esc(linkedPart.id)}</span>`;
+      return `<h3 id="wo-stack">Layup stack${src} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
+      ${diverged ? `<div class="stack-diff no-print">${icon("warning", 14)}
+        <span>${drift.n} ${drift.n === 1 ? "ply differs" : "plies differ"} from ${esc(linkedPart.partName || linkedPart.id)}'s plan.</span>
+        <button class="link" onclick="openStackCompare('${esc(wo.id)}')">Compare</button></div>` : ""}
+      ${stackFrozen(wo) ? `<div class="tny muted no-print">Stack frozen — the bench is working to this. Editing the part's plan will not move it.</div>` : ""}
+      ${plyTable("workOrders", wo, { edit: E, drift: diverged ? drift.rows : {} })}`;
+    })()}
     <h3 id="wo-bom">BOM</h3>
     <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
       ${(wo.bom || []).map((b, i) => E

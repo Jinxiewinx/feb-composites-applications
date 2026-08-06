@@ -481,22 +481,70 @@ function plyClass(m) {
   if (m.includes("twill") || m.includes("carbon") || m.includes("cf") || /\b\d{2,3}\b/.test(m)) return "cf";
   return "other";
 }
-function stackViz(stack) {
-  return `<div class="stackviz">${(stack || []).map((p, i) =>
-    `<div class="plybar ${plyClass(p.material)}">P${i + 1} · ${esc(p.material)} · ${esc(p.orientation || "")} · ${esc(p.coverage || "")} ${p.notes ? "· " + esc(p.notes) : ""}</div>`).join("") || '<span class="muted">no plies recorded</span>'}
+/* The short text tag beside the swatch. print.css has always said hue alone
+   must not carry meaning on paper; the screen bar ignored that until now. */
+const PLY_TAGS = { cf: "CF", spread: "Spread", core: "Core", mesh: "Mesh", other: "—" };
+/* Every ply needs a stable identity before it can be edited, reordered or
+   deleted safely — see stackMutate(). Records written before this have none,
+   so anything that reads a uid must tolerate its absence. */
+function plyUid() { return "y" + Math.random().toString(36).slice(2, 9); }
+function stackViz(stack) { return plyTable(null, { layupStack: stack }, { edit: false }); }
+/* The stack as a table.sub — the same grammar as the BOM directly below it on
+   a work order, which is what "fit the style of the app" means here. `coll` is
+   null for a read-only render with no record behind it (print previews, tests). */
+function plyTable(coll, o, opts) {
+  opts = opts || {};
+  const stack = (o && o.layupStack) || [];
+  const E = !!opts.edit && !!coll;
+  const drift = opts.drift || {};
+  if (!stack.length) {
+    return `<div class="stack"><span class="muted">no plies recorded</span>${
+      E ? `<div class="stack-foot no-print"><button onclick="addPly('${esc(coll)}','${esc(o.id)}')">+ ply</button></div>` : ""}</div>`;
+  }
+  const cell = (p, i, key, ph) => E
+    ? `<td><input value="${esc(p[key] || "")}" placeholder="${esc(ph || "")}" onchange="plyEdit('${esc(coll)}','${esc(o.id)}',${i},'${key}',this.value)"></td>`
+    : `<td>${esc(p[key] || "") || '<span class="muted">—</span>'}</td>`;
+  return `<div class="stack">
+    <div class="stack-cap tny muted">P1 is the mold surface. Plies run outward.</div>
+    <table class="sub stk">
+      <thead><tr><th class="sw" aria-hidden="true"></th><th class="plyno">Ply</th><th>Material</th>
+        <th>Orientation</th><th>Coverage</th><th>Notes</th>${E ? '<th class="rowact no-print"></th>' : ""}</tr></thead>
+      <tbody>${stack.map((p, i) => {
+        const cls = plyClass(p.material);
+        return `<tr class="${cls}${drift[i] ? " drift" : ""}">
+          <td class="sw" aria-hidden="true"></td>
+          <td class="plyno">P${i + 1}</td>
+          ${E ? cell(p, i, "material", "e.g. 195 twill")
+              : `<td class="mat"><span class="plytag">${PLY_TAGS[cls]}</span>${esc(p.material || "")}</td>`}
+          ${cell(p, i, "orientation", "0/90")}${cell(p, i, "coverage", "full")}${cell(p, i, "notes", "")}
+          ${E ? `<td class="rowact no-print">
+            <button title="Move this ply toward the mold surface" ${i === 0 ? "disabled" : ""} onclick="plyMove('${esc(coll)}','${esc(o.id)}',${i},-1)">↑</button>
+            <button title="Move this ply outward" ${i === stack.length - 1 ? "disabled" : ""} onclick="plyMove('${esc(coll)}','${esc(o.id)}',${i},1)">↓</button>
+            <button title="Insert a ply above this one" onclick="addPly('${esc(coll)}','${esc(o.id)}',${i})">+</button>
+            <button title="Duplicate this ply" onclick="plyDup('${esc(coll)}','${esc(o.id)}',${i})">⧉</button>
+            <button class="danger" title="Remove this ply" onclick="plyDel('${esc(coll)}','${esc(o.id)}',${i})">✕</button></td>` : ""}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>
+    ${E ? `<div class="stack-foot no-print"><button onclick="addPly('${esc(coll)}','${esc(o.id)}')">+ ply</button>
+      <span class="tny muted">${stack.length} ${stack.length === 1 ? "ply" : "plies"}</span></div>`
+        : `<div class="tny muted" style="margin-top:4px">${stack.length} ${stack.length === 1 ? "ply" : "plies"}</div>`}
   </div>`;
 }
-// Editor buttons for a record's layupStack. `coll` = "parts" | "workOrders".
+// Kept for the callers that render their own heading and just want the buttons.
+// The table carries its own controls now, so this is only the empty-state add.
 function stackEditor(coll, id) {
-  return `<button onclick="addPly('${coll}','${id}')">+ ply</button> <button onclick="popPly('${coll}','${id}')">− last ply</button>`;
+  return `<button onclick="addPly('${coll}','${id}')">+ ply</button>`;
 }
 // A real form, not two chained prompt() dialogs. The old version also took
 // `prompt(...) || ""`, so cancelling out of it still appended a blank ply — and
 // then mirrored that blank ply onto the linked work order.
-function addPly(coll, id) {
+function addPly(coll, id, at) {
   const o = recById(coll, id); if (!o) return;
+  const where = typeof at === "number"
+    ? `<div class="tny muted" style="margin-bottom:6px">Inserting above P${at + 1} — everything from there moves outward.</div>` : "";
   openModal(`
-    <h2>Add ply</h2>
+    <h2>${typeof at === "number" ? "Insert ply" : "Add ply"}</h2>${where}
     <div class="field"><label>Material <span class="req">*required</span></label>
       <input id="ply-material" autofocus placeholder="e.g. 195 twill, Cu mesh, Rohacell 31 3mm"></div>
     <div class="row2">
@@ -505,36 +553,152 @@ function addPly(coll, id) {
     </div>
     <div class="field"><label>Notes</label><input id="ply-notes" placeholder="optional"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button>
-      <button class="primary" onclick="submitPly('${esc(coll)}','${esc(id)}')">Add ply</button></div>`);
+      <button class="primary" onclick="submitPly('${esc(coll)}','${esc(id)}'${typeof at === "number" ? "," + at : ""})">${
+        typeof at === "number" ? "Insert ply" : "Add ply"}</button></div>`);
 }
-function submitPly(coll, id) {
+function submitPly(coll, id, at) {
   const o = recById(coll, id);
   if (!o) { toast("That record is gone — someone else deleted it.", "error"); closeModal(); render(); return; }
   const val = k => ((document.getElementById(k) || {}).value || "").trim();
   const material = val("ply-material");
   if (!material) { toast("A ply needs a material.", "error"); return; }
-  const ply = { material, orientation: val("ply-orientation"), coverage: val("ply-coverage") || "full", notes: val("ply-notes") };
-  o.layupStack = (o.layupStack || []).concat([ply]); // optimistic
+  const ply = { uid: plyUid(), material, orientation: val("ply-orientation"), coverage: val("ply-coverage") || "full", notes: val("ply-notes") };
   closeModal();
-  stackEdit(coll, o, s => { s = s || []; s.push(ply); return s; });
+  stackMutate(coll, id, typeof at === "number" ? "insert" : "add", { ply, at });
 }
-function popPly(coll, id) {
-  const o = recById(coll, id); if (!o || !(o.layupStack || []).length) return;
-  o.layupStack = o.layupStack.slice(0, -1); // optimistic
-  stackEdit(coll, o, s => { if (s && s.length) s.pop(); return s; });
+function popPly(coll, id) { stackMutate(coll, id, "pop"); }
+function plyEdit(coll, id, i, key, value) { stackMutate(coll, id, "edit", { at: i, key, value }); }
+function plyDel(coll, id, i) { stackMutate(coll, id, "del", { at: i }); }
+function plyDup(coll, id, i) { stackMutate(coll, id, "dup", { at: i }); }
+function plyMove(coll, id, i, dir) { stackMutate(coll, id, "move", { at: i, dir }); }
+
+/* One funnel for every stack edit.
+ *
+ * The hard part is that saveField re-applies the mutator against whatever the
+ * server currently holds, so two people editing at once merge instead of
+ * clobbering. Append and pop were index-free and merged for nothing. Edit,
+ * delete, duplicate and reorder are all positional, and a raw index re-applied
+ * to a changed array edits the WRONG PLY. So each mutator locates its target by
+ * `uid` and only falls back to the index when the ply predates uids — and every
+ * ply it touches gets a uid on the way past, so the stack heals as it is used.
+ *
+ * `move` is the one operation that genuinely cannot merge: two people reordering
+ * the same stack have no correct answer. It is last-writer-wins by design, which
+ * is acceptable because reordering is rare and deliberate and somebody is
+ * looking at the screen while they do it.
+ */
+function stackMutate(coll, id, kind, arg) {
+  const o = recById(coll, id); if (!o) return;
+  arg = arg || {};
+  const cur = o.layupStack || [];
+  const at = arg.at;
+  // Identify the target from the array we're LOOKING at, then find it again by
+  // identity in whatever the server hands the mutator.
+  const target = typeof at === "number" ? cur[at] : null;
+  if (target && !target.uid) target.uid = plyUid();
+  const uid = target && target.uid;
+  const find = s => {
+    if (uid) { const i = s.findIndex(p => p && p.uid === uid); if (i >= 0) return i; }
+    return typeof at === "number" && at < s.length ? at : -1;
+  };
+  const mutator = s => {
+    s = (s || []).slice();
+    if (kind === "add") { s.push(arg.ply); return s; }
+    if (kind === "pop") { s.pop(); return s; }
+    const i = find(s);
+    if (kind === "insert") { s.splice(i < 0 ? s.length : i, 0, arg.ply); return s; }
+    if (i < 0) return s;                       // somebody else already removed it
+    if (kind === "edit") { s[i] = { ...s[i], uid: s[i].uid || uid, [arg.key]: arg.value }; return s; }
+    if (kind === "del") { s.splice(i, 1); return s; }
+    if (kind === "dup") { s.splice(i + 1, 0, { ...s[i], uid: plyUid() }); return s; }
+    if (kind === "move") {
+      const j = i + arg.dir;
+      if (j < 0 || j >= s.length) return s;
+      const [row] = s.splice(i, 1); s.splice(j, 0, row); return s;
+    }
+    return s;
+  };
+  o.layupStack = mutator(cur);                 // optimistic
+  stackEdit(coll, o, mutator);
 }
-// Apply a stack edit transaction-safely (mutator re-applies the delta on fresh
-// server data, so two people adding plies at once don't clobber), and mirror
-// the SAME delta to the linked counterpart so a part and its WO share a stack.
+
+/* Apply a stack edit transaction-safely, then propagate it under the spec /
+   as-built rule.
+ *
+ * The part's stack is the SPEC — what we intend to lay. A run's stack is the
+ * AS-BUILT — what that run actually laid. They used to be one array blindly
+ * deep-copied both ways, which meant signing off an as-built correction at the
+ * bench silently rewrote the design intent, and a remake had nowhere to record
+ * that it differed. `wo.stackSource` tells them apart: absent or "spec" means
+ * this run is still a faithful copy of the plan, "asbuilt" means it has
+ * deliberately diverged and must never be overwritten again.
+ *
+ *   part edited -> pushed to every run still on "spec" whose stack isn't frozen
+ *   run edited  -> marks that run "asbuilt", and does NOT write back to the part
+ *
+ * Adopting a run's stack as the new spec is a deliberate button, not a side
+ * effect. Records with no stackSource behave exactly as they did before, so
+ * there is nothing to migrate. */
 function stackEdit(coll, o, mutator) {
   saveField(coll, o, "layupStack", mutator);
-  const other = linkedCounterpart(coll, o);
-  if (other) {
-    const otherColl = coll === "parts" ? "workOrders" : "parts";
-    other.layupStack = JSON.parse(JSON.stringify(o.layupStack)); // optimistic local mirror
-    saveField(otherColl, other, "layupStack", mutator);
+  if (coll === "parts") {
+    partRuns(o).forEach(r => {
+      const w = r.wo;
+      if (w.stackSource === "asbuilt" || stackFrozen(w)) return;
+      w.layupStack = JSON.parse(JSON.stringify(o.layupStack)); // optimistic mirror
+      saveField("workOrders", w, "layupStack", mutator);
+    });
+  } else if (coll === "workOrders" && o.stackSource !== "asbuilt") {
+    const parent = partOf(o);
+    // Only a run that HAS a parent spec can diverge from one. A standalone WO
+    // stays plain, so nothing about the old single-record flow changes.
+    if (parent && (parent.part.layupStack || []).length) {
+      o.stackSource = "asbuilt";
+      save("workOrders", o, "stackSource");
+    }
   }
   render();
+}
+/* A run whose "Stack frozen" blocker is signed is a committed plan: the bench
+   is working to that piece of paper, so an edit on the part must not move it. */
+function stackFrozen(wo) {
+  return (wo.steps || []).some(s => /stack frozen/i.test(s.title || "") && s.status === "done");
+}
+/* Does this run still match the part it came from? Returns the ply indexes that
+   differ, so the table can tint exactly those rows. */
+function stackDrift(part, wo) {
+  const a = (part && part.layupStack) || [], b = (wo && wo.layupStack) || [];
+  const out = {}; let n = 0;
+  const same = (x, y) => x && y && ["material", "orientation", "coverage", "notes"]
+    .every(k => String(x[k] || "") === String(y[k] || ""));
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if (!same(a[i], b[i])) { out[i] = true; n++; }
+  return { rows: out, n };
+}
+function adoptStackAsSpec(woId) {
+  const wo = recById("workOrders", woId); if (!wo) return;
+  const parent = partOf(wo); if (!parent) return;
+  const p = parent.part;
+  const copy = JSON.parse(JSON.stringify(wo.layupStack || []));
+  p.layupStack = copy;
+  saveField("parts", p, "layupStack", () => copy);
+  wo.stackSource = "spec";
+  save("workOrders", wo, "stackSource");
+  toast(`${p.partName || p.id} now specifies what ${wo.id} actually laid.`);
+  render();
+}
+function openStackCompare(woId) {
+  const wo = recById("workOrders", woId); if (!wo) return;
+  const parent = partOf(wo); if (!parent) return;
+  const d = stackDrift(parent.part, wo);
+  openModal(`
+    <h2>What this run changed</h2>
+    <div class="tny muted" style="margin-bottom:10px">${d.n} ${d.n === 1 ? "ply differs" : "plies differ"} from the part's plan. Highlighted rows are the ones that moved.</div>
+    <div class="stkcmp">
+      <div><h4>${esc(parent.part.partName || parent.part.id)} — plan</h4>${plyTable(null, parent.part, { edit: false, drift: d.rows })}</div>
+      <div><h4>${esc(wo.id)} — as built</h4>${plyTable(null, wo, { edit: false, drift: d.rows })}</div>
+    </div>
+    <div class="foot"><button onclick="closeModal()">Close</button>
+      <button class="primary" onclick="closeModal();adoptStackAsSpec('${esc(woId)}')">Adopt as the part's plan</button></div>`);
 }
 /* ---------- part <-> work order: the parent/child edge ----------
    A part is the durable thing the car needs. A work order is ONE RUN at making
@@ -558,7 +722,12 @@ function stackEdit(coll, o, mutator) {
    a time, instead of one lead-only bulk backfill nobody runs. */
 function partRuns(p) {
   if (!p) return [];
-  const name = (p.partName || "").toUpperCase();
+  let name = (p.partName || "").toUpperCase();
+  // Duplicate PART names are the real FEB pattern, and they are the one case a
+  // name match can't survive: if two parts are both called STRUT there is no
+  // way to know whose run an id-less STRUT work order was. Fall back to the
+  // committed edges only. (partOf() and the backfill refuse the same case.)
+  if (name && (DB.parts || []).filter(q => (q.partName || "").toUpperCase() === name).length > 1) name = "";
   const out = [];
   (DB.workOrders || []).forEach(w => {
     let via = null;

@@ -797,9 +797,19 @@ function renderPartDetail() {
       ${engs.length ? `<div class="pengrow"><div class="lg-label tny">On this part</div>
         <div class="linkrow">${engs.map(engineerChip).join("")}</div></div>` : ""}
 
-      <h3 id="pt-stack">Layup stack${linkedWO ? ` <span class="muted" style="text-transform:none">— synced with work order ${esc(linkedWO.id)}</span>` : ""}</h3>
-      ${stackViz(p.layupStack)}
-      ${E ? stackEditor("parts", p.id) : ""}
+      ${(() => {
+        // The part holds the PLAN. Runs that have diverged are named here, so
+        // editing the plan never feels like it silently rewrote history.
+        const diverged = wos.filter(w => w.stackSource === "asbuilt" && stackDrift(p, w).n > 0);
+        const frozen = wos.filter(w => stackFrozen(w) && !diverged.includes(w));
+        return `<h3 id="pt-stack">Layup stack <span class="muted" style="text-transform:none">— the plan${
+          wos.length ? `, followed by ${wos.length - diverged.length - frozen.length} of ${wos.length} run${wos.length === 1 ? "" : "s"}` : ""}</span></h3>
+        ${diverged.length ? `<div class="stack-diff no-print">${icon("warning", 14)}
+          <span>${diverged.map(w => esc(w.id)).join(", ")} laid something different.</span>
+          ${diverged.length === 1 ? `<button class="link" onclick="openStackCompare('${esc(diverged[0].id)}')">Compare</button>` : ""}</div>` : ""}
+        ${frozen.length ? `<div class="tny muted no-print">${frozen.map(w => esc(w.id)).join(", ")} ${frozen.length === 1 ? "has" : "have"} frozen the stack — changes here will not move ${frozen.length === 1 ? "it" : "them"}.</div>` : ""}
+        ${plyTable("parts", p, { edit: E })}`;
+      })()}
 
       <h3 id="pt-links">Linked${wos.length + tickets.length + weeks.length ? ` <span class="muted" style="text-transform:none">— ${wos.length + tickets.length + weeks.length}</span>` : ""}</h3>
       <div class="linkgrid">

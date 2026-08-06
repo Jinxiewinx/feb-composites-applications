@@ -74,7 +74,10 @@ const counters = {};
 globalThis.fb = {
   state: "loading", user: null, roster: null, rosterCheckFailed: false,
   async save(coll, obj, field) { calls.push(["save", coll, obj.id, field]); },
-  async mutateField(coll, id, field, mutator) { const rec = (DB[coll] || []).find(o => o.id === id); mutator(JSON.parse(JSON.stringify((rec || {})[field] ?? null))); calls.push(["mutateField", coll, id, field]); },
+  // The mutator is kept as a fifth element so a test can re-apply it against
+  // fresh server data — which is the whole point of mutateField, and the only
+  // way to prove an index-based stack edit still finds its own ply.
+  async mutateField(coll, id, field, mutator) { const rec = (DB[coll] || []).find(o => o.id === id); mutator(JSON.parse(JSON.stringify((rec || {})[field] ?? null))); calls.push(["mutateField", coll, id, field, mutator]); },
   async appendTo(coll, id, field, el) { calls.push(["appendTo", coll, id, field]); },
   async upload(path, file) { calls.push(["upload", path]); return { url: "https://x/" + path, path, name: (file && file.name) || "f", size: 100, type: (file && file.type) || "" }; },
   async deleteFile(path) { calls.push(["deleteFile", path]); },
@@ -2118,8 +2121,13 @@ await t("parts layup stack mirrors to linked work order (transaction-safe)", () 
   assert(calls.some(c => c[0] === "mutateField" && c[1] === "workOrders" && c[3] === "layupStack"), "mirrored to WO via transaction: " + JSON.stringify(calls));
   assert(recById("workOrders", "WO-1").layupStack.length === 1, "WO stack synced");
 });
-await t("mirror is skipped when the link is ambiguous", () => {
-  // two work orders share the part name → no unambiguous counterpart → no mirror
+/* CHANGED DELIBERATELY when part->WO became one-to-many (2026-08-05).
+   This used to assert that a part matching two work orders by name mirrored to
+   NEITHER, because the 1:1 model had to pick "the" counterpart and couldn't.
+   Under one-to-many there is nothing to pick: both work orders ARE runs of that
+   part, and the plan belongs on both. The ambiguity that still matters is two
+   PARTS sharing a name — that one is asserted directly below. */
+await t("the plan reaches every run of the part, not just one", () => {
   DB.parts = [{ id: "P-2", partName: "STRUT", layupStack: [] }];
   DB.workOrders = [{ id: "WO-2", partName: "STRUT", layupStack: [] }, { id: "WO-3", partName: "STRUT", layupStack: [] }];
   calls.length = 0;
@@ -2127,8 +2135,115 @@ await t("mirror is skipped when the link is ambiguous", () => {
   document.getElementById("ply-material").value = "195 twill";
   submitPly("parts", "P-2");
   assert(recById("parts", "P-2").layupStack.length === 1, "part still edited");
-  assert(!calls.some(c => c[1] === "workOrders"), "no WO mirrored when name is ambiguous: " + JSON.stringify(calls));
+  assert(recById("workOrders", "WO-2").layupStack.length === 1, "first run carries the plan");
+  assert(recById("workOrders", "WO-3").layupStack.length === 1, "second run carries it too");
 });
+await t("a stack edit never crosses two parts that share a name", () => {
+  // The case that must still refuse: no way to know whose run an id-less STRUT
+  // work order was, so the name match is dropped entirely.
+  DB.parts = [{ id: "P-2", partName: "STRUT", layupStack: [] }, { id: "P-9", partName: "STRUT", layupStack: [] }];
+  DB.workOrders = [{ id: "WO-2", partName: "STRUT", layupStack: [] }];
+  calls.length = 0;
+  addPly("parts", "P-2");
+  document.getElementById("ply-material").value = "195 twill";
+  submitPly("parts", "P-2");
+  assert(recById("parts", "P-2").layupStack.length === 1, "part still edited");
+  assert(!calls.some(c => c[1] === "workOrders"), "no run touched when two parts share the name: " + JSON.stringify(calls));
+});
+/* ---------- the layup stack: editing, and spec vs as-built ---------- */
+console.log("layup stack:");
+const mkStack = (...mats) => mats.map(m => ({ uid: "u" + m, material: m, orientation: "", coverage: "full", notes: "" }));
+await t("a ply is edited in place, by identity rather than by position", () => {
+  DB.parts = [{ id: "P-80", layupStack: mkStack("a", "b", "c") }];
+  DB.workOrders = [];
+  plyEdit("parts", "P-80", 1, "orientation", "±45");
+  assert(recById("parts", "P-80").layupStack[1].orientation === "±45", "the right ply moved");
+  assert(recById("parts", "P-80").layupStack[0].orientation === "", "and only that one");
+});
+await t("an edit re-applied to a shifted stack still finds its own ply", () => {
+  // This is the whole reason plies carry a uid: saveField re-runs the mutator
+  // against fresh server data, and a raw index would edit somebody else's ply.
+  DB.parts = [{ id: "P-81", layupStack: mkStack("a", "b", "c") }];
+  DB.workOrders = [];
+  calls.length = 0;
+  plyEdit("parts", "P-81", 2, "notes", "tack here");
+  const m = calls.find(c => c[0] === "mutateField" && c[1] === "parts");
+  // somebody else inserted a ply at the front in the meantime
+  const server = m[4](mkStack("z", "a", "b", "c"));
+  assert(server.length === 4, "no ply lost");
+  assert(server.find(p => p.material === "c").notes === "tack here", "the edit followed its ply, not index 2");
+  assert(!server.find(p => p.material === "b").notes, "the ply now at index 2 was left alone");
+});
+await t("insert, duplicate, delete and reorder all land where they are aimed", () => {
+  DB.parts = [{ id: "P-82", layupStack: mkStack("a", "b", "c") }];
+  DB.workOrders = [];
+  plyMove("parts", "P-82", 2, -1);
+  assert(recById("parts", "P-82").layupStack.map(p => p.material).join("") === "acb", "moved toward the mold surface");
+  plyDup("parts", "P-82", 0);
+  assert(recById("parts", "P-82").layupStack.map(p => p.material).join("") === "aacb", "duplicate sits below its original");
+  assert(recById("parts", "P-82").layupStack[0].uid !== recById("parts", "P-82").layupStack[1].uid, "a duplicate is its own ply");
+  plyDel("parts", "P-82", 1);
+  assert(recById("parts", "P-82").layupStack.map(p => p.material).join("") === "acb", "deleted the right one");
+});
+await t("a ply written before uids existed is still editable, and gains one", () => {
+  DB.parts = [{ id: "P-83", layupStack: [{ material: "old" }, { material: "older" }] }];
+  DB.workOrders = [];
+  plyEdit("parts", "P-83", 0, "coverage", "half");
+  const s = recById("parts", "P-83").layupStack;
+  assert(s[0].coverage === "half", "legacy ply edited by index fallback");
+  assert(!!s[0].uid, "and healed with a uid on the way past");
+});
+await t("a run that lays something different becomes as-built, and stops following the plan", () => {
+  DB.parts = [{ id: "P-90", partName: "TRAY", layupStack: mkStack("a", "b") }];
+  DB.workOrders = [{ id: "WO-90", partId: "P-90", layupStack: mkStack("a", "b") }];
+  plyEdit("workOrders", "WO-90", 1, "material", "core (swapped at the bench)");
+  const wo = recById("workOrders", "WO-90");
+  assert(wo.stackSource === "asbuilt", "the run is marked as-built");
+  assert(recById("parts", "P-90").layupStack[1].material === "b", "the part's plan was NOT rewritten");
+  assert(stackDrift(recById("parts", "P-90"), wo).n === 1, "and the difference is reported");
+});
+await t("editing the plan leaves a diverged run alone", () => {
+  DB.parts = [{ id: "P-91", partName: "TRAY", layupStack: mkStack("a", "b") }];
+  DB.workOrders = [
+    { id: "WO-91", partId: "P-91", layupStack: mkStack("a", "b") },
+    { id: "WO-92", partId: "P-91", stackSource: "asbuilt", layupStack: mkStack("a", "z") },
+  ];
+  plyEdit("parts", "P-91", 0, "orientation", "0/90");
+  assert(recById("workOrders", "WO-91").layupStack[0].orientation === "0/90", "the faithful run follows");
+  assert(recById("workOrders", "WO-92").layupStack[0].orientation === "", "the diverged run does not");
+});
+await t("a frozen stack is not moved by an edit to the plan", () => {
+  DB.parts = [{ id: "P-93", partName: "TRAY", layupStack: mkStack("a") }];
+  DB.workOrders = [{ id: "WO-93", partId: "P-93", layupStack: mkStack("a"),
+    steps: [{ seq: 1, title: "Stack frozen", status: "done" }] }];
+  plyEdit("parts", "P-93", 0, "coverage", "half");
+  assert(recById("workOrders", "WO-93").layupStack[0].coverage === "full", "the bench's frozen copy stands");
+});
+await t("adopting a run's stack rewrites the plan, deliberately", () => {
+  DB.parts = [{ id: "P-94", partName: "TRAY", layupStack: mkStack("a", "b") }];
+  DB.workOrders = [{ id: "WO-94", partId: "P-94", stackSource: "asbuilt", layupStack: mkStack("a", "z") }];
+  adoptStackAsSpec("WO-94");
+  assert(recById("parts", "P-94").layupStack[1].material === "z", "the plan took the run's stack");
+  assert(recById("workOrders", "WO-94").stackSource === "spec", "and the run is back in step");
+});
+await t("a work order with no part behaves exactly as it always did", () => {
+  DB.parts = [];
+  DB.workOrders = [{ id: "WO-95", partName: "ORPHAN", layupStack: [] }];
+  addPly("workOrders", "WO-95");
+  document.getElementById("ply-material").value = "195 twill";
+  submitPly("workOrders", "WO-95");
+  const wo = recById("workOrders", "WO-95");
+  assert(wo.layupStack.length === 1, "ply added");
+  assert(wo.stackSource === undefined, "nothing is marked as-built when there is no plan to differ from");
+});
+await t("the stack renders as a table with a text carrier, not colour alone", () => {
+  const html = plyTable(null, { id: "X", layupStack: [{ material: "195 twill" }, { material: "Nomex honeycomb 0.125\"" }] }, { edit: false });
+  assert(html.includes('<table class="sub stk">'), "it is a table.sub like the BOM below it");
+  assert(html.includes("plytag"), "each row carries its class as text");
+  assert(html.includes(">CF<") && html.includes(">Core<"), "and names the material class: " + html.slice(0, 200));
+  assert(html.includes("P1 is the mold surface"), "ply order is stated, not implied");
+});
+
 /* ---------- part is the parent, work orders are its runs ----------
    The two mirror tests above are deliberately left exactly as they were: they
    are the back-compat proof that redefining linkedCounterpart from a symmetric

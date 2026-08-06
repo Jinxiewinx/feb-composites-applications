@@ -50,6 +50,13 @@
     --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;
     --purple: #6a3fb0; --purple-bg: #efe7fb; --purple-border: #d3c0f0;
     --info-bg: #e8f0fd; --gold-bg: #fff7e0;
+    /* ply materials — swatch beside a text tag, never the row background;
+       hue is never the only carrier (same rule print.css states) */
+    --ply-cf: #3b4653;
+    --ply-spread: #6b7684;
+    --ply-mesh: #c98f4a;
+    --ply-core: #FDB515;
+    --ply-other: #cfd6e0;
     /* effects */
     --radius: 6px; --r-md: 9px; --r-lg: 14px;
     --shadow: 0 1px 2px rgba(10,22,40,.06), 0 1px 3px rgba(10,22,40,.09);
@@ -101,6 +108,8 @@
     --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
     --purple: #a385e6; --purple-bg: #241c3a; --purple-border: #3d2f5c;
     --info-bg: #182842; --gold-bg: #2a2411;
+    --ply-cf: #7d8ba0; --ply-spread: #9aa7ba; --ply-mesh: #d8a35f;
+    --ply-core: #FDB515; --ply-other: #46536a;
     --shadow: 0 1px 2px rgba(0,0,0,.5); --shadow-md: 0 4px 18px rgba(0,0,0,.55); --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
     --shadow-edge: rgba(0,0,0,.55);
     --carbon: rgba(255,255,255,.03);
@@ -1031,12 +1040,49 @@
   .meshview-note { margin-top: 6px; }
   @media (max-width: 640px) { .meshview canvas { height: 260px; } }
 
-  /* ---- stack viz + steps (work orders, carried) ---- */
-  .stackviz { margin: 8px 0; }
-  .stackviz .plybar { border: 1px solid var(--line); border-bottom: none; padding: 3px 10px; font-size: 12px; }
-  .stackviz .plybar:last-child { border-bottom: 1px solid var(--line); }
-  .plybar.cf { background: #3b4653; color: #fff; } .plybar.spread { background: #6b7684; color: #fff; }
-  .plybar.core { background: var(--gold); } .plybar.mesh { background: #c98f4a; color: #fff; } .plybar.other { background: var(--fill); }
+  /* ---- layup stack ----
+     Was a run of full-width coloured bars with all four fields crammed into
+     one middle-dot string — the only sub-collection in the app that wasn't a
+     table.sub, sitting three lines above the BOM that is one. Now it IS a
+     table.sub, so it inherits the header, the row rules and the inline inputs
+     for free, and the colour moved to a swatch column exactly like the printed
+     traveler has always done (print.css "ply stack"). Colour is now a hint
+     beside a text tag rather than the whole message. */
+  .stack { margin: 8px 0; }
+  .stack-cap { margin-bottom: 4px; }
+  table.sub.stk td.sw, table.sub.stk th.sw { width: 8px; padding: 0; }
+  table.sub.stk td.sw { background: var(--ply-other); }
+  table.sub.stk tr.cf td.sw { background: var(--ply-cf); }
+  table.sub.stk tr.spread td.sw { background: var(--ply-spread); }
+  table.sub.stk tr.core td.sw { background: var(--ply-core); }
+  table.sub.stk tr.mesh td.sw { background: var(--ply-mesh); }
+  table.sub.stk td.plyno, table.sub.stk th.plyno { width: 34px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  table.sub.stk td.mat { font-weight: 600; }
+  /* The text carrier. Without it the material class lives only in the swatch
+     hue, which fails greyscale, a colour-blind reader and the B&W proof. */
+  .plytag { display: inline-block; min-width: 42px; text-align: center; margin-right: 6px;
+    padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; background: var(--fill); color: var(--muted); border: 1px solid var(--line); }
+  tr.cf .plytag { background: var(--ply-cf); color: #fff; border-color: var(--ply-cf); }
+  tr.spread .plytag { background: var(--ply-spread); color: #fff; border-color: var(--ply-spread); }
+  tr.core .plytag { background: var(--ply-core); color: #3a2c05; border-color: var(--ply-core); }
+  tr.mesh .plytag { background: var(--ply-mesh); color: #fff; border-color: var(--ply-mesh); }
+  :root[data-theme="dark"] tr.cf .plytag, :root[data-theme="dark"] tr.spread .plytag { color: #0b0f16; }
+  table.sub.stk td.rowact, table.sub.stk th.rowact { width: 1%; white-space: nowrap; text-align: right; }
+  table.sub.stk td.rowact button { padding: 1px 5px; font-size: 11px; line-height: 1.4; }
+  table.sub.stk tr.drift td { background: var(--warn-bg); }
+  .stack-foot { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  /* Spec vs as-built: the part holds the plan, a run holds what it actually
+     laid. The badge is the only thing that says they stopped agreeing. */
+  .stack-diff { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0;
+    padding: 4px 9px; border: 1px solid var(--warn-border); background: var(--warn-bg);
+    color: var(--amber); border-radius: var(--radius); font-size: 12px; }
+  .stack-diff button { font-size: 12px; }
+  .stkcmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .stkcmp h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  @media (max-width: 640px) { .stkcmp { grid-template-columns: 1fr; } }
+
+  /* ---- steps (work orders, carried) ---- */
   .step { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
   .step:first-of-type { border-top: none; }
   .step .num { font-weight: 700; color: var(--brand-ink); min-width: 22px; }
