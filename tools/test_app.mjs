@@ -2825,9 +2825,52 @@ function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit =
 function seedStock() {
   DB.stock = [1, 1.5, 2, 3].map((t, i) => ({
     id: "BRD-" + i, len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" },
-    thk: { value: t, unit: "in" }, density: 30, qty: 3, kind: "sheet",
+    thk: { value: t, unit: "in" }, density: 30, qty: 3,
   }));
 }
+await t("the planner is scored against the real rack, and says why", async () => {
+  /* The composition used to be picked by blank volume plus a flat per-layer
+     penalty, which cannot see the rack and always favoured thin boards — one
+     glue joint per extra layer, four clamp hours each under CS-003 §7.3. Now
+     each candidate is scored by actually packing it onto the boards we own. */
+  seedStock(); DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 6 * 25.4] });
+  await submitMold();
+  const p = DB.stackplans[0];
+  assert(p.usedRack === true, "the rack was consulted, not guessed at");
+  assert(p.alternatives && p.alternatives.length, "the runners-up are kept so the choice can be explained");
+  assert(p.alternatives.every(a => a.cost >= p.cost), "the winner is the cheapest thing considered");
+  // 6in of stack out of 1/1.5/2/3in boards: three joints would be four layers,
+  // and the joint charge should keep it well under that.
+  assert(p.layers.length <= 3, "pricing glue joints should not hand the shop a five-layer stack, got " + p.layers.length);
+  view = { ...view, tab: "molds", mode: "detail", id: p.id }; render();
+  const h = main.innerHTML;
+  assert(h.includes("Why these boards"), "the plan page explains the choice");
+  assert(/quarter of a 4.8 sheet/.test(h), "and states the exchange rate it used, so it can be argued with");
+});
+await t("a stack is never planned out of board the rack does not hold", async () => {
+  // One 3in sheet must not yield a 3+3 stack. Before supply-awareness the
+  // planner proposed it happily and the problem surfaced later as a shortfall.
+  DB.stock = [{ id: "BRD-only3", len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" },
+    thk: { value: 3, unit: "in" }, density: 30, qty: 1 }];
+  DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 6 * 25.4] });
+  await submitMold();
+  if (DB.stackplans.length) {
+    const three = DB.stackplans[0].thicknessesMm.filter(t => Math.abs(t - 3 * 25.4) < 0.05).length;
+    assert(three <= 1, "only one 3in sheet is on the rack, so only one 3in layer is buildable");
+  } else {
+    assert(/reach|thicker|stock/i.test(lastToast), "or it says the rack cannot reach that height: " + lastToast);
+  }
+});
+await t("planning still works before anybody has entered any board", async () => {
+  DB.stock = []; DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 100], mode: "manual", thk: "50, 50" });
+  await submitMold();
+  assert(DB.stackplans.length === 1, "a manual stack must not need a rack: " + lastToast);
+  assert(DB.stackplans[0].usedRack === false, "and it must admit the rack was not consulted");
+});
+
 await t("the planner picks board thicknesses from stock without being told", async () => {
   seedStock(); DB.stackplans = [];
   fillMold();

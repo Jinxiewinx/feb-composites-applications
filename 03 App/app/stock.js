@@ -217,15 +217,23 @@ function runSliceInline(msg) {
     if (!tris) throw new Error("That body is not in this file.");
     displayTris = tris;
   }
+  // Same injection as the Worker path, so the two cannot drift.
+  const opts = { ...(msg.opts || {}) };
+  if (msg.supply) opts.supply = msg.supply;
+  if (msg.boards && msg.boards.length) {
+    opts.score = layers => moldCost(layers, msg.boards, { density: msg.density }).cost;
+  }
   const r = (msg.thicknesses && msg.thicknesses.length)
-    ? sliceMold(tris, msg.thicknesses, msg.opts || {})
-    : planMold(tris, msg.available, msg.opts || {});
+    ? sliceMold(tris, msg.thicknesses, opts)
+    : planMold(tris, msg.available, opts);
   let meshStl = null;
   try { meshStl = meshStlForStorage(displayTris); } catch (e) { meshStl = null; }
   return {
     layers: r.layers, sections: (r.sections || []).map(s => ({ index: s.index, height: s.height, count: s.layers.length })),
     bounds: r.bounds, warnings: r.warnings, composition: r.composition || msg.thicknesses,
-    considered: r.considered || 0, triangleCount: tris.length, meshStl,
+    considered: r.considered || 0, alternatives: r.alternatives || [], cost: r.cost || 0,
+    usedRack: !!(msg.boards && msg.boards.length),
+    triangleCount: tris.length, meshStl,
   };
 }
 
@@ -402,6 +410,18 @@ async function submitMold() {
     thkMm = list.map(v => toMm({ value: v, unit: tUnit }));
   }
   const available = stockThicknessesMm(density);
+  /* The rack itself, not just the distinct thicknesses on it. Two things need
+     it: compositionCandidates must not propose four 3in layers against one 3in
+     sheet, and moldCost scores a candidate by actually packing it. Filtered to
+     the chosen density because CS-004 says the grades are not interchangeable.
+     Empty (nobody has entered stock yet) means neither is applied and planning
+     falls back to the volume heuristic. */
+  const rack = boardsForPacking().filter(b => b.density === density);
+  const supply = {};
+  for (const b of rack) {
+    const k = Math.round(b.thk * 10) / 10;
+    supply[k] = (supply[k] || 0) + (b.qty || 1);
+  }
   if (auto && !available.length) { toast(`No ${density} lb board stock on the rack — the planner picks thicknesses from what you actually have. Add boards, or pick the other density.`, "error"); return; }
 
   const prog = document.getElementById("ml-progress");
@@ -414,7 +434,7 @@ async function submitMold() {
     for (const [r, label] of [[L, "Length"], [W, "Width"], [H, "Height"]]) {
       if (r.err) { toast(`${label} ${r.err}.`, "error"); return; }
     }
-    msg = { cmd: "slice", box: { len: toMm(L.dim), wid: toMm(W.dim), hgt: toMm(H.dim) }, thicknesses: thkMm, available, opts: {} };
+    msg = { cmd: "slice", box: { len: toMm(L.dim), wid: toMm(W.dim), hgt: toMm(H.dim) }, thicknesses: thkMm, available, boards: rack, supply, density, opts: {} };
     sourceName = `block ${fmtDim(L.dim)} x ${fmtDim(W.dim)} x ${fmtDim(H.dim)}`;
   } else {
     const fileEl = document.getElementById("ml-file");
@@ -455,7 +475,7 @@ async function submitMold() {
     msg = {
       cmd: "slice", buffer: MOLD_BUF.buffer, unit, cacheKey: MOLD_BUF.key,
       bodyIndex: Number((document.getElementById("ml-body") || {}).value || 0),
-      thicknesses: thkMm, available, opts: {},
+      thicknesses: thkMm, available, boards: rack, supply, density, opts: {},
     };
     sourceName = MOLD_BUF.name; sourceBytes = MOLD_BUF.size;
   }
@@ -472,6 +492,7 @@ async function submitMold() {
       thicknessesMm: result.composition || thkMm, bounds: result.bounds,
       layers: result.layers, sections: result.sections || [],
       warnings: result.warnings || [], considered: result.considered || 0,
+      alternatives: result.alternatives || [], usedRack: !!result.usedRack, cost: result.cost || 0,
       triangleCount: result.triangleCount || 0,
       by: myEmail(), ts: new Date().toISOString(),
     };
@@ -647,6 +668,44 @@ function exportSectionStl(planId, sectionIndex) {
   toast(`${tris.length / 12} block${tris.length === 12 ? "" : "s"} exported in mm, at the mold's own origin.`);
 }
 
+/* Why these boards and not the other ones.
+
+   The planner trades board against glue joints at a fixed rate — a joint is
+   worth a quarter of a sheet — and that number is a judgement call, not
+   physics. Printed here with the runners-up beside it, because an exchange rate
+   nobody can see is one nobody can argue with, and one nobody can argue with
+   never gets tuned. CS-003 §7.3 is a 4h clamp per glue-up, so the cost being
+   priced is real hours.
+
+   Note this is scored as if this were the only mold being cut. The cut list
+   packs every planned mold's blanks together and is the authority on how much
+   board actually gets opened; the two will differ. Subtracting other plans'
+   commitments here would make replanning order-dependent and make this page
+   change when somebody edits a different mold. */
+function whyTheseBoards(p) {
+  const alts = p.alternatives || [];
+  const inch = c => c.map(t => (Math.round(t / 25.4 * 100) / 100) + "″").join(" + ");
+  const joints = Math.max(0, (p.layers || []).length - 1);
+  if (!p.usedRack) {
+    return `<h3>Why these boards</h3>
+      <p class="muted tny">Scored on board volume only — there was no board stock recorded when this was planned, so the planner could not check what the rack actually holds. Add boards and re-plan for a real answer.</p>`;
+  }
+  if (!alts.length) return "";
+  return `<h3>Why these boards</h3>
+    <p class="muted tny">${esc(inch(p.thicknessesMm || []))} — ${joints} glue joint${joints === 1 ? "" : "s"},
+      ${joints * 4}h of clamp time under CS-003 §7.3. Scored against the boards on the rack, pricing one glue joint
+      at a quarter of a 4×8 sheet. Runners-up:</p>
+    <table class="list">
+      <tr><th>Stack</th><th>Glue joints</th><th>Cost</th></tr>
+      ${alts.map(a => `<tr>
+        <td>${esc(inch(a.composition || []))}</td>
+        <td>${esc(a.joints)}</td>
+        <td class="tny">${a.cost > (p.cost || 0) ? "+" : ""}${(((a.cost - (p.cost || 0)) / (p.cost || 1)) * 100).toFixed(0)}%</td>
+      </tr>`).join("")}
+    </table>
+    <p class="muted tny">Costed as if this were the only mold being cut. The cut list packs every planned mold together and is the authority on how much board actually gets opened.</p>`;
+}
+
 function renderStackPlan() {
   const p = planById(view.id);
   if (!p) { view.mode = "list"; view.id = null; return moldsOverview(); }
@@ -675,5 +734,6 @@ function renderStackPlan() {
     <p class="muted tny">Dashed outline is the mold at the top of each layer. Check it sits inside every block before initialling the CS-003 §7.2 review step.</p>
     <h3>Blanks to cut</h3>
     ${stackTable(p)}
+    ${whyTheseBoards(p)}
   </div>`;
 }

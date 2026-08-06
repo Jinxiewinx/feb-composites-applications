@@ -9,7 +9,7 @@
    pure and therefore testable under node; a Worker is not.
 
    Protocol
-     in : { cmd:"slice", buffer, unit, thicknesses, opts }
+     in : { cmd:"slice", buffer, unit, thicknesses, boards, supply, density, opts }
      out: { type:"progress", value 0..1 }
           { type:"done", result, meshStl? }
           { type:"error", message, region? }
@@ -23,7 +23,7 @@
    Note importScripts needs a CLASSIC worker (no { type:"module" }), which
    matches how the rest of the app loads. */
 
-importScripts("slicer.js", "stlio.js");
+importScripts("slicer.js", "packer.js", "stlio.js");
 
 /* Kept between messages so picking a body doesn't re-parse a 9MB mesh. */
 let cached = null;   // { key, bodies }
@@ -74,7 +74,15 @@ self.onmessage = function (e) {
       triangleCount = body.tris.length;
       displayTris = body.tris;
     }
+    /* How a candidate stack is judged. packer.js's moldCost scores by actually
+       packing the blanks onto the rack; slicer.js takes it as an injection so
+       it keeps no dependencies of its own. No boards recorded yet means no
+       score is injected and planMold falls back to its volume heuristic. */
     const opts = { ...(msg.opts || {}), onProgress: v => self.postMessage({ type: "progress", value: v }) };
+    if (msg.supply) opts.supply = msg.supply;
+    if (msg.boards && msg.boards.length) {
+      opts.score = layers => moldCost(layers, msg.boards, { density: msg.density }).cost;
+    }
     // thicknesses null => choose them from what the rack actually holds.
     const result = msg.thicknesses && msg.thicknesses.length
       ? sliceMold(tris, msg.thicknesses, opts)
@@ -93,6 +101,9 @@ self.onmessage = function (e) {
         warnings: result.warnings,
         composition: result.composition || msg.thicknesses,
         considered: result.considered || 0,
+        alternatives: result.alternatives || [],
+        cost: result.cost || 0,
+        usedRack: !!(msg.boards && msg.boards.length),
         triangleCount,
       },
     }, meshStl ? [meshStl] : []);

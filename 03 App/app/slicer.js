@@ -772,11 +772,20 @@ function planMold(tris, availableThicknessesMm, opts) {
   }
   let best = null, bestVol = Infinity, bestComp = null;
   const errors = [];
+  const tried = [];
   for (const comp of cands) {
     try {
       const r = sliceMold(tris, comp, { ...opts, simplifyEps: opts.scoreEps == null ? 1 : opts.scoreEps });
       const v = score(r.layers);
-      if (v < bestVol) { bestVol = v; best = r; bestComp = comp; }
+      tried.push({ composition: comp, cost: v, joints: Math.max(0, r.layers.length - 1) });
+      /* A challenger has to beat the incumbent by a real margin, not by float
+         noise. Board opening is discrete, so the objective is steppy and a
+         hairline win flips the answer when somebody adds one board to the rack.
+         Candidates arrive least-overshoot-then-fewest-boards first, so a tie
+         resolves toward the simpler stack and the same rack gives the same
+         plan twice. */
+      if (v < bestVol * (1 - 0.005)) { bestVol = v; best = r; bestComp = comp; }
+      else if (best === null) { bestVol = v; best = r; bestComp = comp; }
     } catch (e) { errors.push(e); }
   }
   // Every candidate failing is a property of the MOLD (an overhang), not of the
@@ -787,6 +796,14 @@ function planMold(tris, availableThicknessesMm, opts) {
   final.composition = bestComp;
   final.considered = cands.length;
   final.cost = bestVol;
+  /* The three runners-up, so the plan page can say WHY these boards rather
+     than asserting it. Without that the exchange rate between a glue joint and
+     a sheet of board is unfalsifiable and will never get tuned. */
+  final.alternatives = tried
+    .filter(x => x.composition !== bestComp)
+    .sort((a, b) => a.cost - b.cost)
+    .slice(0, 3)
+    .map(x => ({ composition: x.composition, cost: x.cost, joints: x.joints }));
   final.boardVolumeMm3 = boardVolume(final.layers);
   return final;
 }
