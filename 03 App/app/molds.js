@@ -10,8 +10,18 @@
    deep — planning a mold created no mold record at all.
 
    SHAPE. The Parts tab's split, transcribed rather than abstracted: a
-   persistent rail on the left (three groups — Molds, Stack plans, Boards),
-   the selected record on the right, the season view when nothing is picked.
+   persistent rail on the left, the selected record on the right, the season
+   view when nothing is picked.
+
+   The rail is MOLDS and BOARDS. A stack plan is a mold's file, not a record
+   beside it — Simon: "you can condense molds and stock plans, they function the
+   same... there should only be an option to make a mold." So the mold carries
+   currentPlanId, plans are reached through their mold, and one + Mold button
+   opens the planner (which can also just record a mold with no geometry, for
+   an SN5 tool being catalogued). The one exception on the rail is a plan whose
+   mold is missing, which has nothing to be reached through and would otherwise
+   be invisible.
+
    The Boards group lists SIZES, one row per length x width x thickness x
    density with a quantity, because that is how anybody standing in front of
    the rack would describe it. The board documents still exist one per board —
@@ -79,7 +89,13 @@ function moldsRailRows() {
     .filter(m => has(m))
     .sort((a, b) => (MOLD_STAGE.indexOf(a.stage) - MOLD_STAGE.indexOf(b.stage)) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
 
+  /* Stack plans are NOT a rail group any more. A plan is a mold's file, not a
+     record in its own right — Simon: "there should only be an option to make a
+     mold." An orphaned plan (made before molds were created automatically) is
+     the one exception: it has no mold to be reached through, so it still shows
+     until somebody adopts it. */
   let plans = (DB.stackplans || [])
+    .filter(p => !p.moldId || !moldRecById(p.moldId))
     .filter(p => has(p))
     .slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
 
@@ -156,9 +172,8 @@ function renderMoldsRail() {
   <aside class="mdindex" aria-label="Molds index">
     <div class="pindex-head no-print">
       <div class="toolbar">
-        <button class="primary ib" onclick="newShopRec('molds')">+ Mold</button>
+        <button class="primary ib" onclick="uploadMold()">+ Mold</button>
         <button class="ib" onclick="newBoard()">+ Board</button>
-        <button class="ib" onclick="uploadMold()">${icon("parts", 15)} Plan a mold</button>
       </div>
       <div class="toolbar">
         ${(DB.stackplans || []).length ? `<button class="ib" onclick="view={...view,mode:'cuts',cutSel:''};render()">${icon("print", 15)} Cut list</button>` : ""}
@@ -184,7 +199,7 @@ function renderMoldsRail() {
       ${molds.length || (DB.molds || []).length ? moldsGroupHead("Molds", [
         `${ready} ready`, noHome ? `${noHome} no home` : "", `${molds.length} shown`]) : ""}
       ${molds.filter(m => !view.fNoHome || !m.location).map(m => moldsRailItem("mold", m)).join("")}
-      ${plans.length ? moldsGroupHead("Stack plans", [
+      ${plans.length ? moldsGroupHead("Plans with no mold", [
         `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn}` : ""]) : ""}
       ${plans.map(p => moldsRailItem("plan", p)).join("")}
       ${boards.length || (DB.stock || []).length ? moldsGroupHead("Boards", [
@@ -382,8 +397,14 @@ function moldsPlanPane(p) {
       </select>
     </div>
   </div>` : "";
+  const cur = owner ? currentPlanFor(owner) : null;
+  const superseded = cur && cur.id !== p.id;
   const ownerLine = owner ? `<div class="card no-print"><b>Mold:</b> <span class="chip" onclick="selectMoldsRec('${esc(owner.id)}')">${esc(owner.name || owner.id)}</span>
-    <span class="muted tny">· stage ${esc(owner.stage || "—")}</span></div>` : "";
+    <span class="muted tny">· stage ${esc(owner.stage || "—")}</span>
+    ${superseded ? `<div class="warn" style="margin-top:6px">${icon("warning", 14)}
+      <b>Superseded</b> by ${esc(cur.name || cur.id)}, planned ${fmtWhen(cur.ts)}. Do not cut from this one.
+      ${isLead() ? `<button class="sm" style="margin-left:8px" onclick="makeCurrentPlan('${esc(owner.id)}','${esc(p.id)}')">Make this the current plan</button>` : ""}
+    </div>` : ""}</div>` : "";
   return `<section class="mddetail" aria-label="Stack plan">${ownerLine}${adopt}${renderStackPlan()}</section>`;
 }
 
@@ -401,14 +422,47 @@ async function createMoldFromPlan(planId) {
   save("molds", m);
   p.moldId = id;
   save("stackplans", p, "moldId");
+  setCurrentPlan(m, p.id);
   toast(`${m.name} created at “Designed” and linked to this plan.`);
   selectMoldsRec(id);
+}
+/* Re-plan an existing mold. The old plan is never deleted — it goes onto
+   planHistory and stays openable, because somebody may already have cut from
+   it and the drawings on the shop wall have its id on them. */
+let MOLD_REPLAN = "";
+function replanMold(moldId) {
+  const m = moldRecById(moldId);
+  if (!m) return;
+  MOLD_REPLAN = moldId;
+  uploadMold(m);
+}
+/* Point a mold at a plan, pushing whatever it pointed at before onto the
+   history. The one place currentPlanId is written, so the invariant "the
+   previous current is always in planHistory" holds by construction. */
+function setCurrentPlan(mold, planId) {
+  if (!mold || !planId) return;
+  const prev = mold.currentPlanId;
+  mold.currentPlanId = planId;
+  if (prev && prev !== planId) {
+    mold.planHistory = [{ id: prev, ts: new Date().toISOString(), by: myEmail() }]
+      .concat((mold.planHistory || []).filter(h => h.id !== prev))
+      .slice(0, 10);
+  }
+  save("molds", mold, "currentPlanId", "planHistory");
+}
+function makeCurrentPlan(moldId, planId) {
+  const m = moldRecById(moldId);
+  if (!m || !planById(planId)) return;
+  setCurrentPlan(m, planId);
+  toast(`${planById(planId).name || planId} is now the current plan.`);
+  render();
 }
 function linkPlanToMold(planId, moldId) {
   const p = planById(planId);
   if (!p || !moldRecById(moldId)) return;
   p.moldId = moldId;
   save("stackplans", p, "moldId");
+  setCurrentPlan(moldRecById(moldId), p.id);
   toast(`Plan linked to ${moldId}.`);
   render();
 }
@@ -419,15 +473,21 @@ function linkPlanToMold(planId, moldId) {
    current; older ones are listed as superseded. Rendered by shop.js's detail
    through the hook below, so Materials and Items stay untouched. */
 function moldPlanSection(m) {
-  const plans = (DB.stackplans || []).filter(p => p.moldId === m.id)
-    .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
-  if (!plans.length) return "";
+  const plans = plansForMold(m);
+  if (!plans.length) {
+    return isLead() ? `<h3>Mold file</h3>
+      <div class="muted tny">No stack plan yet — this mold was recorded by hand or imported.</div>
+      <div class="toolbar no-print"><button class="ib" onclick="replanMold('${esc(m.id)}')">${icon("parts", 15)} Plan the stack</button></div>` : "";
+  }
   const p = plans[0];
   const nSec = sectionCount(p);
-  return `<h3>Stack plan</h3>
-    <div class="muted tny">${esc(p.id)} · ${(p.layers || []).length} layers · planned ${fmtWhen(p.ts)}${plans.length > 1 ? ` · supersedes ${plans.slice(1).map(x => esc(x.id)).join(", ")}` : ""}</div>
+  return `<h3>Mold file</h3>
+    <div class="muted tny">${esc(p.id)} · ${(p.layers || []).length} layers · planned ${fmtWhen(p.ts)}</div>
+    ${plans.length > 1 ? `<div class="muted tny">Earlier: ${plans.slice(1).map(x =>
+      `<span class="chip tny" onclick="selectMoldsRec('${esc(x.id)}')">${esc(x.name || x.id)} · ${fmtWhen(x.ts)}</span>`).join(" ")}</div>` : ""}
     <div class="toolbar no-print">
       <button class="ib" onclick="selectMoldsRec('${esc(p.id)}')">${icon("parts", 15)} Open plan &amp; 3D view</button>
+      ${isLead() ? `<button class="ib" onclick="replanMold('${esc(m.id)}')">${icon("edit", 15)} Re-plan</button>` : ""}
       <button class="ib" onclick="openDrawings('${esc(p.id)}')">${icon("print", 15)} Drawings</button>
       ${nSec === 1 ? `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',0)">${icon("download", 15)} Stock STL</button>`
         : Array.from({ length: nSec }, (_, i) => `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',${i})">${icon("download", 15)} STL S${i + 1}</button>`).join("")}

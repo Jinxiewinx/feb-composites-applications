@@ -3199,7 +3199,10 @@ await t("the merged rail shows molds, plans and boards as three groups", async (
   view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fSub: "", fRetired: false, fNoHome: false };
   render();
   const h = main.innerHTML;
-  assert(h.includes("Stack plans") && h.includes("Boards"), "group headers present");
+  /* Stack plans are no longer a rail group: a plan is a mold's file, reached
+     through the mold. Only ORPHANED plans still show, under their own header. */
+  assert(!h.includes("Stack plans"), "plans are reached through their mold, not listed beside it");
+  assert(h.includes("Boards"), "boards are still a group");
   assert(h.includes(DB.molds[0].id), "the auto-created mold is a rail row");
   // Boards are rail rows BY SIZE, not one per document: Simon, "we don't need
   // each of them being their own item as we really only care about xyz and
@@ -3284,11 +3287,67 @@ await t("embedded shop detail is opt-in; Materials and Items keep the bare shape
   assert(emb.includes("clearMoldsSelection") && emb.includes("mdnav"), "embedded swaps back for clear + prev/next");
 });
 
-await t("the mold detail carries its plan's artifacts; the 3D view stays on the plan", () => {
+await t("a mold owns its plan, and remembers the ones it replaced", async () => {
+  /* Before this, three places each re-derived "newest plan by ts" on their own
+     — three chances to disagree about which plan is live. The mold now points
+     at one, and re-planning pushes the old pointer onto planHistory rather than
+     deleting anything: somebody may already have cut from it, and the drawings
+     on the shop wall carry its id. */
+  seedStock(); DB.molds = []; DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 100] });
+  await submitMold();
+  const m = DB.molds[0], first = DB.stackplans[0];
+  assert(m.currentPlanId === first.id, "the new plan is the mold's current one");
+  assert(currentPlanFor(m).id === first.id, "and currentPlanFor agrees");
+
+  replanMold(m.id);
+  fillMold({ src: "box", box: [320, 210, 100] });
+  await submitMold();
+  assert(DB.molds.length === 1, "re-planning must not mint a second mold");
+  assert(DB.stackplans.length === 2, "and must not delete the old plan");
+  const second = DB.stackplans.find(p => p.id !== first.id);
+  assert(m.currentPlanId === second.id, "the new plan takes over");
+  assert((m.planHistory || []).some(h => h.id === first.id), "the old one is on the history");
+  assert(currentPlanFor(m).id === second.id, "and every reader sees the new one");
+
+  // The superseded plan still opens, and says so rather than looking current.
+  view = { ...view, tab: "molds", mode: "detail", id: first.id }; render();
+  assert(/Superseded/i.test(main.innerHTML), "an old plan must announce that it is not the one to cut from");
+});
+await t("currentPlanFor still works on data planned before the pointer existed", () => {
+  // Every SN5 mold. Falling back to newest-by-ts is what makes this land
+  // without a migration; do not remove it.
+  DB.molds = [{ id: "MOLD-legacy", name: "Old tool" }];
+  DB.stackplans = [
+    { id: "STK-1", moldId: "MOLD-legacy", name: "v1", ts: "2026-01-01T00:00:00Z", layers: [] },
+    { id: "STK-2", moldId: "MOLD-legacy", name: "v2", ts: "2026-06-01T00:00:00Z", layers: [] },
+  ];
+  assert(currentPlanFor(DB.molds[0]).id === "STK-2", "newest wins when no pointer is set");
+  assert(plansForMold(DB.molds[0]).map(p => p.id).join() === "STK-2,STK-1", "history is current-first");
+  // A pointer at a plan that has been deleted must not blank the mold.
+  DB.molds[0].currentPlanId = "STK-gone";
+  assert(currentPlanFor(DB.molds[0]).id === "STK-2", "a dangling pointer falls back rather than showing nothing");
+});
+await t("a mold can be recorded with no geometry at all", async () => {
+  // An SN5 mold being catalogued has no STL. One button, two paths.
+  DB.molds = []; DB.stackplans = [];
+  fillMold({ src: "none", name: "SN5 nosecone tool" });
+  await submitMold();
+  assert(DB.molds.length === 1 && DB.stackplans.length === 0, "a record, no plan: " + lastToast);
+  assert(DB.molds[0].name === "SN5 nosecone tool" && DB.molds[0].stage === "Designed", "named and staged");
+});
+
+await t("the mold detail carries its plan's artifacts; the 3D view stays on the plan", async () => {
+  // Seeds its own mold+plan rather than inheriting whatever ran before it.
+  seedStock(); DB.molds = []; DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 100] });
+  await submitMold();
   view = { ...view, tab: "molds", mode: "detail", id: DB.molds[0].id, edit: false };
   render();
   const h = main.innerHTML;
-  assert(h.includes("Stack plan"), "the linked plan section renders");
+  // "Mold file", not "Stack plan": the mold owns it, and one screen showing
+  // two things both called a plan was the confusion this replaced.
+  assert(h.includes("Mold file"), "the linked plan section renders");
   assert(h.includes("openDrawings") && h.includes("exportSectionStl"), "drawings and STL export inline");
   assert(!h.includes("mv-canvas"), "the WebGL viewer is not double-mounted here");
 });

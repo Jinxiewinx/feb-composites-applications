@@ -309,9 +309,7 @@ function lineageBar(coll, id) {
   else if (coll === "workOrders") { wo = rec; const r = partOf(rec); if (r) { part = r.part; viaPart = r.via; } }
   const pm = part ? partMold(part) : null;
   const mold = pm ? pm.mold : (wo ? recById("molds", wo.moldRef || (wo.mold && wo.mold.moldId)) : null);
-  const plan = part ? partPlan(part)
-    : (mold ? ((DB.stackplans || []).filter(s => s.moldId === mold.id)
-        .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")))[0] || null) : null);
+  const plan = part ? partPlan(part) : currentPlanFor(mold);
   const nRuns = part ? partRuns(part).length : 0;
 
   const node = (kind, label, onclick, opts) => {
@@ -857,14 +855,40 @@ function partMold(p) {
   }
   return null;
 }
-/* The newest stack plan for a part's mold — the "mold file" in Simon's words.
-   Newest wins, matching moldPlanSection()'s rule in molds.js. */
-function partPlan(p) {
-  const pm = partMold(p);
-  if (!pm) return null;
-  const plans = (DB.stackplans || []).filter(s => s.moldId === pm.mold.id)
+/* A mold's CURRENT plan — the "mold file" in Simon's words.
+
+   The mold owns its plan: `currentPlanId` says which one, and planHistory keeps
+   the ones it superseded. Before that, three places (lineageBar here,
+   partPlan below, moldPlanSection in molds.js) each re-derived "newest by ts"
+   independently, which is three chances to disagree about which plan is live.
+
+   The ts fallback stays for every mold planned before the pointer existed, and
+   for a plan adopted by an older record. Do not delete it: it is what makes
+   this work on the SN5 data without a migration. */
+function currentPlanFor(mold) {
+  if (!mold) return null;
+  const all = DB.stackplans || [];
+  if (mold.currentPlanId) {
+    const p = all.find(s => s.id === mold.currentPlanId);
+    if (p) return p;
+    // Pointer to a deleted plan: fall through rather than showing nothing.
+  }
+  const plans = all.filter(s => s.moldId === mold.id)
     .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
   return plans.length ? plans[0] : null;
+}
+/* Every plan a mold has ever had, current first. */
+function plansForMold(mold) {
+  if (!mold) return [];
+  const cur = currentPlanFor(mold);
+  const rest = (DB.stackplans || [])
+    .filter(s => s.moldId === mold.id && (!cur || s.id !== cur.id))
+    .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+  return cur ? [cur].concat(rest) : rest;
+}
+function partPlan(p) {
+  const pm = partMold(p);
+  return pm ? currentPlanFor(pm.mold) : null;
 }
 
 // Preserve the search caret across the full re-render each keystroke triggers.

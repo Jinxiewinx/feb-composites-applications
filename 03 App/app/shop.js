@@ -46,12 +46,11 @@ const SHOP = {
     tab: "molds", label: "Molds", icon: "layers", coll: "molds", cls: null, prefix: "MOLD",
     noun: "mold", nounPlural: "molds",
     stage: { key: "stage", vals: MOLD_STAGE },
-    list: ["name", "stage", "location", "uses", "board"],
+    list: ["name", "stage", "location", "uses"],
     f: [
       ["name", "Name", "text"],
       ["stage", "Stage", "select", MOLD_STAGE],
       ["location", "Home location", "rec:BIN"],
-      ["board", "Cut from board", "rec:stock"],
       ["wo", "Work order", "rec:workOrders"],
       ["density", "Board density (lb/ft³)", "select", ["30", "45", "60"]],
       ["layers", "Board layers", "text"],

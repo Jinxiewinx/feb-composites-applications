@@ -331,16 +331,23 @@ async function loadSampleMold(file) {
   }
 }
 
-function uploadMold() {
+/* One way in. Simon: "there should only be an option to make a mold." This is
+   the + Mold button, the Re-plan button, and nothing else. `existing` is set
+   when re-planning, which prefills the name and density and, on submit, points
+   that mold at the new plan instead of creating another one. */
+function uploadMold(existing) {
   const avail = stockThicknessesMm();
+  const e = existing || {};
+  const dens = Number(e.density) || 30;
   openModal(`
-    <h2>Plan a mold</h2>
-    <div class="field"><label>Name</label><input id="ml-name" placeholder="e.g. UT nose plug"></div>
-    <div class="field"><label>Board density (lb/ft³)</label><select id="ml-density">${DENSITIES.map(d => `<option ${d === 30 ? "selected" : ""}>${d}</option>`).join("")}</select>
+    <h2>${existing ? "Re-plan " + esc(e.name || e.id) : "New mold"}</h2>
+    <div class="field"><label>Name</label><input id="ml-name" value="${esc(e.name || "")}" placeholder="e.g. UT nose plug"></div>
+    <div class="field"><label>Board density (lb/ft³)</label><select id="ml-density">${DENSITIES.map(d => `<option ${d === dens ? "selected" : ""}>${d}</option>`).join("")}</select>
       <span class="muted tny">Cut lists pack blanks onto boards of this density.</span></div>
     <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
       <option value="box">dimensions (X &times; Y &times; Z)</option>
       <option value="stl">an STL file &mdash; beta</option>
+      ${existing ? "" : `<option value="none">nothing yet &mdash; just record the mold</option>`}
     </select></div>
     <div id="ml-box">
       <div class="field"><label>Length (X)</label><input id="ml-bl" placeholder="0"><select id="ml-bl-u">${UNITS.map(u => `<option ${u === "in" ? "selected" : ""}>${u}</option>`).join("")}</select></div>
@@ -377,10 +384,17 @@ function uploadMold() {
   `);
 }
 function moldSrcChanged() {
-  const stl = document.getElementById("ml-src").value === "stl";
+  const v = (document.getElementById("ml-src") || {}).value;
+  const stl = v === "stl", none = v === "none";
   const a = document.getElementById("ml-stl"), b = document.getElementById("ml-box");
   if (a) a.style.display = stl ? "" : "none";
-  if (b) b.style.display = stl ? "none" : "";
+  if (b) b.style.display = (stl || none) ? "none" : "";
+  // Nothing to slice means nothing to choose boards for.
+  for (const id of ["ml-mode", "ml-avail", "ml-manual"]) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = none ? "none" : (id === "ml-manual"
+      ? ((document.getElementById("ml-mode") || {}).value === "manual" ? "" : "none") : "");
+  }
 }
 function moldModeChanged() {
   const m = document.getElementById("ml-manual");
@@ -396,6 +410,22 @@ let MOLD_BODIES = null;
 async function submitMold() {
   const val = k => (document.getElementById(k) || {}).value || "";
   const name = String(val("ml-name")).trim();
+  /* "nothing yet" records the mold and stops. An SN5 mold being catalogued has
+     no STL, and reports.js's importer needs a mold to exist without geometry —
+     but as a branch here, not as a second button on the rail. */
+  if (val("ml-src") === "none") {
+    if (!name) { toast("Give the mold a name.", "error"); return; }
+    const id = await allocId("molds");
+    if (!id) return;
+    const m = { id, name, stage: "Designed", density: String(Number(val("ml-density")) || 30), createdBy: myEmail() };
+    (DB.molds = DB.molds || []).push(m);
+    save("molds", m);
+    closeModal();
+    view = { ...view, tab: "molds", mode: "detail", id };
+    render();
+    toast(`${name} recorded at “Designed”. Plan its stack whenever the CAD is ready.`);
+    return;
+  }
   const isBox = val("ml-src") !== "stl";
   const auto = val("ml-mode") !== "manual";
   const density = Number(val("ml-density")) || 30;
@@ -530,19 +560,31 @@ async function submitMold() {
        the pane offers "Create mold from this plan" later. */
     let moldId = "";
     try {
-      moldId = (await allocId("molds")) || "";
-      if (moldId) {
-        const m = {
-          id: moldId, name: plan.name, stage: "Designed",
-          density: String(density),
-          layers: (plan.thicknessesMm || []).length ? `${plan.thicknessesMm.length} layers` : "",
-          createdBy: myEmail(),
-        };
-        (DB.molds = DB.molds || []).push(m);
-        save("molds", m);
+      /* Re-planning an existing mold points it at the new plan and keeps the
+         old one on planHistory; otherwise a fresh mold is born here, at
+         "Designed", so the CS-003 §7.2 sign-off has a record to hang off. */
+      const existing = MOLD_REPLAN ? moldRecById(MOLD_REPLAN) : null;
+      if (existing) {
+        moldId = existing.id;
         plan.moldId = moldId;
+        setCurrentPlan(existing, plan.id);
+      } else {
+        moldId = (await allocId("molds")) || "";
+        if (moldId) {
+          const m = {
+            id: moldId, name: plan.name, stage: "Designed",
+            density: String(density),
+            layers: (plan.thicknessesMm || []).length ? `${plan.thicknessesMm.length} layers` : "",
+            createdBy: myEmail(),
+          };
+          (DB.molds = DB.molds || []).push(m);
+          save("molds", m);
+          plan.moldId = moldId;
+          setCurrentPlan(m, plan.id);
+        }
       }
     } catch (e) { moldId = ""; }
+    MOLD_REPLAN = "";
     (DB.stackplans = DB.stackplans || []).push(plan);
     save("stackplans", plan);
     closeModal();
