@@ -365,6 +365,7 @@ function renderWODetail() {
   <!-- Buying off a step is the bench action, and it sits below Overview, Mold,
        Layup stack and BOM — a long scroll on a phone with gloves on. Plain
        anchors, so no state and nothing to keep in sync. -->
+  ${lineageBar("workOrders", wo.id)}
   <nav class="jumpbar no-print" aria-label="Jump to section">
     <a href="#wo-overview">Overview</a><a href="#wo-stack">Stack</a><a href="#wo-bom">BOM</a>
     <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-docs">Docs</a><a href="#wo-files">Files</a><a href="#wo-log">Log</a>

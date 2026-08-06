@@ -292,6 +292,58 @@ function chip(coll, id, label) {
   const known = recById(coll, id);
   return `<button type="button" class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</button>`;
 }
+/* ---------- lineage: where a record sits in the chain ----------
+   Part > Run > Mold > Plan > Drawings, drawn identically on every record that
+   sits somewhere in it. Before this, a work order named its part in a muted
+   sentence and the Parts tab could not reach a mold or a drawing at ALL — the
+   chain existed in the data and nowhere on screen.
+
+   Nodes that don't exist yet are drawn as dashed ghosts rather than omitted,
+   because "this part has no mold linked" is exactly the thing worth seeing.
+   `cur` marks the record you are looking at. */
+function lineageBar(coll, id) {
+  const rec = recById(coll, id);
+  if (!rec) return "";
+  let part = null, wo = null, viaPart = null;
+  if (coll === "parts") { part = rec; wo = currentRun(rec); }
+  else if (coll === "workOrders") { wo = rec; const r = partOf(rec); if (r) { part = r.part; viaPart = r.via; } }
+  const pm = part ? partMold(part) : null;
+  const mold = pm ? pm.mold : (wo ? recById("molds", wo.moldRef || (wo.mold && wo.mold.moldId)) : null);
+  const plan = part ? partPlan(part)
+    : (mold ? ((DB.stackplans || []).filter(s => s.moldId === mold.id)
+        .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")))[0] || null) : null);
+  const nRuns = part ? partRuns(part).length : 0;
+
+  const node = (kind, label, onclick, opts) => {
+    opts = opts || {};
+    const cls = "ln-node" + (opts.cur ? " ln-cur" : "") + (opts.ghost ? " ln-ghost" : "");
+    const inner = `<span class="ln-kind">${esc(kind)}</span><span class="ln-id">${esc(label)}</span>${
+      opts.note ? `<span class="ln-note">${esc(opts.note)}</span>` : ""}`;
+    return onclick && !opts.cur
+      ? `<button type="button" class="${cls}" onclick="${onclick}">${inner}</button>`
+      : `<span class="${cls}"${opts.cur ? ' aria-current="true"' : ""}>${inner}</span>`;
+  };
+  const sep = '<span class="ln-sep" aria-hidden="true">›</span>';
+  const out = [];
+  out.push(part
+    ? node("Part", part.partName || part.id, `openRecord('parts','${esc(part.id)}')`,
+        { cur: coll === "parts", note: viaPart === "name" ? "by name" : "" })
+    : node("Part", "not linked", "", { ghost: true }));
+  out.push(wo
+    ? node(nRuns > 1 ? `Run 1 of ${nRuns}` : "Run", wo.id, `openRecord('workorders','${esc(wo.id)}')`,
+        { cur: coll === "workOrders" })
+    : node("Run", nRuns > 1 ? `${nRuns} runs` : "none yet", "", { ghost: true }));
+  out.push(mold
+    ? node("Mold", mold.name || mold.id, `openRecord('molds','${esc(mold.id)}')`,
+        { note: pm && pm.via === "wo" ? "via " + (pm.through ? pm.through.id : "a run") : "" })
+    : node("Mold", "not linked", "", { ghost: true }));
+  out.push(plan
+    ? node("Plan", plan.id, `openRecord('molds','${esc(plan.id)}')`)
+    : node("Plan", "none", "", { ghost: true }));
+  if (plan) out.push(node("Drawings", "open", `openDrawings('${esc(plan.id)}')`));
+  return `<nav class="lineage no-print" aria-label="Where this sits">${out.join(sep)}</nav>`;
+}
+
 /* ---------- where you came from ----------
    Records cross-link constantly: a ticket names its parts, a part names its
    work orders and tickets, a comment names another ticket. Following one of

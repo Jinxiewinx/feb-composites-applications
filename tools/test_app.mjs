@@ -875,7 +875,7 @@ await t("every SN5 record renders in both panes with no migration", () => {
   seed.forEach(p => assert(main.innerHTML.includes(`id="pi-${p.id}"`), p.id + " missing from the index"));
   seed.forEach(p => {
     openRecord("parts", p.id);
-    assert(main.innerHTML.includes("pt-progress") && main.innerHTML.includes("pt-links"), p.id + " detail failed to render");
+    assert(main.innerHTML.includes("pt-progress") && main.innerHTML.includes("pt-children"), p.id + " detail failed to render");
     assert(main.innerHTML.includes("ps-steps"), p.id + " stage stepper failed to render");
     view.edit = true; render();
     assert(main.innerHTML.includes("pgrid"), p.id + " edit mode failed to render");
@@ -2311,6 +2311,69 @@ await t("a part reaches the newest stack plan for its mold", () => {
     { id: "STK-2", moldId: "MOLD-2", ts: "2026-05-01T00:00:00Z" },
   ];
   assert(partPlan(DB.parts[0]).id === "STK-2", "newest plan wins, matching moldPlanSection");
+});
+
+console.log("lineage and the part's children:");
+await t("the lineage bar draws the whole chain, and ghosts what is missing", () => {
+  DB.parts = [{ id: "P-A0", partName: "DIFFUSER", mold: "MOLD-A" }];
+  DB.workOrders = [{ id: "WO-A0", partId: "P-A0" }];
+  DB.molds = [{ id: "MOLD-A", name: "Diffuser tool" }];
+  DB.stackplans = [{ id: "STK-A", moldId: "MOLD-A", ts: "2026-01-01T00:00:00Z" }];
+  const bar = lineageBar("workOrders", "WO-A0");
+  ["Part", "Run", "Mold", "Plan", "Drawings"].forEach(k => assert(bar.includes(">" + k + "<"), k + " node present"));
+  assert(bar.includes("ln-cur"), "the record you are on is marked");
+  assert(bar.includes("openDrawings('STK-A')"), "drawings reachable from a work order");
+  DB.molds = []; DB.stackplans = [];
+  const bare = lineageBar("parts", "P-A0");
+  assert(bare.includes("ln-ghost"), "a missing mold is shown as a ghost, not hidden");
+});
+await t("a part can reach its drawings — the thing it could never do before", () => {
+  DB.parts = [{ id: "P-A1", partName: "TRAY" }];
+  DB.workOrders = [{ id: "WO-A1", partId: "P-A1", moldRef: "MOLD-B" }];
+  DB.molds = [{ id: "MOLD-B", name: "Tray tool" }];
+  DB.stackplans = [{ id: "STK-B", moldId: "MOLD-B", ts: "2026-02-02T00:00:00Z" }];
+  openRecord("parts", "P-A1");
+  assert(main.innerHTML.includes("openDrawings('STK-B')"), "a Drawings button on the part detail");
+  assert(main.innerHTML.includes("Tray tool"), "and the mold it derived");
+});
+await t("a name-matched run offers to become a real link, and does", () => {
+  DB.parts = [{ id: "P-A2", partName: "STRUT" }];
+  DB.workOrders = [{ id: "WO-A2", partName: "STRUT" }];
+  DB.molds = []; DB.stackplans = [];
+  openRecord("parts", "P-A2");
+  assert(main.innerHTML.includes("matched by name"), "the guess is labelled as one");
+  assert(main.innerHTML.includes("confirmRunLink('P-A2','WO-A2')"), "with a one-click promotion");
+  confirmRunLink("P-A2", "WO-A2");
+  assert(recById("workOrders", "WO-A2").partId === "P-A2", "the edge is committed");
+  assert(partRuns(recById("parts", "P-A2"))[0].via === "id", "and now reads as a real link");
+});
+await t("a new run starts from the part, carrying its plan", async () => {
+  DB.parts = [{ id: "P-A3", partName: "TRAY", layupType: "MOLD WET LAY", weightG: "420",
+    layupStack: [{ uid: "u1", material: "195 twill", orientation: "0/90", coverage: "full", notes: "" }] }];
+  DB.workOrders = []; DB.molds = []; DB.stackplans = [];
+  await newRunForPart("P-A3");
+  const w = DB.workOrders[0];
+  assert(!!w, "a run was created");
+  assert(w.partId === "P-A3", "it names its parent");
+  assert(w.processType === "MoldWetLay", "the part's layup type picked the step template");
+  assert(w.layupStack.length === 1 && w.stackSource === "spec", "it starts from the part's plan, faithfully");
+  assert(recById("parts", "P-A3").workOrderId === w.id, "and becomes the current run");
+});
+await t("a part and its mold record disagreeing about stage is pointed at", () => {
+  DB.parts = [{ id: "P-A4", partName: "TRAY", mold: "MOLD-C", moldProgress: "Sealed" }];
+  DB.workOrders = []; DB.stackplans = [];
+  DB.molds = [{ id: "MOLD-C", name: "Tray tool", stage: "Board glued" }];
+  openRecord("parts", "P-A4");
+  assert(main.innerHTML.includes("out of date"), "the mismatch is called out");
+  DB.molds = [{ id: "MOLD-C", name: "Tray tool", stage: "Sealed" }];
+  render();
+  assert(!main.innerHTML.includes("out of date"), "and stays quiet when they agree");
+});
+await t("the drawing title block names the part and the run", () => {
+  const html = drawingSetHtml({ id: "STK-C", name: "Tray tool", layers: [{ blanks: [], islands: [] }] },
+    { partName: "TRAY", woId: "WO-A9" });
+  assert(html.includes(">Part<") && html.includes("TRAY"), "part on the sheet");
+  assert(html.includes("Work order") && html.includes("WO-A9"), "and the run that asked for it");
 });
 
 await t("@mention exact-token: @Nicole does NOT match Nico", () => {

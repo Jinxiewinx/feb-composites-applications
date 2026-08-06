@@ -435,9 +435,14 @@ tr.blk td.seq {
 /* Bottom of every sheet, because a sheet separated from the set has to be able
    to say which mold, which plan, which sheet and at what scale. margin-top:auto
    floats it to the foot of the page rather than leaving it under the drawing. */
+/* Four content columns, not three: the block carries eight cells (mold, plan,
+   part, work order / sheet, title, scale, planned) and they have to fill
+   exactly TWO rows. The brand spans two rows, so a ninth cell would start a
+   third row underneath it — which grows the block, shrinks the drawing area
+   above it and crowds the layer labels. If you add a field here, remove one. */
 .dwg-tb {
   margin-top: auto; display: grid;
-  grid-template-columns: 0.62in repeat(3, 1fr);
+  grid-template-columns: 0.62in repeat(4, 1fr);
   border-top: 1.75pt solid #000; border-left: 0.75pt solid #000;
 }
 .dwg-tb .tb-brand {

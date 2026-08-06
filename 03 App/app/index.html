@@ -1040,6 +1040,28 @@
   .meshview-note { margin-top: 6px; }
   @media (max-width: 640px) { .meshview canvas { height: 260px; } }
 
+  /* ---- lineage bar ----
+     Part › Run › Mold › Plan › Drawings, on every record in the chain. Chip
+     grammar so it reads as navigation rather than as data; ghosts are dashed
+     because a missing mold link is worth seeing, not worth hiding. Scrolls
+     sideways on a phone instead of wrapping into an unreadable stack. */
+  .lineage { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+    overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin; }
+  .lineage .ln-node { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap;
+    padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--fill); color: var(--ink); font: inherit; font-size: 12px; }
+  .lineage button.ln-node { cursor: pointer; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .lineage button.ln-node:hover { background: var(--hover); border-color: var(--border-2); }
+  .lineage .ln-kind { font-size: 10px; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--muted); }
+  .lineage .ln-id { font-weight: 600; }
+  .lineage .ln-note { font-size: 11px; color: var(--muted); }
+  .lineage .ln-cur { background: var(--accent-soft); border-color: var(--accent); }
+  .lineage .ln-cur .ln-kind { color: var(--accent); }
+  .lineage .ln-ghost { background: transparent; border-style: dashed; color: var(--muted); }
+  .lineage .ln-ghost .ln-id { font-weight: 400; font-style: italic; }
+  .lineage .ln-sep { color: var(--faint); padding: 0 1px; }
+
   /* ---- layup stack ----
      Was a run of full-width coloured bars with all four fields crammed into
      one middle-dot string — the only sub-collection in the app that wasn't a
@@ -1235,6 +1257,9 @@
   .undobar .ub-t { flex: 1; min-width: 0; }
   .pgrid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
   .linkgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+  /* The children section stacks several blocks (runs, mold, then this grid);
+     without a rule they butt straight into one another. */
+  .pengrow + .linkgrid { margin-top: 12px; }
   .lg-label { text-transform: uppercase; letter-spacing: .04em; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
   .pengrow { margin-top: 12px; }
   .engchip { padding: 2px 9px 2px 3px; }

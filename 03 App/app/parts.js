@@ -646,6 +646,16 @@ function pfld(p, label, key, opts, type) {
       `<option value="${esc(w.id)}" ${w.id === v ? "selected" : ""}>${esc(w.id)} — ${esc(w.partName || "")}</option>`).join("")}
     ${v && !recById("workOrders", v) ? `<option value="${esc(v)}" selected>${esc(v)} (not found)</option>` : ""}
   </select></div>`;
+  /* The part->mold edge. shop.js's moldUses() and labels.js have BOTH read
+     p.mold since they were written; nothing ever wrote it, so the reverse join
+     on the mold ("used by") and the mold line on the QR label were dead. This
+     picker is the whole fix. */
+  if (type === "mold") return `<div class="f"><label>${label}</label><select onchange="updPart('${key}',this.value)">
+    <option value="" ${v ? "" : "selected"}>— no mold —</option>
+    ${(DB.molds || []).slice().sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id))).map(m =>
+      `<option value="${esc(m.id)}" ${m.id === v ? "selected" : ""}>${esc(m.name || m.id)}${m.stage ? " — " + esc(m.stage) : ""}</option>`).join("")}
+    ${v && !recById("molds", v) ? `<option value="${esc(v)}" selected>${esc(v)} (not found)</option>` : ""}
+  </select></div>`;
   return `<div class="f"><label>${label}</label><input ${type ? `type="${type}"` : ""} value="${esc(v)}" onchange="updPart('${key}',this.value)"></div>`;
 }
 
@@ -699,6 +709,72 @@ function partStageRow(p, st) {
    plain work orders and don't care about provenance. */
 function partWorkOrders(p) { return partRuns(p).map(r => r.wo); }
 function partTickets(p) { return (DB.projects || []).filter(t => (t.relatedParts || []).includes(p.id)); }
+
+/* Promote a guess to a real edge. A name match is how nearly every SN5 record
+   is joined (0 of 33 carry an id), and it silently stops working the day
+   somebody renames a part or adds a second one with the same name. One click,
+   on the record where you can see both sides, is a better migration than a
+   lead-only bulk tool nobody runs. */
+function confirmRunLink(partId, woId) {
+  const p = partById(partId), w = recById("workOrders", woId);
+  if (!p || !w) return;
+  w.partId = p.id; save("workOrders", w, "partId");
+  if (!w.partName && p.partName) { w.partName = p.partName; save("workOrders", w, "partName"); }
+  if (!p.workOrderId) { p.workOrderId = w.id; savePart(p, "workOrderId"); }
+  toast(`${w.id} is now linked to ${p.partName || p.id}.`);
+  render();
+}
+function confirmMoldLink(partId, moldId) {
+  const p = partById(partId);
+  if (!p || !recById("molds", moldId)) return;
+  p.mold = moldId; savePart(p, "mold");
+  toast("Mold linked to this part.");
+  render();
+}
+/* A remake is a second run, not a rewritten first one. Prefilled with the
+   part's identity and its layup plan, so the new traveler starts where the
+   part says it should. */
+async function newRunForPart(partId) {
+  const p = partById(partId);
+  if (!p) return;
+  const id = await allocId("workOrders");
+  if (!id) return;
+  const proc = { "MOLD INFUSION": "MoldInfusion", "GLASS INFUSION": "GlassInfusion",
+    "MOLD WET LAY": "MoldWetLay", "FOAM WRAPPED": "FoamWrapped" }[p.layupType] || "MoldInfusion";
+  const wo = {
+    id, partName: p.partName || "", subteam: p.subteam || "AERO", revision: "A", status: "Draft",
+    processType: proc, moldEngineer: p.moldEngineer || "", manufacturingEngineer: p.manufacturingEngineer || "",
+    createdDate: today(), dueDate: p.layupDeadline || "", partId: p.id,
+    mold: { moldId: p.mold || "", layers: "", density: "", sealingType: "XCR", location: p.moldLocation || "" },
+    layupStack: JSON.parse(JSON.stringify(p.layupStack || [])), stackSource: "spec",
+    stackNote: "", bom: [], standardsRefs: [],
+    steps: (STD_STEPS[proc] || STD_STEPS.Other).map(stepFromTemplate),
+    qualityChecks: [{ criterion: "mass", target: p.weightG || "", actual: "", pass: null }],
+    weightTargetG: p.weightG || null, weightActualG: null, timeline: [], notes: "", retro: false,
+    createdBy: myEmail(),
+  };
+  DB.workOrders.push(wo); save("workOrders", wo);
+  // The newest run becomes the one the part is on.
+  p.workOrderId = id; savePart(p, "workOrderId");
+  toast(`${id} started from ${p.partName || p.id}.`);
+  openRecord("workorders", id);
+}
+/* The part's moldProgress and the mold record's stage are two different enums
+   for the same physical progression, written by different people at different
+   times. They are deliberately NOT synced — merging them is a bigger decision
+   than this change — but a disagreement is worth pointing at. */
+const MOLD_STAGE_AGREE = {
+  "Not Started": ["Designed"],
+  "Machining": ["Board glued"],
+  "Machine Complete": ["Machined"],
+  "Sealed": ["Sealed"],
+  "Ready For Layup": ["Ready for layup", "Retired"],
+};
+function moldStagesAgree(partStage, moldStage) {
+  if (stageIsNA(partStage)) return true;
+  const ok = MOLD_STAGE_AGREE[partStage];
+  return !ok || ok.includes(moldStage);
+}
 function partScheduleWeeks(p) {
   return (DB.schedule || []).filter(w => Object.keys(w).some(k => k !== "id" && w[k] === p.id));
 }
@@ -735,7 +811,8 @@ function renderPartDetail() {
   const linkedWO = linkedCounterpart("parts", p);
   const dd = daysUntil(p.layupDeadline);
   const late = partLate(p);
-  const wos = partWorkOrders(p);
+  const runs = partRuns(p);
+  const wos = runs.map(r => r.wo);
   const tickets = partTickets(p);
   const weeks = partScheduleWeeks(p);
   const engs = partEngineers(p);
@@ -752,9 +829,10 @@ function renderPartDetail() {
         <button class="sm" title="Next part (↓)" onclick="movePartSelection(1)">${icon("chevronRight", 14)}</button>
       </span>
     </div>
+    ${lineageBar("parts", p.id)}
     <nav class="jumpbar no-print" aria-label="Jump to section">
       <a href="#pt-progress"><b>Progress</b></a><a href="#pt-details">Details</a><a href="#pt-stack">Stack</a>
-      <a href="#pt-links">Links</a><a href="#pt-notes">Notes</a>
+      <a href="#pt-children">Children</a><a href="#pt-notes">Notes</a>
     </nav>
     ${/* Finding 5: the season used to vanish the moment a part was opened, so a
           lead had to press Esc to see it and Enter to get back. Pinned. */""}
@@ -780,8 +858,16 @@ function renderPartDetail() {
           // name. Say so, rather than printing "—" next to a header that clearly
           // shows a work order.
           !E && !p.workOrderId && linkedWO
-            ? `<div class="f"><label>Linked work order</label><div class="ro">${chip("workOrders", linkedWO.id, linkedWO.id)} <span class="muted tny">matched by name</span></div></div>`
-            : pfld(p, "Linked work order", "workOrderId", null, "wo")}
+            ? `<div class="f"><label>Current run</label><div class="ro">${chip("workOrders", linkedWO.id, linkedWO.id)} <span class="muted tny">matched by name</span></div></div>`
+            : pfld(p, "Current run", "workOrderId", null, "wo")}
+        ${/* The mold this part is pulled off. Derived through the runs until
+              somebody commits it, so an SN5 record shows the right answer
+              before anyone has touched it. */""}
+        ${!E && !p.mold && partMold(p)
+          ? (() => { const pm = partMold(p); return `<div class="f"><label>Mold</label><div class="ro">
+              <span class="chip" onclick="openRecord('molds','${esc(pm.mold.id)}')">${esc(pm.mold.name || pm.mold.id)}</span>
+              <span class="muted tny">via ${esc(pm.through ? pm.through.id : "a run")}</span></div></div>`; })()
+          : pfld(p, "Mold", "mold", null, "mold")}
         ${pfld(p, "Mold Engineer", "moldEngineer")}${pfld(p, "Manufacturing Engineer", "manufacturingEngineer")}${pfld(p, "Layup schedule (text note)", "layupSchedule")}
         ${pfld(p, "Target weight (g)", "weightG")}${pfld(p, "Actual weight (g)", "weightActualG")}
         ${(() => {
@@ -802,6 +888,19 @@ function renderPartDetail() {
         // editing the plan never feels like it silently rewrote history.
         const diverged = wos.filter(w => w.stackSource === "asbuilt" && stackDrift(p, w).n > 0);
         const frozen = wos.filter(w => stackFrozen(w) && !diverged.includes(w));
+        /* Every SN5 part has an empty stack and every SN5 work order has a full
+           one — the tracker recorded the layup against the job, not the part.
+           Showing "no plies recorded" on all 33 of them would be true and
+           useless, so the run's stack stands in as the plan, clearly labelled
+           as borrowed, with one click to make it the part's own. */
+        const borrow = !(p.layupStack || []).length && wos.find(w => (w.layupStack || []).length);
+        if (borrow) {
+          return `<h3 id="pt-stack">Layup stack <span class="muted" style="text-transform:none">— as laid on ${esc(borrow.id)}</span></h3>
+          <div class="stack-diff no-print">${icon("warning", 14)}
+            <span>This part has no plan of its own. Showing what ${esc(borrow.id)} actually laid.</span>
+            ${E ? `<button class="link" onclick="adoptStackAsSpec('${esc(borrow.id)}')">Adopt as the plan</button>` : ""}</div>
+          ${plyTable(null, borrow, { edit: false })}`;
+        }
         return `<h3 id="pt-stack">Layup stack <span class="muted" style="text-transform:none">— the plan${
           wos.length ? `, followed by ${wos.length - diverged.length - frozen.length} of ${wos.length} run${wos.length === 1 ? "" : "s"}` : ""}</span></h3>
         ${diverged.length ? `<div class="stack-diff no-print">${icon("warning", 14)}
@@ -811,10 +910,61 @@ function renderPartDetail() {
         ${plyTable("parts", p, { edit: E })}`;
       })()}
 
-      <h3 id="pt-links">Linked${wos.length + tickets.length + weeks.length ? ` <span class="muted" style="text-transform:none">— ${wos.length + tickets.length + weeks.length}</span>` : ""}</h3>
+      ${/* The part is the parent record, so its children get the app's
+            sub-collection grammar (table.sub) rather than a flat row of chips
+            that said nothing about status, provenance or what to do next.
+            Runs first: they are what the part is waiting on. */""}
+      <h3 id="pt-children">Children${runs.length + tickets.length + weeks.length ? ` <span class="muted" style="text-transform:none">— ${runs.length} run${runs.length === 1 ? "" : "s"}${
+        tickets.length ? `, ${tickets.length} ticket${tickets.length === 1 ? "" : "s"}` : ""}</span>` : ""}</h3>
+
+      <div class="lg-label tny">Work orders <span class="muted" style="text-transform:none">— each one is a run at making this part</span></div>
+      ${runs.length ? `<table class="sub">
+        <thead><tr><th>Run</th><th>Status</th><th>Due</th><th>Stack</th><th>Linked</th></tr></thead>
+        <tbody>${runs.map(r => {
+          const w = r.wo, d = stackDrift(p, w);
+          const diverged = w.stackSource === "asbuilt" && d.n > 0;
+          return `<tr>
+            <td>${chip("workOrders", w.id, w.id)}${w.id === p.workOrderId ? ' <span class="pill now">current</span>' : ""}</td>
+            <td>${w.status ? `<span class="pill ${esc(w.status)}">${esc(w.status)}</span>` : '<span class="muted">—</span>'}</td>
+            <td>${esc(w.dueDate || "") || '<span class="muted">—</span>'}</td>
+            <td>${(w.layupStack || []).length
+              ? `${(w.layupStack || []).length} ${(w.layupStack || []).length === 1 ? "ply" : "plies"}${
+                  diverged ? ` <span class="warn tny">· ${d.n} differ${d.n === 1 ? "s" : ""}</span>` : ""}${
+                  stackFrozen(w) ? ' <span class="muted tny">· frozen</span>' : ""}`
+              : '<span class="muted">—</span>'}</td>
+            <td>${r.via === "id"
+              ? '<span class="muted tny">linked</span>'
+              : `<span class="muted tny">matched by ${r.via === "name" ? "name" : "the old single link"}</span>
+                 <button class="sm no-print" onclick="confirmRunLink('${esc(p.id)}','${esc(w.id)}')">Confirm</button>`}</td>
+          </tr>`;
+        }).join("")}</tbody></table>`
+        : '<div class="muted tny">No runs yet — nothing has been made from this part.</div>'}
+      <div class="no-print" style="margin-top:6px"><button class="sm" onclick="newRunForPart('${esc(p.id)}')">+ New run</button></div>
+
+      ${/* The mold file: the part could not reach any of this before. */""}
+      <div class="pengrow">
+        <div class="lg-label tny">Mold and stack plan</div>
+        ${(() => {
+          const pm = partMold(p);
+          if (!pm) return `<span class="muted tny">No mold linked${E ? " — set one under Details." : "."}</span>`;
+          const m = pm.mold, plan = partPlan(p);
+          const stageMismatch = m.stage && p.moldProgress && !moldStagesAgree(p.moldProgress, m.stage);
+          return `<div class="linkrow">
+              <span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>
+              ${m.stage ? `<span class="pill">${esc(m.stage)}</span>` : ""}
+              ${pm.via === "wo" ? `<span class="muted tny">matched via ${esc(pm.through ? pm.through.id : "a run")}</span>
+                <button class="sm no-print" onclick="confirmMoldLink('${esc(p.id)}','${esc(m.id)}')">Confirm</button>` : ""}
+            </div>
+            ${stageMismatch ? `<div class="tny warn" style="margin-top:4px">This part says “${esc(p.moldProgress)}” but the mold record says “${esc(m.stage)}”. One of them is out of date.</div>` : ""}
+            ${plan ? `<div class="toolbar no-print" style="margin-top:6px">
+              <button class="ib sm" onclick="openRecord('molds','${esc(plan.id)}')">${icon("parts", 14)} Open plan &amp; 3D view</button>
+              <button class="ib sm" onclick="openDrawings('${esc(plan.id)}')">${icon("print", 14)} Drawings</button>
+              <span class="tny muted">${esc(plan.id)} · ${(plan.layers || []).length} layers</span>
+            </div>` : '<div class="muted tny" style="margin-top:4px">No stack plan on this mold yet.</div>'}`;
+        })()}
+      </div>
+
       <div class="linkgrid">
-        <div><div class="lg-label tny">Work orders</div><div class="linkrow">${
-          wos.map(w => chip("workOrders", w.id, w.id + (w.status ? " · " + w.status : ""))).join("") || '<span class="muted tny">none</span>'}</div></div>
         <div><div class="lg-label tny">Tickets</div><div class="linkrow">${
           tickets.map(t => chip("projects", t.id, t.title || t.id)).join("") || '<span class="muted tny">none</span>'}</div></div>
         <div><div class="lg-label tny">Scheduled weeks</div><div class="linkrow">${

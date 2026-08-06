@@ -1468,10 +1468,20 @@ function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
     ${body}
     <div class="dwg-tb">
       <div class="tb-brand">FEB<span>SN6</span></div>
-      <div class="tb-c wide"><span class="lab">Mold</span><span class="val">${esc(plan.name || "—")}</span></div>
-      <div class="tb-c"><span class="lab">Plan</span><span class="val">${esc(plan.id || "—")}</span></div>
+      ${/* Row 1 — what this sheet is about. The Part and Work order cells are
+            what this whole tool is FOR: a mold drawing with no part number is
+            an orphan the moment it leaves the screen, and the sheet that
+            reaches the ShopSabre has to say which part it makes and which run
+            asked for it. Both are resolved by the caller (openDrawings) and
+            passed through opts, so this file stays pure and testable under
+            node. Eight cells, two rows — see the grid note in print.css. */""}
+      <div class="tb-c"><span class="lab">Mold</span><span class="val sm">${esc(plan.name || "—")}</span></div>
+      <div class="tb-c"><span class="lab">Plan</span><span class="val sm">${esc(plan.id || "—")}</span></div>
+      <div class="tb-c"><span class="lab">Part</span><span class="val sm">${esc(ctx.partName || "—")}</span></div>
+      <div class="tb-c"><span class="lab">Work order</span><span class="val sm">${esc(ctx.woId || "—")}</span></div>
+      ${/* Row 2 — what this sheet IS. */""}
       <div class="tb-c"><span class="lab">Sheet</span><span class="val">${sheetNo} / ${ctx.sheets}</span></div>
-      <div class="tb-c wide"><span class="lab">Sheet title</span><span class="val sm">${title}</span></div>
+      <div class="tb-c"><span class="lab">Sheet title</span><span class="val sm">${title}</span></div>
       <div class="tb-c"><span class="lab">Scale</span><span class="val">${esc(scaleTxt)}</span></div>
       <div class="tb-c"><span class="lab">Planned</span><span class="val sm">${esc(plan.by || "—")}<br>${esc(String(plan.ts || "").slice(0, 10))}</span></div>
       <div class="tb-note">
@@ -1508,6 +1518,8 @@ function drawingSetHtml(plan, opts) {
     printed: today(),
     moldNote: moldSourceNote(art),
     meshNote: opts.meshNote || "",
+    partName: opts.partName || "",
+    woId: opts.woId || "",
   };
   return `<div class="dwg">
     ${sheetIso(plan, ctx)}
@@ -1530,7 +1542,19 @@ async function openDrawings(planId) {
       tris = await mvLoadMesh(plan.meshUrl);
     } catch (e) { meshNote = e.message; }
   }
-  const html = drawingSetHtml(plan, { tris, meshNote });
+  // Walk back up the chain the sheet is about: plan -> mold -> the part it
+  // makes, and that part's current run. Guarded because drawings.js loads after
+  // parts.js and a plan may have no mold linked at all.
+  let partName = "", woId = "";
+  if (plan.moldId && typeof partMold === "function") {
+    const part = (DB.parts || []).find(p => { const pm = partMold(p); return pm && pm.mold.id === plan.moldId; });
+    if (part) {
+      partName = part.partName || part.id;
+      const run = currentRun(part);
+      if (run) woId = run.id;
+    }
+  }
+  const html = drawingSetHtml(plan, { tris, meshNote, partName, woId });
   const n = 2 + dwgLayers(plan).length;
   mountSheet(html, true, `US Letter · ${n} sheets · this is exactly what prints`, `${plan.name || plan.id} drawings`);
   document.body.classList.add("previewing");
