@@ -565,10 +565,15 @@ async function runMoldImport() {
  * missing ids, it is missing EDGES, and this is twenty lines that turn two
  * disconnected lists into a graph.
  *
- * Only unambiguous 1:1 name matches are linked. Two parts with the same name
- * resolve to nothing, deliberately: a wrong edge is worse than no edge, and
- * duplicate part names are a real FEB pattern (linkedCounterpart() in core.js
- * already refuses the same case for the same reason).
+ * The ambiguity that matters is DUPLICATE PART NAMES: two parts called STRUT
+ * and one work order, and there is no way to know whose run it was. That case
+ * is still refused — a wrong edge is worse than no edge, and duplicate part
+ * names are a real FEB pattern (partOf() in core.js refuses it too).
+ *
+ * One part matching SEVERAL work orders is NOT ambiguous any more, and used to
+ * be thrown away. Under a one-to-many model that is just a part with several
+ * runs — a remake after a failed infusion is the ordinary case. All of them get
+ * linked and the newest becomes the current run.
  */
 async function backfillPartWorkOrderLinks() {
   if (!isLead()) return;
@@ -578,26 +583,45 @@ async function backfillPartWorkOrderLinks() {
     if (!k) continue;
     (byName[k] = byName[k] || []).push(w);
   }
-  const todo = [];
+  // A name is only safe to match on if exactly one PART answers to it.
+  const partsByName = {};
   for (const p of DB.parts || []) {
-    if (p.workOrderId) continue;
     const k = String(p.partName || "").trim().toUpperCase();
-    const hits = byName[k] || [];
-    if (hits.length === 1) todo.push([p, hits[0]]);
+    if (!k) continue;
+    (partsByName[k] = partsByName[k] || []).push(p);
   }
-  if (!todo.length) { toast("Every part that can be matched already is."); return; }
+  const todo = [];
+  let refused = 0, extraRuns = 0;
+  for (const p of DB.parts || []) {
+    const k = String(p.partName || "").trim().toUpperCase();
+    const hits = (byName[k] || []).filter(w => !w.partId);
+    if (!hits.length) continue;
+    if ((partsByName[k] || []).length > 1) { refused += hits.length; continue; }
+    // Newest first, so the pointer lands on the current run.
+    hits.sort((a, b) => String(b.createdDate || "").localeCompare(String(a.createdDate || "")) ||
+      String(b.id).localeCompare(String(a.id)));
+    todo.push([p, hits]);
+    if (hits.length > 1) extraRuns += hits.length - 1;
+  }
+  if (!todo.length) {
+    toast(refused ? `Nothing safe to link — ${refused} work order${refused === 1 ? "" : "s"} match a duplicated part name.`
+      : "Every part that can be matched already is.");
+    return;
+  }
 
+  const nWo = todo.reduce((n, [, hits]) => n + hits.length, 0);
   const ok = await confirmAsync(
-    `Link ${todo.length} part${todo.length === 1 ? "" : "s"} to the work order with the same name?\n\n` +
-    `Only exact one-to-one name matches are linked. Parts whose name matches two work orders, ` +
-    `or none, are left alone — a wrong link is worse than no link.`,
+    `Link ${nWo} work order${nWo === 1 ? "" : "s"} to ${todo.length} part${todo.length === 1 ? "" : "s"} with the same name?\n\n` +
+    (extraRuns ? `${extraRuns} of them are extra runs on a part that already has one — a remake is a second run, so they all get linked and the newest becomes current.\n\n` : "") +
+    (refused ? `${refused} work order${refused === 1 ? " is" : "s are"} left alone because two or more parts share that name — a wrong link is worse than no link.\n\n` : "") +
+    `Nothing is overwritten: work orders that already name a part are skipped.`,
     { ok: "Link them", danger: false });
   if (!ok) return;
 
-  for (const [p, w] of todo) {
-    p.workOrderId = w.id; save("parts", p, "workOrderId");
-    if (!w.partId) { w.partId = p.id; save("workOrders", w, "partId"); }
+  for (const [p, hits] of todo) {
+    for (const w of hits) { w.partId = p.id; save("workOrders", w, "partId"); }
+    if (!p.workOrderId) { p.workOrderId = hits[0].id; save("parts", p, "workOrderId"); }
   }
-  toast(`${todo.length} part${todo.length === 1 ? "" : "s"} linked to their work orders.`);
+  toast(`${nWo} work order${nWo === 1 ? "" : "s"} linked across ${todo.length} part${todo.length === 1 ? "" : "s"}.`);
   render();
 }

@@ -2129,6 +2129,75 @@ await t("mirror is skipped when the link is ambiguous", () => {
   assert(recById("parts", "P-2").layupStack.length === 1, "part still edited");
   assert(!calls.some(c => c[1] === "workOrders"), "no WO mirrored when name is ambiguous: " + JSON.stringify(calls));
 });
+/* ---------- part is the parent, work orders are its runs ----------
+   The two mirror tests above are deliberately left exactly as they were: they
+   are the back-compat proof that redefining linkedCounterpart from a symmetric
+   1:1 lookup into part->current-run / run->part changed no existing behaviour. */
+console.log("parts and their runs:");
+await t("a part carries many runs, and each one knows how it was matched", () => {
+  DB.parts = [{ id: "P-10", partName: "DIFFUSER", workOrderId: "WO-11" }];
+  DB.workOrders = [
+    { id: "WO-11", partName: "DIFFUSER", partId: "P-10", createdDate: "2026-01-02" },
+    { id: "WO-12", partName: "DIFFUSER", partId: "P-10", createdDate: "2026-03-04" },
+    { id: "WO-13", partName: "DIFFUSER", createdDate: "2026-02-02" },
+  ];
+  const runs = partRuns(DB.parts[0]);
+  assert(runs.length === 3, "all three runs found: " + runs.length);
+  assert(runs[0].wo.id === "WO-11", "the pointed-at run sorts first: " + runs[0].wo.id);
+  assert(runs.find(r => r.wo.id === "WO-12").via === "id", "explicit partId reads as an id edge");
+  assert(runs.find(r => r.wo.id === "WO-13").via === "name", "the id-less WO is a name match");
+});
+await t("a run committed to another part is never claimed by name", () => {
+  DB.parts = [{ id: "P-20", partName: "STRUT" }, { id: "P-21", partName: "STRUT" }];
+  DB.workOrders = [{ id: "WO-20", partName: "STRUT", partId: "P-21" }];
+  assert(partRuns(DB.parts[0]).length === 0, "P-20 must not borrow P-21's run");
+  assert(partRuns(DB.parts[1]).length === 1, "P-21 keeps it");
+});
+await t("a run resolves its parent even when the part points at a different run", () => {
+  // The old symmetric lookup refused this: it required the counterpart to point
+  // back. Many-to-one has no ambiguity, so a remake resolves its parent fine.
+  DB.parts = [{ id: "P-30", partName: "WING", workOrderId: "WO-30" }];
+  DB.workOrders = [{ id: "WO-30", partId: "P-30" }, { id: "WO-31", partId: "P-30" }];
+  const r = partOf(recById("workOrders", "WO-31"));
+  assert(r && r.part.id === "P-30", "the second run still knows its part");
+  assert(linkedCounterpart("workOrders", recById("workOrders", "WO-31")).id === "P-30", "and so does linkedCounterpart");
+});
+await t("duplicate PART names still refuse to resolve a parent", () => {
+  DB.parts = [{ id: "P-40", partName: "STRUT" }, { id: "P-41", partName: "STRUT" }];
+  DB.workOrders = [{ id: "WO-40", partName: "STRUT" }];
+  assert(partOf(DB.workOrders[0]) === null, "ambiguous name gives no parent");
+});
+await t("currentRun points at the live run, and admits when it can't tell", () => {
+  DB.parts = [{ id: "P-50", partName: "PANEL", workOrderId: "WO-51" }];
+  DB.workOrders = [{ id: "WO-50", partId: "P-50" }, { id: "WO-51", partId: "P-50" }];
+  assert(currentRun(DB.parts[0]).id === "WO-51", "follows the pointer");
+  delete DB.parts[0].workOrderId;
+  assert(currentRun(DB.parts[0]) === null, "two runs and no pointer is ambiguous, not a guess");
+  DB.workOrders = [{ id: "WO-50", partId: "P-50" }];
+  assert(currentRun(DB.parts[0]).id === "WO-50", "a sole run needs no pointer");
+});
+await t("a part finds its mold through its runs until somebody confirms it", () => {
+  DB.molds = [{ id: "MOLD-1", name: "Diffuser tool" }];
+  DB.parts = [{ id: "P-60", partName: "DIFFUSER" }];
+  DB.workOrders = [{ id: "WO-60", partId: "P-60", moldRef: "MOLD-1" }];
+  let pm = partMold(DB.parts[0]);
+  assert(pm && pm.mold.id === "MOLD-1" && pm.via === "wo", "derived through the run");
+  assert(pm.through.id === "WO-60", "and says which run it came through");
+  DB.parts[0].mold = "MOLD-1";
+  pm = partMold(DB.parts[0]);
+  assert(pm.via === "id", "a confirmed p.mold outranks the derivation");
+});
+await t("a part reaches the newest stack plan for its mold", () => {
+  DB.molds = [{ id: "MOLD-2" }];
+  DB.parts = [{ id: "P-70", mold: "MOLD-2" }];
+  DB.workOrders = [];
+  DB.stackplans = [
+    { id: "STK-1", moldId: "MOLD-2", ts: "2026-01-01T00:00:00Z" },
+    { id: "STK-2", moldId: "MOLD-2", ts: "2026-05-01T00:00:00Z" },
+  ];
+  assert(partPlan(DB.parts[0]).id === "STK-2", "newest plan wins, matching moldPlanSection");
+});
+
 await t("@mention exact-token: @Nicole does NOT match Nico", () => {
   DB.users = [{ email: "nico@b.edu", name: "Nico Vera", role: "member" }, { email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
   assert(JSON.stringify(mentionsIn("hey @Nicole look here")) === "[]", "prefix must not match: " + JSON.stringify(mentionsIn("hey @Nicole look here")));

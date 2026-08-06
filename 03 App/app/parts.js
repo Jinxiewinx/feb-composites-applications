@@ -109,7 +109,9 @@ const PART_EVIDENCE = {
     fix: "Attach the STEP or SLDPRT under Files, or link it from Drive under Documents — on this part or on its work order.",
     has: (p) => {
       const holds = r => !!(r && (((r.docs || []).length) || ((r.files || []).length)));
-      return holds(p) || holds(linkedCounterpart("parts", p));
+      // Every run, not just the current one: the CAD was very often attached to
+      // the first attempt, and a remake doesn't make that file disappear.
+      return holds(p) || partRuns(p).some(r => holds(r.wo));
     },
   },
 };
@@ -691,11 +693,11 @@ function partStageRow(p, st) {
    Tickets link to parts, work orders link to parts, the schedule puts parts on
    stations. None of it was visible from the part. All in-memory filters, same
    as every other tab — no query, no index. */
-function partWorkOrders(p) {
-  return (DB.workOrders || []).filter(w => w.partId === p.id ||
-    (p.workOrderId && w.id === p.workOrderId) ||
-    (p.partName && (w.partName || "").toUpperCase() === p.partName.toUpperCase()));
-}
+/* The three-way match this used to do by hand now lives in core.js as
+   partRuns(), which also reports HOW each one matched so the UI can offer to
+   commit a name guess to a real edge. Kept as an alias: several callers want
+   plain work orders and don't care about provenance. */
+function partWorkOrders(p) { return partRuns(p).map(r => r.wo); }
 function partTickets(p) { return (DB.projects || []).filter(t => (t.relatedParts || []).includes(p.id)); }
 function partScheduleWeeks(p) {
   return (DB.schedule || []).filter(w => Object.keys(w).some(k => k !== "id" && w[k] === p.id));

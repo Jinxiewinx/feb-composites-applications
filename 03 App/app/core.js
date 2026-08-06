@@ -536,22 +536,110 @@ function stackEdit(coll, o, mutator) {
   }
   render();
 }
-// The linked counterpart — but ONLY when the link is unambiguous, so a stack
-// edit can never overwrite the wrong record:
-//   - an explicit id link is honored only if the counterpart doesn't point elsewhere;
-//   - a name match is honored only if EXACTLY ONE record has that name
-//     (duplicate part names — a real FEB pattern — resolve to no mirror).
+/* ---------- part <-> work order: the parent/child edge ----------
+   A part is the durable thing the car needs. A work order is ONE RUN at making
+   it, so a part has many runs and a run has exactly one part. A remake after a
+   failed infusion is a second run, not a rewritten first one.
+
+   The canonical edge is `wo.partId` — the child names its parent, which is the
+   only direction that can't go ambiguous. `part.workOrderId` survives but is
+   demoted: it no longer means "the link", it means "the current run". The name
+   has to survive because labels.js reads it, pfld(...,"wo") writes it, the SN5
+   seeds carry it and test_app asserts on it. Redefining is free; renaming is a
+   migration.
+
+   Three ways a run resolves, and which one it was matters to the UI:
+     "id"      w.partId === p.id            a real edge somebody committed to
+     "pointer" p.workOrderId === w.id       the legacy single-link field
+     "name"    partName matches, no partId  the SN5 fallback (0 of 33 SN5 parts
+                                            carry an id link — see shop.js)
+   `via` is what lets the UI say "matched by name" and offer a one-click
+   Confirm that writes the id. That converts the guess into an edge one part at
+   a time, instead of one lead-only bulk backfill nobody runs. */
+function partRuns(p) {
+  if (!p) return [];
+  const name = (p.partName || "").toUpperCase();
+  const out = [];
+  (DB.workOrders || []).forEach(w => {
+    let via = null;
+    if (w.partId === p.id) via = "id";
+    else if (w.partId) return;                       // committed to another part
+    else if (p.workOrderId && w.id === p.workOrderId) via = "pointer";
+    else if (name && (w.partName || "").toUpperCase() === name) via = "name";
+    if (via) out.push({ wo: w, via });
+  });
+  // Current run first, then newest. `workOrderId` is the pointer, so whatever
+  // it names is what the part considers live.
+  return out.sort((a, b) =>
+    (b.wo.id === p.workOrderId) - (a.wo.id === p.workOrderId) ||
+    String(b.wo.createdDate || "").localeCompare(String(a.wo.createdDate || "")) ||
+    String(b.wo.id).localeCompare(String(a.wo.id)));
+}
+/* The parent of a run. Many-to-one has no ambiguity to guard against, so an
+   explicit partId always resolves — unlike the old symmetric lookup, which
+   refused whenever the part pointed at a different WO. Name fallback stays for
+   the SN5 records that have no ids at all. */
+function partOf(wo) {
+  if (!wo) return null;
+  if (wo.partId) { const p = recById("parts", wo.partId); return p ? { part: p, via: "id" } : null; }
+  const name = (wo.partName || "").toUpperCase();
+  if (!name) return null;
+  const byPointer = (DB.parts || []).filter(p => p.workOrderId === wo.id);
+  if (byPointer.length === 1) return { part: byPointer[0], via: "pointer" };
+  const matches = (DB.parts || []).filter(p => (p.partName || "").toUpperCase() === name);
+  // Duplicate PART names are the real FEB pattern, so this one still refuses.
+  return matches.length === 1 ? { part: matches[0], via: "name" } : null;
+}
+/* The run a part is currently on: what workOrderId points at, else the only
+   run there is. Two runs and no pointer is genuinely ambiguous — say so by
+   returning null rather than guessing. */
+function currentRun(p) {
+  const runs = partRuns(p);
+  if (!runs.length) return null;
+  if (p.workOrderId) { const hit = runs.find(r => r.wo.id === p.workOrderId); if (hit) return hit.wo; }
+  return runs.length === 1 ? runs[0].wo : null;
+}
+/* linkedCounterpart keeps its name and its three call sites (stackEdit,
+   renderPartDetail, PART_EVIDENCE.cad) but is no longer symmetric — it can't
+   be, now that one side is a collection. Part -> its current run; run -> its
+   part. Both existing mirror tests still describe exactly this behaviour. */
 function linkedCounterpart(coll, o) {
-  const otherColl = coll === "parts" ? "workOrders" : "parts";
-  const idField = coll === "parts" ? "workOrderId" : "partId";
-  const backField = coll === "parts" ? "partId" : "workOrderId";
-  if (o[idField]) {
-    const c = recById(otherColl, o[idField]);
-    return (c && (!c[backField] || c[backField] === o.id)) ? c : null;
+  if (!o) return null;
+  if (coll === "parts") return currentRun(o);
+  const r = partOf(o);
+  return r ? r.part : null;
+}
+/* The mold a part is made on. `p.mold` is the committed edge; when it's blank
+   the mold is derived through the part's runs, which is how every SN5 record
+   will resolve until somebody confirms it. moldUses() (shop.js) and the QR
+   label (labels.js) have always READ p.mold — nothing ever wrote it, so both
+   start working the moment the picker lands. */
+function partMold(p) {
+  if (!p) return null;
+  if (p.mold) { const m = recById("molds", p.mold); if (m) return { mold: m, via: "id" }; }
+  const runs = partRuns(p);
+  for (const r of runs) {
+    const id = r.wo.moldRef || (r.wo.mold && r.wo.mold.moldId);
+    if (id) { const m = recById("molds", id); if (m) return { mold: m, via: "wo", through: r.wo }; }
   }
-  if (!o.partName) return null;
-  const matches = DB[otherColl].filter(c => (c.partName || "").toUpperCase() === o.partName.toUpperCase());
-  return matches.length === 1 ? matches[0] : null;
+  // molds carry their own `wo` field (SHOP.molds), so the edge may only exist
+  // on the mold side.
+  const runIds = runs.map(r => r.wo.id);
+  const back = (DB.molds || []).filter(m => m.wo && runIds.includes(m.wo));
+  if (back.length === 1) {
+    const through = runs.find(r => r.wo.id === back[0].wo);
+    return { mold: back[0], via: "wo", through: through && through.wo };
+  }
+  return null;
+}
+/* The newest stack plan for a part's mold — the "mold file" in Simon's words.
+   Newest wins, matching moldPlanSection()'s rule in molds.js. */
+function partPlan(p) {
+  const pm = partMold(p);
+  if (!pm) return null;
+  const plans = (DB.stackplans || []).filter(s => s.moldId === pm.mold.id)
+    .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+  return plans.length ? plans[0] : null;
 }
 
 // Preserve the search caret across the full re-render each keystroke triggers.
