@@ -505,7 +505,11 @@ function silhouetteLoops(tris, projName, opts) {
   }
   const spanX = x1 - x0, spanY = y1 - y0;
   if (!(spanX > 0) && !(spanY > 0)) return [];
-  const cell = Math.max(opts.cell || Math.max(spanX, spanY) / DWG_MAX_CELLS, DWG_MIN_CELL_MM);
+  // minCellMm: the 0.5mm floor is sized for a tessellated mold mesh. The stock
+  // outline pass traces a handful of axis-aligned boxes, where a finer grid is
+  // cheap and keeps the heavy overdraw within a page pixel of the block edges.
+  const cell = Math.max(opts.cell || Math.max(spanX, spanY) / DWG_MAX_CELLS,
+    opts.minCellMm != null ? opts.minCellMm : DWG_MIN_CELL_MM);
   // One cell of padding all round, so an occupied cell on the edge of the model
   // still has an EMPTY neighbour to hand the boundary walk. Without it the
   // outline is open along whichever side the mold touches.
@@ -586,6 +590,127 @@ function silhouetteLoops(tris, projName, opts) {
     });
 }
 
+/* ---------------- waterlines ----------------
+
+   The silhouette says where the mold is; it says nothing about the surface
+   inside its own outline, which is why sheet 1 used to read as a brick with a
+   dashed blob in it. Waterlines fix that the way a topographic map does:
+   horizontal sections of the mold at a spread of heights, drawn over the iso
+   view, so the SPACING of the lines is the shape — tight where the surface is
+   steep, wide where it is flat. They are also literally what the ShopSabre
+   cuts: a waterline is a roughing-pass boundary.
+
+   Two kinds, on two dashes. A section at a board interface (each layer's z0,
+   plus the stock top) is a physically meaningful curve — the mold crosses that
+   glue line exactly there — and shares the mold's own dash. The evenly spaced
+   intermediates are reference sections and take the short dash, so nobody
+   reads one as a glue line.
+
+   Slicing reuses slicer.js wholesale: sliceAt -> stitchRelaxed ->
+   outerContours -> simplify, the same chain sliceMold trusts for the saved
+   layer contours. A level that will not stitch is skipped and counted, never
+   thrown — same contract as the silhouette above. */
+
+const DWG_WATERLINE_TARGET = 12;    // z levels aimed for, interfaces included
+const DWG_WATERLINE_DENSE = 100000; // tris; above this the target halves
+const DWG_WATERLINE_GAP_PX = 7;     // min page-y between kept intermediate levels
+
+function moldZRange(tris) {
+  let z0 = Infinity, z1 = -Infinity;
+  for (const t of tris) {
+    for (const z of [t.az, t.bz, t.cz]) { if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  }
+  return { z0, z1 };
+}
+
+/* The heights to section at: every board interface inside the mold's own Z
+   range, then evenly spaced intermediates up to the target, dropped where they
+   would crowd an interface. Both ends are inset by SLICE_EPS_MM because sliceAt
+   skips coplanar triangles by design — a slice exactly on the mold's flat base
+   returns nothing at all. */
+function waterlineZs(plan, tris, targetN) {
+  const r = moldZRange(tris);
+  const z0 = r.z0 + SLICE_EPS_MM, z1 = r.z1 - SLICE_EPS_MM;
+  if (!(z1 > z0)) return [];
+  const n = targetN || (tris.length > DWG_WATERLINE_DENSE ? DWG_WATERLINE_TARGET / 2 : DWG_WATERLINE_TARGET);
+  const zs = [];
+  dwgLayers(plan).forEach(L => {
+    const z = L.z0 + SLICE_EPS_MM;
+    if (z > z0 && z < z1) zs.push({ z, kind: "interface" });
+  });
+  zs.push({ z: z1, kind: "interface" });
+  const want = Math.max(0, Math.round(n) - zs.length);
+  const minDz = (z1 - z0) / (n * 2);
+  for (let i = 1; i <= want; i++) {
+    const z = z0 + ((z1 - z0) * i) / (want + 1);
+    if (zs.every(w => Math.abs(w.z - z) >= minDz)) zs.push({ z, kind: "intermediate" });
+  }
+  return zs.sort((a, b) => a.z - b.z);
+}
+
+function waterlineLoops(tris, zs) {
+  const loops = [];
+  let failures = 0;
+  for (const w of zs) {
+    const segs = sliceAt(tris, w.z);
+    if (!segs.length) continue;
+    let st;
+    try { st = stitchRelaxed(segs, WELD_TOL_MM); }
+    catch (e) { failures++; continue; }
+    outerContours(st.loops).forEach(c => {
+      const pts = simplify(c, 0.2);
+      if (pts.length > 3) loops.push({ z: w.z, kind: w.kind, pts });
+    });
+  }
+  return { loops, failures };
+}
+
+/* Only the viewer's side of each loop. The iso eye direction projects onto XY
+   as (1,1), so an edge faces the viewer exactly when its outward normal has
+   nx + ny > 0 — the loop's own winding (polyArea's sign) says which side is
+   out, no triangle normals and no trust in the mesh's winding needed. The far
+   side would overdraw the near side one dash out of phase and read as noise.
+   Returns open polylines, split where the facing flips; if the loop wrapped
+   past its start point mid-run, the two ends are rejoined. */
+function waterlineRuns(pts) {
+  const sgn = polyArea(pts) > 0 ? 1 : -1;
+  const n = pts.length;
+  const runs = [];
+  let cur = null;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    if (sgn * ((q.y - p.y) - (q.x - p.x)) > 0) {
+      if (!cur) cur = [p];
+      cur.push(q);
+    } else if (cur) { runs.push(cur); cur = null; }
+  }
+  if (cur) {
+    if (runs.length && runs[0][0] === pts[0] && cur[cur.length - 1] === pts[0]) {
+      runs[0] = cur.concat(runs[0].slice(1));
+    } else runs.push(cur);
+  }
+  return runs;
+}
+
+/* Which z levels survive at a given page scale. Interfaces always draw — they
+   are bounded by the layer count and each one is a glue line the sheet already
+   calls out. Intermediates only draw when they clear the last kept level by a
+   legible page gap, which is what keeps a shallow mold from smearing into a
+   dozen coincident dashes. */
+function waterlineKeep(loops, s) {
+  const zs = [...new Set(loops.map(l => l.z))].sort((a, b) => a - b);
+  const isInterface = z => loops.some(l => l.z === z && l.kind === "interface");
+  const keep = new Set();
+  let last = null;
+  zs.forEach(z => {
+    if (isInterface(z) || last == null || s * (z - last) >= DWG_WATERLINE_GAP_PX) {
+      keep.add(z);
+      last = z;
+    }
+  });
+  return keep;
+}
+
 /* What to draw for the mold in one view, and where it came from.
 
    The fallback matters more than it looks. Plans made before the 3D view
@@ -606,7 +731,10 @@ function moldOutlines(plan, tris, projName) {
     if (projName === "top") {
       islands.forEach(is => { if ((is.contour || []).length > 2) loops.push(is.contour.map(p => ({ x: p.x, y: p.y }))); });
     } else if (projName === "iso") {
-      islands.forEach(is => { if ((is.contour || []).length > 2) loops.push(is.contour.map(p => proj(p.x, p.y, L.z1))); });
+      // At z0, not z1: sliceMold cuts each contour at the BOTTOM of its board
+      // (z0 + SLICE_EPS_MM), so drawing it at the top planted every section one
+      // board thickness too high and the stepped silhouette read too large.
+      islands.forEach(is => { if ((is.contour || []).length > 2) loops.push(is.contour.map(p => proj(p.x, p.y, L.z0))); });
     } else {
       // A stepped profile: each layer contributes the rectangle its outline
       // occupies over that layer's own Z band. Honest about what it is — this
@@ -634,11 +762,15 @@ function moldArt(plan, tris) {
   const art = { hasMesh: !!(tris && tris.length) };
   ["iso", "top", "front", "right"].forEach(v => { art[v] = moldOutlines(plan, tris, v); });
   art.source = art.top.source === "mesh" ? "mesh" : art.top.source;
+  // Waterlines only exist off a real mesh. The no-mesh fallback's iso loops ARE
+  // horizontal sections already — computing them again would draw every line
+  // twice, once medium and once thin.
+  art.waterlines = art.hasMesh ? waterlineLoops(tris, waterlineZs(plan, tris)) : { loops: [], failures: 0 };
   DWG_ART[key] = art;
   return art;
 }
 function moldSourceNote(art) {
-  if (!art || art.source === "mesh") return "Mold shown as a silhouette projected from the stored STL.";
+  if (!art || art.source === "mesh") return "Mold shown as a silhouette projected from the stored STL, with horizontal section contours on sheet 1.";
   if (art && art.source === "outline") return "No stored mold mesh — mold shown from the saved layer outlines, so the side views are a stepped profile, not the true surface.";
   return "No mold geometry stored with this plan — blocks only.";
 }
@@ -696,6 +828,33 @@ function spreadLabels(items, minGap, lo, hi) {
   return s;
 }
 
+/* The mold ALONE, small, beside the layer key. On the main view the mold is
+   buried in stock and every line of it is hidden-line dashed; this is the one
+   place it is out of the block, so here — and only here — its lines are solid:
+   silhouette medium, waterlines thin. It answers "what does the finished mold
+   look like" without touching the drawing people already initial. */
+function moldInsetSvg(art) {
+  if (!art || art.source !== "mesh" || !art.iso.loops.length) return "";
+  const IW = 176, IH = 150, pad = 8;
+  const box = bboxOf([].concat(...art.iso.loops));
+  const s = dwgFit(box, IW - pad * 2, IH - pad * 2);
+  const w = (box.x1 - box.x0) * s, h = (box.y1 - box.y0) * s;
+  const v = dwgView(box, s, pad + (IW - pad * 2 - w) / 2, pad + (IH - pad * 2 - h) / 2, false);
+  const proj = dwgProject("iso").fn;
+  const parts = [];
+  const wloops = (art.waterlines && art.waterlines.loops) || [];
+  const keepZ = waterlineKeep(wloops, s);
+  wloops.forEach(l => {
+    if (!keepZ.has(l.z)) return;
+    waterlineRuns(l.pts).forEach(run => parts.push(dwgPoly(run.map(p => {
+      const q = proj(p.x, p.y, l.z);
+      return { x: v.X(q.x), y: v.Y(q.y) };
+    }), DW.thin, null, false)));
+  });
+  art.iso.loops.forEach(loop => parts.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.med, null, true)));
+  return `<svg viewBox="0 0 ${IW} ${IH}" width="100%" role="img" aria-label="The machined mold alone, isometric">${parts.join("")}</svg>`;
+}
+
 function sheetIso(plan, ctx) {
   const proj = dwgProject("iso").fn;
   const layers = dwgLayers(plan);
@@ -726,7 +885,10 @@ function sheetIso(plan, ctx) {
       const face = (pts2) => `<polygon points="${pts2.map(p => `${f1(p.x)},${f1(p.y)}`).join(" ")}" fill="#fff" stroke="currentColor" stroke-width="`;
       body.push(face([P(b.x0, b.y1, L.z1), P(b.x1, b.y1, L.z1), P(b.x1, b.y1, L.z0), P(b.x0, b.y1, L.z0)]) + DW.med + `"/>`);
       body.push(face([P(b.x1, b.y0, L.z1), P(b.x1, b.y1, L.z1), P(b.x1, b.y1, L.z0), P(b.x1, b.y0, L.z0)]) + DW.med + `"/>`);
-      body.push(face([P(b.x0, b.y0, L.z1), P(b.x1, b.y0, L.z1), P(b.x1, b.y1, L.z1), P(b.x0, b.y1, L.z1)]) + DW.heavy + `"/>`);
+      // Medium like the side faces, not heavy: a six-layer stack drew six heavy
+      // top diamonds, and the glue joints shouted as loudly as the assembly
+      // outline. The TRUE outer silhouette gets the heavy rule, once, below.
+      body.push(face([P(b.x0, b.y0, L.z1), P(b.x1, b.y0, L.z1), P(b.x1, b.y1, L.z1), P(b.x0, b.y1, L.z1)]) + DW.med + `"/>`);
       if (k === 0) {
         // The RIGHT vertex of the top face: on a drafted stack that is the
         // silhouette edge, so the leader leaves the block rather than crossing it.
@@ -738,11 +900,35 @@ function sheetIso(plan, ctx) {
       }
     });
   });
+  /* The stack's outer silhouette, heavy over the medium block faces — the one
+     line that means "the edge of the thing you glued". Traced from the blanks'
+     own box triangles through the same rasteriser the mold uses, on a finer
+     grid: a dozen axis-aligned boxes rasterise for nothing, and the finer cells
+     keep the heavy rule within a page pixel of the polygon edges under it. */
+  const stockCell = Math.max(box.x1 - box.x0, box.y1 - box.y0) / 560;
+  silhouetteLoops(stockGeometry(plan).tris, "iso", { cell: stockCell, minCellMm: 0.1 }).forEach(loop => {
+    body.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.heavy, null, true));
+  });
   // The mold last, over the blocks: it is the reference, and a dashed line under
   // a white face is a dashed line nobody can see.
   ctx.art.iso.loops.forEach(loop => {
     body.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.med, DASH_MOLD, true));
   });
+  /* Then its waterlines, thin over the medium silhouette: the surface between
+     the silhouette's edges. Only the viewer's side of each section — the far
+     side would overdraw the near one a dash out of phase — and only the levels
+     that clear each other legibly at this sheet's scale. */
+  const wl = ctx.art.waterlines || { loops: [] };
+  if (wl.loops.length) {
+    const keepZ = waterlineKeep(wl.loops, s);
+    wl.loops.forEach(l => {
+      if (!keepZ.has(l.z)) return;
+      waterlineRuns(l.pts).forEach(run => body.push(dwgPoly(run.map(p => {
+        const q = proj(p.x, p.y, l.z);
+        return { x: v.X(q.x), y: v.Y(q.y) };
+      }), DW.thin, l.kind === "interface" ? DASH_MOLD : DASH_THIN, false)));
+    });
+  }
 
   spreadLabels(labels, 13, M.t + 6, DWG_ISO_H - M.b)
     .forEach(l => body.push(leader(l.px, l.py, DWG_SHEET_W - M.r + 16, l.y, l.text)));
@@ -809,6 +995,7 @@ function sheetIso(plan, ctx) {
     <td>${esc(fmtDwgLine(b.x1 - b.x0))} × ${esc(fmtDwgLine(b.y1 - b.y0))}</td>
     <td class="num">${(L.section || 0) + 1}</td></tr>`)));
 
+  const inset = moldInsetSvg(ctx.art);
   return dwgPage(plan, ctx, 1, "GENERAL VIEW — ASSEMBLED STOCK", dwgRatio(s), `
     ${svg}
     <div class="dwg-cols">
@@ -816,6 +1003,10 @@ function sheetIso(plan, ctx) {
         <div class="dwg-cap">LAYER KEY — EXPLODED</div>
         ${stackSvg(plan, { width: 236 })}
       </div>
+      ${inset ? `<div class="dwg-inset">
+        <div class="dwg-cap">AS MACHINED — MOLD ONLY</div>
+        ${inset}
+      </div>` : ""}
       <div class="dwg-tabwrap">
         <div class="dwg-cap">BLOCKS TO CUT</div>
         <table class="ws-t rows dwg-t">
@@ -823,7 +1014,8 @@ function sheetIso(plan, ctx) {
           <tbody>${rows.join("")}</tbody>
         </table>
       </div>
-    </div>`);
+    </div>`,
+    "Dashed lines are the mold inside the stock, reference only: medium dashes its silhouette, thin long dashes its section at each glue line, thin short dashes intermediate sections.");
 }
 
 /* ============================================================================

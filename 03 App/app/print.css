@@ -411,6 +411,10 @@ tr.blk td.seq {
    it is a key to. preserveAspectRatio letterboxes it — the drawing shrinks and
    centres, it never squashes. */
 .dwg-key svg { width: 100%; height: auto; max-height: 2.9in; color: #000; }
+/* The as-machined mold inset on sheet 1. Narrower than the key: it is a
+   picture, not a keyed diagram, and the cut-list table needs the width more. */
+.dwg-inset { flex: 0 0 1.85in; }
+.dwg-inset svg { width: 100%; height: auto; max-height: 2.9in; color: #000; }
 .dwg-tabwrap { flex: 1 1 auto; }
 .dwg-cap {
   font-size: 6.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;

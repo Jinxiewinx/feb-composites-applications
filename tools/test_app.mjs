@@ -3437,6 +3437,45 @@ await t("a plan with no stored mesh still draws, and says the mold is only an ou
   assert(!/No stored mold mesh/.test(withMesh), "and drops the fallback warning");
 });
 
+await t("sheet 1 sections the mold: waterlines from the mesh, culled to the near side", () => {
+  const p = twoSectionPlan();
+  const tris = boxTris(400, 300, 220);
+  // An interface level at every glue line INSIDE the mold's Z range, plus the
+  // top; the mold's own base is excluded because a coplanar slice is empty.
+  const zs = waterlineZs(p, tris);
+  const interfaces = zs.filter(w => w.kind === "interface");
+  const glueLines = p.layers.filter(L => L.z0 > 0 && L.z0 < 219).length;
+  assert(interfaces.length === glueLines + 1, `${interfaces.length} interfaces for ${glueLines} glue lines + top`);
+  assert(zs.some(w => w.kind === "intermediate"), "with intermediates spread between them");
+  // A clean box stitches at every level into exactly one rectangle each.
+  const wl = waterlineLoops(tris, zs);
+  assert(wl.failures === 0, "no stitch failures on a box: " + wl.failures);
+  assert(wl.loops.length === zs.length, `${wl.loops.length} loops for ${zs.length} levels`);
+  // The cull keeps only the two faces toward the iso eye (+X and +Y): a CCW
+  // square comes back as ONE run of its right and back edges, joined.
+  const runs = waterlineRuns([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
+  assert(runs.length === 1 && runs[0].length === 3, `${runs.length} runs of ${runs[0] && runs[0].length}`);
+  // And the sheet carries them: intermediate sections short-dashed, plus the
+  // mold-alone inset that only a real mesh earns.
+  const html = drawingSetHtml({ ...p, id: "STK-WL" }, { tris });
+  assert(html.indexOf('stroke-dasharray="3 2.5"') !== -1, "intermediate sections print short-dashed");
+  assert(/AS MACHINED — MOLD ONLY/.test(html), "the inset appears with a mesh");
+  const noMesh = drawingSetHtml({ ...p, id: "STK-WL2" }, {});
+  assert(!/AS MACHINED/.test(noMesh), "and never without one");
+});
+
+await t("the no-mesh iso fallback draws each section at the BOTTOM of its board", () => {
+  /* sliceMold cuts every stored contour at z0 + SLICE_EPS_MM. The iso fallback
+     used to project it at z1, planting each section one board thickness high —
+     invisible while the loops were a blob, wrong the moment they became the
+     picture. */
+  const sq = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }];
+  const p1 = { id: "STK-Z", layers: [{ z0: 50, z1: 100, thickness: 50, blanks: [{ x0: 0, y0: 0, x1: 100, y1: 100 }], islands: [{ contour: sq }] }] };
+  const iso = moldOutlines(p1, null, "iso");
+  const want = dwgProject("iso").fn(0, 0, 50);
+  assert(Math.abs(iso.loops[0][0].y - want.y) < 1e-9, `drawn at py ${iso.loops[0][0].y}, sliced at py ${want.y}`);
+});
+
 await t("a drawing sheet never inherits the traveler's repeating fixed footer", () => {
   // .ws-foot is position:fixed in print so it repeats on every physical page —
   // right for a two-page traveler, wrong for a set where each sheet carries its

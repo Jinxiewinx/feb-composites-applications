@@ -1473,6 +1473,74 @@ metrics is precisely how a label ends up on a line: the test can only speak for
 what the shop sees if the shop gets the same glyphs. It has **no U+2033 ″**, so
 the inch mark is a plain ASCII quote.
 
+### Sheet 1 revamp — waterline contours (2026-08-05)
+
+Simon's complaint: the general view's "wireframe" showed nothing of the mold's
+actual geometry. It couldn't: the dashed loop is a flat 2D silhouette, so all
+interior surface shape was lost. Three exploration agents compared candidate
+renderings; two independently landed on topographic waterlines, and that is
+what shipped.
+
+What changed on sheet 1 (`sheetIso`):
+
+- **Waterlines.** Horizontal sections of the mold at every board interface plus
+  the stock top (long dash, thin, same DASH_MOLD family as the silhouette) and
+  evenly spaced intermediates (short dash, DASH_THIN), drawn over the iso view.
+  The spacing of the lines is the shape: tight where steep, wide where flat.
+  Machinery is slicer.js verbatim (`sliceAt` -> `stitchRelaxed` ->
+  `outerContours` -> `simplify`); a level that won't stitch is skipped and
+  counted, never thrown. New helpers `waterlineZs` / `waterlineLoops` /
+  `waterlineRuns` / `waterlineKeep` sit next to `silhouetteLoops`.
+- **Back-face cull, no mesh normals.** The iso eye projects onto XY as (1,1),
+  so an edge faces the viewer exactly when its outward loop normal has
+  nx + ny > 0; the loop's own winding (polyArea sign) says which side is out.
+  The far side of each section is dropped, or it overdraws the near side one
+  dash out of phase.
+- **Clutter defence.** Intermediates only draw when they clear the last kept
+  level by 7 page px at the sheet's scale (`waterlineKeep`); interfaces always
+  draw. Verified on the thinstack fixture.
+- **Line-weight hierarchy fixed.** Every blank's top face was DW.heavy, so a
+  six-layer stack printed six heavy diamonds and glue joints shouted as loudly
+  as the assembly outline. Faces are now all DW.med and the TRUE outer
+  silhouette is overdrawn heavy once, traced from
+  `silhouetteLoops(stockGeometry(plan).tris, "iso")` on a finer grid
+  (new `minCellMm` opt, since the 0.5mm floor is sized for meshes, not boxes).
+- **AS MACHINED inset.** A small mold-alone iso next to the layer key: solid
+  lines (out of the block it is visible geometry), silhouette med, waterlines
+  thin. Mesh-backed plans only. New `.dwg-inset` in print.css, 1.85in.
+- **Sheet note.** Sheet 1 now passes a dash legend through `dwgPage`'s
+  `sheetNote` arg, which it alone had left empty.
+- **Bug fix found on the way:** the no-mesh iso fallback projected each stored
+  layer contour at `L.z1`, but `sliceMold` cuts them at `z0 + SLICE_EPS_MM`.
+  Every section drew one board thickness too high. Now `L.z0`, with a unit test.
+
+Deliberate deviations from the approved plan, both judgment calls:
+
+- **No waterlines in the no-mesh fallback.** Its iso loops already ARE
+  horizontal sections; recomputing them as waterlines would draw every line
+  twice. The fallback keeps its med-dashed loops, now at the right height.
+- **The "machined top face" (evenodd cavity hole) was dropped.** These are
+  mostly MALE molds: at the stock top the material remaining after machining is
+  only the mold's own section, not "face minus hole", so the trick would draw
+  the wrong picture for the common case, and the sheet is titled ASSEMBLED
+  STOCK, which is solid by definition. The inset answers the same question
+  honestly.
+
+Considered and deferred (details in the plan file and the agents' reports):
+feature-edge rendering with a raster depth buffer (about 2 days, real tuning
+risk on rough meshes) and a half cutaway with ISO pattern hatch (rewrites the
+painter loop, wants a cutting-plane line on sheet 2).
+
+Verification: 331/331 in `test_app.mjs` (two new tests: waterlines + cull +
+inset, and the z0 fix). `test_drawings.mjs` finding counts identical to main
+fixture-for-fixture (the pre-existing text-on-text findings; nothing new,
+waterlines are dashed and dashed is exempt from the label-crossing rule).
+Eyeballed nosecone / thinstack / clamshell / nomesh sheet 1 via --shots-all.
+
+Harness note: `tools/test_drawings.mjs` resolves Playwright from `.ds-sync/`,
+which is gitignored and so absent in a worktree. Symlink it from the main
+checkout (`ln -s ../../.ds-sync .ds-sync` shaped) before running there.
+
 ## Mold Stack Planner — phase 2 (auto boards, sections, cut list)
 
 **SN5 consumed ~20 sheets**, so the optimizer is worth building — a 20% saving
