@@ -9,6 +9,61 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-05
+Status: **Parts become the parent record (2026-08-05).** Branch
+`mold-drawing-revamp`, four commits, all 15 runnable suites green
+(test_app 331 -> 355).
+
+Simon asked to mark the parts/work-order relationship properly ("we create the
+part first, and track its children"), move Parts to the top of Build, and make
+the layup stack fit the app's style while keeping its colour coding. He chose,
+from three options each: part = spec / WO = as-built; part->WO one-to-many;
+full mold wiring including drawings from the part.
+
+What landed: Build is Parts -> Work Orders -> Molds -> Inventory. core.js gains
+partRuns/partOf/currentRun/partMold/partPlan, each reporting HOW a link matched
+("id" / "pointer" / "name") so the UI can offer a one-click Confirm that
+commits a name guess to a real edge — the fix for 0 of 33 SN5 parts carrying a
+link. linkedCounterpart keeps its name but is no longer symmetric. A lineage
+bar (Part > Run > Mold > Plan > Drawings) sits on part, WO and mold detail.
+Parts gains a Children section, a mold picker that finally WRITES p.mold (dead
+but read by shop.js and labels.js since forever), and Drawings straight from
+the part. The layup stack is now a table.sub like the BOM it sits above, with
+--ply-* tokens (the old .plybar hex was theme-blind), a CF/Spread/Core/Mesh
+text tag so hue is never alone, and in-place edit / insert / duplicate /
+reorder / delete through one stackMutate() funnel.
+
+Traps this round, all real, all cost time:
+- **stackview.js already defines stackTable()** for the exploded tooling-board
+  BLANK stack and loads AFTER core.js, so the obvious name silently overrode
+  the new component and it never rendered. The layup one is plyTable().
+  Two different things here are called "stack" — keep them apart.
+- **Plies needed a uid.** saveField re-applies its mutator against fresh server
+  data; append/pop were index-free, but edit/delete/reorder are positional and
+  a raw index re-applied to a changed array edits the WRONG ply.
+- **The drawing title block is a 2-row grid** (the brand cell spans both), so
+  adding Part and Work order started a third row, grew the block, shrank the
+  drawing area and made layer labels collide. Widened to four content columns.
+  Adding a ninth field means removing one.
+- **0 of 33 SN5 parts have a layup stack; 26 of 26 WOs do.** A part-owns-the-
+  plan model shows "no plies recorded" on every SN5 part unless the run's
+  stack stands in. Caught by looking at a screenshot, not by a test.
+- **test_drawings has 9 pre-existing failures on main** (dimension/label
+  collisions). They are invisible without Playwright installed, because the
+  skip message reads exactly like a pass. Counts are identical to main
+  fixture-for-fixture, so this branch adds none. Worth fixing separately.
+- One deliberate behaviour change: the old "mirror is skipped when the link is
+  ambiguous" test asserted a part matching two WOs by name mirrored to
+  NEITHER. Under one-to-many both ARE its runs, so the plan goes to both. The
+  ambiguity that still refuses is two PARTS sharing a name, now guarded in
+  partRuns() and asserted directly.
+
+Open for Simon: whether STAGE_MOLD (part) and MOLD_STAGE (mold record) should
+be merged. Not synced here — different enums, different authors — the app just
+says "one of them is out of date" when they disagree.
+
+Previous status follows.
+
 Last updated: 2026-08-04 (night)
 Status: **Dashboard round three ships: the glance board (2026-08-04).**
 Simon: too much space for too little, New activity overflowing its box,

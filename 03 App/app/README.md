@@ -46,6 +46,43 @@ activity** shows the tickets you watch that changed, capped at four.
 Empty states shrink the page instead of padding it, and nothing that
 renders empty on the team's own archive sits above the fold.
 
+### How parts, runs and molds fit together
+
+The part is the parent record. It is the thing the car needs, and it outlives
+every attempt at making it. Everything else hangs off it:
+
+```
+Part ─┬─ Work orders   one RUN each at making it (a remake is a second run)
+      ├─ Mold ── Stack plan ── Drawings
+      ├─ Tickets
+      └─ Scheduled weeks
+```
+
+Every record in that chain shows the same lineage bar across the top, so you
+can walk up to the part or down to the drawings from wherever you are.
+
+The link that matters is **`wo.partId`**: the child names its parent, which is
+the only direction that cannot go ambiguous. `part.workOrderId` still exists but
+means "the current run", not "the link". Older records join by part name
+instead, and the app says so: a run matched that way is labelled *matched by
+name* with a **Confirm** button that writes the real link. None of the 33 SN5
+parts carried an id link, so most of the existing data starts out matched by
+name and gets promoted one part at a time as people open things.
+
+Two parts sharing a name is the one case that still refuses to guess, because
+there is no way to know whose run an unlabelled work order was. Duplicate part
+names are a real pattern here, so this matters.
+
+**+ New run** on a part starts another work order against it, carrying the
+part's name, subteam, deadline, mass target, process and layup plan.
+
+The mold works the same way: `p.mold` is the committed link, and until somebody
+sets it the mold is derived through the part's runs and shown as *via WO-…*. Set
+it once and the mold's own "used by" list and the QR label pick it up. A part's
+`moldProgress` and the mold record's `stage` are deliberately **not** synced;
+they are different enums maintained by different people, so the app points out
+when they disagree rather than quietly overwriting one.
+
 ### Work Orders
 
 ![A work order: steps, buy-offs, cure holds, the printable traveler](../design/workorder-detail-mockup-20260803.png)
@@ -55,13 +92,42 @@ stamped with who signed them, blocker enforcement, enforced cure holds (the
 numbers live in `resins.js`, each signed off by a lead), and a printable
 hand-fillable sheet that is always exactly two pages.
 
+A work order is one run at making a part, so its layup stack is what that run
+**actually laid**, while the part's stack is the **plan**. Editing the plan
+pushes it to every run that is still following it; editing a run's stack marks
+that run as-built and never writes back to the plan. When they differ the run
+says how many plies moved, with a side-by-side compare and an explicit *Adopt as
+the part's plan*. A run whose "Stack frozen" step is signed is left alone by plan
+edits entirely — the bench is working to that piece of paper.
+
+The stack itself is an editable table: change any field in place, insert a ply
+above another, duplicate, reorder toward or away from the mold surface, or
+delete. P1 is the mold surface and the table says so. Each ply carries a hidden
+id so that two people editing the same stack at once merge instead of
+overwriting each other; only reordering is last-writer-wins, because two people
+reordering the same stack has no correct answer.
+
+Material colour is a swatch beside a short text tag (CF, Spread, Core, Mesh), so
+the distinction survives greyscale, a colour-blind reader and the black-and-white
+laser. Hue is never the only thing carrying the meaning.
+
 ### Parts
 
 ![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260803.png)
 
-Parts is last season's Part Tracker reborn. Each part carries three parallel
+Parts is last season's Part Tracker reborn, and it leads the Build group
+because the part is where the work starts. Each part carries three parallel
 progress stages (CAD, Mold, Layup) plus subteam, layup type and schedule,
 engineers, target weight, and a layup deadline.
+
+Its **Children** section is the rest of the picture: every run against the part
+with status, due date and ply count; the mold and its stack plan, with buttons
+straight to the 3D view and the drawings; then tickets and scheduled weeks.
+Before this the Parts tab could not reach a mold or a drawing at all.
+
+SN5 parts have no layup plan of their own — the old tracker recorded the layup
+against the job, not the part — so a part with no plan shows what its run
+actually laid, labelled as borrowed, with one click to adopt it as the plan.
 
 Above 900px it is a split: an index of every part down the left, the selected
 part beside it. Opening a part no longer destroys the list and going back no

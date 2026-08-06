@@ -8,7 +8,7 @@ Two versions live here.
 
 `app/` is the hosted, multi-user app, live at https://feb-composites.web.app.
 Everyone signs in with email and password, and a shared Firestore database on
-the free tier backs eleven tabs (Tickets, Dashboard, Work Orders, Parts,
+the free tier backs eleven tabs (Tickets, Dashboard, Parts, Work Orders,
 Molds, Inventory, Schedule, Budget, Documents, Reports, People) that update
 live for the whole team, plus printed QR labels and a public scan page. Molds
 also holds the tooling-board inventory and the mold stack planner (once a
