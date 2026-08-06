@@ -2320,7 +2320,10 @@ await t("the lineage bar draws the whole chain, and ghosts what is missing", () 
   DB.molds = [{ id: "MOLD-A", name: "Diffuser tool" }];
   DB.stackplans = [{ id: "STK-A", moldId: "MOLD-A", ts: "2026-01-01T00:00:00Z" }];
   const bar = lineageBar("workOrders", "WO-A0");
-  ["Part", "Run", "Mold", "Plan", "Drawings"].forEach(k => assert(bar.includes(">" + k + "<"), k + " node present"));
+  // "Mold file", not "Plan" — the part page already says "the plan" for the
+  // LAYUP plan, so the stackplans node uses the name Simon uses for it.
+  ["Part", "Run", "Mold", "Mold file", "Drawings"].forEach(k => assert(bar.includes(">" + k + "<"), k + " node present"));
+  assert(!/>Plan</.test(bar), "nothing in the chain is called just 'Plan'");
   assert(bar.includes("ln-cur"), "the record you are on is marked");
   assert(bar.includes("openDrawings('STK-A')"), "drawings reachable from a work order");
   DB.molds = []; DB.stackplans = [];

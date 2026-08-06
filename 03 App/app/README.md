@@ -53,7 +53,7 @@ every attempt at making it. Everything else hangs off it:
 
 ```
 Part ─┬─ Work orders   one RUN each at making it (a remake is a second run)
-      ├─ Mold ── Stack plan ── Drawings
+      ├─ Mold ── Mold file ── Drawings
       ├─ Tickets
       └─ Scheduled weeks
 ```
@@ -121,8 +121,15 @@ progress stages (CAD, Mold, Layup) plus subteam, layup type and schedule,
 engineers, target weight, and a layup deadline.
 
 Its **Children** section is the rest of the picture: every run against the part
-with status, due date and ply count; the mold and its stack plan, with buttons
-straight to the 3D view and the drawings; then tickets and scheduled weeks.
+with status, due date and ply count; the mold and its **mold file**, with
+buttons straight to the 3D view and the drawings; then tickets and scheduled
+weeks.
+
+("Mold file" is the stack plan record, `STK-…`: the slicer's output for how the
+mold gets cut out of tooling board. The lineage bar and the part page call it
+the mold file because those screens already use "the plan" for the *layup*
+plan, and two different plans on one screen is confusing. The Molds tab, where
+it is shown as a record in its own right, still calls it a stack plan.)
 Before this the Parts tab could not reach a mold or a drawing at all.
 
 SN5 parts have no layup plan of their own — the old tracker recorded the layup

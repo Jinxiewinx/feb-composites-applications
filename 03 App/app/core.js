@@ -338,8 +338,12 @@ function lineageBar(coll, id) {
         { note: pm && pm.via === "wo" ? "via " + (pm.through ? pm.through.id : "a run") : "" })
     : node("Mold", "not linked", "", { ghost: true }));
   out.push(plan
-    ? node("Plan", plan.id, `openRecord('molds','${esc(plan.id)}')`)
-    : node("Plan", "none", "", { ghost: true }));
+    // "Mold file", not "Plan": the part page already uses "the plan" for the
+    // LAYUP plan, and two unrelated things called plan on one screen is what
+    // this node used to be. The record keeps its own name (Stack plan) on the
+    // Molds tab, where it is shown as a record rather than a step in a chain.
+    ? node("Mold file", plan.id, `openRecord('molds','${esc(plan.id)}')`)
+    : node("Mold file", "none", "", { ghost: true }));
   if (plan) out.push(node("Drawings", "open", `openDrawings('${esc(plan.id)}')`));
   return `<nav class="lineage no-print" aria-label="Where this sits">${out.join(sep)}</nav>`;
 }

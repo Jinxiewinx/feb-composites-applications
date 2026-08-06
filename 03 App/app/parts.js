@@ -943,7 +943,7 @@ function renderPartDetail() {
 
       ${/* The mold file: the part could not reach any of this before. */""}
       <div class="pengrow">
-        <div class="lg-label tny">Mold and stack plan</div>
+        <div class="lg-label tny">Mold and mold file</div>
         ${(() => {
           const pm = partMold(p);
           if (!pm) return `<span class="muted tny">No mold linked${E ? " — set one under Details." : "."}</span>`;
@@ -960,7 +960,7 @@ function renderPartDetail() {
               <button class="ib sm" onclick="openRecord('molds','${esc(plan.id)}')">${icon("parts", 14)} Open plan &amp; 3D view</button>
               <button class="ib sm" onclick="openDrawings('${esc(plan.id)}')">${icon("print", 14)} Drawings</button>
               <span class="tny muted">${esc(plan.id)} · ${(plan.layers || []).length} layers</span>
-            </div>` : '<div class="muted tny" style="margin-top:4px">No stack plan on this mold yet.</div>'}`;
+            </div>` : '<div class="muted tny" style="margin-top:4px">No mold file yet — slice the mold STL on the Molds tab to make one.</div>'}`;
         })()}
       </div>
 
