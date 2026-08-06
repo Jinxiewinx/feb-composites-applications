@@ -325,8 +325,14 @@ function dimIso(a, b, nx, ny, mm, off) {
   if (wx < 0 || (wx === 0 && wy < 0)) { wx = -wx; wy = -wy; }
   const deg = Math.atan2(wy, wx) * 180 / Math.PI;
   const outward = (wy * nx - wx * ny) > 0;      // (wy,−wx)·(nx,ny)
-  const clear = (outward ? DW.font * 0.28 : DW.font * 0.92) + 3;
   const d = fmtDwg(mm);
+  /* A short span with a long label: the text runs past both arrowheads and
+     into the extension-line tips (a 3in height still prints as `3" [76.2]`,
+     which is wider than its own dimension line). dimH solves this with
+     minSpan; here the text stays put and moves OUT past the extension
+     overshoot instead, which reads the same and costs no layout. */
+  const over = estTextW(`${d.primary}  ${d.secondary}`, DW.font) > len - 8 ? DW.ext + 3 : 0;
+  const clear = (outward ? DW.font * 0.28 : DW.font * 0.92) + 3 + over;
   const mx = (A.x + B.x) / 2 + nx * clear, my = (A.y + B.y) / 2 + ny * clear;
   return [
     dwgLine(a.x + nx * 4, a.y + ny * 4, A.x + nx * DW.ext, A.y + ny * DW.ext, DW.thin),
@@ -470,9 +476,13 @@ function sectionSplitsZ(plan) {
    straight lines and diagonals. Two functions this app already trusts, reused
    rather than rewritten. */
 
-const DWG_MAX_CELLS = 340;        // longest axis; ~2px per cell on a printed sheet
+/* 720 cells, not the 340 this started at: at 340 a CAD-straight mold edge came
+   back as a visible wave (the cell is ~3mm on a metre-wide mold, and simplify's
+   tolerance scales with it). 720 puts the trace within a printed pixel, and the
+   budget rises with it — it is a hang guard, not a performance target. */
+const DWG_MAX_CELLS = 720;        // longest axis; ~1px per cell on a printed sheet
 const DWG_MIN_CELL_MM = 0.5;
-const DWG_RASTER_BUDGET = 6e6;    // cell writes; a pathological mesh stops early rather than hanging
+const DWG_RASTER_BUDGET = 4e7;    // cell writes; a pathological mesh stops early rather than hanging
 
 /* (x,y,z) -> a 2D frame per view. The isometric matches stackview.js exactly
    (px = (x-y)cos30, py = (x+y)sin30 - z) so the two drawings of the same stack
@@ -580,14 +590,149 @@ function silhouetteLoops(tris, projName, opts) {
   catch (e) { return []; }
   // Drop specks: a loop smaller than a few cells is raster noise, not a feature,
   // and printing it as a dashed blob reads like a mold detail that isn't there.
-  const min = cell * 2.5;
+  const min = cell * 3.5;
   return loops
-    .map(l => simplify(l, cell * 1.25))
+    .map(l => straightenLoop(simplify(l, cell * 1.25), 8, cell * 2.5))
     .filter(l => {
       if (l.length < 4) return false;
       const b = bboxOf(l);
       return (b.x1 - b.x0) > min || (b.y1 - b.y0) > min;
     });
+}
+
+/* Collapse the raster staircase's residual micro-kinks. Douglas-Peucker bounds
+   DEVIATION but happily keeps a long shallow S-wave inside its tolerance, and
+   that wave is exactly what a CAD-straight edge traced through a grid looks
+   like on paper. So gate on the TURN instead: drop a vertex when the direction
+   barely changes there AND removing it moves the outline less than a couple of
+   cells. Real corners turn hard and stay; real curves get checked against the
+   deviation bound like everything else. A few passes, because removing one
+   wobble vertex exposes the next. */
+function straightenLoop(pts, maxTurnDeg, devTol) {
+  const cosMin = Math.cos(maxTurnDeg * Math.PI / 180);
+  let out = pts;
+  for (let pass = 0; pass < 4; pass++) {
+    const n = out.length;
+    if (n < 5) break;
+    const next = [];
+    let dropped = 0, prevDropped = false;
+    for (let i = 0; i < n; i++) {
+      const p = out[(i - 1 + n) % n], q = out[i], r = out[(i + 1) % n];
+      const ax = q.x - p.x, ay = q.y - p.y, bx = r.x - q.x, by = r.y - q.y;
+      const la = Math.hypot(ax, ay) || 1, lb = Math.hypot(bx, by) || 1;
+      const shallow = (ax * bx + ay * by) / (la * lb) > cosMin;
+      // Never drop neighbours in the same pass — that can walk a whole gentle
+      // arc down to nothing while every single removal looked safe.
+      if (shallow && !prevDropped && distToSeg(q, p, r) < devTol) { dropped++; prevDropped = true; continue; }
+      prevDropped = false;
+      next.push(q);
+    }
+    out = next;
+    if (!dropped) break;
+  }
+  return out;
+}
+
+/* When the TRUE segments are known — the stock outline is a union of boxes
+   whose projected edges are exact — don't settle for a straightened trace:
+   snap every traced vertex onto the nearest exact edge (corners first, they
+   beat any edge projection), then let straightenLoop collapse the now-collinear
+   runs. The result lies ON the CAD line, so the heavy overdraw coincides with
+   the block-face edges underneath it instead of chewing along them. */
+function snapLoopToSegments(loop, segs, tol) {
+  const out = [];
+  for (const q of loop) {
+    let px = q.x, py = q.y, best = tol;
+    // Corners get 1.4x the reach: a raster corner cuts diagonally across the
+    // true one, and landing exactly on it is what makes the miter sharp.
+    for (const s of segs) {
+      for (const e of s) {
+        const d = Math.hypot(q.x - e.x, q.y - e.y);
+        if (d < Math.min(best * 1.4, tol * 1.4)) { px = e.x; py = e.y; best = d / 1.4; }
+      }
+    }
+    if (px === q.x && py === q.y) {
+      for (const s of segs) {
+        const a = s[0], b = s[1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L2 = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / L2));
+        const cx = a.x + t * dx, cy = a.y + t * dy;
+        const d = Math.hypot(q.x - cx, q.y - cy);
+        if (d < best) { px = cx; py = cy; best = d; }
+      }
+    }
+    const prev = out[out.length - 1];
+    if (!prev || Math.hypot(prev.x - px, prev.y - py) > 1e-6) out.push({ x: px, y: py });
+  }
+  return out;
+}
+
+function polyPerimeter(pts) {
+  let t = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const q = pts[(i + 1) % pts.length];
+    t += Math.hypot(q.x - pts[i].x, q.y - pts[i].y);
+  }
+  return t;
+}
+
+/* Emit the waterline overlay for one iso view: keep-filtered levels, projected,
+   with three suppressions that all exist because dashes cannot overlap and stay
+   readable —
+     specks    a loop shorter than a few dash periods on paper prints as dirt;
+     tangency  where a section runs within a stroke-width of the silhouette,
+               the two dashed curves bead into a doubled-stroke smear, and the
+               silhouette is the one that carries meaning, so the section yields
+               (a wall section that IS the silhouette vanishes entirely);
+     stubs     what is left after cutting the tangent stretch out is dropped if
+               it is shorter than two dash periods.
+   dashFor(l) picks the dash per loop so the main view can keep its glue-line /
+   intermediate distinction while the mold-only inset draws everything solid. */
+function waterlinePaths(art, v, s, dashFor) {
+  const wl = art.waterlines || { loops: [] };
+  if (!wl.loops.length) return [];
+  const proj = dwgProject("iso").fn;
+  const silSegs = [];
+  (art.iso.loops || []).forEach(loop => loop.forEach((p, i) => silSegs.push([p, loop[(i + 1) % loop.length]])));
+  const keepZ = waterlineKeep(wl.loops, s);
+  const nearTol = 2.5 / s;                  // ~2.5 page px, in projected mm
+  const out = [];
+  /* Draw order is priority order, because each drawn loop joins the occlusion
+     set for the ones after it: glue-line sections first (they carry meaning),
+     then intermediates, upper before lower within each. Two dashed curves a
+     stroke apart bead into a smear, and this is what decides which one lives. */
+  const drawn = wl.loops
+    .filter(l => keepZ.has(l.z))
+    .sort((a, b) => (a.kind === b.kind ? b.z - a.z : (a.kind === "interface" ? -1 : 1)));
+  drawn.forEach(l => {
+    const pj = l.pts.map(p => proj(p.x, p.y, l.z));
+    if (polyPerimeter(pj) * s < 28) return;
+    const page = pj.map(p => ({ x: v.X(p.x), y: v.Y(p.y) }));
+    const near = pj.map(p => silSegs.some(g => distToSeg(p, g[0], g[1]) < nearTol));
+    const dash = dashFor(l);
+    const claim = () => pj.forEach((p, i) => silSegs.push([p, pj[(i + 1) % pj.length]]));
+    if (!near.some(x => x)) { out.push(dwgPoly(page, DW.thin, dash, true)); claim(); return; }
+    if (near.every(x => x)) return;
+    const n = page.length;
+    const start = near.findIndex(x => x);
+    let run = [];
+    let emitted = false;
+    const flush = () => {
+      let len = 0;
+      for (let i = 1; i < run.length; i++) len += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+      if (run.length > 1 && len >= 16) { out.push(dwgPoly(run, DW.thin, dash, false)); emitted = true; }
+      run = [];
+    };
+    for (let k = 1; k <= n; k++) {
+      const i = (start + k) % n;
+      if (near[i]) flush();
+      else run.push(page[i]);
+    }
+    flush();
+    if (emitted) claim();
+  });
+  return out;
 }
 
 /* ---------------- waterlines ----------------
@@ -658,55 +803,58 @@ function waterlineLoops(tris, zs) {
     try { st = stitchRelaxed(segs, WELD_TOL_MM); }
     catch (e) { failures++; continue; }
     outerContours(st.loops).forEach(c => {
-      const pts = simplify(c, 0.2);
+      // 0.8mm + the straighten pass, not sliceMold's raw 0.2: these are drawn,
+      // never stored, and on a nearly-flat region a slice tracks tessellation
+      // noise sideways — smoothing is what keeps a straight CAD contour
+      // straight and a dash pattern regular instead of a trail of specks.
+      const pts = straightenLoop(simplify(c, 0.8), 10, 2.0);
       if (pts.length > 3) loops.push({ z: w.z, kind: w.kind, pts });
     });
   }
   return { loops, failures };
 }
 
-/* Only the viewer's side of each loop. The iso eye direction projects onto XY
-   as (1,1), so an edge faces the viewer exactly when its outward normal has
-   nx + ny > 0 — the loop's own winding (polyArea's sign) says which side is
-   out, no triangle normals and no trust in the mesh's winding needed. The far
-   side would overdraw the near side one dash out of phase and read as noise.
-   Returns open polylines, split where the facing flips; if the loop wrapped
-   past its start point mid-run, the two ends are rejoined. */
-function waterlineRuns(pts) {
-  const sgn = polyArea(pts) > 0 ? 1 : -1;
-  const n = pts.length;
-  const runs = [];
-  let cur = null;
-  for (let i = 0; i < n; i++) {
-    const p = pts[i], q = pts[(i + 1) % n];
-    if (sgn * ((q.y - p.y) - (q.x - p.x)) > 0) {
-      if (!cur) cur = [p];
-      cur.push(q);
-    } else if (cur) { runs.push(cur); cur = null; }
-  }
-  if (cur) {
-    if (runs.length && runs[0][0] === pts[0] && cur[cur.length - 1] === pts[0]) {
-      runs[0] = cur.concat(runs[0].slice(1));
-    } else runs.push(cur);
-  }
-  return runs;
+/* Two sections at different heights of a VERTICAL wall are the same curve in
+   XY, so drawing both prints the same line twice a couple of pixels apart —
+   which on a flat-sided mold turns every wall into a smear of near-coincident
+   dashes. Cheap likeness test: bounding boxes within tol and enclosed areas
+   within tol times the perimeter. A wall with any real slope shifts the
+   contour and fails it; a shape morphing at constant box AND constant area is
+   not a mold. */
+function loopsAlike(a, b, tol) {
+  const ba = bboxOf(a), bb = bboxOf(b);
+  if (Math.abs(ba.x0 - bb.x0) > tol || Math.abs(ba.y0 - bb.y0) > tol ||
+      Math.abs(ba.x1 - bb.x1) > tol || Math.abs(ba.y1 - bb.y1) > tol) return false;
+  const per = 2 * (ba.x1 - ba.x0 + ba.y1 - ba.y0) + 1;
+  return Math.abs(Math.abs(polyArea(a)) - Math.abs(polyArea(b))) < tol * per;
 }
 
-/* Which z levels survive at a given page scale. Interfaces always draw — they
-   are bounded by the layer count and each one is a glue line the sheet already
-   calls out. Intermediates only draw when they clear the last kept level by a
-   legible page gap, which is what keeps a shallow mold from smearing into a
-   dozen coincident dashes. */
+/* Which z levels survive at a given page scale. EVERY level, interfaces
+   included, must differ from the last kept one (loopsAlike above): on a
+   vertical wall the section at a glue line is the same rectangle as the
+   section below it, and seven identical rectangles stacked two pixels apart
+   is a moiré, not information — the glue lines themselves are already named
+   by the leader callouts. Intermediates additionally need a legible page gap.
+   A dome, where every level genuinely differs, keeps its full contour
+   ladder. */
 function waterlineKeep(loops, s) {
-  const zs = [...new Set(loops.map(l => l.z))].sort((a, b) => a - b);
-  const isInterface = z => loops.some(l => l.z === z && l.kind === "interface");
+  const byZ = new Map();
+  loops.forEach(l => {
+    if (!byZ.has(l.z)) byZ.set(l.z, []);
+    byZ.get(l.z).push(l);
+  });
+  const zs = [...byZ.keys()].sort((a, b) => a - b);
   const keep = new Set();
   let last = null;
   zs.forEach(z => {
-    if (isInterface(z) || last == null || s * (z - last) >= DWG_WATERLINE_GAP_PX) {
-      keep.add(z);
-      last = z;
-    }
+    const ls = byZ.get(z);
+    const dup = last != null &&
+      ls.every(l => (byZ.get(last) || []).some(o => loopsAlike(l.pts, o.pts, 1.2)));
+    if (dup) return;
+    const isInt = ls.some(l => l.kind === "interface");
+    if (!isInt && last != null && s * (z - last) < DWG_WATERLINE_GAP_PX) return;
+    keep.add(z);
+    last = z;
   });
   return keep;
 }
@@ -840,17 +988,14 @@ function moldInsetSvg(art) {
   const s = dwgFit(box, IW - pad * 2, IH - pad * 2);
   const w = (box.x1 - box.x0) * s, h = (box.y1 - box.y0) * s;
   const v = dwgView(box, s, pad + (IW - pad * 2 - w) / 2, pad + (IH - pad * 2 - h) / 2, false);
-  const proj = dwgProject("iso").fn;
   const parts = [];
-  const wloops = (art.waterlines && art.waterlines.loops) || [];
-  const keepZ = waterlineKeep(wloops, s);
-  wloops.forEach(l => {
-    if (!keepZ.has(l.z)) return;
-    waterlineRuns(l.pts).forEach(run => parts.push(dwgPoly(run.map(p => {
-      const q = proj(p.x, p.y, l.z);
-      return { x: v.X(q.x), y: v.Y(q.y) };
-    }), DW.thin, null, false)));
-  });
+  // The same hatch as the main view, so "hatched = mold material" holds across
+  // the sheet. Sheet 1's <defs> carries the pattern; url(#) resolves
+  // document-wide, and the inset only ever prints on sheet 1.
+  parts.push(`<path d="${art.iso.loops.map(loop =>
+    "M" + loop.map(p => `${f1(v.X(p.x))} ${f1(v.Y(p.y))}`).join("L") + "Z").join("")}"
+    fill="url(#dwgHatch)" fill-rule="evenodd" stroke="none"/>`);
+  parts.push(...waterlinePaths(art, v, s, () => null));
   art.iso.loops.forEach(loop => parts.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.med, null, true)));
   return `<svg viewBox="0 0 ${IW} ${IH}" width="100%" role="img" aria-label="The machined mold alone, isometric">${parts.join("")}</svg>`;
 }
@@ -900,14 +1045,32 @@ function sheetIso(plan, ctx) {
       }
     });
   });
+  /* Shade the mold's footprint before any of its lines: a light 45° hatch over
+     the white faces, so where the mold sits inside the stock reads at a glance
+     instead of having to be assembled from dashes. The hatch is a pattern fill
+     on a single evenodd path, NOT generated lines — generated hatch would be
+     hundreds of solid segments for the label-collision audit to trip over,
+     while a pattern's one template line never meets a label. */
+  const hatchPath = ctx.art.iso.loops.map(loop =>
+    "M" + loop.map(p => `${f1(v.X(p.x))} ${f1(v.Y(p.y))}`).join("L") + "Z").join("");
+  if (hatchPath) body.push(`<path d="${hatchPath}" fill="url(#dwgHatch)" fill-rule="evenodd" stroke="none"/>`);
   /* The stack's outer silhouette, heavy over the medium block faces — the one
      line that means "the edge of the thing you glued". Traced from the blanks'
-     own box triangles through the same rasteriser the mold uses, on a finer
-     grid: a dozen axis-aligned boxes rasterise for nothing, and the finer cells
-     keep the heavy rule within a page pixel of the polygon edges under it. */
-  const stockCell = Math.max(box.x1 - box.x0, box.y1 - box.y0) / 560;
-  silhouetteLoops(stockGeometry(plan).tris, "iso", { cell: stockCell, minCellMm: 0.1 }).forEach(loop => {
-    body.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.heavy, null, true));
+     own box triangles through the same rasteriser the mold uses, on a much
+     finer grid: a dozen axis-aligned boxes rasterise for nothing, and at these
+     cells the heavy rule stays within a printed pixel of the true edges, so a
+     CAD-straight edge prints straight. */
+  const stockCell = Math.max(box.x1 - box.x0, box.y1 - box.y0) / 1400;
+  const stockSegs = [];
+  layers.forEach(L => (L.blanks || []).forEach(b => {
+    const C = [];
+    for (const z of [L.z0, L.z1]) for (const c of [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]) C.push(proj(c[0], c[1], z));
+    [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+      .forEach(e => stockSegs.push([C[e[0]], C[e[1]]]));
+  }));
+  silhouetteLoops(stockGeometry(plan).tris, "iso", { cell: stockCell, minCellMm: 0.05 }).forEach(loop => {
+    const exact = straightenLoop(snapLoopToSegments(loop, stockSegs, stockCell * 3), 8, stockCell * 2.5);
+    body.push(dwgPoly(exact.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.heavy, null, true));
   });
   // The mold last, over the blocks: it is the reference, and a dashed line under
   // a white face is a dashed line nobody can see.
@@ -915,20 +1078,12 @@ function sheetIso(plan, ctx) {
     body.push(dwgPoly(loop.map(p => ({ x: v.X(p.x), y: v.Y(p.y) })), DW.med, DASH_MOLD, true));
   });
   /* Then its waterlines, thin over the medium silhouette: the surface between
-     the silhouette's edges. Only the viewer's side of each section — the far
-     side would overdraw the near one a dash out of phase — and only the levels
-     that clear each other legibly at this sheet's scale. */
-  const wl = ctx.art.waterlines || { loops: [] };
-  if (wl.loops.length) {
-    const keepZ = waterlineKeep(wl.loops, s);
-    wl.loops.forEach(l => {
-      if (!keepZ.has(l.z)) return;
-      waterlineRuns(l.pts).forEach(run => body.push(dwgPoly(run.map(p => {
-        const q = proj(p.x, p.y, l.z);
-        return { x: v.X(q.x), y: v.Y(q.y) };
-      }), DW.thin, l.kind === "interface" ? DASH_MOLD : DASH_THIN, false)));
-    });
-  }
+     the silhouette's edges. FULL loops — everything mold on this sheet is
+     hidden-line dashed already, so the far side of a section draws like the
+     rest of it; a culled half-contour read as a broken line, not a convention.
+     waterlinePaths drops duplicate levels, specks, and any stretch tangent to
+     the silhouette (two dashed curves a stroke apart bead into a smear). */
+  body.push(...waterlinePaths(ctx.art, v, s, l => l.kind === "interface" ? DASH_MOLD : DASH_THIN));
 
   spreadLabels(labels, 13, M.t + 6, DWG_ISO_H - M.b)
     .forEach(l => body.push(leader(l.px, l.py, DWG_SHEET_W - M.r + 16, l.y, l.text)));
@@ -983,6 +1138,7 @@ function sheetIso(plan, ctx) {
 
   const svg = `<svg class="dwg-view" viewBox="0 0 ${DWG_SHEET_W} ${DWG_ISO_H}" width="100%" role="img"
     aria-label="Assembled isometric view of the mold stock, ${layers.length} layers">
+    <defs><pattern id="dwgHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" stroke-width="0.5"/></pattern></defs>
     ${body.join("\n    ")}
     ${nb.join("\n    ")}
     ${scaleBar(s, 6, DWG_ISO_H - 10)}
@@ -991,7 +1147,7 @@ function sheetIso(plan, ctx) {
   const rows = [];
   layers.forEach((L, i) => (L.blanks || []).forEach((b, k) => rows.push(`<tr>
     <td class="num">${blankLabel(i, k, L.blanks.length)}</td>
-    <td>${k === 0 ? esc(fmtDwgLine(L.thickness)) : ""}</td>
+    <td>${esc(fmtDwgLine(L.thickness))}</td>
     <td>${esc(fmtDwgLine(b.x1 - b.x0))} × ${esc(fmtDwgLine(b.y1 - b.y0))}</td>
     <td class="num">${(L.section || 0) + 1}</td></tr>`)));
 
@@ -1015,7 +1171,7 @@ function sheetIso(plan, ctx) {
         </table>
       </div>
     </div>`,
-    "Dashed lines are the mold inside the stock, reference only: medium dashes its silhouette, thin long dashes its section at each glue line, thin short dashes intermediate sections.");
+    "Hatching and dashed lines are the mold inside the stock, reference only: medium dashes its silhouette, thin long dashes its section at each glue line, thin short dashes intermediate sections (the mold-only inset draws them solid).");
 }
 
 /* ============================================================================

@@ -1541,6 +1541,70 @@ Harness note: `tools/test_drawings.mjs` resolves Playwright from `.ds-sync/`,
 which is gitignored and so absent in a worktree. Symlink it from the main
 checkout (`ln -s ../../.ds-sync .ds-sync` shaped) before running there.
 
+### Sheet 1, round two — straightness, shading, strict review loop (2026-08-05)
+
+Simon's feedback on the real clamshell mating-surface mold (now a permanent
+harness fixture, `mating`, from `tools/fixtures/clamshell-mating-surface.stl`
+copied into `03 App/app/samples/`): lines that are straight in CAD printed
+wavy and fragmented, some went missing, and he asked for the mold to be shaded
+inside the stock. He also asked for a strict reviewer sub-agent (visibility,
+line width, straightness, design-language conformance). Three review rounds
+ran; the fixes, in the order the reviews forced them:
+
+- **Finer raster + straighten pass.** DWG_MAX_CELLS 340 -> 720 (budget 4e7).
+  New `straightenLoop(pts, maxTurnDeg, devTol)`: drops vertices where the turn
+  is shallow AND removal moves the outline less than a couple of cells.
+  Douglas-Peucker bounds deviation but keeps the long shallow S-wave a grid
+  trace makes of a straight edge; the angle gate is what kills it. Applied to
+  every silhouette loop and to waterlines (10 deg / 2.0mm).
+- **Exact snapping for the stock outline.** `snapLoopToSegments`: the blanks'
+  projected box edges are known exactly, so every traced vertex snaps to the
+  nearest exact edge (corners first, 1.4x reach) before straightening. The
+  heavy rule now lies ON the CAD line: no waviness, sharp miters, no burrs
+  where it crosses the face edges underneath.
+- **Hatch shading.** 45 deg pattern fill (`#dwgHatch`, 7px pitch, 0.5 stroke)
+  over the mold's silhouette loops in the main view and the inset, drawn under
+  all linework. Pattern fill, never generated lines: generated hatch would be
+  hundreds of solid segments for the label-collision audit to trip over; a
+  pattern's one template line never meets a label. Legend updated.
+- **Waterlines: full loops, aggressive dedupe, tangency suppression.** The
+  back-face cull from round one is GONE (a culled half-contour read as a
+  broken line; everything mold is hidden-line dashed anyway, so full loops are
+  the convention). `waterlineKeep` now drops ANY level, interfaces included,
+  whose loops match the last kept level (bbox+area within 1.2mm) — on a
+  vertical wall the glue-line section is the same rectangle as the one below
+  it, and thinstack's seven identical rectangles wove a moire with the hatch.
+  `waterlinePaths` is the single emitter (main view dashed by kind, inset
+  solid): it drops speck loops (< ~4 dash periods on paper), and suppresses
+  any stretch running within ~2.5 page px of the silhouette OR of an
+  already-drawn waterline — two dashed curves a stroke apart bead into a
+  smear. Priority order decides who lives: glue lines first, then upper
+  levels. A straight-walled box now draws NO waterlines at all (its sections
+  ARE its silhouette); test_app asserts exactly that.
+- **dimIso short-span fix.** A 3in height dimension prints `3" [76.2]`, wider
+  than its own dimension line; the label now moves out past the extension
+  overshoot when the text is longer than the span (dimH already had minSpan
+  for the same disease). This killed a real text-on-line audit finding the new
+  mating fixture surfaced.
+- **Minors from review:** BLOCKS TO CUT prints board thickness on every row
+  (blank ditto cells were ambiguous at the bench); legend notes the inset
+  draws sections solid.
+
+Review loop mechanics, for next time: render with
+`node tools/test_drawings.mjs --shots-all`, then a general-purpose sub-agent
+Reads the PNGs against the four criteria and returns SEVERE/MODERATE/MINOR
+with pixel locations and a SHIP/FIX verdict. Sub-agents cannot be resumed
+after they complete, so each round is a fresh agent carrying the previous
+round's findings in its prompt. Round 1 found the wavy heavy outline, the
+speck-trail glue line, nosecone edge burrs, and the thinstack moire; round 2
+confirmed those fixed and caught the tangent-contour beading; round 3 is the
+ship gate.
+
+Deviation from Simon's suggestion, on purpose: he floated shading "in the
+above photo" — done as hatch, not grey fill, because the sheet's design
+language carries meaning by rule weight and dash only, and a grey fill dies
+on the RFS laser printer.
+
 ## Mold Stack Planner — phase 2 (auto boards, sections, cut list)
 
 **SN5 consumed ~20 sheets**, so the optimizer is worth building — a 20% saving

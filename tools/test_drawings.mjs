@@ -70,6 +70,10 @@ const FIXTURES = [
   { id: "nosecone", label: "single body, 3 layers", src: { file: "nosecone-plug.stl" } },
   { id: "undertray", label: "9.4in tall, splits into 2 machine setups", src: { file: "undertray-diffuser.stl" } },
   { id: "clamshell", label: "one body out of a 3-body assembly", src: { file: "clamshell-assembly.stl", body: 1 } },
+  // The real SN5 clamshell mating-surface mold: 35 x 21 x 2.43in, designed in
+  // inches and exported in mm. Flat, wide, shallow curve — the mold that found
+  // the 889.00 stitching bug, and then the wavy-silhouette raster on sheet 1.
+  { id: "mating", label: "flat wide shallow mold — straight CAD edges", src: { file: "clamshell-mating-surface.stl" } },
   { id: "twotower", label: "multi-blank layers — two towers on one base", src: { synth: "towers" } },
   { id: "thinstack", label: "many thin boards — worst case for label crowding", src: { synth: "thin" } },
   { id: "overhang", label: "a layer that hangs over the board below", src: { synth: "overhang" } },

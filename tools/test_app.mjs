@@ -3437,7 +3437,7 @@ await t("a plan with no stored mesh still draws, and says the mold is only an ou
   assert(!/No stored mold mesh/.test(withMesh), "and drops the fallback warning");
 });
 
-await t("sheet 1 sections the mold: waterlines from the mesh, culled to the near side", () => {
+await t("sheet 1 sections the mold: waterlines, straightening, duplicate-level dedupe", () => {
   const p = twoSectionPlan();
   const tris = boxTris(400, 300, 220);
   // An interface level at every glue line INSIDE the mold's Z range, plus the
@@ -3451,14 +3451,25 @@ await t("sheet 1 sections the mold: waterlines from the mesh, culled to the near
   const wl = waterlineLoops(tris, zs);
   assert(wl.failures === 0, "no stitch failures on a box: " + wl.failures);
   assert(wl.loops.length === zs.length, `${wl.loops.length} loops for ${zs.length} levels`);
-  // The cull keeps only the two faces toward the iso eye (+X and +Y): a CCW
-  // square comes back as ONE run of its right and back edges, joined.
-  const runs = waterlineRuns([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
-  assert(runs.length === 1 && runs[0].length === 3, `${runs.length} runs of ${runs[0] && runs[0].length}`);
-  // And the sheet carries them: intermediate sections short-dashed, plus the
-  // mold-alone inset that only a real mesh earns.
+  // Vertical walls: every section of a straight-sided box is the same curve in
+  // XY, interfaces included, so the whole ladder collapses onto the first
+  // distinct level — seven identical rectangles two pixels apart is a moiré,
+  // not information.
+  const keep = waterlineKeep(wl.loops, 1);
+  assert(keep.size <= 2, `a box collapses to its first distinct section: kept ${keep.size} of ${zs.length}`);
+  // straightenLoop: a wobbled-but-straight CAD edge comes back as one line and
+  // a real 90° corner survives it — the raster staircase fix in one assert.
+  const rect = [
+    { x: 0, y: 0 }, { x: 300, y: 2 }, { x: 600, y: 0 },
+    { x: 600, y: 300 }, { x: 300, y: 298 }, { x: 0, y: 300 },
+  ];
+  const st2 = straightenLoop(rect, 8, 4);
+  assert(st2.length === 4, "wobble mid-vertices dropped, corners kept: " + st2.length);
+  // On a straight-walled box every section lies ON the silhouette, so the
+  // tangency suppression leaves nothing extra to draw — the silhouette already
+  // IS the section. No thin short-dash strokes should survive.
   const html = drawingSetHtml({ ...p, id: "STK-WL" }, { tris });
-  assert(html.indexOf('stroke-dasharray="3 2.5"') !== -1, "intermediate sections print short-dashed");
+  assert(html.indexOf('stroke-dasharray="3 2.5"') === -1, "wall sections tangent to the silhouette are suppressed");
   assert(/AS MACHINED — MOLD ONLY/.test(html), "the inset appears with a mesh");
   const noMesh = drawingSetHtml({ ...p, id: "STK-WL2" }, {});
   assert(!/AS MACHINED/.test(noMesh), "and never without one");
