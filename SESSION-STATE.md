@@ -47,12 +47,27 @@ Traps worth keeping:
 - slicer.js must keep zero dependencies (test_slicer evals it standalone), so
   the cost function lives in packer.js and arrives as `opts.score`.
 
-Still open, and next: commit 8, the mold/plan merge — `currentPlanId` +
-`planHistory` on molds, one `currentPlanFor()` replacing three duplicated
-"newest by ts" scans (core.js:313, core.js:865, molds.js:368), Stack plans
-off the rail, one `+ Mold` button. Then, deliberately deferred: cut-list
-execution and writing leftovers back into inventory (packAll already tags
-each leftover with its `boardId` for exactly this).
+The mold/plan merge landed too: `currentPlanId` + `planHistory` on molds, one
+`currentPlanFor()` (with a newest-by-ts fallback that must NOT be removed —
+it is what makes this work on SN5 data with no migration) replacing three
+duplicated scans, Stack plans off the rail, one `+ Mold` button that also
+covers "record a mold with no CAD yet", and a Re-plan that supersedes rather
+than deletes. `stackplans` stays its own collection on purpose: 900KB docs,
+the Storage mesh path, and STK- deep links all depend on it.
+
+End-to-end on the shipped code, both sample molds against the SN5 rack:
+nosecone 3 layers -> 2 (8h clamp -> 4h), diffuser 5 -> 4 (16h -> 12h); every
+blank a whole half inch and every cut position on an eighth-inch mark, e.g.
+"Rip at 21.00in", "Crosscut at 13.50in". Pushed and deployed, verified live
+by curl.
+
+Deliberately deferred, the one piece of the approved plan NOT done: cut-list
+execution — a "Mark these boards cut" action that decrements board qty and
+writes leftovers back as new board rows. Left out because renderCutList()
+runs on every render (including the Molds overview banner), so writing back
+there would fabricate inventory from a hypothetical; it needs its own
+confirm/partial/undo flow. `packAll` already tags every leftover with its
+`boardId` for exactly this.
 
 Previous status follows.
 
