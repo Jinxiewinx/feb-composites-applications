@@ -110,6 +110,34 @@ t("CRITICAL replaying the cut sequence never saws through a placed blank", () =>
   assert(r.cuts.length > 0, "a real pack should require cuts");
 });
 
+console.log("cuts:");
+t("no blank ever costs more than two cuts", () => {
+  // Structural: a placement makes at most one cut per axis. Asserted anyway,
+  // because a rewrite that starts re-cutting a rectangle would still pass every
+  // feasibility test above while quietly doubling the work at the saw.
+  const parts = [];
+  for (let i = 0; i < 10; i++) parts.push(blank("p" + i, 180 + (i % 5) * 90, 140 + (i % 4) * 60));
+  const r = P.packBoard({ w: 8 * 12 * IN, h: 4 * 12 * IN }, parts, {});
+  assert(r.cuts.length <= 2 * r.placed.length,
+    `${r.cuts.length} cuts for ${r.placed.length} blanks`);
+});
+t("the split order is chosen, not fixed", () => {
+  /* Four blanks that tile a 1220 square two-by-two. The old rule always split
+     to keep the bigger single offcut, which here costs a cut it does not need;
+     trying both orders finds the tiling. Same blanks placed either way — the
+     whole difference is at the saw. */
+  const parts = [0, 1, 2, 3].map(i => blank("q" + i, 600, 400));
+  const r = P.packBoard({ w: 1220, h: 1220 }, parts, {});
+  assert(r.placed.length === 4, "all four should fit");
+  assert(r.cuts.length <= 6, "a tiling board should not need 8 cuts, got " + r.cuts.length);
+});
+t("the same board and the same blanks give the same plan twice", () => {
+  const parts = [0, 1, 2, 3, 4].map(i => blank("d" + i, 300 + i * 40, 200 + (i % 3) * 55));
+  const key = r => JSON.stringify([r.placed.map(p => [p.part.id, p.x, p.y, p.rotated]), r.cuts]);
+  assert(key(P.packBoard({ w: 1500, h: 1000 }, parts, {})) === key(P.packBoard({ w: 1500, h: 1000 }, parts, {})),
+    "ties must resolve the same way every run, or a printed cut list stops matching the screen");
+});
+
 console.log("stock policy:");
 t("offcuts are spent before fresh sheets", () => {
   const boards = [

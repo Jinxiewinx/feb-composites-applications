@@ -36,6 +36,12 @@
 
 const KERF_MM = 3.175;          // 1/8in saw blade
 const MIN_REMNANT_MM = 101.6;   // 4in — Simon: "we have had small like 4 x 10 inch pieces"
+/* How deep to try BOTH ways of splitting a rectangle instead of guessing.
+   Depth climbs by 2 per level, so 4 means the top three levels branch: at most
+   8 subtree evaluations, on a routine that is O(n^2) to begin with. Near the
+   root the rectangles are big and the choice actually matters; deeper down it
+   is a small subtree and the guess is fine. */
+const SPLIT_TRIAL_DEPTH = 4;
 
 /* One blank to cut. { id, w, h, thickness, density, label } — w/h already
    include the glue margin, straight from the slicer. */
@@ -75,19 +81,39 @@ function packFill(x, y, w, h, depth, remaining, kerf, rotate) {
   const rest = remaining.slice(0, idx).concat(remaining.slice(idx + 1));
   const here = { part, x, y, w: fit.w, h: fit.h, rotated: fit.rotated };
 
-  // Two ways to split what is left. Prefer the one that keeps the bigger
-  // single offcut whole, because a big rectangle is reusable and two thin
-  // strips are scrap.
   const restW = w - fit.w - kerf;
   const restH = h - fit.h - kerf;
-  const horizontalFirst = Math.max(restW * h, w * restH) === restW * h;
+  /* Two ways to split what is left. The old rule always kept the bigger single
+     offcut whole, which is a decent guess and only ever a guess — it is made
+     before knowing what still has to be placed. Near the root, where the
+     rectangles are big and the decision is worth the most, try both and keep
+     the better result. Deeper down the guess stands, because the subtree is
+     small and the branching is not free. */
+  const wideFirst = Math.max(restW * h, w * restH) === restW * h;
+  let sub = packSplit(x, y, w, h, depth, rest, kerf, rotate, fit, wideFirst);
+  if (depth <= SPLIT_TRIAL_DEPTH) {
+    const alt = packSplit(x, y, w, h, depth, rest, kerf, rotate, fit, !wideFirst);
+    if (betterSplit(alt, sub)) sub = alt;
+  }
+  return {
+    placed: [here].concat(sub.placed),
+    cuts: sub.cuts,
+    leftover: sub.leftover,
+    remaining: sub.remaining,
+  };
+}
 
+/* Split the rectangle one specific way and fill both children.
+   `horizontalFirst` is the choice; everything else follows from it. */
+function packSplit(x, y, w, h, depth, rest, kerf, rotate, fit, horizontalFirst) {
   /* Record the cuts. The span of the SECOND cut depends on whether the first
      one actually happened: if the leftover was thinner than the blade there
      is nothing to separate, no cut is made, and the piece still in hand is
      the full rectangle — so the second cut has to cross all of it, not just
      the part. Getting this wrong prints a cut that stops halfway, which is
      a notch, which a saw cannot do. */
+  const restW = w - fit.w - kerf;
+  const restH = h - fit.h - kerf;
   const cuts = [];
   let a, b;
   if (horizontalFirst) {
@@ -112,11 +138,32 @@ function packFill(x, y, w, h, depth, remaining, kerf, rotate) {
   const ra = packFill(a.x, a.y, a.w, a.h, depth + 2, rest, kerf, rotate);
   const rb = packFill(b.x, b.y, b.w, b.h, depth + 2, ra.remaining, kerf, rotate);
   return {
-    placed: [here].concat(ra.placed, rb.placed),
+    placed: ra.placed.concat(rb.placed),
     cuts: cuts.concat(ra.cuts, rb.cuts),
     leftover: ra.leftover.concat(rb.leftover),
     remaining: rb.remaining,
   };
+}
+
+/* Is subtree `a` better than subtree `b`? LEXICOGRAPHIC, not a weighted sum:
+   a weighted sum would need exchange rates between blank area, saw cuts and
+   offcut size, and there is no honest way to set those at this level. A strict
+   order needs none, and it says what the shop would say out loud:
+
+     1. get more blanks out of the board
+     2. then make fewer cuts
+     3. then leave one big usable offcut rather than several awkward ones
+
+   Strictly-better only, so a tie keeps the incumbent and two runs of the same
+   pack give the same answer. */
+function betterSplit(a, b) {
+  const area = r => r.placed.reduce((n, p) => n + p.w * p.h, 0);
+  const biggest = r => r.leftover.reduce((n, o) =>
+    (o.w >= MIN_REMNANT_MM && o.h >= MIN_REMNANT_MM) ? Math.max(n, o.w * o.h) : n, 0);
+  const aa = area(a), ab = area(b);
+  if (aa !== ab) return aa > ab;
+  if (a.cuts.length !== b.cuts.length) return a.cuts.length < b.cuts.length;
+  return biggest(a) > biggest(b);
 }
 
 /* Pack as many parts as possible into one board. */
