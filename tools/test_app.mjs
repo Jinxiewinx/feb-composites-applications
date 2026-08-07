@@ -1222,7 +1222,7 @@ await t("issue kind requires a work order before it can be created", async () =>
 await t("board drag moves status (field-scoped write)", () => {
   view = { ...view, tab: "projects", mode: "list", id: null, edit: false };
   const id = DB.projects.find(p => p.kind === "project").id;
-  view = { ...view, mode: "list", projView: "board" }; render();
+  view = { ...view, mode: "list" }; render();
   assert(main.innerHTML.includes('class="board"'), "board renders");
   projDragStart(id); calls.length = 0; projDrop("Done", { classList: { remove() {} } });
   assert(projById(id).status === "Done");
@@ -1230,7 +1230,7 @@ await t("board drag moves status (field-scoped write)", () => {
 });
 await t("an issue can't be dragged/dropped to Done without a disposition", () => {
   const p = projById(testIssueId);
-  view = { ...view, mode: "list", projView: "board" }; render();
+  view = { ...view, mode: "list" }; render();
   projDragStart(p.id); calls.length = 0; lastToast = "";
   projDrop("Done", { classList: { remove() {} } });
   assert(projStatus(p) !== "Done", "blocked");
@@ -2332,7 +2332,7 @@ await t("deadlineItems drops 'N/A (Flat)' from Who — it's a stage value, not a
 });
 await t("tickets board gives every status its own track (was repeat(4,1fr) for 6 statuses)", () => {
   DB.projects = PROJ_STATUS.map((s, i) => ({ id: "TB" + i, title: "t" + i, status: s, assignees: [] }));
-  view = { ...view, tab: "projects", mode: "list", projView: "board", q: "", tkFilter: "" };
+  view = { ...view, tab: "projects", mode: "list", q: "", tkFilter: "" };
   const html = renderProjBoard();
   assert(html.includes('class="boardwrap"'), "scroll wrapper present");
   PROJ_STATUS.forEach(s => assert(html.includes(`col-${STATUS_SLUG[s]}`), "column for " + s));
@@ -4421,18 +4421,57 @@ await t("the trail crosses tabs, because the links do", () => {
 /* ---- sub-tickets ---------------------------------------------------------
    They were filtered out of both planning views, so breaking a ticket down hid
    the work. */
-await t("a sub-ticket appears on the board and in the list, carrying its parent", () => {
+await t("a sub-ticket appears on the board and in the rail, nested under its parent", () => {
   DB.projects = [
     { id: "TKT-P", kind: "project", title: "Undertray mold", status: "In Progress", comments: [], files: [] },
     { id: "TKT-S", kind: "project", title: "Machine the plug", status: "To Do", parentId: "TKT-P", comments: [], files: [] },
   ];
-  view = { ...view, tab: "projects", mode: "list", projView: "board", q: "", tkFilter: "" };
+  view = { ...view, tab: "projects", mode: "list", q: "", tkFilter: "", tkOpen: false, tkLate: false, tkMine: false, tkDone: false };
   render();
-  assert(main.innerHTML.includes("Machine the plug"), "the sub-ticket has its own card");
+  assert(main.innerHTML.includes("Machine the plug"), "the sub-ticket has its own board card");
   assert(/part of .*TKT-P|part of .*Undertray mold/.test(main.innerHTML), "and says whose: " + main.innerHTML.slice(0, 400));
-  view = { ...view, projView: "list" }; render();
-  assert(main.innerHTML.includes("Machine the plug"), "and its own row in the list");
-  assert(main.innerHTML.includes("part of"), "with the same context line");
+  // The rail nests it: the child row carries pi-child and sits right after the parent.
+  const rail = main.innerHTML;
+  const pAt = rail.indexOf('id="pi-TKT-P"'), sAt = rail.indexOf('id="pi-TKT-S"');
+  assert(pAt > -1 && sAt > pAt, "parent row, then the child row");
+  assert(/pi-child[^"]*" id="pi-TKT-S"/.test(rail), "the child row is indented under its parent");
+  const rows = tkIndexRows();
+  assert(rows[0].id === "TKT-P" && rows[1].id === "TKT-S", "j/k walks parent then child");
+});
+await t("rail group headers are not rows: j/k can never land on one", () => {
+  const entries = tkRailPlan();
+  assert(entries.some(e => e.head), "headers exist in the plan");
+  const rows = tkIndexRows();
+  assert(rows.every(r => r && r.id), "every row is a ticket");
+  assert(!rows.some(r => typeof r === "string"), "no labels leak into the rows");
+});
+await t("a filter that hides the open ticket pins it instead of blanking the pane", () => {
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-P", q: "zzz-no-match" };
+  const rows = tkIndexRows();
+  assert(rows.some(r => r.id === "TKT-P"), "selection survives a blanking filter");
+  view = { ...view, mode: "list", id: null, q: "" };
+});
+await t("tkKeydown honors the shared contract: guards, j/k, Enter, Escape, /", () => {
+  view = { ...view, tab: "projects", mode: "list", id: null, edit: false };
+  const ev = (key, extra) => Object.assign({ key, target: {} }, extra);
+  assert(tkKeydown(ev("j", { metaKey: true })) === null, "modifier bails");
+  assert(tkKeydown(ev("j", { target: { tagName: "INPUT" } })) === null, "typing bails");
+  assert(tkKeydown(ev("Enter")) === "open", "Enter opens the first row");
+  assert(view.mode === "detail", "and the pane fills");
+  assert(tkKeydown(ev("j")) === "next", "j moves down");
+  assert(tkKeydown(ev("k")) === "prev", "k moves up");
+  assert(tkKeydown(ev("Escape")) === "clear", "Escape clears back to the board");
+  assert(view.mode === "list", "cleared");
+  assert(tkKeydown(ev("/")) === "search", "/ focuses search");
+  const held = view.tab; view = { ...view, tab: "parts" };
+  assert(tkKeydown(ev("j")) === null, "inert on another tab");
+  view = { ...view, tab: held };
+});
+await t("ticket filter keys are their own: tkLate does not leak into fLate or woLate", () => {
+  view = { ...view, tab: "projects", tkLate: true };
+  assert(!view.fLate && !view.woLate, "one tab's toggle, one tab's key");
+  resetTicketFilters();
+  assert(!view.tkLate && !view.tkDone && !view.tkMine && !view.tkOpen, "reset clears them all");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

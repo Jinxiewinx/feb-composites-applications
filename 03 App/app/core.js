@@ -398,7 +398,7 @@ function ticketLineage(rec) {
    nobody has ever wanted the 40th step back. */
 let NAV_STACK = [];
 const NAV_MAX = 25;
-function navHere() { return { tab: view.tab, mode: view.mode, id: view.id, projView: view.projView }; }
+function navHere() { return { tab: view.tab, mode: view.mode, id: view.id }; }
 function navSame(a, b) { return !!a && !!b && a.tab === b.tab && a.mode === b.mode && a.id === b.id; }
 function navPush(entry) {
   if (!entry || !entry.tab) return;
@@ -1794,6 +1794,7 @@ function render() {
      this the rail renders with the selected row well below the fold. Same
      optional-function guard as the two above, for the same reason. */
   if (typeof syncWORailScroll === "function") syncWORailScroll();
+  if (typeof syncTicketRailScroll === "function") syncTicketRailScroll();
   syncChromeMetrics();
 }
 

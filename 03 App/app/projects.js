@@ -302,34 +302,204 @@ function delProject(id) {
   });
 }
 
-/* ---- board / list ---- */
+/* ---- the tab: master-detail, board as the overview ----
+   The last tab to get the rail+pane grammar Parts, Work Orders and Molds
+   already speak: a persistent index on the left, the open ticket beside it,
+   and the kanban board as the pane when nothing is selected. Going between
+   tickets is one click in the rail now instead of detail -> back -> find ->
+   detail. The old table view is gone: the rail IS the list, with better
+   filters and the keyboard. The board survives because dragging a card
+   between statuses is how the Monday meeting actually runs. */
 function renderProjects() {
-  if (view.mode === "detail") return renderProjDetail();
-  const boardMode = view.projView !== "list";
+  const sel = selectedTicket();
+  return `<div class="mdsplit tkouter ${sel ? "has-sel" : ""}">
+    ${renderTicketIndex()}${sel ? renderProjDetail() : renderTicketOverview()}
+  </div>`;
+}
+
+/* ---------- selection ----------
+   view.mode === "detail" stays the switch, exactly as on Work Orders: a dozen
+   tests set it directly, and openRecord()/consumePendingLink() write it. */
+function selectedTicket() { return view.mode === "detail" ? projById(view.id) : null; }
+function selectTicket(id) {
+  view = { ...view, mode: "detail", id, edit: false };
+  render();
+  const el = document.getElementById("pi-" + id);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+}
+function clearTicketSelection() { view = { ...view, mode: "list", edit: false }; render(); }
+/* Arriving from a chip, the Dashboard or a deep link goes through openRecord(),
+   which never calls selectTicket() — so the rail would render with the selected
+   row far below the fold. Called from render(), same guarded idiom as
+   syncWORailScroll(). */
+function syncTicketRailScroll() {
+  if (typeof document.querySelector !== "function") return;
+  if (view.tab !== "projects" || view.mode !== "detail" || !view.id) return;
+  const el = document.getElementById("pi-" + view.id);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+}
+
+/* ---------- the index rows ----------
+   Group headers are NOT in the plan's row entries and must never be: keyboard
+   navigation walks tkIndexRows(), and a header in it would let j/k set view.id
+   to a label and silently drop the pane back to the overview.
+
+   Order is genealogy-first: each top-level project followed immediately by its
+   sub-tickets (indented), then the issues as their own run. Status grouping
+   would tear children from parents (their statuses are independent), and the
+   parent-child adjacency is the thing the flat board could never show. */
+const TK_STATUS_ORDER = { "In Progress": 0, "On Hold": 1, "Collecting Data": 2, "To Do": 3, "Done": 4, "Cancelled": 5 };
+function tkClosed(p) { const st = projStatus(p); return st === "Done" || st === "Cancelled"; }
+function isTkLate(p) { const dd = daysUntil(p.dueDate); return dd != null && dd < 0 && !tkClosed(p); }
+function tkCmp(a, b) {
+  return (TK_STATUS_ORDER[projStatus(a)] - TK_STATUS_ORDER[projStatus(b)])
+    || (a.dueDate || "9999").localeCompare(b.dueDate || "9999")
+    || a.id.localeCompare(b.id);
+}
+/* One plan for rail body AND keyboard rows, built once, so they cannot
+   disagree about order. Entries are {head} labels or {row, child} tickets. */
+function tkRailPlan() {
+  const q = (view.q || "").toLowerCase();
+  const kf = view.tkFilter || "";
+  /* Like Work Orders, this rail does NOT hide finished records by default: a
+     season's tickets are half archive, and a done-hiding default lands an
+     all-done history on an empty rail that reads as a broken tab. Open and
+     done are one chip each. */
+  let rows = (DB.projects || [])
+    .filter(p => !kf || ticketKind(p) === kf)
+    .filter(p => !view.tkOpen || !tkClosed(p))
+    .filter(p => !view.tkDone || tkClosed(p))
+    .filter(p => !view.tkLate || isTkLate(p))
+    .filter(p => !view.tkMine || isMine(p.assignees || []))
+    .filter(p => !q || (p.title || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q)
+      || (p.assignees || []).some(e => userName(e).toLowerCase().includes(q) || e.toLowerCase().includes(q)));
+  // The open ticket never falls out from under you — a filter that would hide
+  // what you are reading keeps it in place instead.
+  const sel = selectedTicket();
+  if (sel && !rows.includes(sel)) rows = rows.concat([sel]);
+
+  const inRows = new Set(rows.map(r => r.id));
+  const kids = new Map();       // parentId (present in rows) -> children
+  const loose = [];             // children whose parent is filtered out or gone
+  rows.filter(p => !isIssue(p) && p.parentId).forEach(p => {
+    if (inRows.has(p.parentId)) {
+      if (!kids.has(p.parentId)) kids.set(p.parentId, []);
+      kids.get(p.parentId).push(p);
+    } else loose.push(p);
+  });
+  const tops = rows.filter(p => !isIssue(p) && !p.parentId).sort(tkCmp);
+  const issues = rows.filter(p => isIssue(p) && !p.parentId).sort(tkCmp);
+  const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || a.id.localeCompare(b.id);
+
+  const entries = [];
+  if (tops.length || loose.length) entries.push({ head: "Projects", rows: tops.concat(loose) });
+  tops.forEach(p => {
+    entries.push({ row: p });
+    (kids.get(p.id) || []).sort(byDue).forEach(k => entries.push({ row: k, child: true }));
+  });
+  loose.sort(tkCmp).forEach(p => entries.push({ row: p }));
+  if (issues.length) entries.push({ head: "Issues", rows: issues });
+  issues.forEach(p => entries.push({ row: p }));
+  return entries;
+}
+function tkIndexRows() { return tkRailPlan().filter(e => e.row).map(e => e.row); }
+
+function tkSummary() {
+  const D = DB.projects || [];
+  const open = D.filter(p => !tkClosed(p));
+  return {
+    total: D.length, open: open.length, done: D.length - open.length,
+    late: D.filter(isTkLate).length,
+    mine: open.filter(p => isMine(p.assignees || [])).length,
+  };
+}
+function resetTicketFilters() { view = { ...view, tkOpen: false, tkLate: false, tkMine: false, tkDone: false, tkFilter: "", q: "" }; render(); }
+
+/* One rail row. Four fixed slots, same grammar as the other rails, so the
+   ≤900 collapse and the tablet-band rules apply without knowing what a
+   ticket is. The status pill takes the slot Work Orders spends on its
+   progress bar: status is the one thing a ticket has instead of progress. */
+function tkIndexItem(p, opts) {
+  opts = opts || {};
+  const sel = view.mode === "detail" && view.id === p.id;
+  const st = projStatus(p);
+  const late = isTkLate(p);
+  return `<div class="pitem ${sel ? "sel" : ""} ${tkClosed(p) ? "isdone" : ""} ${opts.child ? "pi-child" : ""}" id="pi-${esc(p.id)}"
+      role="option" aria-selected="${sel}" title="${esc(p.id)} · ${esc(st)}"
+      onclick="selectTicket('${esc(p.id)}')">
+    <span class="pi-name">${isIssue(p) ? `<span class="kindbadge issue">Issue</span> ` : ""}${esc(p.title || p.id)}${
+      projUnread(p) ? ' <span class="unread-dot" title="New activity"></span>' : ""}<span class="tny muted"> ${esc(p.id)}</span></span>
+    <span class="pi-due ${late ? "warn" : ""}">${p.dueDate ? shortDate(p.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
+    <span class="pi-sub"><span class="status ${projStatusClass(st)}"><span class="dot"></span>${esc(st)}</span>${
+      p.priority === "High" && !tkClosed(p) ? '<span class="prio High tny">High</span>' : ""}</span>
+    <span class="pi-who">${(p.assignees || []).slice(0, 3).map(e => avatar(e, 20)).join("")}</span>
+  </div>`;
+}
+
+function tkGroupHead(label, rows) {
+  const late = rows.filter(isTkLate).length;
+  return `<div class="pgrouphd">
+    <span class="pg-name">${esc(label)}</span>
+    <span class="pg-n">${rows.length} ${rows.length === 1 ? "ticket" : "tickets"}</span>
+    ${late ? `<span class="pg-n pg-late">${icon("warning", 12)} ${late} late</span>` : ""}
+  </div>`;
+}
+
+function renderTicketIndex() {
+  const D = DB.projects || [];
+  const entries = tkRailPlan();
+  const nRows = entries.filter(e => e.row).length;
+  const s = tkSummary();
   const kf = view.tkFilter || "";
   return `
-  <div class="toolbar no-print">
-    <button class="primary" onclick="openNewProject()">+ New ticket</button>
-    <div class="kindfilter">
-      <span class="${kf ? "" : "on"}" onclick="view.tkFilter='';render()">All</span>
-      <span class="${kf === "project" ? "on" : ""}" onclick="view.tkFilter='project';render()">Projects</span>
-      <span class="${kf === "issue" ? "on" : ""}" onclick="view.tkFilter='issue';render()">Issues</span>
+  <aside class="mdindex" aria-label="Tickets index">
+    <div class="pindex-head no-print">
+      <div class="toolbar">
+        <button class="primary ib" onclick="openNewProject()">${icon("plus", 15)} New ticket</button>
+        <span class="muted tny" style="margin-left:auto">${nRows} of ${D.length} tickets</span>
+      </div>
+      <div class="psum">
+        ${summaryChip("open", s.open, !!view.tkOpen, "view.tkOpen=!view.tkOpen;view.tkDone=false;render()")}
+        ${summaryChip("late", s.late, !!view.tkLate, "view.tkLate=!view.tkLate;view.tkMine=false;render()", s.late ? "bad" : "")}
+        ${summaryChip("mine", s.mine, !!view.tkMine, "view.tkMine=!view.tkMine;view.tkLate=false;render()")}
+        ${summaryChip("done", s.done, !!view.tkDone, "view.tkDone=!view.tkDone;view.tkOpen=false;render()")}
+      </div>
+      <div class="pfilters">
+        <input id="searchbox" placeholder="search title / id / assignee…" value="${esc(view.q)}" oninput="searchInput(this)">
+        <select title="Kind" onchange="view.tkFilter=this.value;render()">
+          <option value="" ${kf ? "" : "selected"}>All kinds</option>
+          <option value="project" ${kf === "project" ? "selected" : ""}>Projects</option>
+          <option value="issue" ${kf === "issue" ? "selected" : ""}>Issues</option>
+        </select>
+        <button class="sm sortdir" title="Clear filters" onclick="resetTicketFilters()">✕</button>
+      </div>
     </div>
-    <button onclick="view.projView='${boardMode ? "list" : "board"}';render()">${boardMode ? "List view" : "Board view"}</button>
-    <input id="searchbox" placeholder="search title / assignee…" value="${esc(view.q)}" oninput="searchInput(this)" style="margin-left:auto">
-  </div>
-  ${DB.projects.length === 0 ? `<div class="card">No tickets yet. <b>+ New ticket</b> to start one.</div>` : boardMode ? renderProjBoard() : renderProjTable()}`;
+    <div class="plist" role="listbox" aria-label="Tickets">
+      ${nRows ? entries.map(e => e.head ? tkGroupHead(e.head, e.rows) : tkIndexItem(e.row, { child: e.child })).join("")
+        : `<div class="pempty muted">${D.length ? "No tickets match these filters." : "No tickets yet — <b>New ticket</b> to start one."}</div>`}
+      <div class="plistfade" aria-hidden="true"></div>
+    </div>
+    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
+  </aside>`;
 }
-/* Sub-tickets used to be filtered out of both the board and the list, on the
-   theory that they belong to their parent's page. What that actually meant was
-   that breaking a ticket down HID the work: "Machine the plug" existed, was
-   assigned, was due Friday, and appeared on neither view the team plans from.
 
-   They get their own card and their own row now, in their own status column —
-   a sub-ticket has its own status, so nesting it under a parent in a different
-   column was never going to work on a board anyway. What keeps it from reading
-   as an orphan is parentLine(), which the Dashboard and Weekly Plan already use
-   for exactly this. */
+/* The overview pane: the board, exactly as it was, one level in. */
+function renderTicketOverview() {
+  return `<section class="mddetail" aria-label="Tickets board">
+    ${DB.projects.length === 0
+      ? `<div class="card">No tickets yet. <b>+ New ticket</b> to start one.</div>`
+      : renderProjBoard()}
+  </section>`;
+}
+/* Sub-tickets used to be filtered out of the board, on the theory that they
+   belong to their parent's page. What that actually meant was that breaking a
+   ticket down HID the work: "Machine the plug" existed, was assigned, was due
+   Friday, and appeared nowhere the team plans from.
+
+   They get their own card, in their own status column — a sub-ticket has its
+   own status, so nesting it under a parent in a different column was never
+   going to work on a board anyway. What keeps a card from reading as an
+   orphan is parentLine(); in the rail it is the indent under the parent. */
 function projMatch(p) {
   const q = (view.q || "").toLowerCase();
   const kf = view.tkFilter || "";
@@ -374,28 +544,8 @@ function projDrop(status, el) {
   const prevStatus = projStatus(p);
   p.status = status; saveProj(p, "status"); announceIfResolved(p, prevStatus); render();
 }
-function renderProjTable() {
-  const order = { "In Progress": 0, "On Hold": 1, "Collecting Data": 2, "To Do": 3, "Done": 4, "Cancelled": 5 };
-  const rows = DB.projects.filter(p => projMatch(p))
-    .sort((a, b) => (order[projStatus(a)] - order[projStatus(b)]) || (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
-  return `<table class="list">
-    <tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Assignees</th><th>Linked to</th><th>Activity</th></tr>
-    ${rows.map(p => {
-      const dd = daysUntil(p.dueDate), late = dd != null && dd < 0 && projStatus(p) !== "Done";
-      const st = projStatus(p);
-      const linked = isIssue(p) ? (p.workOrderId ? `<span class="chip">${esc(p.workOrderId)}</span>` : "—")
-        : (subTickets(p).length ? `<span class="chip">${subTickets(p).length} sub-ticket${subTickets(p).length === 1 ? "" : "s"}</span>` : "—");
-      return `<tr onclick="openRecord('projects','${p.id}')">
-        <td><span class="kindbadge ${ticketKind(p)}">${isIssue(p) ? "Issue" : "Project"}</span> <b>${esc(p.title || p.id)}</b>${projUnread(p) ? " 🟡" : ""}${parentLine(parentOf(p))}</td>
-        <td><span class="status ${projStatusClass(st)}"><span class="dot"></span>${esc(st)}</span></td>
-        <td class="prio ${esc(p.priority)}">${esc(p.priority || "")}</td>
-        <td><span class="avatar-stack">${(p.assignees || []).slice(0, 5).map(e => avatar(e, 22)).join("")}</span></td>
-        <td class="tny">${linked}</td>
-        <td class="${late ? "warn" : ""}">${p.dueDate ? esc(p.dueDate) + (late ? " " + icon("warning", 13) : "") : `<span class="cnt">${icon("message", 13)}${projComments(p).length}</span>`}</td>
-      </tr>`;
-    }).join("")}
-  </table>`;
-}
+/* renderProjTable() is gone. The rail is the list now — same records, better
+   filters, keyboard walk — and two list-shaped surfaces would drift apart. */
 
 /* ---- ticket page ---- */
 function editProject() {
@@ -482,13 +632,15 @@ function ticketBackBtn() {
 
 function renderProjDetail() {
   const p = projById(view.id);
-  if (!p) { view.mode = "list"; return renderProjTable(); }
+  // A dangling id (deleted ticket, mistyped link) falls back to the overview,
+  // never a throw — same guard as the other converted tabs.
+  if (!p) { view.mode = "list"; return renderTicketOverview(); }
   markSeen(p.id);
   const E = view.edit;
   const watching = (p.watchers || []).includes(myEmail());
   const kindLabel = isIssue(p) ? "Issue" : "Project";
   if (E) {
-    return `
+    return `<section class="mddetail" aria-label="Ticket detail">
     <div class="toolbar no-print">
       ${ticketBackBtn()}
       <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
@@ -517,7 +669,7 @@ function renderProjDetail() {
            in place on the ticket page, by clicking the text, so there is one
            place to change each of them rather than two that can disagree about
            which write lands last. -->
-    </div>`;
+    </div></section>`;
   }
   const partChips = (p.relatedParts || []).map(id => chip("parts", id, (recById("parts", id) || {}).partName || id)).join(" ") || '<span class="muted">none</span>';
   const ticketChips = (p.relatedTickets || []).map(id => chip("projects", id, (recById("projects", id) || {}).title || id)).join(" ") || "";
@@ -526,7 +678,7 @@ function renderProjDetail() {
   const st = projStatus(p);
   const gateMsg = isIssue(p) && st !== "Done" ? statusGate(p, "Done") : null;
   const kids = !isIssue(p) && !p.parentId ? subTickets(p) : [];
-  return `
+  return `<section class="mddetail" aria-label="Ticket detail">
   <div class="toolbar no-print">
     ${ticketBackBtn()}
     <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
@@ -667,7 +819,7 @@ function renderProjDetail() {
     <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div>
       </aside>
     </div>
-  </div>`;
+  </div></section>`;
 }
 
 /* One attachment tile, shared by tickets, work orders and the budget receipt.
@@ -789,3 +941,47 @@ function rmProjDoc(linkId) { removeDocLink("projects", view.id, linkId); }
 function discardCommentDraft(id) {
   confirmModal("Throw away this unposted draft?", () => { clearDraft("comment", id); render(); });
 }
+
+/* ---------- keyboard ----------
+   Same contract as partsKeydown(), woKeydown() and moldsKeydown(): a pure
+   function that returns the name of the action it took (or null), so a test
+   can drive it without constructing a KeyboardEvent. All the handlers are
+   bound to document at once, so the view.tab guard comes first. */
+function tkNeighborId(dir) {
+  const rows = tkIndexRows();
+  if (!rows.length) return null;
+  const i = rows.findIndex(p => p.id === view.id);
+  if (i < 0) return rows[dir > 0 ? 0 : rows.length - 1].id;
+  return rows[Math.min(rows.length - 1, Math.max(0, i + dir))].id;
+}
+function moveTicketSelection(dir) { const id = tkNeighborId(dir); if (id) selectTicket(id); }
+
+function tkKeydown(e) {
+  if (!e || e.metaKey || e.ctrlKey || e.altKey) return null;
+  if (typeof view === "undefined" || view.tab !== "projects") return null;
+  const modal = document.getElementById("modal");
+  if (modal && typeof modal.className === "string" && modal.className.includes("open")) return null;
+  const t = e.target || {};
+  const tag = String(t.tagName || "").toUpperCase();
+  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
+  const k = e.key;
+  if (typing) {
+    // Escape gets you out of the search box; nothing else is stolen from a
+    // field you are typing in — and a ticket page is FULL of contenteditable.
+    if (k === "Escape" && t.blur) { t.blur(); return "blur"; }
+    return null;
+  }
+  if (k === "ArrowDown" || k === "j") { if (e.preventDefault) e.preventDefault(); moveTicketSelection(1); return "next"; }
+  if (k === "ArrowUp" || k === "k") { if (e.preventDefault) e.preventDefault(); moveTicketSelection(-1); return "prev"; }
+  if (k === "Enter" && view.mode !== "detail") { const id = tkNeighborId(1); if (id) { selectTicket(id); return "open"; } return null; }
+  if (k === "Escape" && view.mode === "detail") { clearTicketSelection(); return "clear"; }
+  if (k === "/") {
+    if (e.preventDefault) e.preventDefault();
+    const s = document.getElementById("searchbox");
+    if (s && s.focus) s.focus();
+    return "search";
+  }
+  if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
+  return null;
+}
+document.addEventListener("keydown", tkKeydown);
