@@ -1287,6 +1287,33 @@ await t("legacy updates[] still render as comments", () => {
   const merged = projComments(p);
   assert(merged.some(c => c.html.includes("legacy note")), "legacy update shown");
 });
+await t("thread is newest-first, and the composer sits above it", () => {
+  // Newest first: the latest status is what you open an active ticket for,
+  // and oldest-first put it several screens down.
+  const p = projById(view.id);
+  p.updates = [{ author: "Old", email: "o@x.c", ts: "2026-01-01T00:00:00", text: "oldest note" }];
+  p.comments = [{ id: "C1", author: "New", email: "n@x.c", ts: "2026-08-01T00:00:00", html: "newest note" }];
+  const merged = projComments(p);
+  assert(merged[0].html.includes("newest note"), "newest comment first");
+  assert(merged[merged.length - 1].html.includes("oldest note"), "legacy oldest last");
+  const html = renderProjDetail();
+  const composerAt = html.indexOf("comment-editor");
+  const newestAt = html.indexOf("newest note");
+  const oldestAt = html.indexOf("oldest note");
+  assert(composerAt > -1 && newestAt > -1 && oldestAt > -1, "all three render");
+  assert(composerAt < newestAt && newestAt < oldestAt, "composer, then newest, then oldest");
+  delete p.updates; p.comments = [];
+});
+await t("composer footer puts the primary rightmost, like every .foot modal", () => {
+  // The composers used to render the post button FIRST, so the position that
+  // means confirm everywhere else was Cancel here, and a mis-tap discarded a
+  // long comment.
+  const html = composerHtml({ targetId: "order-check", alwaysOpen: true, onpost: "x()", oncancel: "y()" });
+  const cancelAt = html.indexOf(">Cancel<");
+  const postAt = html.indexOf("data-rte-post");
+  assert(cancelAt > -1 && postAt > -1, "both buttons render");
+  assert(cancelAt < postAt, "Cancel before the primary");
+});
 await t("sanitizeHtml strips onerror + javascript: URLs, incl. slash form", () => {
   const dirty = `<img src=x onerror="alert(1)"><img/onerror=alert(2)><a href="javascript:alert(3)">x</a><b>ok</b>`;
   const clean = sanitizeHtml(dirty);

@@ -433,13 +433,17 @@ function composerHtml(o) {
       onfocus="RTE_ACTIVE='${t}'">${rteSeed(o.html)}</div>
     ${rteBubbleHtml()}${rteInsertHtml()}
     <div class="composer-foot">
-      <button class="primary" data-rte-post onclick="${o.onpost}">${esc(o.postLabel || "Comment")}</button>
-      ${o.oncancel ? `<button onclick="${o.oncancel}">Cancel</button>` : ""}
       ${/* The keyboard shortcut is split into its own span so a phone can drop
             it. "⌘↵ to post" on a device with no Cmd key is an instruction that
             cannot be followed, and it was the longest thing in a hint that had
             no room to begin with. Hidden by the pointer:coarse block. */""}
       <span class="muted tny composer-hint">${esc(o.hint || "Paste photos, tables and text straight in.")}${o.hint ? "" : ` <span class="kbdhint">⌘↵ to post.</span>`}</span>
+      ${/* Cancel left of the primary, primary rightmost, matching every .foot
+            modal in the app. The composers used to put the primary FIRST, so
+            the position muscle memory learns as confirm was Cancel here, and a
+            mis-tap discarded a long comment. */""}
+      ${o.oncancel ? `<button onclick="${o.oncancel}">Cancel</button>` : ""}
+      <button class="primary" data-rte-post onclick="${o.onpost}">${esc(o.postLabel || "Comment")}</button>
     </div>
   </div>`;
 }
@@ -591,7 +595,11 @@ function commentHtml(coll, id, c) {
 function threadHtml(coll, id, list, opts) {
   const o = opts || {};
   const rows = (list || []).map(c => commentHtml(coll, id, c)).join("");
+  // o.lead renders between the heading and the rows. It exists so a caller can
+  // put its composer at the TOP of a newest-first thread without floating it
+  // above the Comments heading itself.
   return `<h3 id="tk-comments">${list.length || ""} ${esc(o.noun || "Comment")}${list.length === 1 ? "" : "s"}</h3>
+    ${o.lead || ""}
     ${rows || `<span class="muted">${esc(o.empty || "No comments yet.")}</span>`}`;
 }
 

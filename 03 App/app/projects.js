@@ -114,9 +114,12 @@ function announceIfResolved(p, prevStatus) {
   if (isIssue(p) && projStatus(p) === "Done" && prevStatus !== "Done") postToSlack(slackIssueResolvedMsg(p));
 }
 // Legacy: earlier projects stored a plain updates[]; show them as comments.
+// Newest first: on an active ticket the latest status is what you came for,
+// and oldest-first put it several screens down. Order is applied at read time,
+// so postComment's append and fb.appendTo stay order-agnostic.
 function projComments(p) {
   const legacy = (p.updates || []).map(u => ({ author: u.author, email: u.email, ts: u.ts, html: esc(u.text || "") }));
-  return legacy.concat(p.comments || []).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return legacy.concat(p.comments || []).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
 }
 function projActivity(p) { return p.updatedAt || ""; }
 
@@ -621,13 +624,15 @@ function renderProjDetail() {
        comment reads as a paragraph in a form; framed like the ticket itself it
        reads as the document it is meant to be. -->
   <div class="card thread-card">
-    ${threadHtml("projects", p.id, projComments(p), { empty: "No comments yet. The first one usually says what was actually built." })}
     ${(() => {
       // Uploads from this composer land in the ticket's own Storage tree, which
       // is the one storage.rules already scopes.
       rteSetUpload(name => `projects/${p.id}/${Date.now()}-${name}`);
       const draft = loadDraft("comment", p.id);
-      return composerHtml({
+      // Composer at the TOP of the thread (via lead): with newest-first
+      // comments, writing and reading the latest update both happen at the top
+      // of the card instead of after a scroll to the bottom.
+      const composer = composerHtml({
         targetId: "comment-editor",
         html: sanitizeHtml(draft),
         placeholder: "Write a comment…",
@@ -637,6 +642,10 @@ function renderProjDetail() {
         postLabel: "Comment as " + signerName(),
       }) + (draft && composerOpen("comment-editor")
         ? `<div class="muted tny">Draft restored. <button class="link" onclick="discardCommentDraft('${p.id}')">Discard it</button></div>` : "");
+      return threadHtml("projects", p.id, projComments(p), {
+        lead: composer,
+        empty: "No comments yet. The first one usually says what was actually built.",
+      });
     })()}
   </div>
       </div>
