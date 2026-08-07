@@ -304,6 +304,7 @@ function chip(coll, id, label) {
 function lineageBar(coll, id) {
   const rec = recById(coll, id);
   if (!rec) return "";
+  if (coll === "projects") return ticketLineage(rec);
   let part = null, wo = null, viaPart = null;
   if (coll === "parts") { part = rec; wo = currentRun(rec); }
   else if (coll === "workOrders") { wo = rec; const r = partOf(rec); if (r) { part = r.part; viaPart = r.via; } }
@@ -312,16 +313,7 @@ function lineageBar(coll, id) {
   const plan = part ? partPlan(part) : currentPlanFor(mold);
   const nRuns = part ? partRuns(part).length : 0;
 
-  const node = (kind, label, onclick, opts) => {
-    opts = opts || {};
-    const cls = "ln-node" + (opts.cur ? " ln-cur" : "") + (opts.ghost ? " ln-ghost" : "");
-    const inner = `<span class="ln-kind">${esc(kind)}</span><span class="ln-id">${esc(label)}</span>${
-      opts.note ? `<span class="ln-note">${esc(opts.note)}</span>` : ""}`;
-    return onclick && !opts.cur
-      ? `<button type="button" class="${cls}" onclick="${onclick}">${inner}</button>`
-      : `<span class="${cls}"${opts.cur ? ' aria-current="true"' : ""}>${inner}</span>`;
-  };
-  const sep = '<span class="ln-sep" aria-hidden="true">›</span>';
+  const node = lnNode, sep = LN_SEP;
   const out = [];
   out.push(part
     ? node("Part", part.partName || part.id, `openRecord('parts','${esc(part.id)}')`,
@@ -344,6 +336,51 @@ function lineageBar(coll, id) {
     : node("Mold file", "none", "", { ghost: true }));
   if (plan) out.push(node("Drawings", "open", `openDrawings('${esc(plan.id)}')`));
   return `<nav class="lineage no-print" aria-label="Where this sits">${out.join(sep)}</nav>`;
+}
+
+// One node emitter for every lineage chain, so the build chain above and the
+// ticket chain below cannot drift apart in markup or CSS contract.
+function lnNode(kind, label, onclick, opts) {
+  opts = opts || {};
+  const cls = "ln-node" + (opts.cur ? " ln-cur" : "") + (opts.ghost ? " ln-ghost" : "");
+  const inner = `<span class="ln-kind">${esc(kind)}</span><span class="ln-id">${esc(label)}</span>${
+    opts.note ? `<span class="ln-note">${esc(opts.note)}</span>` : ""}`;
+  return onclick && !opts.cur
+    ? `<button type="button" class="${cls}" onclick="${onclick}">${inner}</button>`
+    : `<span class="${cls}"${opts.cur ? ' aria-current="true"' : ""}>${inner}</span>`;
+}
+const LN_SEP = '<span class="ln-sep" aria-hidden="true">›</span>';
+
+/* The ticket chain. A sub-ticket's genealogy is Ticket › Sub-ticket, with the
+   parent node as the button to the top ticket — the detail page used to have
+   NO route to the parent at all; the back button only worked if you had
+   arrived from it this session. An issue's chain walks into the build lineage
+   (Issue › Run › Part), because a nonconformance belongs to the hardware it
+   was found on. A plain top-level project returns nothing: its downward view
+   is the Sub-tickets table, and an all-ghost bar is noise. */
+function ticketLineage(rec) {
+  const out = [];
+  if (rec.parentId) {
+    const parent = recById("projects", rec.parentId);
+    out.push(parent
+      ? lnNode("Ticket", parent.title || parent.id, `openRecord('projects','${esc(parent.id)}')`)
+      : lnNode("Ticket", "parent missing", "", { ghost: true }));
+    out.push(lnNode("Sub-ticket", rec.title || rec.id, "", { cur: true }));
+  } else if (rec.kind === "issue") {
+    out.push(lnNode("Issue", rec.title || rec.id, "", { cur: true }));
+    const wo = rec.workOrderId ? recById("workOrders", rec.workOrderId) : null;
+    out.push(wo
+      ? lnNode("Run", wo.id, `openRecord('workorders','${esc(wo.id)}')`)
+      : lnNode("Run", rec.workOrderId || "none set", "", { ghost: true }));
+    const r = wo ? partOf(wo) : null;
+    out.push(r
+      ? lnNode("Part", r.part.partName || r.part.id, `openRecord('parts','${esc(r.part.id)}')`,
+          { note: r.via === "name" ? "by name" : "" })
+      : lnNode("Part", "not linked", "", { ghost: true }));
+  } else {
+    return "";
+  }
+  return `<nav class="lineage no-print" aria-label="Where this sits">${out.join(LN_SEP)}</nav>`;
 }
 
 /* ---------- where you came from ----------

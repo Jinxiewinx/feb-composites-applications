@@ -1277,6 +1277,40 @@ await t("sub-ticket modal prefills from the parent: due, subteam, links", () => 
   assert(/<option [^>]*selected[^>]*>AERO/.test(modal), "parent subteam preselected");
   closeModal();
 });
+await t("a sub-ticket's lineage names its parent, hyperlinked, with the child marked current", () => {
+  // The genealogy Simon asked for: PROJ-001 > PROJ-002 near the top, with the
+  // parent node as THE button to the top ticket. Before this the detail page
+  // had no route to the parent at all.
+  const parent = DB.projects.find(p => p.kind === "project" && !p.parentId);
+  const kid = subTickets(parent)[0];
+  const bar = lineageBar("projects", kid.id);
+  assert(bar.includes('class="lineage'), "chain renders");
+  assert(bar.includes(esc(parent.title || parent.id)), "parent named");
+  assert(new RegExp(`openRecord\\('projects','${parent.id}'\\)`).test(bar), "parent node navigates");
+  assert(/ln-cur/.test(bar) && bar.includes("Sub-ticket"), "child marked current");
+});
+await t("an issue's lineage walks Issue > Run > Part, ghosting what is not linked", () => {
+  const iss = DB.projects.find(p => p.kind === "issue" && !p.parentId);
+  iss.workOrderId = DB.workOrders[0].id;
+  const bar = lineageBar("projects", iss.id);
+  assert(bar.includes("Issue") && /ln-cur/.test(bar), "issue is the current node");
+  assert(new RegExp(`openRecord\\('workorders','${DB.workOrders[0].id}'\\)`).test(bar), "run node navigates");
+  iss.workOrderId = "WO-GONE-999";
+  const ghost = lineageBar("projects", iss.id);
+  assert(/ln-ghost/.test(ghost), "dangling work order ghosts instead of throwing");
+  iss.workOrderId = "";
+  const none = lineageBar("projects", iss.id);
+  assert(none.includes("none set"), "unset work order says so");
+});
+await t("a plain top-level project has no lineage bar; its children table is the downward view", () => {
+  const parent = DB.projects.find(p => p.kind === "project" && !p.parentId);
+  assert(lineageBar("projects", parent.id) === "", "no chain, no all-ghost noise");
+  const dangling = { id: "PROJ-DANGL", kind: "project", parentId: "PROJ-DELETED", title: "orphan" };
+  DB.projects.push(dangling);
+  const bar = lineageBar("projects", dangling.id);
+  assert(/ln-ghost/.test(bar) && bar.includes("parent missing"), "deleted parent ghosts");
+  DB.projects = DB.projects.filter(p => p.id !== "PROJ-DANGL");
+});
 await t("children render as a table.sub with status, due and a late warn", () => {
   const parent = DB.projects.find(p => p.kind === "project" && !p.parentId);
   const kid = subTickets(parent)[0];

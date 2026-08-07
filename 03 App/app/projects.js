@@ -534,6 +534,7 @@ function renderProjDetail() {
     <button class="primary" onclick="editProject()">Edit</button>
     <button onclick="toggleWatch()">${watching ? "★ Watching" : "☆ Watch"}</button>
   </div>
+  ${lineageBar("projects", p.id)}
   <div class="card">
     <h2>${esc(p.title || "(untitled ticket)")}</h2>
     <div class="muted">${esc(p.id)} · <span class="prio ${esc(p.priority)}">${esc(p.priority || "")} priority</span>${p.dueDate ? ` · due ${esc(p.dueDate)}${dd != null ? ` (${dd < 0 ? Math.abs(dd) + " days late" : dd + " days out"})` : ""}` : ""}</div>
