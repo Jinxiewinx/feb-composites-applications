@@ -85,12 +85,30 @@ when they disagree rather than quietly overwriting one.
 
 ### Work Orders
 
-![A work order: steps, buy-offs, cure holds, the printable traveler](../design/workorder-detail-mockup-20260803.png)
+![A work order: the rail grouped by part, and the traveler sectioned beside it](../design/workorder-detail-mockup-20260807.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, enforced cure holds (the
 numbers live in `resins.js`, each signed off by a lead), and a printable
 hand-fillable sheet that is always exactly two pages.
+
+It is a split view, like Parts and Molds. The rail indexes every run grouped by
+the part it builds, so the tab reads as the hierarchy above; each row shows how
+far through its buy-offs the run is and whether it is blocked or curing. Runs
+whose part cannot be resolved collect in a named block at the bottom, which on
+the SN5 archive is most of them and is the to-do list for linking them up.
+Parts nobody has started appear too, with the button that starts a run. Group,
+sort and filter are yours to set.
+
+The pane sections one work order into Steps, Overview, Stack & BOM, Quality,
+Files & docs, and Notes & log, showing one at a time. It opens on Steps because
+that is what you came to do; `←`/`→` or `1`-`6` move between sections and the
+one you chose follows you as you walk the rail. What is true of the whole
+record stays above the tabs: which run it is, its status, the lineage bar, and
+anything blocking it, including a cure hold, which is shown there as a clock
+time rather than a countdown (only the Steps section keeps a countdown honest).
+Unlike Parts, this rail does not hide finished runs by default, because reading
+back what was done is half of what a traveler is for.
 
 A work order is one run at making a part, so its layup stack is what that run
 **actually laid**, while the part's stack is the **plan**. Editing the plan
