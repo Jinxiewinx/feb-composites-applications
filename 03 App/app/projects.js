@@ -148,10 +148,17 @@ function kindNoun(kind) { return kind === "issue" ? "issue" : "project"; }
 function openNewProject(parentId) {
   NEW_TICKET_PARENT = parentId || null;
   const forSub = !!NEW_TICKET_PARENT;
+  /* A sub-ticket starts from its parent, not from a blank form — the same
+     move as newRunForPart() prefilling a run from the part. Related parts and
+     work orders carry over (the breakdown is about the same hardware), the
+     subteam carries over, and the due date defaults to the parent's and is
+     capped there: a child due after its parent is a plan that cannot work.
+     Everything stays editable. */
+  const parent = forSub ? projById(parentId) : null;
   pickerInit("pa", assigneeItems(), [myEmail()]);
-  pickerInit("pp", partItems(), []);
+  pickerInit("pp", partItems(), parent ? (parent.relatedParts || []) : []);
   pickerInit("rt", ticketItems(), []);
-  pickerInit("rwo", workOrderItems(), []);
+  pickerInit("rwo", workOrderItems(), parent ? (parent.relatedWorkOrders || []) : []);
   openModal(`
     <h2 id="np-heading">${forSub ? "New sub-ticket" : "New " + kindNoun("project")}</h2>
     ${forSub ? "" : `
@@ -166,9 +173,10 @@ function openNewProject(parentId) {
       <div class="field"><label>Status</label><select id="np-status">${PROJ_STATUS.map(s => `<option>${s}</option>`).join("")}</select></div>
       <div class="field"><label>Priority</label><select id="np-priority">${PRIORITY.map(s => `<option ${s === "Medium" ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     </div>
-    <div class="field"><label>Due date</label><input id="np-due" type="date"></div>
+    <div class="field"><label>Due date${parent && parent.dueDate ? ` <span class="muted nocaps">— parent is due ${esc(parent.dueDate)}</span>` : ""}</label>
+      <input id="np-due" type="date" value="${esc((parent && parent.dueDate) || "")}" ${parent && parent.dueDate ? `max="${esc(parent.dueDate)}"` : ""}></div>
     <div class="field"><label>Subteam <span class="muted nocaps">— for Weekly Plan</span></label>
-      <select id="np-subteam"><option value="">Unassigned</option>${SUBTEAMS.map(s => `<option>${s}</option>`).join("")}</select></div>
+      <select id="np-subteam"><option value="" ${parent && parent.subteam ? "" : "selected"}>Unassigned</option>${SUBTEAMS.map(s => `<option ${parent && parent.subteam === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     <div class="field"><label>Assignees</label>${pickerField("pa")}</div>
     <div id="np-issue-fields" style="display:none">
       <div class="field"><label>Work order <span class="req">*required</span></label><select id="np-wo">${woSelectOptions("")}</select></div>
@@ -259,8 +267,13 @@ async function submitNewProject() {
     subteam: form.subteam,
     description: form.description,
     assignees,
-    // assignees + creator watch by default (creator watches the ticket they made)
-    watchers: [...new Set([myEmail(), ...assignees])].filter(Boolean),
+    // assignees + creator watch by default (creator watches the ticket they
+    // made). A sub-ticket also inherits its parent's watchers: whoever asked
+    // to be told about the parent asked to be told about its pieces.
+    watchers: [...new Set([
+      myEmail(), ...assignees,
+      ...(parentId ? ((projById(parentId) || {}).watchers || []) : []),
+    ])].filter(Boolean),
     relatedParts: form.relatedParts,
     relatedTickets: form.relatedTickets,
     relatedWorkOrders: form.relatedWorkOrders,
@@ -607,12 +620,27 @@ function renderProjDetail() {
       upload: name => `projects/${p.id}/${Date.now()}-${name}`,
     })}
     ${!isIssue(p) && !p.parentId ? `
+    ${/* The ticket is the parent record, so its children get the app's
+          sub-collection grammar (table.sub), same as the part page's runs
+          table — the flat chip row this replaces said nothing about due
+          dates, priority or lateness, which is what you check a breakdown
+          for. Statuses stay independent; the count is display only. */""}
     <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
-    ${kids.length ? kids.map(k => `<div class="subticket" onclick="openRecord('projects','${k.id}')">
-      <span class="status ${projStatusClass(projStatus(k))}"><span class="dot"></span>${esc(projStatus(k))}</span>
-      <span class="stt">${esc(k.title || k.id)}</span>
-      <span class="avatar-stack">${(k.assignees || []).slice(0, 3).map(e => avatar(e, 20)).join("")}</span>
-    </div>`).join("") : '<span class="muted">No sub-tickets yet.</span>'}
+    ${kids.length ? `<table class="sub">
+      <thead><tr><th>Ticket</th><th>Status</th><th>Due</th><th>Priority</th><th>Assignees</th></tr></thead>
+      <tbody>${kids.map(k => {
+        const kst = projStatus(k);
+        const kdd = daysUntil(k.dueDate);
+        const klate = kdd != null && kdd < 0 && kst !== "Done" && kst !== "Cancelled";
+        return `<tr>
+          <td>${chip("projects", k.id, k.id)} ${esc(k.title || "")}</td>
+          <td><span class="status ${projStatusClass(kst)}"><span class="dot"></span>${esc(kst)}</span></td>
+          <td class="${klate ? "warn" : ""}">${k.dueDate ? esc(k.dueDate) + (klate ? " " + icon("warning", 13) : "") : '<span class="muted">—</span>'}</td>
+          <td><span class="prio ${esc(k.priority)}">${esc(k.priority || "")}</span></td>
+          <td><span class="avatar-stack">${(k.assignees || []).slice(0, 3).map(e => avatar(e, 20)).join("")}</span></td>
+        </tr>`;
+      }).join("")}</tbody></table>`
+      : '<span class="muted">No sub-tickets yet.</span>'}
     <div class="no-print" style="margin-top:6px"><button class="sm" onclick="openNewSubTicket('${p.id}')">+ Add sub-ticket</button></div>
     ` : ""}
 

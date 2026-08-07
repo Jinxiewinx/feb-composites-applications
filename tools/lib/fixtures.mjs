@@ -83,6 +83,26 @@ export const PROJECTS = [
     assignees: [], watchers: ["starbuck@berkeley.edu"],
     relatedParts: [], relatedTickets: [], relatedWorkOrders: [], files: [], comments: [], retro: false,
   },
+  /* Sub-tickets, both under TKT-0031 (which is DB.projects[0], the record the
+     populated-content suites open). One open and one done-but-late, so the
+     children table renders its done/total count AND a late warn in the same
+     fixture. The browser suites had zero parentId coverage before these. */
+  {
+    id: "TKT-0037", kind: "project", parentId: "TKT-0031",
+    title: "Machine the plug from the new surface model",
+    status: "To Do", priority: "High", dueDate: iso(5), subteam: "AERO",
+    description: "Blocked until the draft-angle cut lands in CAD.",
+    assignees: ["mokafor@berkeley.edu"], watchers: ["arivera@berkeley.edu", "mokafor@berkeley.edu"],
+    relatedParts: [], relatedTickets: [], relatedWorkOrders: [], files: [], comments: [], retro: false,
+  },
+  {
+    id: "TKT-0038", kind: "project", parentId: "TKT-0031",
+    title: "Compare draft angles against the SN5 bag failure photos",
+    status: "Done", priority: "Medium", dueDate: iso(-2), subteam: "AERO",
+    description: "Annotated photo set is in the parent's files.",
+    assignees: ["dchen@berkeley.edu"], watchers: ["dchen@berkeley.edu"],
+    relatedParts: [], relatedTickets: [], relatedWorkOrders: [], files: [], comments: [], retro: false,
+  },
 ];
 
 /* Budget. Spans all three statuses, and TKT-shaped costs: one over $50 and

@@ -1263,6 +1263,36 @@ await t("sub-ticket creates as a full child ticket, no rollup to the parent", as
   parent.status = "In Progress"; // parent set independently
   assert(projStatus(parent) !== projStatus(kids[0]), "parent status is untouched by the child's status");
 });
+await t("sub-ticket modal prefills from the parent: due, subteam, links", () => {
+  // Same move as newRunForPart(): the breakdown starts from the parent, not a
+  // blank form. Everything stays editable; the due date is capped at the
+  // parent's because a child due after its parent cannot work.
+  const parent = DB.projects.find(p => p.kind === "project" && !p.parentId);
+  parent.dueDate = "2026-09-01"; parent.subteam = "AERO";
+  parent.relatedParts = ["P-SN6-001"]; parent.relatedWorkOrders = [];
+  openNewSubTicket(parent.id);
+  const modal = document.getElementById("modal").innerHTML;
+  assert(/id="np-due"[^>]*value="2026-09-01"/.test(modal), "due defaults to the parent's");
+  assert(/id="np-due"[^>]*max="2026-09-01"/.test(modal), "due is capped at the parent's");
+  assert(/<option [^>]*selected[^>]*>AERO/.test(modal), "parent subteam preselected");
+  closeModal();
+});
+await t("children render as a table.sub with status, due and a late warn", () => {
+  const parent = DB.projects.find(p => p.kind === "project" && !p.parentId);
+  const kid = subTickets(parent)[0];
+  assert(kid, "the creation test left a child");
+  kid.dueDate = "2020-01-01"; kid.status = "To Do"; // long past due, open
+  view = { ...view, tab: "projects", mode: "detail", id: parent.id, edit: false };
+  const html = renderProjDetail();
+  const tbl = html.slice(html.indexOf("Sub-tickets"));
+  assert(/<table class="sub">/.test(tbl), "children are a table.sub, not chip rows");
+  assert(tbl.includes("2020-01-01"), "child due date shown");
+  assert(/class="warn"/.test(tbl), "open child past due carries a late warn");
+  assert(/status todo|status\s+todo/.test(tbl) || tbl.includes('class="status todo"'), "status pill rendered");
+  kid.status = "Done";
+  const done = renderProjDetail().slice(renderProjDetail().indexOf("Sub-tickets"));
+  assert(!/class="warn"/.test(done.slice(0, done.indexOf("</table>"))), "a Done child is never late");
+});
 await t("rich-text comment posts via appendTo, sanitized", () => {
   const id = DB.projects.find(p => p.kind === "project" && !p.parentId).id;
   view = { ...view, mode: "detail", id, edit: false }; render();
