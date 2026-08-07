@@ -85,7 +85,7 @@ when they disagree rather than quietly overwriting one.
 
 ### Work Orders
 
-![A work order: the rail grouped by part, and the traveler sectioned beside it](../design/workorder-detail-mockup-20260807.png)
+![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260807.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, enforced cure holds (the
@@ -100,15 +100,20 @@ the SN5 archive is most of them and is the to-do list for linking them up.
 Parts nobody has started appear too, with the button that starts a run. Group,
 sort and filter are yours to set.
 
-The pane sections one work order into Steps, Overview, Stack & BOM, Quality,
-Files & docs, and Notes & log, showing one at a time. It opens on Steps because
-that is what you came to do; `←`/`→` or `1`-`6` move between sections and the
-one you chose follows you as you walk the rail. What is true of the whole
-record stays above the tabs: which run it is, its status, the lineage bar, and
-anything blocking it, including a cure hold, which is shown there as a clock
-time rather than a countdown (only the Steps section keeps a countdown honest).
-Unlike Parts, this rail does not hide finished runs by default, because reading
-back what was done is half of what a traveler is for.
+The pane is one scroll, ordered Steps, Overview, Stack & BOM, Quality, Files &
+docs, Notes & log. Steps leads because that is what you came to do. A bar above
+it jumps to any section (`1`-`6` from the keyboard) and carries a count per
+section and a dot when something in one wants attention, so you can see there
+are five plies or that a check failed without scrolling to find out. It is
+buttons rather than anchors on purpose: an `href="#wo-stack"` would overwrite
+the deep link the app keeps in the URL hash.
+
+What is true of the whole record stays above that bar: which run it is, its
+status, the lineage bar, and anything blocking it, including a cure hold, which
+is shown there as a clock time rather than a countdown (the step's own banner
+is the one a timer keeps honest). Unlike Parts, this rail does not hide
+finished runs by default, because reading back what was done is half of what a
+traveler is for.
 
 A work order is one run at making a part, so its layup stack is what that run
 **actually laid**, while the part's stack is the **plan**. Editing the plan

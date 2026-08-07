@@ -389,7 +389,15 @@
 
   table.sub { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 13px; }
   table.sub th { text-align: left; background: var(--surface-2); padding: 5px 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-  table.sub td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  /* `overflow-wrap: anywhere` because a cell's contents decide the table's
+     minimum width, and these cells hold things with no break opportunity in
+     them: a bare 120-character Drive URL in a BOM source, an
+     underscore-joined CAD filename in a quality check's actual. Without it one
+     such string sets the min-content width of the whole table, which the work
+     order's pane then cannot shrink below, and the PAGE scrolls sideways —
+     measured at 1489px inside 1440px. It only affects strings that had no
+     other way to wrap. */
+  table.sub td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
   table.sub input, table.sub select { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; }
 
   /* ---- projects board ----
@@ -1230,21 +1238,22 @@
   .pgrouphd.norows { border: 1px dashed var(--border-2); background: none; }
   .pgrouphd .pg-start { margin-left: auto; padding: 2px 8px; }
 
-  /* The section tabs. Geometry borrowed from .jumpbar (which Parts still uses),
-     but these are buttons with state rather than anchors: one section renders
-     at a time, so this is the only thing saying which. */
+  /* The section jump bar. Geometry borrowed from .jumpbar (which Parts still
+     uses), but these are buttons rather than anchors, because an <a href="#…">
+     would overwrite the deep link this app keeps in the URL hash. They scroll;
+     they do not switch. What they add over the old jumpbar is a count per
+     section and a dot when something in one needs attention. */
   .secnav { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
     position: sticky; top: var(--topbar-h); z-index: 4; background: var(--canvas); padding: 6px 0; border-bottom: 1px solid var(--line); }
   .secnav-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; line-height: 1.1;
     min-height: 30px; padding: 5px 11px; border-radius: var(--radius); border: 1px solid transparent; background: none;
     color: var(--muted); cursor: pointer; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .secnav-btn:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
-  .secnav-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--brand-ink); font-weight: 700; }
-  /* Empty sections stay visible and muted. A hidden tab is a section nobody can
-     find in order to fill it in — which is the bug, not the tidiness. */
+  /* A section with nothing in it is still listed, muted. Dropping it would mean
+     the bar changes shape per record, and an empty section is the one you most
+     need to be able to find in order to fill it in. */
   .secnav-btn.empty { opacity: .62; }
   .secnav-n { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
-  .secnav-btn.on .secnav-n { background: var(--card); color: var(--brand-ink); }
   .secnav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
   .secnav-btn.warn .secnav-dot { background: var(--bad); }
   .wosec { min-width: 0; }

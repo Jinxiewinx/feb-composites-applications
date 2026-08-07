@@ -9,8 +9,9 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-06
-Status: **Work Orders became a master-detail tab (2026-08-06).** Branch
+Last updated: 2026-08-06 (later)
+Status: **Work Orders became a master-detail tab, and the pane is ONE SCROLL
+(2026-08-06).** Branch
 `mold-drawing-revamp`. All suites green: test_app 377 (was 362), appui 1246
 (was 1244), detailui 816 (was 781), designsystem 23, safearea 30, plus
 print_mobile 14, labels 32, route 38, scan 50, q_landing 32, sanitize 55,
@@ -20,39 +21,49 @@ Simon asked for the Work Orders tab to feel like the rest of Build, and chose,
 from options: WO stays its own tab; the rail gets a group/sort/filter control
 defaulting to grouped-by-part; parts with zero runs appear with a "+ Start run"
 row; rail rows show progress through steps; deep links land with the rail
-visible and scrolled; the pane gets in-pane SECTION TABS opening on Steps, and
-the section persists as you walk between runs; identity, the lineage bar and
-blocking warnings stay above the tabs (the toolbar does not).
+visible and scrolled; identity, the lineage bar and blocking warnings stay
+above the section bar (the toolbar does not).
+
+The pane was built as in-pane SECTION TABS first, and Simon asked for the
+scroll back the same day: on a traveler you read across sections constantly
+(the stack while signing "Stack frozen", the BOM while checking what went in),
+and a tab makes you leave one to see the other. So every section renders, in
+one card, Steps first, and `.secnav` became a JUMP bar. What survived from the
+tab attempt is the part worth keeping: a count per section and a dot when one
+needs attention, both readable without going there.
 
 What landed: `renderWOList()` and its flat seven-column table are gone.
 `renderWorkOrders()` returns `.mdsplit` + `renderWOIndex()` + (detail or
 `renderWOOverview()`), reusing Parts' rail markup wholesale so the ≤900
 collapse and the print rule apply without new CSS. `renderWODetail()` is now
-toolbar + lineage + `.wohead` + `.secnav` + one `WO_SECTIONS` body; the six
-bodies are the old markup moved verbatim. New pure helpers `woProgress`,
-`woFlags`, `isWoLate` sit beside `stepState`. `woKeydown` mirrors
-`partsKeydown` and adds ←/→ and 1-6 for sections.
+toolbar + lineage + `.wohead` + `.secnav` + every `WO_SECTIONS` body joined;
+the six bodies are the old markup moved verbatim. New pure helpers
+`woProgress`, `woFlags`, `isWoLate` sit beside `stepState`. `woKeydown` mirrors
+`partsKeydown` and adds 1-6 to jump to a section.
 
 Decisions worth keeping:
 - **This rail does NOT hide finished records, unlike Parts.** A part drops off
   once it is made; a work order is a traveler you also read back, and every one
   of the 26 SN5 records is Complete, and a done-hiding default landed on an empty
   rail and read as a broken tab. Open/done are one chip each. There is a test.
-- **Cure holds show an ABSOLUTE ready time everywhere except the Steps
-  section.** `syncHoldTick` arms its 60 s re-render on `#main .step .gate`, so
-  with Steps behind a tab it idles elsewhere, which is correct. Broadening
-  that selector to cover the header banner would re-render every 60 s while you
-  type in Notes. dashboard.js:162 made the same call for the same reason.
-  Invisible coupling, so it has its own test.
-- **`woSec()` validates on the way out.** render() does
-  `el.innerHTML = tab.render()` with no try/catch, so a stale `view.woSec` would
-  throw and leave #main blank. Falling back to Steps cannot fail. Tested.
+- **The header states a cure hold as an ABSOLUTE ready time; only the step's
+  own banner gets a countdown.** `syncHoldTick` arms its 60 s re-render on
+  `#main .step .gate`, which keeps the step banner honest. The header is always
+  on screen and deliberately does NOT get a countdown, or it would be the one
+  thing on the page nothing refreshes. dashboard.js:162 made the same call for
+  the same reason. Tested.
+- **The jump bar is buttons, not `<a href="#wo-stack">`.** The URL hash carries
+  the deep link to the record (syncUrl writes `#/WO-SN6-004`), and an anchor
+  overwrites it, so the address bar stops naming what you are reading and a
+  copied link lands on a section instead of the run. The OLD jumpbar did use
+  anchors and did exactly that. `woJump()` scrolls instead; the
+  `scroll-margin-top` rule on `#main [id^="wo-"]` clears the sticky bars.
 - **Synthetic "no run yet" group headers are NOT in `woIndexRows()`.** That
   array is what j/k walks; a header in it would set view.id to a part id and
   silently drop the pane to the overview. Tested both ways.
-- **Steps has to stay the default section.** test_detailui's `wo-detail` and
-  `wo-detail-edit` assert the page contains "inHg", which only appears in step
-  titles, and five test_app cases grep step markup.
+- **Steps leads the scroll.** Partly the bench argument, partly that
+  test_detailui's `wo-detail` and `wo-detail-edit` assert the page contains
+  "inHg", which only appears in step titles.
 - **Filters use woOpen/woLate/woMine/woDone, not Parts' fLate/fMine/fDone**,
   because setTab() clears the former and not the latter. A toggle left on in
   Parts would otherwise filter a different tab's rail.
@@ -77,6 +88,13 @@ Traps hit on the way:
   opened` as the real check.
 - The clickable part name in a group header measured 14px and failed the
   coarse-pointer tap-target audit.
+- **Rendering every section at once made the page scroll sideways at 1440**
+  (1489px in 1440px), and the audit named no element because the culprit was a
+  table's own minimum width. `table.sub td` had no `overflow-wrap`, so a bare
+  120-character Drive URL in a BOM source, and an underscore-joined CAD
+  filename in a quality actual, each set the min-content width of their table.
+  Fixed on `table.sub td` for every tab. It had been invisible only because
+  those two tables were never on screen at 1440 in a populated fixture.
 
 Previous status follows.
 

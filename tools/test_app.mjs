@@ -526,7 +526,7 @@ function woSplitFixture() {
       bom: [], qualityChecks: [], timeline: [], layupStack: [], steps: [step(1, "Trim and finish", true)] },
   ];
   view = { ...view, tab: "workorders", mode: "list", id: null, edit: false, q: "", fSub: "", fStatus: "",
-    woSec: null, woOpen: false, woLate: false, woMine: false, woDone: false, sortKey: null, sortDir: null };
+    woOpen: false, woLate: false, woMine: false, woDone: false, sortKey: null, sortDir: null };
 }
 await t("the tab renders both panes at once — the rail is never destroyed by opening a run", () => {
   woSplitFixture(); render();
@@ -583,38 +583,49 @@ await t("a missing id falls back to the overview instead of throwing", () => {
   assert(main.innerHTML.includes("Runs in flight"), "and the right pane is the overview");
 });
 
-console.log("work orders: sections in the detail pane");
-await t("the pane opens on Steps, and the section survives moving between runs", () => {
+console.log("work orders: the record is one scroll");
+await t("every section is on the page at once, in order, Steps first", () => {
+  /* This tab was briefly one-section-at-a-time and Simon asked for the scroll
+     back: on a traveler you read across sections constantly (the stack while
+     signing "Stack frozen", the BOM while checking what went in), and a tab
+     makes you leave one to see the other. */
   woSplitFixture(); selectWO("WO-SN6-001");
-  assert(woSec() === "steps", "default section");
-  assert(main.innerHTML.includes("Machine mold"), "a step is on the page");
-  setWOSec("notes");
-  selectWO("WO-SN6-003");
-  assert(woSec() === "notes", "walking the rail keeps the section you were reading");
+  const h = main.innerHTML;
+  ["wo-steps", "wo-overview", "wo-stack", "wo-bom", "wo-quality", "wo-docs", "wo-files", "wo-log"]
+    .forEach(a => assert(h.includes(`id="${a}"`), a + " is on the page"));
+  assert(h.includes("Machine mold"), "the steps really rendered");
+  assert(h.indexOf('id="wo-steps"') < h.indexOf('id="wo-overview"'),
+    "Steps leads, because it is the bench action");
 });
-await t("a section id that no longer exists falls back rather than blanking the page", () => {
-  // render() does `el.innerHTML = tab.render()` with no try/catch, so a stale
-  // view.woSec pointing at a removed section would throw and leave #main empty.
+await t("the bar jumps to a section rather than swapping which one exists", () => {
   woSplitFixture(); selectWO("WO-SN6-001");
-  view.woSec = "a-section-that-was-deleted"; render();
-  assert(woSec() === "steps", "the getter validates");
-  assert(main.innerHTML.includes("Machine mold"), "and the pane still has content");
+  assert(main.innerHTML.includes("woJump('wo-stack')"), "the control scrolls");
+  // Not an <a href="#wo-stack">: the URL hash carries the deep link to this
+  // record (syncUrl writes #/WO-SN6-001), and an anchor would overwrite it.
+  assert(!/href="#wo-/.test(main.innerHTML), "and never touches the deep-link hash");
 });
-await t("what blocks the whole record stays visible from every section", () => {
-  woSplitFixture();
-  DB.projects = [{ id: "ISSUE-1", kind: "issue", title: "Delam", status: "In Progress", workOrderId: "WO-SN6-001", assignees: [] }];
-  selectWO("WO-SN6-001"); setWOSec("notes");
-  assert(main.innerHTML.includes("Can't complete this work order"), "the undisposed-issue gate is outside the sections");
-  assert(main.innerHTML.includes("lineage"), "so is the lineage bar");
-});
-await t("the section tabs say which sections have nothing in them", () => {
+await t("the jump bar counts what is in each section, and flags what needs attention", () => {
   woSplitFixture(); selectWO("WO-SN6-002");
   // WO-SN6-002 has no plies and one step, so Stack is empty and Steps is not.
   assert(/class="secnav-btn[^"]*\bempty\b[^"]*"[^>]*id="wosec-stack"/.test(main.innerHTML),
-    "an empty section is marked, not hidden — a hidden tab is one nobody can find in order to fill it in");
+    "an empty section is listed and muted, not dropped — otherwise the bar changes shape per record");
   assert(!/class="secnav-btn[^"]*\bempty\b[^"]*"[^>]*id="wosec-steps"/.test(main.innerHTML),
     "and a section with content is not marked empty");
-  assert(main.innerHTML.includes('id="wosec-stack"'), "the empty section is still a tab you can reach");
+  const w = woById("WO-SN6-001");
+  w.qualityChecks = [{ criterion: "mass", target: "500", actual: "610", pass: false }];
+  selectWO("WO-SN6-001");
+  assert(/class="secnav-btn[^"]*\bwarn\b[^"]*"[^>]*id="wosec-quality"/.test(main.innerHTML),
+    "a failed check puts a dot on Quality without making you scroll to it");
+});
+await t("what blocks the whole record sits above the scroll, not inside a section", () => {
+  woSplitFixture();
+  DB.projects = [{ id: "ISSUE-1", kind: "issue", title: "Delam", status: "In Progress", workOrderId: "WO-SN6-001", assignees: [] }];
+  selectWO("WO-SN6-001");
+  const h = main.innerHTML;
+  assert(h.includes("Can't complete this work order"), "the undisposed-issue gate renders");
+  assert(h.indexOf("Can't complete this work order") < h.indexOf('id="wo-steps"'),
+    "and it is above the first section, so scrolling can never leave it behind");
+  assert(h.includes("lineage"), "so is the lineage bar");
 });
 
 console.log("work orders: the keyboard");
@@ -629,16 +640,14 @@ await t("↑/↓/j/k walk the rail, Enter opens, Escape clears", () => {
   assert(woKeydown({ key: "Escape", target: {} }) === "clear");
   assert(view.mode === "list", "and Escape closes the pane");
 });
-await t("←/→ and the digits move between sections, only with a run open", () => {
+await t("1-6 jump to a section, only with a run open", () => {
   woSplitFixture(); render();
-  assert(woKeydown({ key: "ArrowRight", target: {} }) === null, "nothing to section through on the overview");
+  assert(woKeydown({ key: "3", target: {} }) === null, "nothing to jump to on the overview pane");
   selectWO("WO-SN6-001");
-  assert(woKeydown({ key: "ArrowRight", target: {} }) === "section");
-  assert(woSec() === "overview", "right moves one along: " + woSec());
-  assert(woKeydown({ key: "ArrowLeft", target: {} }) === "section");
-  assert(woSec() === "steps", "and left comes back");
-  assert(woKeydown({ key: "3", target: {} }) === "section");
-  assert(woSec() === "stack", "a digit jumps straight there: " + woSec());
+  assert(woKeydown({ key: "3", target: {} }) === "section", "a digit jumps");
+  // No ←/→ any more: with the whole record in one scroll there is no "current
+  // section" for them to step from. That was a switch; this is a jump.
+  assert(woKeydown({ key: "ArrowRight", target: {} }) === null, "and the arrows are not section keys");
 });
 await t("the work-order keys do nothing on another tab, or in a field", () => {
   woSplitFixture(); render();
@@ -648,11 +657,12 @@ await t("the work-order keys do nothing on another tab, or in a field", () => {
   assert(woKeydown({ key: "j", target: { tagName: "INPUT" } }) === null, "and never steals a keystroke from a field");
   assert(woKeydown({ key: "j", target: {}, metaKey: true }) === null, "or a shortcut");
 });
-await t("the cure countdown ticks only while the Steps section is on screen", () => {
-  /* syncHoldTick arms a 60-second re-render on `#main .step .gate`, so putting
-     Steps behind a tab silently changed when it runs. The behaviour is right —
-     nothing is counting down elsewhere, and the header shows an ABSOLUTE ready
-     time for exactly that reason — but it is invisible, so it gets a test. */
+await t("a live cure hold reads as a countdown on the step and a clock time in the header", () => {
+  /* Two renderings of one fact, on purpose. syncHoldTick arms a 60-second
+     re-render on `#main .step .gate`, which keeps the step's countdown honest.
+     The header banner is always on screen and deliberately does NOT get a
+     countdown: it would be the one thing on the page nothing refreshes.
+     dashboard.js made the same call for the same reason. */
   woSplitFixture();
   const w = woById("WO-SN6-001");
   w.steps = [
@@ -661,10 +671,11 @@ await t("the cure countdown ticks only while the Steps section is on screen", ()
     { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
   ];
   selectWO("WO-SN6-001");
-  assert(main.innerHTML.includes("Curing until"), "the countdown is on the Steps section");
-  setWOSec("overview");
-  assert(!/class="step /.test(main.innerHTML), "no step rows once you leave");
-  assert(main.innerHTML.includes("Curing until"), "but the header still says it is curing, as a clock time");
+  const h = main.innerHTML;
+  assert(h.includes("Curing until"), "the hold is stated");
+  assert(h.indexOf("Curing until") < h.indexOf('id="wo-steps"'), "once in the header, above the scroll");
+  assert(/class="step /.test(h), "and the step rows are on the same page");
+  assert((h.match(/Curing until/g) || []).length >= 2, "the step carries its own live banner");
 });
 
 console.log("parts: master–detail split");
@@ -1833,10 +1844,10 @@ await t("every tab that can hold a document renders one without throwing", () =>
   DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
   view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-900", edit: false };
   render(); assert(main.innerHTML.includes("Mold drawing"), "parts");
-  // Documents live in the work order's "Files & docs" section now, so the tab
-  // has to be open for them to be on the page at all. This replaced an assert
-  // on the old jumpbar's href="#wo-docs" anchor, which the section tabs retired.
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-DOC", edit: false, woSec: "files" };
+  // Documents live in the work order's "Files & docs" section. The whole record
+  // is one scroll, so it is on the page without opening anything; the jump bar
+  // replaced the old jumpbar's href="#wo-docs" anchor with a scroll button.
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-DOC", edit: false };
   render();
   assert(main.innerHTML.includes("Mold drawing"), "work orders");
   assert(main.innerHTML.includes('id="wosec-files"'), "and the section that holds it is a real tab");
@@ -4186,8 +4197,7 @@ await t("every note surface writes to its own field through the same renderer", 
 await t("a work-order note is authored, appended safely, and rendered by the shared thread", () => {
   DB.workOrders = [{ id: "WO-N", partName: "X", processType: "MoldInfusion", revision: "A",
     status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [] }];
-  // The thread and its composer are in the "Notes & log" section.
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: false, woSec: "notes" };
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: false };
   render();
   openComposer("wo-note"); render();
   calls.length = 0;
@@ -4219,7 +4229,7 @@ await t("a step note keeps its plain text so the printed traveler never goes bla
 await t("a rich field writes the markup and keeps the plain value the traveler reads", () => {
   DB.workOrders = [{ id: "WO-RF", partName: "X", processType: "MoldInfusion", revision: "A",
     status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [], notes: "old plain note" }];
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-RF", edit: false, woSec: "notes" };
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-RF", edit: false };
   render();
   assert(main.innerHTML.includes("old plain note"), "the pre-existing plain value still renders, with nothing backfilled");
   startFieldEdit("workOrders", "WO-RF", "notes", true);

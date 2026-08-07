@@ -1456,7 +1456,7 @@ function setTab(id) {
   // and friends are NOT reset here, and a "late only" toggle left on in Parts
   // would otherwise silently filter a different tab's rail.
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
-    woSec: null, woOpen: false, woLate: false, woMine: false, woDone: false };
+    woOpen: false, woLate: false, woMine: false, woDone: false };
   closeDrawer();
   render(); syncUrl();
 }

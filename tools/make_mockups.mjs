@@ -59,7 +59,7 @@ const SHOTS = [
   { id: "workorder-detail", kind: "app", badge: 3, vh: 1500,
     js: `setTab("workorders"); openRecord("workorders", __WO__);`,
     title: "A work order · steps, buy-offs, cure holds",
-    note: "The traveler lives here, sectioned so one part of it shows at a time and opening on Steps, which is the bench action. Which run it is, its status, the lineage and anything blocking it stay above the tabs. Buying off an infusion asks which resin and which lots went in, and the demould step then stays locked until the cure hold has run." },
+    note: "The traveler lives here as one scroll, Steps first because that is the bench action, with a bar that jumps to any section and counts what is in it. Which run it is, its status, the lineage and anything blocking it stay above that bar. Buying off an infusion asks which resin and which lots went in, and the demould step then stays locked until the cure hold has run." },
   { id: "parts", kind: "app", badge: 4, vh: 1200,
     js: `setTab("parts"); openRecord("parts", __PART__);`,
     title: "Parts · the season tracker, split view",

@@ -129,11 +129,8 @@ const VIEWS = [
      of a comment — none of them had ever been measured at any width, because
      nothing in the suite opened them. `needs` is empty here: the audit measures
      the overlay, so a token from the page behind it is not what to look for. */
-  /* setWOSec("notes") because the work-order pane is sectioned and opens on
-     Steps: the note thread these two views photograph is real, but it is one
-     tab over. Without it they measure an empty overlay and call it a pass. */
   { id: "lightbox", tab: "workorders", what: "a comment photo opened in the lightbox",
-    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); setWOSec("notes");
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
            const im = document.querySelector("#main .comment .prose img"); if (im) openLightbox(im);`,
     needs: "" },
   { id: "doclink-modal", tab: "workorders", what: "the link-a-document form",
@@ -163,7 +160,7 @@ const VIEWS = [
            openAddGoalModal(w.id, "arivera@berkeley.edu");`,
     needs: "" },
   { id: "composer-open", tab: "workorders", what: "the note composer expanded with a long draft in it",
-    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); setWOSec("notes");
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
            openComposer("wo-note");
            const ed = document.getElementById("wo-note");
            /* The LONGEST comment, not the first. The first is the bare-URL one

@@ -632,7 +632,7 @@ function renderWOIndex() {
       <div class="plistfade" aria-hidden="true"></div>
     </div>
     <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
-      selectedWO() ? "<span><kbd>←</kbd><kbd>→</kbd> section</span>" : ""
+      selectedWO() ? "<span><kbd>1</kbd>–<kbd>6</kbd> jump</span>" : ""
     }<span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
   </aside>`;
 }
@@ -726,41 +726,51 @@ function fld(wo, label, key, type) {
    full-width page that was one very long scroll with an anchor jumpbar bolted on
    top; beside a rail it would be the same scroll in three quarters of the width.
 
-   So the pane is sectioned and exactly one section renders at a time. What sits
-   ABOVE them is what you must not be able to lose by being on the wrong tab:
-   which run this is, its status, where it sits in the chain, and anything
-   blocking it.
+   So the pane is ordered rather than paginated: the whole record is ONE scroll,
+   with Steps at the top because that is the bench action, and the bar above it
+   jumps you down to a section instead of swapping which one exists.
 
-   The sections are a table rather than six branches so the nav and the panel
-   cannot disagree about what exists — a tab that renders while its content does
-   not is invisible until somebody clicks it. */
+   This was briefly one-section-at-a-time, and Simon asked for the scroll back.
+   The reason is sound: on a traveler you read across sections constantly (the
+   stack while signing "Stack frozen", the BOM while checking what went in), and
+   a tab makes you leave one to see the other. What the bar keeps from that
+   attempt is the part worth keeping — a count per section, and a dot when
+   something in it needs attention, both visible without going there.
+
+   The sections are a table rather than six inline blocks so the jump bar and
+   the body cannot disagree about what exists or what order it is in. */
 const WO_SECTIONS = [
-  { id: "steps", label: "Steps",
+  { id: "steps", label: "Steps", anchor: "wo-steps",
     badge: w => { const p = woProgress(w); return p.total ? `${p.done}/${p.total}` : ""; },
     warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
     body: (w, E) => woSecSteps(w, E) },
-  { id: "overview", label: "Overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
-  { id: "stack", label: "Stack & BOM",
+  { id: "overview", label: "Overview", anchor: "wo-overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
+  { id: "stack", label: "Stack & BOM", anchor: "wo-stack",
     badge: w => String((w.layupStack || []).length || ""),
     body: (w, E) => woSecStack(w, E) },
-  { id: "quality", label: "Quality",
+  { id: "quality", label: "Quality", anchor: "wo-quality",
     badge: w => String((w.qualityChecks || []).length || ""),
     warn: w => (w.qualityChecks || []).some(q => q.pass === false) || undisposedIssuesForWO(w.id).length > 0,
     body: (w, E) => woSecQuality(w, E) },
-  { id: "files", label: "Files & docs",
+  { id: "files", label: "Files & docs", anchor: "wo-docs",
     badge: w => String(((w.docs || []).length + (w.files || []).length) || ""),
     body: (w, E) => woSecFiles(w, E) },
-  { id: "notes", label: "Notes & log",
+  { id: "notes", label: "Notes & log", anchor: "wo-log",
     badge: w => String((w.noteLog || []).length || ""),
     body: (w, E) => woSecNotes(w, E) },
 ];
-/* Validated on the way out, never read raw. render() does
-   `el.innerHTML = tab.render()` with no try/catch, so a view.woSec naming a
-   section that no longer exists would throw inside the render and leave #main
-   blank — the worst failure mode this architecture has. Falling back to Steps
-   costs nothing and cannot fail. */
-function woSec() { return WO_SECTIONS.some(s => s.id === view.woSec) ? view.woSec : "steps"; }
-function setWOSec(id) { view = { ...view, woSec: id }; render(); }
+/* Scroll, rather than an <a href="#wo-steps">. The app keeps a deep link in the
+   URL hash (syncUrl writes #/WO-SN6-004), and an anchor would overwrite it with
+   #wo-steps — so the address bar would stop naming the record you are reading
+   and a copied link would land on the tab instead of the run. The old jumpbar
+   did use anchors and did exactly that.
+
+   scroll-margin-top on #main [id^="wo-"] (index.html) is what keeps the heading
+   clear of the topbar and this bar. */
+function woJump(anchor) {
+  const el = document.getElementById(anchor);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" });
+}
 
 /* The part this run belongs to, for the header chip and for stackDrift().
    Deliberately the ORIGINAL loose lookup and not woPart()/partOf(): partOf
@@ -778,7 +788,6 @@ function renderWODetail() {
   // dangling reference here throws inside render() and blanks the page.
   if (!wo) { view.mode = "list"; return renderWOOverview(); }
   const E = view.edit;
-  const sec = WO_SECTIONS.find(s => s.id === woSec()) || WO_SECTIONS[0];
   const linkedPart = woDetailPart(wo);
   const undisposed = undisposedIssuesForWO(wo.id);
   const fl = woFlags(wo);
@@ -805,25 +814,24 @@ function renderWODetail() {
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
     <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span> · ${esc(wo.processType || "")}${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.dueDate ? ` · due ${esc(wo.dueDate)}${isWoLate(wo) ? ' <span class="warn">late</span>' : ""}` : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
     ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
-    ${fl.blocked ? `<p class="gate blocked"><span class="gi">✕</span><span>Blocked by an unsigned blocker: <b>${esc(stripCS(fl.blocked.title))}</b>. <button class="link no-print" onclick="setWOSec('steps')">Go to steps</button></span></p>` : ""}
-    ${fl.curing ? `<p class="gate"><span class="gi">⚠</span><span>Curing until <b>${esc(fl.curing.readyAt)}</b>${fl.curing.resin ? ` · ${esc(fl.curing.resin.label)}` : ""}. <button class="link no-print" onclick="setWOSec('steps')">Go to steps</button></span></p>` : ""}
+    ${fl.blocked ? `<p class="gate blocked"><span class="gi">✕</span><span>Blocked by an unsigned blocker: <b>${esc(stripCS(fl.blocked.title))}</b>. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}
+    ${fl.curing ? `<p class="gate"><span class="gi">⚠</span><span>Curing until <b>${esc(fl.curing.readyAt)}</b>${fl.curing.resin ? ` · ${esc(fl.curing.resin.label)}` : ""}. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}
     ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
   </div>
-  ${/* Replaces the anchor jumpbar. The <h3 id="wo-*"> anchors stay on the
-        headings inside each section: they cost nothing and keep any external
-        link working. */""}
-  <nav class="secnav no-print" role="tablist" aria-label="Work order sections">
+  ${/* A jump bar, not a switch: every section below is rendered, this scrolls
+        to one. Carries the count and the attention dot so you can see there are
+        five plies, or that a quality check failed, without going there. */""}
+  <nav class="secnav no-print" aria-label="Jump to a section of this work order">
     ${WO_SECTIONS.map((s, i) => {
-      const on = s.id === sec.id;
       const n = s.badge ? s.badge(wo) : "";
       const warn = s.warn && s.warn(wo);
-      return `<button type="button" class="secnav-btn ${on ? "on" : ""} ${n ? "" : "empty"} ${warn ? "warn" : ""}"
-        role="tab" id="wosec-${esc(s.id)}" aria-selected="${on}" title="${esc(s.label)} (${i + 1})"
-        onclick="setWOSec('${esc(s.id)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
+      return `<button type="button" class="secnav-btn ${n ? "" : "empty"} ${warn ? "warn" : ""}"
+        id="wosec-${esc(s.id)}" title="${esc(s.label)} (${i + 1})"
+        onclick="woJump('${esc(s.anchor)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
     }).join("")}
   </nav>
-  <div class="card wosec" id="wosec-panel" role="tabpanel" aria-labelledby="wosec-${esc(sec.id)}">
-    ${sec.body(wo, E)}
+  <div class="card wosec">
+    ${WO_SECTIONS.map(s => s.body(wo, E)).join("")}
   </div>
   </section>`;
 }
@@ -1528,20 +1536,14 @@ function woKeydown(e) {
     return "search";
   }
   if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
-  /* Sections are ←/→ (and [ / ]) plus 1-6 to jump. Digits are free here in a
-     way they are not on Parts, which spends 1/2/3 advancing stages: a work
-     order has no stage enum to advance. Gated on an open record so they do not
-     swallow horizontal scrolling on the overview pane. */
-  if (view.mode === "detail" && (k === "ArrowLeft" || k === "ArrowRight" || k === "[" || k === "]")) {
-    if (e.preventDefault) e.preventDefault();
-    const d = (k === "ArrowRight" || k === "]") ? 1 : -1;
-    const i = WO_SECTIONS.findIndex(s => s.id === woSec());
-    setWOSec(WO_SECTIONS[Math.min(WO_SECTIONS.length - 1, Math.max(0, i + d))].id);
-    return "section";
-  }
+  /* 1-6 scroll to a section of the open record. Digits are free here in a way
+     they are not on Parts, which spends 1/2/3 advancing stages: a work order
+     has no stage enum to advance. There is no ←/→ any more, because with the
+     whole record in one scroll there is no "current section" for them to step
+     from — that was a switch, and this is a jump. */
   if (view.mode === "detail" && /^[1-6]$/.test(k) && WO_SECTIONS[+k - 1]) {
     if (e.preventDefault) e.preventDefault();
-    setWOSec(WO_SECTIONS[+k - 1].id);
+    woJump(WO_SECTIONS[+k - 1].anchor);
     return "section";
   }
   return null;
