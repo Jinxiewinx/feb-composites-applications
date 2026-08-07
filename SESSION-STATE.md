@@ -9,6 +9,72 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-07
+Status: **Tickets revamped: master-detail, genealogy, sub-tickets as real
+children (2026-08-07).** Branch `mold-drawing-revamp`, six commits. All suites
+green: test_app 391 (was 377), designsystem 23, detailui 816, appui 1246.
+
+Simon asked for a tickets/projects revamp and, interrogated with options,
+chose: master-detail with the board as the no-selection pane and the table
+view RETIRED (the rail is the list); the full lineage bar including the build
+chain (sub-ticket shows Ticket > Sub-ticket, issue shows Issue > Run > Part);
+a real table.sub children table plus a creator that prefills from the parent
+(NO progress rollup, depth stays 1); all four sanctioned UX fixes
+(newest-first comments, the phone metadata fix, composer button order, the
+jump bar); and the issue block moved into the main column.
+
+What landed, in commit order: composer footer puts primary rightmost in all
+six composers at once (one swap in composerHtml; threadHtml gained opts.lead
+so the composer sits under the Comments heading of a newest-first thread);
+fixtures got sub-tickets TKT-0037/0038 under TKT-0031 (browser suites had ZERO
+parentId coverage); the children chip-row became table.sub.tksub;
+openNewProject seeds from the parent incl. a max= cap on the due date;
+lineageBar gained a projects branch via ticketLineage() with the node emitter
+hoisted to lnNode/LN_SEP; the tkmeta details element is GONE (tkmain first in
+DOM, grid-areas keep metadata visually left, phone reads discussion first —
+the structural fix the old in-code note said to wait for); renderProjects is
+now .mdsplit.tkouter with tkRailPlan() feeding both the painted rail and
+tkIndexRows(); tkKeydown follows the shared contract; tkSections(p) drives a
+per-kind FILTERED jump bar (digits index the same array) and woJump's body
+was hoisted to core.js secJump().
+
+Decisions worth keeping:
+- **tkRailPlan() is ONE builder for body and rows.** Headers live only in
+  entries with .head; a test asserts they can never enter tkIndexRows().
+  Children attach under their parent only when the parent survives the
+  filters; otherwise they float un-indented so a "late" filter can show a
+  late child alone. Orphaned parentIds float too, never dropped.
+- **The rail does not hide done tickets** (WO's archive argument), and the
+  filter keys are tkOpen/tkLate/tkMine/tkDone, fresh per tab.
+- **tksplit is decoupled from mdsplit** and carries its own grid + print
+  rules. Required: the outer split's below-900 rules would otherwise cascade
+  into the inner one. Do not re-merge them.
+- **tkSections is a function, not a table**, because a ticket's shape varies
+  by kind; the bar never shows a dead button and digits match the tooltips.
+  A test walks every secnav button's anchor to an id in the same HTML.
+- **.status pills are white-space:nowrap now** (app-wide): inside table.sub's
+  overflow-wrap:anywhere cells a pill shattered one letter per line at 393.
+  table.sub.tksub scopes word-boundary wrapping for team-typed text; the
+  anywhere rule stays for the URL-bearing WO tables.
+- view.projView is dead (navHere too). renderProjTable deleted.
+
+Traps hit this round:
+- The old test asserting the children table checked the raw ISO date; due
+  dates now render via shortDate(), and the harness DOM stub has no
+  getAttribute, so prefill assertions grep the modal HTML string instead.
+- make_mockups.mjs crashes at the CFD stage in a worktree (untracked
+  DP_22_variant.pdf, documented before); all 18 app mockups regenerate before
+  it dies, so CFD/site PNGs were left at their existing dates on purpose.
+- The mockup badge renumber: inserting ticket-detail as badge 10 bumped every
+  later spec by one (schedule..scan are 11-18 now).
+
+Still open, unchanged: the sanctioned list at the 2026-08-02 section
+(lightbox thumb-reach/zoom, trash contrast, drawer close control), and the
+amber collision (in-work on Parts vs on-hold on Tickets) which this revamp
+did not touch.
+
+Previous status follows.
+
 Last updated: 2026-08-06 (later)
 Status: **Work Orders became a master-detail tab, and the pane is ONE SCROLL
 (2026-08-06).** Branch

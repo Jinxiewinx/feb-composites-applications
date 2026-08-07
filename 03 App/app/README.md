@@ -227,15 +227,30 @@ whether the planned blanks actually fit the rack.
 Tickets is a jira-style tracker holding two kinds: projects (R&D, process fixes,
 outreach, and they can have sub-tickets) and issues (a production
 nonconformance, which needs a work order, a disposition and a documented root
-cause before it can close). Create from a modal with assignee and related-part
-pickers and a due date, then drag cards across the board (To Do, In Progress,
-Collecting Data, On Hold, Done, Cancelled) or use list view. Sub-tickets appear
-on both, in their own status column, labelled with the ticket they belong to:
-breaking work down should make it more visible, not less.
+cause before it can close). The tab is the same master-detail split as Parts,
+Work Orders and Molds: a rail of every ticket on the left, grouped Projects
+then Issues with each sub-ticket nested and indented under its parent, and the
+open ticket in the pane beside it. With nothing selected the pane is the
+kanban board (To Do, In Progress, Collecting Data, On Hold, Done, Cancelled),
+and dragging a card between columns still changes its status. There is no
+separate list view any more; the rail is the list, with open/late/mine/done
+chips, a kind filter, search, and the arrow keys.
 
-Each ticket gets its own page with assignees, watchers who get flagged on new
-activity, a files section for photos and docs, an editable description and a
-comment thread with rich text and image attachments.
+![Tickets: the rail and the board](../design/tickets-mockup-20260807.png)
+
+Each ticket's page opens with a lineage bar: a sub-ticket names its parent,
+hyperlinked (that is the route to the top ticket from anywhere, including a
+deep link), and an issue walks Issue, then its run, then the part the run was
+building, ghosting whatever is not linked yet. A jump bar counts what is in
+each section (an issue that still cannot close carries a warning dot) and
+digits 1-5 scroll to them. Sub-tickets are a real children table with status,
+due date, lateness, priority and assignees, and the New sub-ticket modal
+starts from the parent: related parts and work orders carry over, the due
+date defaults to the parent's and is capped there. The comment thread reads
+newest-first with the composer at the top, and on a phone the description and
+discussion come before the metadata instead of five screens after it.
+
+![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260807.png)
 
 Back goes back. Records cross-link constantly, and following a chip from one
 ticket to another used to dump you at the board when you pressed the button,
@@ -246,7 +261,7 @@ the trail, since that's "take me elsewhere" rather than a step.
 
 ### Schedule
 
-One tab, two views behind a toggle (the Tickets board/list idiom): the
+One tab, two views behind a toggle: the
 season by station, and the week by person. They were separate Timeline and
 Weekly Plan tabs until 2026-08; they always rendered the same schedule
 records, and old links to either still land in the right view.
