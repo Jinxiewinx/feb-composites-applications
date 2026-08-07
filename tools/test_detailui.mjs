@@ -81,6 +81,13 @@ const WIDTHS = [
    check below while rendering nothing. Kept declarative so adding a populated
    surface is one row. */
 const VIEWS = [
+  /* The work-order RAIL, populated and with nothing selected. test_appui walks
+     this tab but never seeds it and never goes below 393; the rail is where a
+     long part name, a progress bar and a status pill compete for 320px, so it
+     is the surface most likely to spill. Grouped by part, which is the default
+     and the densest arrangement. */
+  { id: "wo-list", tab: "workorders", what: "the work order index grouped by part, nothing selected",
+    open: `setTab("workorders")`, needs: "work orders" },
   { id: "wo-detail", tab: "workorders", what: "a work order with notes, documents and files",
     open: `openRecord("workorders", (DB.workOrders[0] || {}).id)`, needs: "inHg" },
   { id: "wo-detail-edit", tab: "workorders", what: "the same work order in edit mode",
@@ -122,8 +129,11 @@ const VIEWS = [
      of a comment — none of them had ever been measured at any width, because
      nothing in the suite opened them. `needs` is empty here: the audit measures
      the overlay, so a token from the page behind it is not what to look for. */
+  /* setWOSec("notes") because the work-order pane is sectioned and opens on
+     Steps: the note thread these two views photograph is real, but it is one
+     tab over. Without it they measure an empty overlay and call it a pass. */
   { id: "lightbox", tab: "workorders", what: "a comment photo opened in the lightbox",
-    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); setWOSec("notes");
            const im = document.querySelector("#main .comment .prose img"); if (im) openLightbox(im);`,
     needs: "" },
   { id: "doclink-modal", tab: "workorders", what: "the link-a-document form",
@@ -153,7 +163,7 @@ const VIEWS = [
            openAddGoalModal(w.id, "arivera@berkeley.edu");`,
     needs: "" },
   { id: "composer-open", tab: "workorders", what: "the note composer expanded with a long draft in it",
-    open: `openRecord("workorders", (DB.workOrders[0] || {}).id);
+    open: `openRecord("workorders", (DB.workOrders[0] || {}).id); setWOSec("notes");
            openComposer("wo-note");
            const ed = document.getElementById("wo-note");
            /* The LONGEST comment, not the first. The first is the bare-URL one
@@ -427,7 +437,14 @@ for (const vp of widths) {
     const at = `${v.id}/${vp.id}`;
     report.push({ at, ...a });
 
-    ok(`${at} renders`, a.mainText > 20, `only ${a.mainText} chars in main`);
+    /* The lightbox is exempt because it is not a text surface: everything in it
+       is one <img>, a caption and a "3 / 7" counter. "bagged diffuser tool" is
+       20 characters, and whether this passed used to depend on whether the
+       counter happened to render — i.e. on how many photos the record had. That
+       is a text-length proxy measuring the wrong thing; `lightbox opened` on the
+       next line is the real check, and the audit's spill/clip/off-screen
+       measurements still run over the overlay either way. */
+    ok(`${at} renders`, a.mainText > 20 || a.root === "lightbox", `only ${a.mainText} chars in main`);
     if (v.id === "lightbox") ok(`${at} lightbox opened`, a.root === "lightbox", `measured "${a.root}"`);
     else if (/-modal$/.test(v.id)) ok(`${at} modal opened`, /modal/.test(a.root), `measured "${a.root}"`);
     else if (v.id === "drawer-open") {

@@ -1204,6 +1204,63 @@
   .prog3 .sg.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
   .prog3 .sg.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); opacity: .6; }
 
+  /* ============================================================
+     WORK ORDERS — rail row extras, and the in-pane section tabs.
+     The split itself is .mdsplit above; nothing here re-declares it, and the
+     one-pane-at-a-time collapse stays where every other width rule lives, in
+     the responsive block at the end of this sheet. A test enforces that.
+     ============================================================ */
+  /* How far through its buy-offs a run is — the one number the flat table
+     never carried. A bar AND the fraction: a bar alone can't tell 4/9 from
+     40/90, and the fraction alone doesn't scan down a column of rows. */
+  .wprog { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11px; color: var(--muted); }
+  .wprog .wp-bar { width: 34px; height: 5px; border-radius: 999px; background: var(--fill); overflow: hidden; }
+  .wprog .wp-bar i { display: block; height: 100%; background: var(--ok); }
+  .wprog b { font-family: var(--font-display); color: var(--ink); }
+  /* At most one of these per row, and never together: blocked is something to
+     go and fix, curing is something to wait for. */
+  .wflag { padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .wflag.blocked { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad); }
+  .wflag.curing { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--amber); }
+  /* A group header that names a part is a way INTO that part, not just a label. */
+  .pgrouphd .pg-open { font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); cursor: pointer; }
+  .pgrouphd .pg-open:hover { color: var(--brand-ink); text-decoration: underline; }
+  /* A part with no runs. Dashed, because there is nothing under it to select —
+     it is the shape of a gap, and the button is the only thing to do with it. */
+  .pgrouphd.norows { border: 1px dashed var(--border-2); background: none; }
+  .pgrouphd .pg-start { margin-left: auto; padding: 2px 8px; }
+
+  /* The section tabs. Geometry borrowed from .jumpbar (which Parts still uses),
+     but these are buttons with state rather than anchors: one section renders
+     at a time, so this is the only thing saying which. */
+  .secnav { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
+    position: sticky; top: var(--topbar-h); z-index: 4; background: var(--canvas); padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .secnav-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12.5px; line-height: 1.1;
+    min-height: 30px; padding: 5px 11px; border-radius: var(--radius); border: 1px solid transparent; background: none;
+    color: var(--muted); cursor: pointer; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .secnav-btn:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
+  .secnav-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--brand-ink); font-weight: 700; }
+  /* Empty sections stay visible and muted. A hidden tab is a section nobody can
+     find in order to fill it in — which is the bug, not the tidiness. */
+  .secnav-btn.empty { opacity: .62; }
+  .secnav-n { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+  .secnav-btn.on .secnav-n { background: var(--card); color: var(--brand-ink); }
+  .secnav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+  .secnav-btn.warn .secnav-dot { background: var(--bad); }
+  .wosec { min-width: 0; }
+  /* Five controls in the rail head where Parts has four, so the third select
+     (group/sort) is told to span the two flexible columns and leave the `auto`
+     one to the reverse button. Without this it lands in the auto track and a
+     label like "Group: subteam" gets squeezed to nothing. Not a width rule —
+     it is a different control count, at every width. */
+  .wosplit .pfilters > select:nth-of-type(3) { grid-column: 1 / 3; }
+  /* The always-visible header: identity, status, and anything blocking. Sits
+     outside every section on purpose — a gate you can navigate away from is a
+     gate that gets walked past. */
+  .wohead { margin-bottom: 10px; }
+  .wohead h2 { margin-top: 0; }
+  .wohead .gate { margin-top: 10px; }
+
   /* Part detail */
   .mdnav { margin-left: auto; display: inline-flex; gap: 4px; }
   .pdue { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 11px; font-size: 13px;
@@ -1943,6 +2000,10 @@
       background: none; border: none; border-radius: 0; box-shadow: none; }
     .pindex-head { padding: 0 0 10px; background: none; border-bottom: none; }
     .plist { padding: 0; overflow: visible; }
+    /* The work-order section tabs stop being sticky here. At this width the
+       pane IS the page, so the tabs are already at the top of it; pinning them
+       under the topbar only costs a strip of the bench view. */
+    .secnav { position: static; }
     /* The rail is the page here and the page scrolls, so there is no clipped
        edge to fade and no inner scrollbar to hint at. */
     .plistfade { display: none; }
@@ -1969,6 +2030,11 @@
     /* Fixed track widths, not `auto`: a row with no deadline or no named
        engineer must not slide its stage rail out of line with the row above. */
     .pitem { grid-template-columns: minmax(0, 1fr) 168px 66px 74px; gap: 0 14px; }
+    /* A work-order row carries more in pi-sub than a part's three-segment stage
+       rail does — a progress bar, a fraction, and a blocked/curing chip — so it
+       gets a wider track. Scoped to .wosplit so Parts keeps the 168px it was
+       tuned for. */
+    .wosplit .pitem { grid-template-columns: minmax(0, 1fr) 230px 66px 74px; }
     .pitem .pi-name, .pitem .pi-sub, .pitem .pi-who, .pitem .pi-due { grid-row: 1; }
     .pitem .pi-name { grid-column: 1; font-size: 14px; }
     .pitem .pi-sub { grid-column: 2; }
@@ -1996,6 +2062,15 @@
     }
     .docrow { align-items: flex-start; }
     .docrow .di, .docrow .dsz { padding-top: 1px; }
+
+    /* Six section tabs at the 40px coarse-pointer minimum is well over two
+       phone widths of button, which wrapped to three rows and put 120px of
+       chrome above the step you came to sign. One row that scrolls instead —
+       the same trade .rte-toolbar already makes, for the same reason. */
+    .secnav { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .secnav::-webkit-scrollbar { display: none; }
+    .secnav-btn { flex: none; }
 
     /* Tickets board: one status section per row, each full width. Desktop drag
        isn't used here; a card tap opens it. */
@@ -2086,6 +2161,10 @@
        padding: the name is one clipped line either way, and padding alone put
        the text off-centre in the strip. */
     .fileitem .fn a { min-height: 40px; display: flex; align-items: center; }
+    /* The part name in a work-order group header is a way into that part, so it
+       is a tap target and measured as one — 14px of bare text otherwise. Same
+       min-height idiom as the filename above, for the same reason. */
+    .pgrouphd .pg-open { min-height: 40px; display: inline-flex; align-items: center; }
     /* No Cmd key on a phone, so this is an instruction nobody can follow. */
     .kbdhint { display: none; }
     /* Same reasoning as the phone rules above, but keyed on the pointer: a
@@ -2173,7 +2252,7 @@
     main { max-width: none; padding: 0; }
     /* Paper wants the record, not the navigation: print the selected part (or
        the season overview when none is selected), never the index beside it. */
-    .mdsplit { display: block; } .mdindex, .keyhint, .mdnav { display: none !important; }
+    .mdsplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }
     /* Paper can't be tapped: a stage prints as the value it is, not as six
        buttons one of which is filled in. */
     .pstep:not(.cur) { display: none !important; }

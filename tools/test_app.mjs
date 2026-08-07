@@ -499,6 +499,174 @@ await t("Stock and Parts don't share a sidebar icon (regression: Stock used to r
 });
 await t("part field edit saves only that field", () => { view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-009", edit: true }; calls.length = 0; updPart("subteam", "AERO"); assert(partById("P-SN6-009").subteam === "AERO"); assert(calls.some(c => c[0] === "save" && c[1] === "parts" && c[3] === "subteam")); });
 
+console.log("work orders: master–detail split");
+/* A fixture with the three states the rail has to tell apart: a live run part
+   way through its steps, a run whose part cannot be resolved (the SN5 case —
+   0 of 33 archive parts carry an id link), and a finished one. Plus a part with
+   no runs at all, which is the thing the flat table could never show. */
+function woSplitFixture() {
+  DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  DB.projects = []; DB.schedule = []; DB.molds = []; DB.stackplans = [];
+  const step = (seq, title, signed) => ({ seq, title, status: "open", notes: "",
+    buyoff: signed ? { name: "Nick", date: "2026-08-01" } : { name: "", date: "" } });
+  DB.parts = [
+    { id: "P-N1", partName: "NOSECONE", subteam: "AERO", layupStack: [] },
+    { id: "P-N9", partName: "ZZ NO RUNS", subteam: "AERO", layupStack: [] },
+  ];
+  DB.workOrders = [
+    { id: "WO-SN6-001", partName: "NOSECONE", partId: "P-N1", subteam: "AERO", revision: "A",
+      status: "InWork", processType: "MoldInfusion", dueDate: "2030-01-01", moldEngineer: "Nick",
+      bom: [], qualityChecks: [], timeline: [], layupStack: [],
+      steps: [step(1, "Stack frozen", true), step(2, "Glue mold stock", true), step(3, "Machine mold", false), step(4, "Infuse", false)] },
+    { id: "WO-SN6-002", partName: "GHOST PART", subteam: "AERO", revision: "A",
+      status: "Draft", processType: "MoldWetLay", dueDate: "2030-02-01",
+      bom: [], qualityChecks: [], timeline: [], layupStack: [], steps: [step(1, "Stack frozen", false)] },
+    { id: "WO-SN6-003", partName: "NOSECONE", partId: "P-N1", subteam: "AERO", revision: "B",
+      status: "Complete", processType: "MoldInfusion", dueDate: "2026-01-01",
+      bom: [], qualityChecks: [], timeline: [], layupStack: [], steps: [step(1, "Trim and finish", true)] },
+  ];
+  view = { ...view, tab: "workorders", mode: "list", id: null, edit: false, q: "", fSub: "", fStatus: "",
+    woSec: null, woOpen: false, woLate: false, woMine: false, woDone: false, sortKey: null, sortDir: null };
+}
+await t("the tab renders both panes at once — the rail is never destroyed by opening a run", () => {
+  woSplitFixture(); render();
+  assert(main.innerHTML.includes("mdsplit"), "the split wrapper");
+  assert(main.innerHTML.includes("mdindex"), "the rail");
+  assert(main.innerHTML.includes("mddetail"), "the pane");
+  assert(!main.innerHTML.includes("has-sel"), "nothing selected yet");
+  selectWO("WO-SN6-001");
+  assert(main.innerHTML.includes("has-sel"), "the wrapper carries the selected flag");
+  assert(main.innerHTML.includes("mdindex"), "and the rail survived the selection");
+  assert(/pitem sel[^"]*" id="pi-WO-SN6-001"/.test(main.innerHTML), "the open row is marked");
+});
+await t("the rail shows finished runs by default — a work order is a record you read back", () => {
+  woSplitFixture(); render();
+  // Unlike Parts, which hides done. Every SN5 work order is Complete, so a
+  // done-hiding default lands on an empty rail and reads as a broken tab.
+  assert(main.innerHTML.includes("3 of 3 work orders"), "all three counted: " + (main.innerHTML.match(/\d+ of \d+ work orders/) || [])[0]);
+  assert(main.innerHTML.includes("pi-WO-SN6-003"), "the Complete one is in the rail");
+  view.woOpen = true; render();
+  assert(!main.innerHTML.includes("pi-WO-SN6-003"), "and the open chip takes it out");
+});
+await t("grouped by part is the default, and runs with no part get a named group of their own", () => {
+  woSplitFixture(); render();
+  assert(main.innerHTML.includes("NOSECONE"), "the part that has runs heads a group");
+  assert(main.innerHTML.includes("Not linked to a part"), "and the unresolvable one is named, not left as an empty heading");
+  const html = main.innerHTML;
+  assert(html.indexOf("NOSECONE") < html.indexOf("Not linked to a part"), "unlinked sorts last");
+});
+await t("a part with no runs is shown, with the button that starts one", () => {
+  woSplitFixture(); render();
+  assert(main.innerHTML.includes("ZZ NO RUNS"), "the part with nothing started is on the rail");
+  assert(main.innerHTML.includes("newRunForPart('P-N9')"), "and offers to start a run");
+  // The invariant that makes this safe: keyboard nav walks woIndexRows(), which
+  // is work orders only. A synthetic header in there would let j/k set view.id
+  // to a part and silently drop the pane back to the overview.
+  assert(!woIndexRows().some(w => w.id === "P-N9"), "but it is NOT a navigable row");
+});
+await t("the open run never falls out from under a filter", () => {
+  woSplitFixture(); selectWO("WO-SN6-003");
+  view.q = "zzzzz"; render();
+  assert(main.innerHTML.includes("pi-WO-SN6-003"), "a search that matches nothing still keeps the row you are reading");
+  assert(main.innerHTML.includes("has-sel"), "and the pane stays open");
+});
+await t("openRecord from another tab arrives selected, with the rail alongside", () => {
+  woSplitFixture(); view = { ...view, tab: "dashboard" }; render();
+  openRecord("workorders", "WO-SN6-001");
+  assert(view.tab === "workorders" && view.mode === "detail", "landed on the tab in detail mode");
+  assert(main.innerHTML.includes("mdindex") && main.innerHTML.includes("has-sel"), "both panes, one selected");
+});
+await t("a missing id falls back to the overview instead of throwing", () => {
+  woSplitFixture(); view = { ...view, mode: "detail", id: "WO-NOPE" };
+  render();
+  assert(main.innerHTML.includes("mdindex"), "the rail still renders");
+  assert(main.innerHTML.includes("Runs in flight"), "and the right pane is the overview");
+});
+
+console.log("work orders: sections in the detail pane");
+await t("the pane opens on Steps, and the section survives moving between runs", () => {
+  woSplitFixture(); selectWO("WO-SN6-001");
+  assert(woSec() === "steps", "default section");
+  assert(main.innerHTML.includes("Machine mold"), "a step is on the page");
+  setWOSec("notes");
+  selectWO("WO-SN6-003");
+  assert(woSec() === "notes", "walking the rail keeps the section you were reading");
+});
+await t("a section id that no longer exists falls back rather than blanking the page", () => {
+  // render() does `el.innerHTML = tab.render()` with no try/catch, so a stale
+  // view.woSec pointing at a removed section would throw and leave #main empty.
+  woSplitFixture(); selectWO("WO-SN6-001");
+  view.woSec = "a-section-that-was-deleted"; render();
+  assert(woSec() === "steps", "the getter validates");
+  assert(main.innerHTML.includes("Machine mold"), "and the pane still has content");
+});
+await t("what blocks the whole record stays visible from every section", () => {
+  woSplitFixture();
+  DB.projects = [{ id: "ISSUE-1", kind: "issue", title: "Delam", status: "In Progress", workOrderId: "WO-SN6-001", assignees: [] }];
+  selectWO("WO-SN6-001"); setWOSec("notes");
+  assert(main.innerHTML.includes("Can't complete this work order"), "the undisposed-issue gate is outside the sections");
+  assert(main.innerHTML.includes("lineage"), "so is the lineage bar");
+});
+await t("the section tabs say which sections have nothing in them", () => {
+  woSplitFixture(); selectWO("WO-SN6-002");
+  // WO-SN6-002 has no plies and one step, so Stack is empty and Steps is not.
+  assert(/class="secnav-btn[^"]*\bempty\b[^"]*"[^>]*id="wosec-stack"/.test(main.innerHTML),
+    "an empty section is marked, not hidden — a hidden tab is one nobody can find in order to fill it in");
+  assert(!/class="secnav-btn[^"]*\bempty\b[^"]*"[^>]*id="wosec-steps"/.test(main.innerHTML),
+    "and a section with content is not marked empty");
+  assert(main.innerHTML.includes('id="wosec-stack"'), "the empty section is still a tab you can reach");
+});
+
+console.log("work orders: the keyboard");
+await t("↑/↓/j/k walk the rail, Enter opens, Escape clears", () => {
+  woSplitFixture(); render();
+  assert(woKeydown({ key: "ArrowDown", target: {} }) === "next");
+  const first = view.id;
+  assert(view.mode === "detail" && first, "moving selects");
+  assert(woKeydown({ key: "j", target: {} }) === "next");
+  assert(woKeydown({ key: "k", target: {} }) === "prev");
+  assert(view.id === first, "j then k comes back");
+  assert(woKeydown({ key: "Escape", target: {} }) === "clear");
+  assert(view.mode === "list", "and Escape closes the pane");
+});
+await t("←/→ and the digits move between sections, only with a run open", () => {
+  woSplitFixture(); render();
+  assert(woKeydown({ key: "ArrowRight", target: {} }) === null, "nothing to section through on the overview");
+  selectWO("WO-SN6-001");
+  assert(woKeydown({ key: "ArrowRight", target: {} }) === "section");
+  assert(woSec() === "overview", "right moves one along: " + woSec());
+  assert(woKeydown({ key: "ArrowLeft", target: {} }) === "section");
+  assert(woSec() === "steps", "and left comes back");
+  assert(woKeydown({ key: "3", target: {} }) === "section");
+  assert(woSec() === "stack", "a digit jumps straight there: " + woSec());
+});
+await t("the work-order keys do nothing on another tab, or in a field", () => {
+  woSplitFixture(); render();
+  view.tab = "parts";
+  assert(woKeydown({ key: "j", target: {} }) === null, "inert on another tab");
+  view.tab = "workorders";
+  assert(woKeydown({ key: "j", target: { tagName: "INPUT" } }) === null, "and never steals a keystroke from a field");
+  assert(woKeydown({ key: "j", target: {}, metaKey: true }) === null, "or a shortcut");
+});
+await t("the cure countdown ticks only while the Steps section is on screen", () => {
+  /* syncHoldTick arms a 60-second re-render on `#main .step .gate`, so putting
+     Steps behind a tab silently changed when it runs. The behaviour is right —
+     nothing is counting down elsewhere, and the header shows an ABSOLUTE ready
+     time for exactly that reason — but it is invisible, so it gets a test. */
+  woSplitFixture();
+  const w = woById("WO-SN6-001");
+  w.steps = [
+    { seq: 1, title: "Infuse", status: "done", buyoff: { name: "Nick", date: "2026-08-01" },
+      rule: { kind: "startsHold" }, cure: { resin: RESINS[0].id, startedAt: new Date().toISOString(), tempC: 20 } },
+    { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
+  ];
+  selectWO("WO-SN6-001");
+  assert(main.innerHTML.includes("Curing until"), "the countdown is on the Steps section");
+  setWOSec("overview");
+  assert(!/class="step /.test(main.innerHTML), "no step rows once you leave");
+  assert(main.innerHTML.includes("Curing until"), "but the header still says it is curing, as a clock time");
+});
+
 console.log("parts: master–detail split");
 // A small fixture the split tests share. Deliberately includes a completed part
 // (so the default filter hides it) and a late one.
@@ -1665,10 +1833,13 @@ await t("every tab that can hold a document renders one without throwing", () =>
   DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
   view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-900", edit: false };
   render(); assert(main.innerHTML.includes("Mold drawing"), "parts");
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-DOC", edit: false };
+  // Documents live in the work order's "Files & docs" section now, so the tab
+  // has to be open for them to be on the page at all. This replaced an assert
+  // on the old jumpbar's href="#wo-docs" anchor, which the section tabs retired.
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-DOC", edit: false, woSec: "files" };
   render();
   assert(main.innerHTML.includes("Mold drawing"), "work orders");
-  assert(main.innerHTML.includes('href="#wo-docs"'), "and the hand-maintained jumpbar gained its anchor");
+  assert(main.innerHTML.includes('id="wosec-files"'), "and the section that holds it is a real tab");
   view = { ...view, tab: "weekplan", wpWeek: "W-DOC" };
   assert(renderWeekPlan().includes("Mold drawing"), "weekly plan");
 });
@@ -4015,7 +4186,8 @@ await t("every note surface writes to its own field through the same renderer", 
 await t("a work-order note is authored, appended safely, and rendered by the shared thread", () => {
   DB.workOrders = [{ id: "WO-N", partName: "X", processType: "MoldInfusion", revision: "A",
     status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [] }];
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: false };
+  // The thread and its composer are in the "Notes & log" section.
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-N", edit: false, woSec: "notes" };
   render();
   openComposer("wo-note"); render();
   calls.length = 0;
@@ -4047,7 +4219,7 @@ await t("a step note keeps its plain text so the printed traveler never goes bla
 await t("a rich field writes the markup and keeps the plain value the traveler reads", () => {
   DB.workOrders = [{ id: "WO-RF", partName: "X", processType: "MoldInfusion", revision: "A",
     status: "InWork", bom: [], qualityChecks: [], timeline: [], steps: [], noteLog: [], notes: "old plain note" }];
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-RF", edit: false };
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-RF", edit: false, woSec: "notes" };
   render();
   assert(main.innerHTML.includes("old plain note"), "the pre-existing plain value still renders, with nothing backfilled");
   startFieldEdit("workOrders", "WO-RF", "notes", true);

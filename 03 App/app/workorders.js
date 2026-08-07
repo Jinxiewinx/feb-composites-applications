@@ -288,46 +288,427 @@ function blockerOpenBefore(wo, idx) {
 function issuesForWO(woId) { return (DB.projects || []).filter(p => isIssue(p) && p.workOrderId === woId); }
 // Cancelled issues need no disposition — they turned out not to be real.
 function undisposedIssuesForWO(woId) { return issuesForWO(woId).filter(p => projStatus(p) !== "Cancelled" && !p.resolutionMethod); }
-function renderWorkOrders() {
-  return view.mode === "detail" ? renderWODetail() : renderWOList();
+/* ---------- what the rail says about a run ----------
+   Three pure functions, no DOM, so the rail, the overview pane and the tests
+   all read the same answer. They sit here beside stepState() rather than down
+   among the renderers because they are facts about a work order, not markup. */
+function woProgress(w) {
+  const steps = (w && w.steps) || [];
+  let done = 0, failed = 0;
+  steps.forEach(s => { const st = stepState(s); if (st === "done") done++; else if (st === "failed") failed++; });
+  return { done, failed, total: steps.length, pct: steps.length ? done / steps.length : 0 };
+}
+/* Blocked and curing are asked ONLY about the step you would act on next — the
+   same definition dashboard.js's blockedNow() uses (`if (i > next) return`).
+   Two answers to "is this blocked" that disagreed between the rail and the
+   Dashboard would be a bug report, not a nuance.
+
+   Retro and Complete records flag nothing: they are history, and history is not
+   waiting on anybody. */
+function woFlags(w) {
+  const none = { blocked: null, curing: null };
+  if (!w || w.retro || w.status === "Complete") return none;
+  const steps = w.steps || [];
+  const next = steps.findIndex(s => stepState(s) !== "done" && stepState(s) !== "failed");
+  if (next < 0) return none;
+  const hold = holdState(w, next);
+  return {
+    blocked: blockerOpenBefore(w, next),
+    curing: hold && !hold.ready && !hold.overridden ? hold : null,
+  };
+}
+// isWoLate, not woLate: view.woLate is the filter flag, and one word meaning
+// both a predicate and a toggle is how the next person loses an hour.
+function isWoLate(w) {
+  const d = daysUntil(w && w.dueDate);
+  return d != null && d < 0 && w.status !== "Complete";
 }
 
-function renderWOList() {
-  const D = DB.workOrders;
-  const rows = D
+/* ---------- which part a run belongs to ----------
+   partOf() (core.js) scans DB.parts, and grouping by part would call it once
+   per row per comparison — O(n log n) scans of the whole collection. Resolve
+   every run once into a map instead, rebuilt at the top of woIndexRows().
+
+   Deliberately NOT a cache with an invalidation key: the edges change whenever
+   somebody confirms a name guess, and a map that went stale on that would
+   regroup the rail wrongly with nothing on screen to explain it. Rebuilding is
+   26 x 33 comparisons, which is free. */
+let WO_PART_MAP = new Map();
+function buildWOPartMap() {
+  WO_PART_MAP = new Map();
+  (DB.workOrders || []).forEach(w => { const r = partOf(w); WO_PART_MAP.set(w.id, r ? r.part : null); });
+  return WO_PART_MAP;
+}
+// Falls back to a direct resolve so a test (or the keyboard handler) can call
+// this without having rendered the rail first.
+function woPart(w) {
+  if (!w) return null;
+  if (WO_PART_MAP.has(w.id)) return WO_PART_MAP.get(w.id);
+  const r = partOf(w);
+  return r ? r.part : null;
+}
+// "~~unlinked" sorts after every real part name, so the runs with no parent
+// land in one block at the bottom rather than scattered under an empty heading.
+function woPartSortKey(w) { const p = woPart(w); return p ? (p.partName || p.id).toLowerCase() : "~~unlinked"; }
+
+/* ---------- grouping and sorting the rail ----------
+   Parts gets away with a single `group` sentinel because it groups by exactly
+   one thing. A run has several parents worth grouping under, so the modes are a
+   table: a key present in WO_GROUPS draws headers, anything else is a flat sort. */
+const WO_GROUPS = {
+  gpart: w => { const p = woPart(w); return p ? p.id : ""; },
+  gstatus: w => w.status || "",
+  gsub: w => w.subteam || "",
+  gproc: w => w.processType || "",
+};
+const WO_SORT_COLS = {
+  gpart: woPartSortKey,
+  // Enum order, never alphabetical — Draft/Released/InWork/Complete is progress
+  // order and sorted as text it is nonsense. Same rule as PART_SORT_COLS.
+  gstatus: w => WO_STATUSES.indexOf(w.status),
+  gsub: w => (w.subteam || "~").toLowerCase(),
+  gproc: w => (w.processType || "~").toLowerCase(),
+  dueDate: w => w.dueDate || "9999",
+  id: w => w.id,
+  partName: w => (w.partName || "").toLowerCase(),
+  status: w => WO_STATUSES.indexOf(w.status),
+  progress: w => woProgress(w).pct,
+};
+const WO_SORT_LABELS = {
+  gpart: "Group: part", gstatus: "Group: status", gsub: "Group: subteam", gproc: "Group: process",
+  dueDate: "Sort: Due", id: "Sort: ID", partName: "Sort: Part", status: "Sort: Status", progress: "Sort: Progress",
+};
+function woSortKey() { return WO_SORT_COLS[view.sortKey] ? view.sortKey : "gpart"; }
+function sortWOsBy(key) {
+  if (view.sortKey === key) view.sortDir = view.sortDir === "desc" ? "asc" : "desc";
+  else { view.sortKey = key; view.sortDir = "asc"; }
+  render();
+}
+function toggleWOSortDir() { view.sortDir = view.sortDir === "desc" ? "asc" : "desc"; render(); }
+function sortedWORows(rows) {
+  const get = WO_SORT_COLS[woSortKey()];
+  const mul = view.sortDir === "desc" ? -1 : 1;
+  // Ties break on due date then id, always ascending. This is what stops rows
+  // shuffling between renders when a whole group shares a sort value.
+  return rows.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    if (av < bv) return -mul;
+    if (av > bv) return mul;
+    return (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || a.id.localeCompare(b.id);
+  });
+}
+
+/* ---------- the index rows ----------
+   Work orders only. Group headers are NOT in here and must never be: keyboard
+   navigation walks this array, and a header in it would let j/k set view.id to
+   a part name and silently drop the detail pane back to the overview. */
+function woIndexRows() {
+  buildWOPartMap();
+  const D = DB.workOrders || [];
+  const q = (view.q || "").toLowerCase();
+  /* Unlike Parts, this rail does NOT hide finished records by default.
+     A part is a thing that has to exist by a deadline, so once it is made it
+     drops off the list. A work order is the traveler for one run — reading back
+     what was done is half of what the tab is for, and the entire SN5 archive is
+     Complete, so a done-hiding default lands on an empty rail and reads as a
+     broken tab. Open/done are both one chip away instead. */
+  let rows = D
+    .filter(w => (!view.woOpen || w.status !== "Complete"))
+    .filter(w => (!view.woDone || w.status === "Complete"))
     .filter(w => (!view.fStatus || w.status === view.fStatus))
     .filter(w => (!view.fSub || w.subteam === view.fSub))
-    .filter(w => { const q = view.q.toLowerCase(); return !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q); })
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const subs = [...new Set(D.map(w => w.subteam))].sort();
+    .filter(w => (!view.woLate || isWoLate(w)))
+    .filter(w => (!view.woMine || isMine([w.moldEngineer, w.manufacturingEngineer])))
+    .filter(w => !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q));
+  // The open run never falls out from under you — a filter that would hide what
+  // you are reading keeps it in place instead. This is the whole point of a
+  // persistent rail, and without it typing in the search box blanks the pane.
+  const sel = selectedWO();
+  if (sel && !rows.includes(sel)) rows = rows.concat([sel]);
+  return sortedWORows(rows);
+}
+
+function woSummary() {
+  const D = DB.workOrders || [];
+  const open = D.filter(w => w.status !== "Complete");
+  let curing = 0, blocked = 0;
+  D.forEach(w => { const f = woFlags(w); if (f.curing) curing++; if (f.blocked) blocked++; });
+  return {
+    total: D.length, open: open.length, done: D.length - open.length,
+    late: D.filter(isWoLate).length,
+    mine: open.filter(w => isMine([w.moldEngineer, w.manufacturingEngineer])).length,
+    curing, blocked,
+  };
+}
+function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, fStatus: "", fSub: "", q: "" }; render(); }
+
+/* ---------- selection ----------
+   view.mode === "detail" stays the switch, exactly as it was when this tab was
+   a full-page swap. A dozen tests set it directly, and print.js's ⌘P mount
+   reads it — a different selection model would break both in ways whose symptom
+   points somewhere else entirely. */
+function selectedWO() { return view.mode === "detail" ? woById(view.id) : null; }
+function selectWO(id) {
+  view = { ...view, mode: "detail", id, edit: false };
+  render();
+  const el = document.getElementById("pi-" + id);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+}
+function clearWOSelection() { view = { ...view, mode: "list", edit: false }; render(); }
+
+/* Arriving from a lineage bar, the Dashboard or a scanned label goes through
+   openRecord(), which sets view.mode/id without ever calling selectWO() — so
+   the rail would render with the selected row forty rows below the fold. Called
+   from render(), same guarded idiom as syncTimelineScroll(). */
+function syncWORailScroll() {
+  if (typeof document.querySelector !== "function") return;
+  if (view.tab !== "workorders" || view.mode !== "detail" || !view.id) return;
+  const el = document.getElementById("pi-" + view.id);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+}
+
+function renderWorkOrders() {
+  const sel = selectedWO();
+  return `<div class="mdsplit wosplit ${sel ? "has-sel" : ""}">
+    ${renderWOIndex()}${sel ? renderWODetail() : renderWOOverview()}
+  </div>`;
+}
+
+/* One rail row. Four fixed slots, same grammar as Parts and Molds, so the
+   ≤900 collapse and the tablet-band rules apply without knowing what a work
+   order is. */
+function woIndexItem(w, opts) {
+  opts = opts || {};
+  const sel = view.mode === "detail" && view.id === w.id;
+  const done = w.status === "Complete";
+  const pr = woProgress(w);
+  const fl = woFlags(w);
+  const late = isWoLate(w);
+  const engs = [w.moldEngineer, w.manufacturingEngineer].filter(Boolean);
+  // Grouped by part, the header already said the part name — repeating it down
+  // twelve rows is a column of the same word. Lead with the id instead.
+  const name = opts.hidePart
+    ? `${esc(w.id)}<span class="tny muted"> rev ${esc(w.revision || "A")}</span>`
+    : `${esc(w.partName || w.id)}<span class="tny muted"> ${esc(w.id.replace(/^WO-/, ""))}</span>`;
+  // At most ONE flag. Blocked beats curing: one of them is something to fix and
+  // the other is something to wait for.
+  const flag = fl.blocked ? `<span class="wflag blocked">blocked</span>`
+    : fl.curing ? `<span class="wflag curing">curing</span>` : "";
+  return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""}" id="pi-${esc(w.id)}"
+      role="option" aria-selected="${sel}" title="${esc(w.id)} · ${esc(w.processType || "")} · ${esc(w.status || "")}"
+      onclick="selectWO('${esc(w.id)}')">
+    <span class="pi-name">${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}</span>
+    <span class="pi-due ${late ? "warn" : ""}">${w.dueDate ? shortDate(w.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
+    <span class="pi-sub">${woProgBar(pr)}${flag || `<span class="tny">${esc(opts.hidePart ? (w.processType || "") : (w.subteam || ""))}</span>`}</span>
+    <span class="pi-who">${engs.map(e => avatar(e, 20)).join("")}</span>
+  </div>`;
+}
+/* The one number the flat table never had: how far through its buy-offs this
+   run is. A bar plus the fraction, because a bar alone can't tell 4/9 from
+   40/90 and the fraction alone doesn't scan down a column. */
+function woProgBar(pr) {
+  const pct = Math.round(pr.pct * 100);
+  return `<span class="wprog" title="${pr.done} of ${pr.total} steps signed">
+    <span class="wp-bar"><i style="width:${pct}%"></i></span><b>${pr.done}/${pr.total}</b></span>`;
+}
+
+function woGroupHead(label, rows, extra) {
+  const late = rows.filter(isWoLate).length;
+  return `<div class="pgrouphd">
+    <span class="pg-name">${label}</span>
+    <span class="pg-n">${rows.length} ${rows.length === 1 ? "run" : "runs"}</span>
+    ${late ? `<span class="pg-n pg-late">${icon("warning", 12)} ${late} late</span>` : ""}
+    ${extra || ""}
+  </div>`;
+}
+
+/* The rail body. Headers are drawn HERE and nowhere else — see woIndexRows().
+
+   Grouped by part, this also emits a header for every part with no runs at all,
+   carrying the button that starts one. Those headers have no rows under them
+   and are not in woIndexRows(), so the keyboard never lands on one; they are
+   the visible answer to "what haven't we started yet", which is the question
+   the flat table could not answer without leaving the tab. */
+function woIndexBody(rows) {
+  const key = woSortKey();
+  const grouping = WO_GROUPS[key];
+  if (!grouping) return rows.map(w => woIndexItem(w)).join("");
+
+  if (key === "gpart") {
+    const groups = new Map();               // partId ("" = unlinked) -> rows
+    rows.forEach(w => {
+      const g = grouping(w);
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(w);
+    });
+    const entries = [];
+    groups.forEach((rs, pid) => {
+      if (!pid) return;                     // the unlinked block is appended last
+      const p = recById("parts", pid);
+      entries.push({ sort: ((p && (p.partName || p.id)) || "").toLowerCase(), pid, p, rows: rs });
+    });
+    // Parts nobody has started. Interleaved alphabetically rather than dumped in
+    // a block at the end, because the point is to see the gap where a run should
+    // be, next to the parts that have one.
+    (DB.parts || []).forEach(p => {
+      if (groups.has(p.id)) return;
+      if (partRuns(p).length) return;       // has runs, just filtered out of view
+      entries.push({ sort: (p.partName || p.id).toLowerCase(), pid: p.id, p, rows: [], empty: true });
+    });
+    entries.sort((a, b) => a.sort.localeCompare(b.sort));
+    let out = entries.map(e => {
+      const label = `<span class="pg-open" onclick="event.stopPropagation();openRecord('parts','${esc(e.pid)}')"
+        role="button" tabindex="0" title="Open ${esc((e.p && (e.p.partName || e.p.id)) || e.pid)} in Parts">${esc((e.p && (e.p.partName || e.p.id)) || e.pid)}</span>`;
+      if (e.empty) {
+        return `<div class="pgrouphd norows">
+          <span class="pg-name">${label}</span>
+          <span class="pg-n">no run yet</span>
+          <button class="sm pg-start no-print" onclick="newRunForPart('${esc(e.pid)}')">+ Start run</button>
+        </div>`;
+      }
+      return woGroupHead(label, e.rows) + e.rows.map(w => woIndexItem(w, { hidePart: true })).join("");
+    }).join("");
+    const loose = groups.get("") || [];
+    if (loose.length) {
+      // Named, not left as an empty heading: 0 of 33 SN5 parts carry an id link,
+      // so this block is the visible to-do list for the archive.
+      out += woGroupHead(`<span class="pg-name">Not linked to a part</span>`, loose)
+        + loose.map(w => woIndexItem(w)).join("");
+    }
+    return out;
+  }
+
+  let out = "", run = null;
+  rows.forEach(w => {
+    const g = grouping(w);
+    if (g !== run) {
+      run = g;
+      out += woGroupHead(esc(g || "None"), rows.filter(r => grouping(r) === g));
+    }
+    out += woIndexItem(w);
+  });
+  return out;
+}
+
+function renderWOIndex() {
+  const D = DB.workOrders || [];
+  const rows = woIndexRows();
+  const s = woSummary();
+  const subs = [...new Set(D.map(w => w.subteam))].filter(Boolean).sort();
+  const key = woSortKey();
   return `
-  <div class="toolbar no-print">
-    <button class="primary" onclick="newWO()">+ New Work Order</button>
-    <button onclick="printBlankWO(document.getElementById('blankproc').value)">Print blank traveler</button>
-    <select id="blankproc" title="process for the blank form">${PROCESSES.map(p => `<option>${p}</option>`).join("")}</select>
-  </div>
-  <div class="filters no-print">
-    <select onchange="view.fStatus=this.value;render()">
-      <option value="">All statuses</option>
-      ${WO_STATUSES.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${s}</option>`).join("")}
-    </select>
-    <select onchange="view.fSub=this.value;render()">
-      <option value="">All subteams</option>
-      ${subs.map(s => `<option ${view.fSub === s ? "selected" : ""}>${s}</option>`).join("")}
-    </select>
-    <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">
-    <span class="muted" style="align-self:center">${rows.length} of ${D.length} work orders</span>
-  </div>
-  ${D.length === 0 ? `<div class="card">No work orders yet. <b>New Work Order</b> to start${isLead() ? ", or <b>Load SN5 archive</b> for the retro records" : ""}.</div>` : ""}
-  <table class="list">
-    <tr><th>ID</th><th>Part</th><th>Subteam</th><th>Process</th><th>ME / RE</th><th>Due</th><th>Status</th></tr>
-    ${rows.map(w => `<tr onclick="view={...view,mode:'detail',id:'${w.id}',edit:false};render()">
-      <td><b>${esc(w.id)}</b>${w.retro ? ' <span class="pill retro">retro</span>' : ""}</td>
-      <td>${esc(w.partName)}</td><td>${esc(w.subteam)}</td><td>${esc(w.processType)}</td>
-      <td>${esc(w.moldEngineer || "—")} / ${esc(w.manufacturingEngineer || "—")}</td>
-      <td>${esc(w.dueDate || "")}</td><td><span class="pill ${esc(w.status)}">${esc(w.status)}</span></td>
-    </tr>`).join("")}
-  </table>`;
+  <aside class="mdindex" aria-label="Work orders index">
+    <div class="pindex-head no-print">
+      <div class="toolbar">
+        <button class="primary ib" onclick="newWO()">${icon("plus", 15)} New WO</button>
+        <button class="sm" onclick="openBlankTraveler()">Blank traveler</button>
+        <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} work orders</span>
+      </div>
+      <div class="psum">
+        ${summaryChip("open", s.open, !!view.woOpen, "view.woOpen=!view.woOpen;view.woDone=false;render()")}
+        ${summaryChip("late", s.late, !!view.woLate, "view.woLate=!view.woLate;view.woMine=false;render()", s.late ? "bad" : "")}
+        ${summaryChip("mine", s.mine, !!view.woMine, "view.woMine=!view.woMine;view.woLate=false;render()")}
+        ${summaryChip("done", s.done, !!view.woDone, "view.woDone=!view.woDone;view.woOpen=false;render()")}
+      </div>
+      <div class="pfilters">
+        <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">
+        <select title="Status" onchange="view.fStatus=this.value;render()">
+          <option value="">All statuses</option>
+          ${WO_STATUSES.map(st => `<option ${view.fStatus === st ? "selected" : ""}>${esc(st)}</option>`).join("")}
+        </select>
+        <select title="Subteam" onchange="view.fSub=this.value;render()">
+          <option value="">All subteams</option>
+          ${subs.map(st => `<option ${view.fSub === st ? "selected" : ""}>${esc(st)}</option>`).join("")}
+        </select>
+        <select title="Group or sort by" onchange="sortWOsBy(this.value)">
+          ${Object.keys(WO_SORT_LABELS).map(k => `<option value="${k}" ${key === k ? "selected" : ""}>${esc(WO_SORT_LABELS[k])}</option>`).join("")}
+        </select>
+        <button class="sm sortdir" title="Reverse order" onclick="toggleWOSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
+      </div>
+    </div>
+    <div class="plist" role="listbox" aria-label="Work orders">
+      ${rows.length || (key === "gpart" && (DB.parts || []).length) ? woIndexBody(rows) : `<div class="pempty muted">${
+        D.length ? "No work orders match these filters." : `No work orders yet — <b>New WO</b> to start${isLead() ? ", or <b>Load SN5 archive</b> for the retro records" : ""}.`}</div>`}
+      <div class="plistfade" aria-hidden="true"></div>
+    </div>
+    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
+      selectedWO() ? "<span><kbd>←</kbd><kbd>→</kbd> section</span>" : ""
+    }<span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
+  </aside>`;
+}
+
+/* The blank traveler used to be a naked <select> sitting in the list toolbar.
+   There is no room for one in a 320px rail, and it was the only control on the
+   tab that did something without a record selected. */
+function openBlankTraveler() {
+  openModal(`<h3>Print a blank traveler</h3>
+    <p class="muted">A paper form with the standard steps for one process and nothing filled in.</p>
+    <div class="f"><label>Process</label>
+      <select id="blankproc">${PROCESSES.map(p => `<option>${esc(p)}</option>`).join("")}</select></div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="(function(){var v=document.getElementById('blankproc').value;closeModal();printBlankWO(v);})()">Print</button>
+    </div>`);
+}
+
+/* ---------- right pane when nothing is selected ----------
+   The rail answers "which run"; this answers "what is the state of the build".
+   At ≤900 it is never shown, because there the rail owns the screen. */
+function renderWOOverview() {
+  const D = DB.workOrders || [];
+  const s = woSummary();
+  const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
+  const open = D.filter(w => w.status !== "Complete");
+  const curing = [], blocked = [];
+  open.forEach(w => { const f = woFlags(w); if (f.curing) curing.push({ w, h: f.curing }); if (f.blocked) blocked.push({ w, b: f.blocked }); });
+  const late = D.filter(isWoLate).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+  const mine = open.filter(w => isMine([w.moldEngineer, w.manufacturingEngineer]));
+  const noRun = (DB.parts || []).filter(p => !partRuns(p).length);
+  const mini = (w, right) => `<div class="pmini" onclick="selectWO('${esc(w.id)}')">
+    <span class="pm-name">${esc(w.partName || w.id)}</span>
+    ${woProgBar(woProgress(w))}
+    <span class="pm-due">${right || (w.dueDate ? shortDate(w.dueDate) : "no date")}</span></div>`;
+  return `
+  <section class="mddetail" aria-label="Work orders overview">
+    <div class="stat-row">
+      ${tile(s.open, "Open runs")}${tile(s.late, "Behind due date", s.late ? "warn" : "")}${tile(s.curing, "Curing")}${tile(s.blocked, "Blocked", s.blocked ? "warn" : "")}
+    </div>
+    <div class="card">
+      <h2>Runs in flight</h2>
+      <div class="muted">${s.open} open · ${s.done} complete · ${D.filter(w => w.retro).length} retro records. Pick a run on the left.</div>
+      ${curing.length ? `<h3>Waiting on a cure</h3>${curing.map(({ w, h }) =>
+        /* An absolute clock time, never a countdown. The 60-second tick that
+           keeps a countdown honest is armed only by the Steps section (see
+           syncHoldTick), so a countdown painted here would be wrong a minute
+           later with nothing to correct it. dashboard.js:162 made the same
+           call for the same reason. */
+        mini(w, "ready " + esc(h.readyAt))).join("")}` : ""}
+      ${blocked.length ? `<h3>Blocked right now</h3>${blocked.map(({ w, b }) =>
+        mini(w, esc(stripCS(b.title)))).join("")}` : ""}
+      ${late.length ? `<h3>Behind due date</h3>${late.slice(0, 8).map(w => mini(w)).join("")}
+        ${!view.woLate ? `<button class="sm no-print" onclick="view.woLate=true;view.woMine=false;render()">Show only these</button>` : ""}` : ""}
+      ${mine.length ? `<h3>On you</h3>${mine.slice(0, 8).map(w => mini(w)).join("")}` : ""}
+    </div>
+    ${/* Only when the rail is NOT already showing them. Grouped by part (the
+          default) every one of these has its own header on the left with the
+          same button on it, and the pane repeating the list beside it is the
+          same twelve rows twice on one screen. Grouped any other way the rail
+          drops them, and this is the only place they appear. */""}
+    ${noRun.length && woSortKey() !== "gpart" ? `<div class="card">
+      <h3>Parts with no run yet</h3>
+      <div class="muted tny">Nothing has been started for these. Starting a run copies the part's plan onto it.</div>
+      ${noRun.slice(0, 12).map(p => `<div class="pmini">
+        <span class="pm-name">${esc(p.partName || p.id)}</span>
+        <span class="tny muted">${esc(p.subteam || "")}</span>
+        <button class="sm no-print" onclick="event.stopPropagation();newRunForPart('${esc(p.id)}')">+ Start run</button>
+      </div>`).join("")}
+    </div>` : ""}
+    <div class="card no-print">
+      <h3>Paper</h3>
+      <div class="muted">A blank form to take to the bench when the job is ahead of the record.</div>
+      <div style="margin-top:8px"><button onclick="openBlankTraveler()">Print blank traveler</button></div>
+    </div>
+  </section>`;
 }
 
 function fld(wo, label, key, type) {
@@ -338,46 +719,122 @@ function fld(wo, label, key, type) {
   return `<div class="f"><label>${label}</label><input value="${esc(v)}" onchange="updWO('${key}',this.value)"></div>`;
 }
 
+/* ---------- the detail pane ----------
+   A work order carries more than any other record here: eleven header fields, a
+   mold block, the layup stack, a BOM, the steps and their buy-offs, quality
+   checks, documents, files, an event log, free notes and a comment thread. As a
+   full-width page that was one very long scroll with an anchor jumpbar bolted on
+   top; beside a rail it would be the same scroll in three quarters of the width.
+
+   So the pane is sectioned and exactly one section renders at a time. What sits
+   ABOVE them is what you must not be able to lose by being on the wrong tab:
+   which run this is, its status, where it sits in the chain, and anything
+   blocking it.
+
+   The sections are a table rather than six branches so the nav and the panel
+   cannot disagree about what exists — a tab that renders while its content does
+   not is invisible until somebody clicks it. */
+const WO_SECTIONS = [
+  { id: "steps", label: "Steps",
+    badge: w => { const p = woProgress(w); return p.total ? `${p.done}/${p.total}` : ""; },
+    warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
+    body: (w, E) => woSecSteps(w, E) },
+  { id: "overview", label: "Overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
+  { id: "stack", label: "Stack & BOM",
+    badge: w => String((w.layupStack || []).length || ""),
+    body: (w, E) => woSecStack(w, E) },
+  { id: "quality", label: "Quality",
+    badge: w => String((w.qualityChecks || []).length || ""),
+    warn: w => (w.qualityChecks || []).some(q => q.pass === false) || undisposedIssuesForWO(w.id).length > 0,
+    body: (w, E) => woSecQuality(w, E) },
+  { id: "files", label: "Files & docs",
+    badge: w => String(((w.docs || []).length + (w.files || []).length) || ""),
+    body: (w, E) => woSecFiles(w, E) },
+  { id: "notes", label: "Notes & log",
+    badge: w => String((w.noteLog || []).length || ""),
+    body: (w, E) => woSecNotes(w, E) },
+];
+/* Validated on the way out, never read raw. render() does
+   `el.innerHTML = tab.render()` with no try/catch, so a view.woSec naming a
+   section that no longer exists would throw inside the render and leave #main
+   blank — the worst failure mode this architecture has. Falling back to Steps
+   costs nothing and cannot fail. */
+function woSec() { return WO_SECTIONS.some(s => s.id === view.woSec) ? view.woSec : "steps"; }
+function setWOSec(id) { view = { ...view, woSec: id }; render(); }
+
+/* The part this run belongs to, for the header chip and for stackDrift().
+   Deliberately the ORIGINAL loose lookup and not woPart()/partOf(): partOf
+   refuses when two parts share a name, and the drift comparison has always
+   accepted the looser match. Changing which part a stack is compared against is
+   not a layout change. */
+function woDetailPart(wo) {
+  return wo.partId ? recById("parts", wo.partId)
+    : DB.parts.find(p => (p.partName || "").toUpperCase() === (wo.partName || "").toUpperCase());
+}
+
 function renderWODetail() {
   const wo = woById(view.id);
-  if (!wo) { view.mode = "list"; return renderWOList(); }
+  // Falls back to the OVERVIEW pane. renderWOList() no longer exists, and a
+  // dangling reference here throws inside render() and blanks the page.
+  if (!wo) { view.mode = "list"; return renderWOOverview(); }
   const E = view.edit;
-  // Light link: this WO's part in the Parts tab (by explicit partId or name match).
-  const linkedPart = wo.partId ? recById("parts", wo.partId)
-    : DB.parts.find(p => (p.partName || "").toUpperCase() === (wo.partName || "").toUpperCase());
-  const moldRows = wo.mold ? `
-    <h3>Mold</h3><div class="grid">
-      ${mf(wo, "Mold ID", "moldId")}${mf(wo, "Layers", "layers")}${mf(wo, "Density (lb/ft³)", "density")}
-      ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
-    </div>` : "";
-  const issues = issuesForWO(wo.id);
+  const sec = WO_SECTIONS.find(s => s.id === woSec()) || WO_SECTIONS[0];
+  const linkedPart = woDetailPart(wo);
   const undisposed = undisposedIssuesForWO(wo.id);
+  const fl = woFlags(wo);
   return `
+  <section class="mddetail" aria-label="Work order detail" data-lbgroup="workOrders:${esc(wo.id)}">
   <div class="toolbar no-print">
-    <button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} All work orders</button>
+    <button class="ib" onclick="clearWOSelection()">${icon("chevronLeft", 16)} All work orders</button>
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     <button onclick="openPrintPreview('${wo.id}')">Print</button>
     ${labelBtn("workOrders", wo.id)}
     <button onclick="createIssueFromWO('${wo.id}')">⚠ Create issue</button>
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
+    <span class="mdnav no-print">
+      <button class="sm" title="Previous work order (↑)" onclick="moveWOSelection(-1)">${icon("chevronLeft", 14)}</button>
+      <button class="sm" title="Next work order (↓)" onclick="moveWOSelection(1)">${icon("chevronRight", 14)}</button>
+    </span>
   </div>
-  <!-- Buying off a step is the bench action, and it sits below Overview, Mold,
-       Layup stack and BOM — a long scroll on a phone with gloves on. Plain
-       anchors, so no state and nothing to keep in sync. -->
   ${lineageBar("workOrders", wo.id)}
-  <nav class="jumpbar no-print" aria-label="Jump to section">
-    <a href="#wo-overview">Overview</a><a href="#wo-stack">Stack</a><a href="#wo-bom">BOM</a>
-    <a href="#wo-steps"><b>Steps</b></a><a href="#wo-quality">Quality</a><a href="#wo-docs">Docs</a><a href="#wo-files">Files</a><a href="#wo-log">Log</a>
-  </nav>
-  <div class="card" data-lbgroup="workOrders:${esc(wo.id)}">
+  ${/* Everything in here is true of the whole record, so it renders whichever
+        section is open. A gate you can navigate away from is a gate that gets
+        walked past. */""}
+  <div class="card wohead">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
-    <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span>${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
+    <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span> · ${esc(wo.processType || "")}${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.dueDate ? ` · due ${esc(wo.dueDate)}${isWoLate(wo) ? ' <span class="warn">late</span>' : ""}` : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
     ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
-    ${issues.length ? `
-    <h3>Issues</h3>
-    <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>
-    ` : ""}
+    ${fl.blocked ? `<p class="gate blocked"><span class="gi">✕</span><span>Blocked by an unsigned blocker: <b>${esc(stripCS(fl.blocked.title))}</b>. <button class="link no-print" onclick="setWOSec('steps')">Go to steps</button></span></p>` : ""}
+    ${fl.curing ? `<p class="gate"><span class="gi">⚠</span><span>Curing until <b>${esc(fl.curing.readyAt)}</b>${fl.curing.resin ? ` · ${esc(fl.curing.resin.label)}` : ""}. <button class="link no-print" onclick="setWOSec('steps')">Go to steps</button></span></p>` : ""}
+    ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
+  </div>
+  ${/* Replaces the anchor jumpbar. The <h3 id="wo-*"> anchors stay on the
+        headings inside each section: they cost nothing and keep any external
+        link working. */""}
+  <nav class="secnav no-print" role="tablist" aria-label="Work order sections">
+    ${WO_SECTIONS.map((s, i) => {
+      const on = s.id === sec.id;
+      const n = s.badge ? s.badge(wo) : "";
+      const warn = s.warn && s.warn(wo);
+      return `<button type="button" class="secnav-btn ${on ? "on" : ""} ${n ? "" : "empty"} ${warn ? "warn" : ""}"
+        role="tab" id="wosec-${esc(s.id)}" aria-selected="${on}" title="${esc(s.label)} (${i + 1})"
+        onclick="setWOSec('${esc(s.id)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
+    }).join("")}
+  </nav>
+  <div class="card wosec" id="wosec-panel" role="tabpanel" aria-labelledby="wosec-${esc(sec.id)}">
+    ${sec.body(wo, E)}
+  </div>
+  </section>`;
+}
+
+function woSecOverview(wo, E) {
+  const moldRows = wo.mold ? `
+    <h3>Mold</h3><div class="grid">
+      ${mf(wo, "Mold ID", "moldId")}${mf(wo, "Layers", "layers")}${mf(wo, "Density (lb/ft³)", "density")}
+      ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
+    </div>` : "";
+  return `
     <h3 id="wo-overview">Overview</h3>
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
@@ -385,31 +842,43 @@ function renderWODetail() {
       ${fld(wo, "Manufacturing Engineer", "manufacturingEngineer")}${fld(wo, "Created", "createdDate")}${fld(wo, "Due", "dueDate")}
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
-    ${moldRows}
-    ${(() => {
-      // The run's stack is what it actually laid. Say plainly whether that is
-      // still the part's plan or has diverged from it, and make the difference
-      // one click away rather than something you reconstruct by eye.
-      const drift = linkedPart ? stackDrift(linkedPart, wo) : { rows: {}, n: 0 };
-      const diverged = wo.stackSource === "asbuilt" && drift.n > 0;
-      const src = !linkedPart ? ""
-        : diverged
-          ? ` <span class="muted" style="text-transform:none">· as built on this run</span>`
-          : ` <span class="muted" style="text-transform:none">· follows the plan on ${esc(linkedPart.id)}</span>`;
-      return `<h3 id="wo-stack">Layup stack${src} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
-      ${diverged ? `<div class="stack-diff no-print">${icon("warning", 14)}
-        <span>${drift.n} ${drift.n === 1 ? "ply differs" : "plies differ"} from ${esc(linkedPart.partName || linkedPart.id)}'s plan.</span>
-        <button class="link" onclick="openStackCompare('${esc(wo.id)}')">Compare</button></div>` : ""}
-      ${stackFrozen(wo) ? `<div class="tny muted no-print">Stack frozen — the bench is working to this. Editing the part's plan will not move it.</div>` : ""}
-      ${plyTable("workOrders", wo, { edit: E, drift: diverged ? drift.rows : {} })}`;
-    })()}
+    ${moldRows}`;
+}
+
+/* Stack and BOM share a section because both answer "what goes into this part"
+   and neither is long enough to own a tab of its own. */
+function woSecStack(wo, E) {
+  const linkedPart = woDetailPart(wo);
+  const stack = (() => {
+    // The run's stack is what it actually laid. Say plainly whether that is
+    // still the part's plan or has diverged from it, and make the difference
+    // one click away rather than something you reconstruct by eye.
+    const drift = linkedPart ? stackDrift(linkedPart, wo) : { rows: {}, n: 0 };
+    const diverged = wo.stackSource === "asbuilt" && drift.n > 0;
+    const src = !linkedPart ? ""
+      : diverged
+        ? ` <span class="muted" style="text-transform:none">· as built on this run</span>`
+        : ` <span class="muted" style="text-transform:none">· follows the plan on ${esc(linkedPart.id)}</span>`;
+    return `<h3 id="wo-stack">Layup stack${src} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
+    ${diverged ? `<div class="stack-diff no-print">${icon("warning", 14)}
+      <span>${drift.n} ${drift.n === 1 ? "ply differs" : "plies differ"} from ${esc(linkedPart.partName || linkedPart.id)}'s plan.</span>
+      <button class="link" onclick="openStackCompare('${esc(wo.id)}')">Compare</button></div>` : ""}
+    ${stackFrozen(wo) ? `<div class="tny muted no-print">Stack frozen — the bench is working to this. Editing the part's plan will not move it.</div>` : ""}
+    ${plyTable("workOrders", wo, { edit: E, drift: diverged ? drift.rows : {} })}`;
+  })();
+  return `
+    ${stack}
     <h3 id="wo-bom">BOM</h3>
     <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
       ${(wo.bom || []).map((b, i) => E
         ? `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`
         : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
     </tbody></table>
-    ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
+    ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}`;
+}
+
+function woSecSteps(wo, E) {
+  return `
     <h3 id="wo-steps">Steps and buy-offs (shaded: no sign-off, no moving on. A hold waits on the clock instead)</h3>
     ${(() => {
       // The first not-done, not-failed step is the one to act on right now —
@@ -471,30 +940,47 @@ function renderWODetail() {
         </div>
       </div>`;
       }).join("");
-    })()}
+    })()}`;
+}
+
+function woSecQuality(wo, E) {
+  const issues = issuesForWO(wo.id);
+  return `
+    ${issues.length ? `<h3>Issues</h3>
+    <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>` : ""}
     <h3 id="wo-quality">Quality checks / acceptance criteria</h3>
     <table class="sub"><thead><tr><th>Criterion</th><th>Target (set at creation!)</th><th>Actual</th><th>Pass</th></tr></thead><tbody>
       ${(wo.qualityChecks || []).map((q, i) => E
         ? `<tr><td><input value="${esc(q.criterion)}" onchange="uq(${i},'criterion',this.value)"></td><td><input value="${esc(q.target)}" onchange="uq(${i},'target',this.value)"></td><td><input value="${esc(q.actual)}" onchange="uq(${i},'actual',this.value)"></td><td><select onchange="uq(${i},'pass',this.value==='true'?true:this.value==='false'?false:null)"><option ${q.pass == null ? "selected" : ""}>—</option><option value="true" ${q.pass === true ? "selected" : ""}>pass</option><option value="false" ${q.pass === false ? "selected" : ""}>FAIL</option></select></td></tr>`
         : `<tr><td>${esc(q.criterion)}</td><td>${esc(q.target)}</td><td>${esc(q.actual)}</td><td>${q.pass === true ? '<span class="ok">pass</span>' : q.pass === false ? '<span class="warn">FAIL</span>' : "—"}</td></tr>`).join("")}
     </tbody></table>
-    ${E ? `<button onclick="woById('${wo.id}').qualityChecks.push({criterion:'',target:'',actual:'',pass:null});saveWO(woById('${wo.id}'),'qualityChecks');render()">+ check</button>` : ""}
+    ${E ? `<button onclick="woById('${wo.id}').qualityChecks.push({criterion:'',target:'',actual:'',pass:null});saveWO(woById('${wo.id}'),'qualityChecks');render()">+ check</button>` : ""}`;
+}
+
+/* Documents and Files are one section because EVIDENCE.file.has() accepts
+   either — split across two tabs, the design-review gate would look
+   unsatisfiable from whichever one you happened to be looking at. */
+function woSecFiles(wo, E) {
+  return `
     <!-- The mold drawing, the CAM notes, the DRB deck: the documents that
          explain this job. They used to be a Slack paste, which meant they were
-         findable for a day (PP-09). Placed after Quality and before the log so
-         a phone reaches Steps first. -->
+         findable for a day (PP-09). -->
     <h3 id="wo-docs">Documents</h3>
     ${docLinkList(wo.docs, { onRemove: `rmWoDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
     <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'workOrders', id: '${wo.id}' })">+ Link a document</button></div>
-    <!-- Files, new: a work order could link a Google Doc but not hold a file,
-         so the mold CAD lived wherever somebody last pasted it. The design
-         review buy-off now wants it here (or linked above — either satisfies
-         the check; the CAD really does live in Drive). -->
+    <!-- Files: a work order could link a Google Doc but not hold a file, so the
+         mold CAD lived wherever somebody last pasted it. The design review
+         buy-off now wants it here (or linked above — either satisfies the
+         check; the CAD really does live in Drive). -->
     <h3 id="wo-files">Files</h3>
     <div class="filegrid">
       ${(wo.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
     </div>
-    <div class="no-print" style="margin-top:8px"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>
+    <div class="no-print" style="margin-top:8px"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>`;
+}
+
+function woSecNotes(wo, E) {
+  return `
     <h3 id="wo-log">Event log</h3>
     <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
       ${(wo.timeline || []).map((t, i) => E
@@ -528,8 +1014,7 @@ function renderWODetail() {
         oncancel: `closeComposer('wo-note')`,
         postLabel: "Add note as " + signerName(),
       });
-    })()}
-  </div>`;
+    })()}`;
 }
 
 /* field update helpers (operate on current WO; each saves only its field) */
@@ -1000,3 +1485,65 @@ function saveStepNote(woId, i) {
   });
   render();
 }
+
+/* ---------- keyboard ----------
+   Same contract as partsKeydown() and moldsKeydown(): a pure function that
+   returns the name of the action it took (or null), so a test can drive it
+   without constructing a KeyboardEvent.
+
+   All three handlers are bound to document at once, so the view.tab guard has
+   to come first — right after the modifier check. */
+function woNeighborId(dir) {
+  const rows = woIndexRows();
+  if (!rows.length) return null;
+  const i = rows.findIndex(w => w.id === view.id);
+  if (i < 0) return rows[dir > 0 ? 0 : rows.length - 1].id;
+  return rows[Math.min(rows.length - 1, Math.max(0, i + dir))].id;
+}
+function moveWOSelection(dir) { const id = woNeighborId(dir); if (id) selectWO(id); }
+
+function woKeydown(e) {
+  if (!e || e.metaKey || e.ctrlKey || e.altKey) return null;
+  if (typeof view === "undefined" || view.tab !== "workorders") return null;
+  const modal = document.getElementById("modal");
+  if (modal && typeof modal.className === "string" && modal.className.includes("open")) return null;
+  const t = e.target || {};
+  const tag = String(t.tagName || "").toUpperCase();
+  const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
+  const k = e.key;
+  if (typing) {
+    // Escape gets you out of the search box; nothing else is stolen from a
+    // field you are typing in.
+    if (k === "Escape" && t.blur) { t.blur(); return "blur"; }
+    return null;
+  }
+  if (k === "ArrowDown" || k === "j") { if (e.preventDefault) e.preventDefault(); moveWOSelection(1); return "next"; }
+  if (k === "ArrowUp" || k === "k") { if (e.preventDefault) e.preventDefault(); moveWOSelection(-1); return "prev"; }
+  if (k === "Enter" && view.mode !== "detail") { const id = woNeighborId(1); if (id) { selectWO(id); return "open"; } return null; }
+  if (k === "Escape" && view.mode === "detail") { clearWOSelection(); return "clear"; }
+  if (k === "/") {
+    if (e.preventDefault) e.preventDefault();
+    const s = document.getElementById("searchbox");
+    if (s && s.focus) s.focus();
+    return "search";
+  }
+  if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
+  /* Sections are ←/→ (and [ / ]) plus 1-6 to jump. Digits are free here in a
+     way they are not on Parts, which spends 1/2/3 advancing stages: a work
+     order has no stage enum to advance. Gated on an open record so they do not
+     swallow horizontal scrolling on the overview pane. */
+  if (view.mode === "detail" && (k === "ArrowLeft" || k === "ArrowRight" || k === "[" || k === "]")) {
+    if (e.preventDefault) e.preventDefault();
+    const d = (k === "ArrowRight" || k === "]") ? 1 : -1;
+    const i = WO_SECTIONS.findIndex(s => s.id === woSec());
+    setWOSec(WO_SECTIONS[Math.min(WO_SECTIONS.length - 1, Math.max(0, i + d))].id);
+    return "section";
+  }
+  if (view.mode === "detail" && /^[1-6]$/.test(k) && WO_SECTIONS[+k - 1]) {
+    if (e.preventDefault) e.preventDefault();
+    setWOSec(WO_SECTIONS[+k - 1].id);
+    return "section";
+  }
+  return null;
+}
+document.addEventListener("keydown", woKeydown);

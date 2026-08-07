@@ -9,6 +9,77 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-06
+Status: **Work Orders became a master-detail tab (2026-08-06).** Branch
+`mold-drawing-revamp`. All suites green: test_app 377 (was 362), appui 1246
+(was 1244), detailui 816 (was 781), designsystem 23, safearea 30, plus
+print_mobile 14, labels 32, route 38, scan 50, q_landing 32, sanitize 55,
+qr 69.
+
+Simon asked for the Work Orders tab to feel like the rest of Build, and chose,
+from options: WO stays its own tab; the rail gets a group/sort/filter control
+defaulting to grouped-by-part; parts with zero runs appear with a "+ Start run"
+row; rail rows show progress through steps; deep links land with the rail
+visible and scrolled; the pane gets in-pane SECTION TABS opening on Steps, and
+the section persists as you walk between runs; identity, the lineage bar and
+blocking warnings stay above the tabs (the toolbar does not).
+
+What landed: `renderWOList()` and its flat seven-column table are gone.
+`renderWorkOrders()` returns `.mdsplit` + `renderWOIndex()` + (detail or
+`renderWOOverview()`), reusing Parts' rail markup wholesale so the ≤900
+collapse and the print rule apply without new CSS. `renderWODetail()` is now
+toolbar + lineage + `.wohead` + `.secnav` + one `WO_SECTIONS` body; the six
+bodies are the old markup moved verbatim. New pure helpers `woProgress`,
+`woFlags`, `isWoLate` sit beside `stepState`. `woKeydown` mirrors
+`partsKeydown` and adds ←/→ and 1-6 for sections.
+
+Decisions worth keeping:
+- **This rail does NOT hide finished records, unlike Parts.** A part drops off
+  once it is made; a work order is a traveler you also read back, and every one
+  of the 26 SN5 records is Complete, and a done-hiding default landed on an empty
+  rail and read as a broken tab. Open/done are one chip each. There is a test.
+- **Cure holds show an ABSOLUTE ready time everywhere except the Steps
+  section.** `syncHoldTick` arms its 60 s re-render on `#main .step .gate`, so
+  with Steps behind a tab it idles elsewhere, which is correct. Broadening
+  that selector to cover the header banner would re-render every 60 s while you
+  type in Notes. dashboard.js:162 made the same call for the same reason.
+  Invisible coupling, so it has its own test.
+- **`woSec()` validates on the way out.** render() does
+  `el.innerHTML = tab.render()` with no try/catch, so a stale `view.woSec` would
+  throw and leave #main blank. Falling back to Steps cannot fail. Tested.
+- **Synthetic "no run yet" group headers are NOT in `woIndexRows()`.** That
+  array is what j/k walks; a header in it would set view.id to a part id and
+  silently drop the pane to the overview. Tested both ways.
+- **Steps has to stay the default section.** test_detailui's `wo-detail` and
+  `wo-detail-edit` assert the page contains "inHg", which only appears in step
+  titles, and five test_app cases grep step markup.
+- **Filters use woOpen/woLate/woMine/woDone, not Parts' fLate/fMine/fDone**,
+  because setTab() clears the former and not the latter. A toggle left on in
+  Parts would otherwise filter a different tab's rail.
+- `partOf()` scans DB.parts, so grouping resolves every run once into
+  `WO_PART_MAP` at the top of `woIndexRows()`. Deliberately NOT a cache with an
+  invalidation key: the edges move whenever somebody confirms a name guess.
+
+Traps hit on the way:
+- **`.modal-actions` does not exist.** I wrote it, then grepped, found my own
+  new line, and read it as precedent. test_designsystem catches undefined
+  classes; the real convention is `.foot`.
+- **A comment containing the string "has-sel" fails a test.** test_app:882
+  greps the stylesheet text for any has-sel rule above the responsive block,
+  and does not care that yours is inside a comment.
+- **The lightbox gallery is now scoped to the open section.** `lbCollect` walks
+  the rendered DOM, so arrowing through photos no longer crosses from a step
+  note to the note thread. Accepted: the alternative is rendering hidden
+  sections. This also unmasked a latent test bug: `renders` asserted
+  `mainText > 20` against the lightbox's own caption ("bagged diffuser tool",
+  exactly 20 chars), which had been passing only when a record happened to have
+  enough photos to render the "3 / 7" counter. Now exempted, with `lightbox
+  opened` as the real check.
+- The clickable part name in a group header measured 14px and failed the
+  coarse-pointer tap-target audit.
+
+Previous status follows.
+
 Last updated: 2026-08-05 (later)
 Status: **Cut lists that fill boards (2026-08-05).** Branch
 `mold-drawing-revamp`, eight more commits, all suites green (test_app 359,

@@ -1451,7 +1451,12 @@ function setTab(id) {
   // trail — so the trail ends here rather than letting Back walk you into a tab
   // you deliberately left.
   navClear();
-  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false };
+  // The work-order rail keeps its filter flags in woLate/woMine/woDone rather
+  // than reusing the Parts ones, precisely so this line can clear them: fLate
+  // and friends are NOT reset here, and a "late only" toggle left on in Parts
+  // would otherwise silently filter a different tab's rail.
+  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
+    woSec: null, woOpen: false, woLate: false, woMine: false, woDone: false };
   closeDrawer();
   render(); syncUrl();
 }
@@ -1747,6 +1752,11 @@ function render() {
      tab that has anything to restore. */
   if (typeof syncTimelineScroll === "function") syncTimelineScroll();
   if (typeof syncHoldTick === "function") syncHoldTick();
+  /* Arriving at a work order from a lineage bar, the Dashboard or a scanned
+     label goes through openRecord(), which never calls selectWO() — so without
+     this the rail renders with the selected row well below the fold. Same
+     optional-function guard as the two above, for the same reason. */
+  if (typeof syncWORailScroll === "function") syncWORailScroll();
   syncChromeMetrics();
 }
 
