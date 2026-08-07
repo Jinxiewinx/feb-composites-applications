@@ -767,10 +767,7 @@ const WO_SECTIONS = [
 
    scroll-margin-top on #main [id^="wo-"] (index.html) is what keeps the heading
    clear of the topbar and this bar. */
-function woJump(anchor) {
-  const el = document.getElementById(anchor);
-  if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" });
-}
+function woJump(anchor) { secJump(anchor); }
 
 /* The part this run belongs to, for the header chip and for stackDrift().
    Deliberately the ORIGINAL loose lookup and not woPart()/partOf(): partOf

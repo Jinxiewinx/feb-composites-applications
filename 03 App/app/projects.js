@@ -479,7 +479,9 @@ function renderTicketIndex() {
         : `<div class="pempty muted">${D.length ? "No tickets match these filters." : "No tickets yet — <b>New ticket</b> to start one."}</div>`}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
-    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
+    <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
+      selectedTicket() ? "<span><kbd>1</kbd>–<kbd>5</kbd> jump</span>" : ""
+    }<span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
   </aside>`;
 }
 
@@ -630,6 +632,50 @@ function ticketBackBtn() {
   return `<button class="ib" title="${esc(label)}" onclick="navBack({tab:'projects',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(label)}</button>`;
 }
 
+/* ---------- the jump bar ----------
+   Same idea as WO_SECTIONS, with one difference: a ticket's shape varies by
+   kind, so the sections are a FUNCTION returning the filtered list — the bar
+   never shows a dead button for a section this ticket does not have, and the
+   digit keys index the same filtered array. Nav and body render from one
+   call per render, and a test asserts every button's anchor exists on the
+   page, so they cannot drift apart. Buttons, never anchors: an href="#tk-…"
+   would clobber the #/PROJ-SN6-xxx deep link in the URL hash. */
+function tkSections(p) {
+  const out = [];
+  if (isIssue(p)) out.push({
+    id: "issue", label: "Issue", anchor: "tk-issue",
+    badge: x => x.resolutionMethod ? "✓" : "",
+    warn: x => projStatus(x) !== "Done" && (!x.workOrderId || !!statusGate(x, "Done")),
+  });
+  out.push({ id: "desc", label: "Description", anchor: "tk-desc", badge: () => "" });
+  if (!isIssue(p) && !p.parentId) out.push({
+    id: "subs", label: "Sub-tickets", anchor: "tk-subs",
+    badge: x => { const k = subTickets(x); return k.length ? `${k.filter(t => projStatus(t) === "Done").length}/${k.length}` : ""; },
+    warn: x => subTickets(x).some(isTkLate),
+  });
+  out.push({
+    id: "meta", label: "Details & links", anchor: "tk-meta",
+    badge: x => String(((x.assignees || []).length + (x.docs || []).length + (x.files || []).length) || ""),
+  });
+  out.push({
+    id: "comments", label: "Comments", anchor: "tk-comments",
+    badge: x => String(projComments(x).length || ""),
+    warn: x => projUnread(x),
+  });
+  return out;
+}
+function tkSecnav(p) {
+  return `<nav class="secnav no-print" aria-label="Jump to a section of this ticket">
+    ${tkSections(p).map((s, i) => {
+      const n = s.badge ? s.badge(p) : "";
+      const warn = s.warn && s.warn(p);
+      return `<button type="button" class="secnav-btn ${n ? "" : "empty"} ${warn ? "warn" : ""}"
+        id="tksec-${esc(s.id)}" title="${esc(s.label)} (${i + 1})"
+        onclick="secJump('${esc(s.anchor)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
+    }).join("")}
+  </nav>`;
+}
+
 function renderProjDetail() {
   const p = projById(view.id);
   // A dangling id (deleted ticket, mistyped link) falls back to the overview,
@@ -691,6 +737,12 @@ function renderProjDetail() {
     <h2>${esc(p.title || "(untitled ticket)")}</h2>
     <div class="muted">${esc(p.id)} · <span class="prio ${esc(p.priority)}">${esc(p.priority || "")} priority</span>${p.dueDate ? ` · due ${esc(p.dueDate)}${dd != null ? ` (${dd < 0 ? Math.abs(dd) + " days late" : dd + " days out"})` : ""}` : ""}</div>
 
+    ${/* A jump bar, not a switch: everything below stays rendered, this
+          scrolls to it. Counts and attention dots say there are five
+          comments, or that an issue still cannot close, without going
+          there. Digits 1-5 do the same from the keyboard. */""}
+    ${tkSecnav(p)}
+
     <!-- Split at 901px: metadata into a rail, the narrative into the wide
          column. Five h3-plus-one-chip-row blocks were each spanning the full
          1560px content box to carry a handful of words, and pushing the
@@ -712,7 +764,24 @@ function renderProjDetail() {
          column it happens to be rendered in. -->
     <div class="tksplit" data-lbgroup="projects:${esc(p.id)}">
       <div class="tkmain">
-    <h3>Description</h3>
+    ${isIssue(p) ? `
+    ${/* The issue's narrative — work order, what happened, disposition —
+          lives in the WIDE column, not the metadata rail: it is the reason
+          the record exists, and in the rail it was the thing a phone buried
+          below the fold. */""}
+    <h3 id="tk-issue">Work order <span class="muted nocaps">— required</span></h3>
+    <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
+    <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
+    ${richField("projects", p.id, "whatHappened", {
+      plain: true, label: "What happened",
+      empty: "What went wrong, and why. Photos of the defect belong here.",
+      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
+    })}
+    <h3>Resolution method</h3>
+    <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
+    ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
+    ` : ""}
+    <h3 id="tk-desc">Description</h3>
     ${richField("projects", p.id, "description", {
       label: "Description",
       empty: "What this is, and what done looks like.",
@@ -724,7 +793,7 @@ function renderProjDetail() {
           table — the flat chip row this replaces said nothing about due
           dates, priority or lateness, which is what you check a breakdown
           for. Statuses stay independent; the count is display only. */""}
-    <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
+    <h3 id="tk-subs">Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
     ${kids.length ? `<table class="sub tksub">
       <thead><tr><th>Ticket</th><th>Status</th><th>Due</th><th>Priority</th><th>Assignees</th></tr></thead>
       <tbody>${kids.map(k => {
@@ -787,20 +856,6 @@ function renderProjDetail() {
           ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
           return `<div class="tny muted">Details, files and links${n.length ? ` — ${esc(n.join(", "))}` : ""}</div>`;
         })()}
-    ${isIssue(p) ? `
-    <h3>Work order <span class="muted nocaps">— required</span></h3>
-    <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
-    <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
-    ${richField("projects", p.id, "whatHappened", {
-      plain: true, label: "What happened",
-      empty: "What went wrong, and why. Photos of the defect belong here.",
-      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
-    })}
-    <h3>Resolution method</h3>
-    <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
-    ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
-    ` : ""}
-
     <h3>Assignees</h3>
     <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div>
     <h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
@@ -982,6 +1037,18 @@ function tkKeydown(e) {
     return "search";
   }
   if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
+  /* Digits scroll to a section of the open ticket. They index the FILTERED
+     section list, same numbers the buttons' tooltips show, so 1 is Issue on
+     an issue and Description on a project — the bar and the keys agree. */
+  if (view.mode === "detail" && /^[1-5]$/.test(k)) {
+    const p = selectedTicket();
+    const s = p && tkSections(p)[+k - 1];
+    if (s) {
+      if (e.preventDefault) e.preventDefault();
+      secJump(s.anchor);
+      return "section";
+    }
+  }
   return null;
 }
 document.addEventListener("keydown", tkKeydown);

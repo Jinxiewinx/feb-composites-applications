@@ -351,6 +351,17 @@ function lnNode(kind, label, onclick, opts) {
 }
 const LN_SEP = '<span class="ln-sep" aria-hidden="true">›</span>';
 
+/* Scroll to a section anchor, rather than an <a href="#…">. The app keeps its
+   deep link in the URL hash (syncUrl writes #/WO-SN6-004), and an anchor would
+   overwrite it — the address bar would stop naming the record and a copied
+   link would land on a section instead of the run. Shared by the Work Orders
+   and Tickets jump bars; scroll-margin-top on #main [id^=…] (index.html)
+   keeps the heading clear of the topbar and the sticky bar. */
+function secJump(anchor) {
+  const el = document.getElementById(anchor);
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 /* The ticket chain. A sub-ticket's genealogy is Ticket › Sub-ticket, with the
    parent node as the button to the top ticket — the detail page used to have
    NO route to the parent at all; the back button only worked if you had

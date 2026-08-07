@@ -4467,6 +4467,41 @@ await t("tkKeydown honors the shared contract: guards, j/k, Enter, Escape, /", (
   assert(tkKeydown(ev("j")) === null, "inert on another tab");
   view = { ...view, tab: held };
 });
+await t("the ticket jump bar and body render from one tkSections() call and cannot drift", () => {
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-P", edit: false };
+  const html = renderProjDetail();
+  const anchors = [...html.matchAll(/secJump\('([^']+)'\)/g)].map(m => m[1]);
+  assert(anchors.length >= 3, "bar renders: " + anchors.join(","));
+  anchors.forEach(a => assert(html.includes(`id="${a}"`), `anchor ${a} exists on the page`));
+  assert(!/href="#tk-/.test(html), "buttons, never anchors: an href would clobber the deep link");
+  assert(html.includes('id="tksec-subs"'), "a top-level project offers Sub-tickets");
+  assert(!html.includes('id="tksec-issue"'), "and no Issue section");
+});
+await t("an issue's bar has Issue first with a warn dot while it cannot close; a sub-ticket has neither Issue nor Sub-tickets", () => {
+  DB.projects.push({ id: "TKT-I", kind: "issue", title: "Warped flange", status: "To Do", workOrderId: "", comments: [], files: [] });
+  const iss = projById("TKT-I");
+  const secs = tkSections(iss);
+  assert(secs[0].id === "issue", "Issue leads");
+  assert(secs[0].warn(iss), "undisposed issue warns");
+  assert(!secs.some(s => s.id === "subs"), "no Sub-tickets on an issue");
+  const kid = projById("TKT-S");
+  const kidSecs = tkSections(kid);
+  assert(!kidSecs.some(s => s.id === "issue") && !kidSecs.some(s => s.id === "subs"), "a sub-ticket gets neither");
+  view = { ...view, id: "TKT-I" };
+  const html = renderProjDetail();
+  assert(html.includes('id="tk-issue"'), "the issue block renders in the main column under its anchor");
+  assert(/tksec-issue[^>]*>/.test(html) && /secnav-dot/.test(html), "bar shows the warn dot");
+  DB.projects = DB.projects.filter(p => p.id !== "TKT-I");
+  view = { ...view, mode: "list", id: null };
+});
+await t("digit keys jump to the filtered section list and return 'section'", () => {
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-P", edit: false };
+  const ev = key => ({ key, target: {} });
+  assert(tkKeydown(ev("1")) === "section", "1 jumps on a detail pane");
+  assert(tkKeydown(ev("9")) === null, "digits outside the list are inert");
+  view = { ...view, mode: "list", id: null };
+  assert(tkKeydown(ev("1")) === null, "digits are inert on the overview");
+});
 await t("ticket filter keys are their own: tkLate does not leak into fLate or woLate", () => {
   view = { ...view, tab: "projects", tkLate: true };
   assert(!view.fLate && !view.woLate, "one tab's toggle, one tab's key");
