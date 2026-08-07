@@ -486,40 +486,32 @@ for (const vp of widths) {
         small.slice(0, 3).map(t => `"${t.t}" ${t.h}px`).join(", "));
     }
 
-    /* The ticket rail's disclosure, both directions. It is the one thing here
-       that is a behaviour rather than a measurement, and it can break silently
-       in two opposite ways: shipping `open` again (the phone gets five screens
-       of metadata before the discussion, which is how it shipped) or losing the
-       901px force-show (a desktop gets a hidden summary AND a closed rail, so
-       the ticket's metadata is unreachable at any width). Neither shows up in a
-       screenshot of the other width. */
+    /* The ticket metadata, both widths. The details disclosure is GONE — the
+       phone problem it fought over is solved structurally now: .tkmain comes
+       first in the DOM, so below 901px (where .tksplit stacks by source order)
+       the discussion leads and the metadata follows. Two behaviours to hold:
+       the metadata must actually PAINT everywhere (the regression that took
+       the desktop page down was metadata with real boxes the browser never
+       drew — checkVisibility() is the one API that tells the truth about
+       that, never rect height), and on a phone the main column must sit ABOVE
+       the metadata, because burying the discussion is the bug this layout
+       replaced. */
     if (v.id === "ticket-detail") {
       const rail = await page.evaluate(() => {
-        const d = document.querySelector("#main details.tkmeta-fold");
-        if (!d) return "no rail";
-        const kid = [...d.children].find(el => el.tagName !== "SUMMARY");
-        const sum = d.querySelector("summary");
+        const meta = document.querySelector("#main .tkmeta");
+        const main = document.querySelector("#main .tkmain");
+        if (!meta || !main) return "missing";
+        if (document.querySelector("#main .tkmeta details")) return "details-came-back";
+        const kid = [...meta.children].find(el => el.checkVisibility && el.textContent.trim());
         return [
-          d.hasAttribute("open") ? "open" : "closed",
-          /* checkVisibility(), NOT getBoundingClientRect().height > 0. Height
-             was the signal the first version of this used, it passed, and the
-             ticket page shipped blank on desktop. A closed <details> whose
-             children carry an author `display` has real boxes with real
-             dimensions that the browser never paints: 345x18, contentVisibility
-             "visible", visibility "visible", opacity 1, and nothing on screen.
-             checkVisibility() is the one API that answers the question being
-             asked. */
           kid && kid.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
-            ? "shown" : "hidden",
-          sum && sum.checkVisibility() ? "summary" : "no-summary",
+            ? "painted" : "unpainted",
+          main.getBoundingClientRect().top <= meta.getBoundingClientRect().top
+            ? "main-first" : "meta-first",
         ].join("/");
       });
-      /* The rail is open at every width now. Above 901px the summary is hidden
-         and the content is simply there; below, the summary shows so it can be
-         collapsed by hand. Asserted at BOTH ends because the desktop half is
-         the half that broke and the half nothing else looks at. */
-      ok(`${at} rail disclosure`,
-        vp.w <= 900 ? rail === "open/shown/summary" : rail === "open/shown/no-summary", rail);
+      ok(`${at} ticket metadata`,
+        vp.w <= 900 ? rail === "painted/main-first" : rail.startsWith("painted"), rail);
     }
 
     if (SHOTS) {

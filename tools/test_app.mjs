@@ -1319,8 +1319,8 @@ await t("children render as a table.sub with status, due and a late warn", () =>
   view = { ...view, tab: "projects", mode: "detail", id: parent.id, edit: false };
   const html = renderProjDetail();
   const tbl = html.slice(html.indexOf("Sub-tickets"));
-  assert(/<table class="sub">/.test(tbl), "children are a table.sub, not chip rows");
-  assert(tbl.includes("2020-01-01"), "child due date shown");
+  assert(/<table class="sub tksub">/.test(tbl), "children are a table.sub, not chip rows");
+  assert(tbl.includes(esc(shortDate("2020-01-01"))), "child due date shown, in the rails' short form");
   assert(/class="warn"/.test(tbl), "open child past due carries a late warn");
   assert(/status todo|status\s+todo/.test(tbl) || tbl.includes('class="status todo"'), "status pill rendered");
   kid.status = "Done";

@@ -320,7 +320,10 @@
   .kindbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 4px; padding: 2px 7px; vertical-align: 1px; }
   .kindbadge.project { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
   .kindbadge.issue { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-border); }
-  .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 5px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
+  /* white-space: nowrap because a pill's label is one token to the eye. Inside
+     a table.sub cell (whose td carries overflow-wrap: anywhere for bare URLs)
+     an unprotected pill shatters to one letter per line at phone widths. */
+  .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 5px; font-size: 12px; font-weight: 700; border: 1px solid transparent; white-space: nowrap; }
   .status .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .status.todo { background: var(--fill); color: var(--muted); border-color: var(--border-2); } .status.todo .dot { background: var(--faint); }
   .status.inprogress { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); } .status.inprogress .dot { background: var(--accent); }
@@ -399,6 +402,13 @@
      other way to wrap. */
   table.sub td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
   table.sub input, table.sub select { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; }
+  /* The sub-tickets table holds team-typed titles and short tokens, never the
+     bare URLs the anywhere rule above exists for — and at phone widths that
+     rule shattered "Machine" to "Machi/ne" and "12 Aug" to three lines while
+     the table still had slack. Words break at word boundaries here; the due
+     cell is one token; the below-900 overflow-x scroll covers what is left. */
+  table.sub.tksub td { overflow-wrap: normal; }
+  table.sub.tksub td:nth-child(3) { white-space: nowrap; }
 
   /* ---- projects board ----
      One track per status, derived from the children rather than a hardcoded
@@ -498,50 +508,30 @@
   .stepnote input { flex: 1; min-width: 0; }
 
   /* ---- ticket detail split ----
-     .tksplit rides on .mdsplit's grid, sticky rail and <=900 collapse, but
-     deliberately does NOT take the selected-row rule that hides the Parts index
-     pane: there the rail is a list you navigate away from, and here it is
-     content you need alongside the discussion. */
+     Its own grid, no longer riding on .mdsplit: the Tickets tab itself is a
+     master-detail split now, and the generic <=900 mdsplit rules (single
+     column, the selected-row rule that hides the index) must not cascade
+     into this inner one — here the left column is content you need alongside
+     the discussion, not a list you navigate away from.
+
+     The DOM puts .tkmain FIRST and grid areas put the metadata visually left,
+     so a phone (which stacks by source order) reads the description and
+     thread before the metadata. That is what finally retires the forced-open
+     details rail: the phone problem is solved by rendering, not by fighting
+     a browser primitive. The postmortem for the CSS-over-details attempt
+     lives in tools/README.md; do not reintroduce a details element here. */
   /* Both panes need min-width:0. A grid item's automatic minimum is its
      min-content width, so ONE unbreakable thing in the rail — a filename in a
      file card, a long assignee list — sizes the track to fit it and the whole
      page grows with it. .tkmain had this and .tkmeta did not, which is why a
      populated ticket measured 1030px wide inside a 393px phone. */
-  .tkmeta { position: sticky; top: calc(var(--topbar-h) + 10px); min-width: 0; }
-  .tkmain { min-width: 0; }
-  .tkmeta-fold > summary { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  .tksplit { display: grid; grid-template-columns: clamp(300px, 24vw, 420px) minmax(0, 1fr); grid-template-areas: "meta main"; gap: 16px; align-items: start; }
+  .tkmeta { grid-area: meta; position: sticky; top: calc(var(--topbar-h) + 10px); min-width: 0; }
+  .tkmain { grid-area: main; min-width: 0; }
   .tkmeta .stagerow, .tkmeta .linkrow { margin-top: 4px; }
-  /* On a wide screen the rail is always open and its summary is noise — the
-     disclosure exists for the phone, where it is what buys the thread the top
-     of the page. */
-  /* DO NOT try to force a closed <details> open with CSS. This is where that
-     was tried and it took the whole ticket page down on desktop.
-
-     The idea was to ship the markup without `open` (so a phone gets the rail
-     collapsed and the discussion near the top) and force the content visible
-     above 901px with `.tkmeta-fold > *:not(summary) { display: block }`. It does
-     not work, for two independent reasons:
-
-     1. A closed <details> skips PAINTING its content. An author `display` only
-        restores LAYOUT. The children had real boxes — getBoundingClientRect
-        returned 345x18, contentVisibility computed `visible`, visibility
-        `visible`, opacity 1 — and the browser still drew nothing.
-        `element.checkVisibility()` returned false, and that is the only one of
-        those signals that was telling the truth. With the summary also hidden
-        at this width, the rail was blank with no control left to open it:
-        assignees, watchers, related parts, documents and files, all gone.
-     2. `display: block` flattens the children's own layout anyway. Four
-        .stagerow, plus .linkrow, .filegrid and .gate, are all flex. The file
-        grid measured 453px tall as a single column.
-
-     So the rail keeps `open` in the markup and is simply always expanded. The
-     phone cost is real (the thread starts lower down) and is the accepted
-     trade until it is solved by rendering the rail differently, rather than by
-     overriding a browser primitive. */
-  @media (min-width: 901px) { .tkmeta-fold > summary { display: none; } }
   @media (max-width: 900px) {
+    .tksplit { display: block; }
     .tkmeta { position: static; }
-    .tksplit { gap: 0; }
   }
   /* One row that scrolls, never a wrapping block. Eleven buttons at the 40px
      coarse-pointer minimum is ~460px of button in a 341px phone box, which
@@ -2261,7 +2251,7 @@
     main { max-width: none; padding: 0; }
     /* Paper wants the record, not the navigation: print the selected part (or
        the season overview when none is selected), never the index beside it. */
-    .mdsplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }
+    .mdsplit, .tksplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }
     /* Paper can't be tapped: a stage prints as the value it is, not as six
        buttons one of which is filled in. */
     .pstep:not(.cur) { display: none !important; }
@@ -2327,11 +2317,6 @@
        rendering fault once printed. */
     .richfield { border-color: transparent !important; background: none !important; padding: 0; margin: 0; }
     .rf-empty { display: none; }
-    /* The rail is metadata; on paper it reads better as a block above the
-       thread than as a column beside it, which .mdsplit's print rule already
-       handles — but the disclosure has to be forced open or it prints empty. */
-    .tkmeta-fold > summary { display: none; }
-    .tkmeta-fold { display: block !important; }
   }
 </style>
 <link rel="stylesheet" href="print.css">

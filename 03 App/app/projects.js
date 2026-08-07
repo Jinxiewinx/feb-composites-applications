@@ -544,75 +544,21 @@ function renderProjDetail() {
          1560px content box to carry a handful of words, and pushing the
          comments (the thing this page is FOR) to roughly y=900, below the fold.
 
-         .mdsplit is reused verbatim rather than reinvented, so the sticky rail,
-         the <=900 single-column collapse and the existing
-         @media print { .mdsplit { display: block } } all come free. What is NOT
-         reused is .mdsplit's has-sel rule: on Parts the left column is a list
-         you navigate away from, so hiding it is right; here it is content you
-         need alongside the discussion, and hiding it would delete the ticket's
-         metadata on every phone. -->
+         .tksplit is its OWN grid now, not .mdsplit: since the Tickets tab
+         became a master-detail split, the generic <=900 mdsplit rules (single
+         column, has-sel hiding the index) would cascade into this inner split
+         too. And the DOM puts .tkmain FIRST: on a phone the split stacks by
+         source order, so the description and thread come first and the
+         metadata lands below them. That retires the forced-open details rail
+         (and the accepted phone cost documented with it) by rendering the rail
+         differently instead of fighting the element — the fix the postmortem
+         in tools/README.md said to wait for. Grid areas keep the metadata
+         column visually left on wide screens, so nothing moves on desktop. -->
     <!-- data-lbgroup: one photo set for the whole ticket. The Files grid is in
          the rail and the comment photos are in the wide column, and "next
          photo" should walk both — a photo belongs to the ticket, not to the
          column it happens to be rendered in. -->
-    <div class="mdsplit tksplit" data-lbgroup="projects:${esc(p.id)}">
-      <div class="tkmeta">
-        <!-- STAYS OPEN. Dropping the attribute so a phone gets the rail
-             collapsed is the obvious move and it is how the ticket page got
-             taken down on desktop: above 901px the summary is hidden, so a
-             closed rail there has no control left to open it, and CSS cannot
-             force a closed <details> to paint. See the long note beside
-             .tkmeta-fold in index.html.
-
-             The phone cost is real — the rail pushes the discussion down — and
-             is accepted until it is fixed by rendering the rail differently
-             rather than by fighting the element. -->
-        <details class="moredetails tkmeta-fold" open>
-          ${/* The summary still says what is behind it. It is hidden above
-                901px and it is the phone's way back after collapsing the rail
-                by hand, so naming the contents is worth the line either way:
-                assignees are what you glance at a ticket for. Counted, not
-                listed — the job is to answer "is it worth opening". */""}
-          <summary>Details, files and links${(() => {
-            const n = [
-              [(p.assignees || []).length, "assignee"],
-              [(p.docs || []).length, "doc"],
-              [(p.files || []).length, "file"],
-            ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
-            return n.length ? ` <span class="muted nocaps">— ${esc(n.join(", "))}</span>` : "";
-          })()}</summary>
-    ${isIssue(p) ? `
-    <h3>Work order <span class="muted nocaps">— required</span></h3>
-    <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
-    <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
-    ${richField("projects", p.id, "whatHappened", {
-      plain: true, label: "What happened",
-      empty: "What went wrong, and why. Photos of the defect belong here.",
-      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
-    })}
-    <h3>Resolution method</h3>
-    <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
-    ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
-    ` : ""}
-
-    <h3>Assignees</h3>
-    <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div>
-    <h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
-    <div class="stagerow">${(p.watchers || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">none</span>'}</div>
-    ${isIssue(p) ? "" : `<h3>Related parts</h3><div class="stagerow">${partChips}</div>`}
-    ${(ticketChips || woChips) ? `<h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div>` : ""}
-
-
-    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets</span></h3>
-    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
-    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
-    <h3>Files</h3>
-    <div class="filegrid">
-      ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
-    </div>
-    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div>
-        </details>
-      </div>
+    <div class="tksplit" data-lbgroup="projects:${esc(p.id)}">
       <div class="tkmain">
     <h3>Description</h3>
     ${richField("projects", p.id, "description", {
@@ -627,7 +573,7 @@ function renderProjDetail() {
           dates, priority or lateness, which is what you check a breakdown
           for. Statuses stay independent; the count is display only. */""}
     <h3>Sub-tickets <span class="muted nocaps">${kids.length ? `— ${kids.filter(k => projStatus(k) === "Done").length} of ${kids.length} done, tracked independently` : ""}</span></h3>
-    ${kids.length ? `<table class="sub">
+    ${kids.length ? `<table class="sub tksub">
       <thead><tr><th>Ticket</th><th>Status</th><th>Due</th><th>Priority</th><th>Assignees</th></tr></thead>
       <tbody>${kids.map(k => {
         const kst = projStatus(k);
@@ -636,7 +582,7 @@ function renderProjDetail() {
         return `<tr>
           <td>${chip("projects", k.id, k.id)} ${esc(k.title || "")}</td>
           <td><span class="status ${projStatusClass(kst)}"><span class="dot"></span>${esc(kst)}</span></td>
-          <td class="${klate ? "warn" : ""}">${k.dueDate ? esc(k.dueDate) + (klate ? " " + icon("warning", 13) : "") : '<span class="muted">—</span>'}</td>
+          <td class="${klate ? "warn" : ""}">${k.dueDate ? esc(shortDate(k.dueDate)) + (klate ? " " + icon("warning", 13) : "") : '<span class="muted">—</span>'}</td>
           <td><span class="prio ${esc(k.priority)}">${esc(k.priority || "")}</span></td>
           <td><span class="avatar-stack">${(k.assignees || []).slice(0, 3).map(e => avatar(e, 20)).join("")}</span></td>
         </tr>`;
@@ -644,7 +590,6 @@ function renderProjDetail() {
       : '<span class="muted">No sub-tickets yet.</span>'}
     <div class="no-print" style="margin-top:6px"><button class="sm" onclick="openNewSubTicket('${p.id}')">+ Add sub-ticket</button></div>
     ` : ""}
-
 
   <!-- The thread lives INSIDE the wide column, beside the rail rather than
        stacked under the whole split — otherwise a ticket with a long metadata
@@ -678,6 +623,49 @@ function renderProjDetail() {
     })()}
   </div>
       </div>
+      <aside class="tkmeta" id="tk-meta" aria-label="Ticket details, files and links">
+        ${/* The count line survives from the old disclosure summary: it is
+              still the one-glance answer to what is over here, on every
+              width, now that there is nothing to open. */""}
+        ${(() => {
+          const n = [
+            [(p.assignees || []).length, "assignee"],
+            [(p.docs || []).length, "doc"],
+            [(p.files || []).length, "file"],
+          ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
+          return `<div class="tny muted">Details, files and links${n.length ? ` — ${esc(n.join(", "))}` : ""}</div>`;
+        })()}
+    ${isIssue(p) ? `
+    <h3>Work order <span class="muted nocaps">— required</span></h3>
+    <div class="stagerow">${p.workOrderId ? chip("workOrders", p.workOrderId, p.workOrderId) : '<span class="warn">none set</span>'}</div>
+    <h3>What happened <span class="muted nocaps">— required before this can close</span></h3>
+    ${richField("projects", p.id, "whatHappened", {
+      plain: true, label: "What happened",
+      empty: "What went wrong, and why. Photos of the defect belong here.",
+      upload: name => `projects/${p.id}/${Date.now()}-${name}`,
+    })}
+    <h3>Resolution method</h3>
+    <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
+    ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
+    ` : ""}
+
+    <h3>Assignees</h3>
+    <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div>
+    <h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
+    <div class="stagerow">${(p.watchers || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">none</span>'}</div>
+    ${isIssue(p) ? "" : `<h3>Related parts</h3><div class="stagerow">${partChips}</div>`}
+    ${(ticketChips || woChips) ? `<h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div>` : ""}
+
+
+    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets</span></h3>
+    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
+    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
+    <h3>Files</h3>
+    <div class="filegrid">
+      ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+    </div>
+    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div>
+      </aside>
     </div>
   </div>`;
 }
