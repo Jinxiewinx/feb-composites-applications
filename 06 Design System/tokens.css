@@ -75,6 +75,7 @@
   --bad: #cf3430;   --bad-bg: #fdeceb;   --bad-border: #f4bbb6;  /* error, blocked, late */
   --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;/* retro / not-applicable */
   --purple: #6a3fb0;--purple-bg: #efe7fb;--purple-border: #d3c0f0;/* collecting / secondary */
+  --hold: #47566b;  --hold-bg: #e8edf4;  --hold-border: #c3cfdf; /* on hold, parked — cool slate, deliberately not amber (in-work) or red (late) */
   --info-bg: #e8f0fd;
   --gold-bg: #fff7e0;     /* "today" / unread highlight */
 
@@ -137,6 +138,7 @@
   --bad: #ff6f62;   --bad-bg: #2c1613;   --bad-border: #56291f;
   --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
   --purple: #a385e6;--purple-bg: #241c3a;--purple-border: #3d2f5c;
+  --hold: #a9bbd1;  --hold-bg: #232b36;  --hold-border: #3a4757;
   --info-bg: #182842; --gold-bg: #2a2411;
 
   --ply-cf: #7d8ba0; --ply-spread: #9aa7ba; --ply-mesh: #d8a35f;

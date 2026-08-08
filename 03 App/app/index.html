@@ -49,6 +49,10 @@
     --bad: #cf3430; --bad-bg: #fdeceb; --bad-border: #f4bbb6;
     --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;
     --purple: #6a3fb0; --purple-bg: #efe7fb; --purple-border: #d3c0f0;
+    /* on hold: slate. Deliberately NOT amber (amber means in-work: Parts
+       st-mid, WO InWork, cure gates) and not red (red is late/blocked). A
+       parked thing is cool and quiet. */
+    --hold: #47566b; --hold-bg: #e8edf4; --hold-border: #c3cfdf;
     --info-bg: #e8f0fd; --gold-bg: #fff7e0;
     /* ply materials — swatch beside a text tag, never the row background;
        hue is never the only carrier (same rule print.css states) */
@@ -107,6 +111,7 @@
     --bad: #ff6f62; --bad-bg: #2c1613; --bad-border: #56291f;
     --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
     --purple: #a385e6; --purple-bg: #241c3a; --purple-border: #3d2f5c;
+    --hold: #a9bbd1; --hold-bg: #232b36; --hold-border: #3a4757;
     --info-bg: #182842; --gold-bg: #2a2411;
     --ply-cf: #7d8ba0; --ply-spread: #9aa7ba; --ply-mesh: #d8a35f;
     --ply-core: #FDB515; --ply-other: #46536a;
@@ -333,7 +338,11 @@
   .status.todo { background: var(--fill); color: var(--muted); border-color: var(--border-2); } .status.todo .dot { background: var(--faint); }
   .status.inprogress { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); } .status.inprogress .dot { background: var(--accent); }
   .status.collecting { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); } .status.collecting .dot { background: var(--purple); }
-  .status.onhold { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); } .status.onhold .dot { background: var(--amber); }
+  /* Slate, not amber: amber means in-work everywhere else in the app, and a
+     ticket On Hold is the opposite of in work. (.pill.OnHold on Work Orders
+     stays red and untouched: it is borrowed as a generic exception badge by
+     Inventory and Budget.) */
+  .status.onhold { background: var(--hold-bg); color: var(--hold); border-color: var(--hold-border); } .status.onhold .dot { background: var(--hold); }
   .status.done { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); } .status.done .dot { background: var(--ok); }
   .status.cancelled { background: var(--surface-2); color: var(--faint); border-color: var(--line); text-decoration: line-through; } .status.cancelled .dot { background: var(--faint); }
   /* the "large dropdown near the top with colors" — status is directly editable from here, no Edit mode needed */
@@ -342,7 +351,7 @@
   .statusdrop.todo select { background: var(--fill); color: var(--muted); border-color: var(--border-2); }
   .statusdrop.inprogress select { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); }
   .statusdrop.collecting select { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
-  .statusdrop.onhold select { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); }
+  .statusdrop.onhold select { background: var(--hold-bg); color: var(--hold); border-color: var(--hold-border); }
   .statusdrop.done select { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
   .statusdrop.cancelled select { background: var(--surface-2); color: var(--faint); border-color: var(--line); }
   .statusdrop::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: .6; font-size: 10px; }
@@ -366,7 +375,7 @@
   .col.col-todo::before { background: var(--faint); }
   .col.col-inprogress::before { background: var(--accent); }
   .col.col-collecting::before { background: var(--purple); }
-  .col.col-onhold::before { background: var(--amber); }
+  .col.col-onhold::before { background: var(--hold); }
   .col.col-done::before { background: var(--ok); }
   .col.col-cancelled::before { background: var(--faint); }
 
