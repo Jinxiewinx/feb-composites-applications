@@ -256,7 +256,13 @@ function dimH(x1, x2, yLine, yFeat, mm, opts) {
   const loSide = opts.tight === "lo";
   const tx = tight ? (loSide ? lo - 10 : hi + 10) : (lo + hi) / 2;
   const anchor = tight ? (loSide ? "end" : "start") : "middle";
-  out.push(dwgText(tx, yLine - 12.5, d.primary, DW.font, { anchor, bold: true }));
+  /* 15/3.5, not 12.5/3.5. A baseline gap of 9px is less than the primary's
+     descent plus the secondary's ascent, so the inch text's font box sat ON
+     the millimetre bracket's — the single biggest source of text-on-text
+     findings in tools/test_drawings.mjs, one per dimension drawn. The gap
+     must clear ~0.25em descent (2.6px at 10.4) + ~0.9em ascent (7.2px at 8),
+     so 11.5px separates them with margin. */
+  out.push(dwgText(tx, yLine - 15, d.primary, DW.font, { anchor, bold: true }));
   out.push(dwgText(tx, yLine - 3.5, d.secondary, DW.sub, { anchor }));
   if (opts.note) out.push(dwgText(tx, yLine + 10, opts.note, DW.tiny, { anchor }));
   return out.join("");
@@ -285,7 +291,9 @@ function dimV(y1, y2, xLine, xFeat, mm, opts) {
   const loSide = opts.tight === "lo";
   const ty = tight ? (loSide ? lo - 10 : hi + 10) : (lo + hi) / 2;
   const anchor = tight ? (loSide ? "start" : "end") : "middle";
-  out.push(dwgText(xLine - 12.5, ty, d.primary, DW.font, { anchor, bold: true, rotate: -90 }));
+  /* Same 15/3.5 gap as dimH, for the same reason: 9px of baseline
+     separation put the rotated inch text's font box on the bracket's. */
+  out.push(dwgText(xLine - 15, ty, d.primary, DW.font, { anchor, bold: true, rotate: -90 }));
   out.push(dwgText(xLine - 3.5, ty, d.secondary, DW.sub, { anchor, rotate: -90 }));
   return out.join("");
 }
@@ -961,8 +969,19 @@ function awayNormal(a, b, c) {
    Only ever pushed DOWN in order, so leaders cannot cross — a crossed leader is
    worse than a tight one, because it points at the wrong layer. lo/hi then slide
    the whole run back inside the drawing area if it grew past the bottom. */
+/* Minimum pitch for a stack of leader labels. Leader text is DW.font bold,
+   whose font box (ascent + descent, what getBBox and the collision audit
+   measure) runs ~1.45em, so labels packed at the old 12.5-13px pitch sat on
+   each other whenever a stack was tight. 1.55em clears the box with margin. */
+const LEADER_PITCH = Math.ceil(DW.font * 1.55);
+/* Pitch between stacked dimension rungs (the k-ladders on the layer sheets).
+   A dimension's label block now reaches ~24px from its own line (15px to the
+   primary baseline + the font's ascent), so the old 27px pitch left under
+   3px to the next rung's line and grazed it on crowded multi-blank sheets.
+   30 clears the measured block with margin. */
+const DIM_PITCH = 30;
 function spreadLabels(items, minGap, lo, hi) {
-  const gap = minGap || 13;
+  const gap = minGap || LEADER_PITCH;
   const s = items.slice().sort((a, b) => a.y - b.y);
   for (let i = 1; i < s.length; i++) if (s[i].y - s[i - 1].y < gap) s[i].y = s[i - 1].y + gap;
   if (hi != null && s.length && s[s.length - 1].y > hi) {
@@ -1085,7 +1104,7 @@ function sheetIso(plan, ctx) {
      the silhouette (two dashed curves a stroke apart bead into a smear). */
   body.push(...waterlinePaths(ctx.art, v, s, l => l.kind === "interface" ? DASH_MOLD : DASH_THIN));
 
-  spreadLabels(labels, 13, M.t + 6, DWG_ISO_H - M.b)
+  spreadLabels(labels, LEADER_PITCH, M.t + 6, DWG_ISO_H - M.b)
     .forEach(l => body.push(leader(l.px, l.py, DWG_SHEET_W - M.r + 16, l.y, l.text)));
 
   /* Overall size, dimensioned along the three isometric axes. A pictorial view
@@ -1253,8 +1272,11 @@ function sheetThreeView(plan, ctx) {
   out.push(dimH(rightV.ox, rightV.ox + rightV.w, rightV.oy + rightV.h + 34, rightV.oy + rightV.h, Y));
   /* Overall height goes in the gutter BETWEEN the front and right views, not on
      the left: the left of the front elevation is the board callout column, and a
-     dimension line there is crossed by every one of its leaders. */
-  out.push(dimV(frontV.oy, frontV.oy + frontV.h, frontV.ox + frontV.w + 32, frontV.ox + frontV.w, Z));
+     dimension line there is crossed by every one of its leaders. 36, not 32:
+     a section-split line overhangs the elevation by 6px, and the label block
+     reaches ~24px left of its own line, so at 32 the two nearly touched on a
+     sectioned mold. */
+  out.push(dimV(frontV.oy, frontV.oy + frontV.h, frontV.ox + frontV.w + 36, frontV.ox + frontV.w, Z));
 
   /* The stack recipe, board by board, up the front elevation. Ticked at every
      glue line and LABELLED ON LEADERS rather than as a dimension chain: on a
@@ -1267,7 +1289,7 @@ function sheetThreeView(plan, ctx) {
     chain.push({ y: frontV.Y((L.z0 + L.z1) / 2), px: frontV.ox, py: frontV.Y((L.z0 + L.z1) / 2), text: `L${i + 1} · ${fmtDwg(L.thickness).primary}` });
   });
   out.push(dwgLine(frontV.ox - 12, frontV.Y(B.z1), frontV.ox, frontV.Y(B.z1), DW.thin));
-  spreadLabels(chain, 12.5, frontV.oy, frontV.oy + frontV.h)
+  spreadLabels(chain, LEADER_PITCH, frontV.oy, frontV.oy + frontV.h)
     .forEach(l => out.push(leader(l.px, l.py, M.l - 46, l.y, l.text)));
 
   const cap = (v, text) => dwgText(v.ox + v.w / 2, v.oy - 9, text, DW.tiny, { anchor: "middle", bold: true, track: "0.14em" });
@@ -1341,8 +1363,8 @@ function sheetLayer(plan, ctx, i) {
     out.push(dwgText(v.X(b.x0) + 2, v.Y(b.y1) - 6, tag, DW.font, { anchor: "start", bold: true }));
     // The board's own size, always — it is the first thing checked against
     // whatever came off the saw.
-    out.push(dimH(v.X(b.x0), v.X(b.x1), v.oy + v.h + 26 + k * 27, v.Y(b.y0), b.x1 - b.x0));
-    out.push(dimV(v.Y(b.y0), v.Y(b.y1), v.ox - 26 - k * 27, v.X(b.x0), b.y1 - b.y0));
+    out.push(dimH(v.X(b.x0), v.X(b.x1), v.oy + v.h + 26 + k * DIM_PITCH, v.Y(b.y0), b.x1 - b.x0));
+    out.push(dimV(v.Y(b.y0), v.Y(b.y1), v.ox - 26 - k * DIM_PITCH, v.X(b.x0), b.y1 - b.y0));
 
     const sup = below ? bestSupport(b, below.blanks) : null;
     const ins = insetsBetween(sup, b);
@@ -1352,8 +1374,8 @@ function sheetLayer(plan, ctx, i) {
          when the offset is zero — which it is for the very blank that DEFINES
          the datum, and a dimension reading 0″ from a corner to itself is noise
          on the one sheet that most needs to be plain. The table still shows it. */
-      if (Math.abs(b.x0 - ctx.datum.x) > 0.5) out.push(dimH(v.X(ctx.datum.x), v.X(b.x0), v.oy + v.h + 26 + (nB + k) * 27, v.Y(b.y0), b.x0 - ctx.datum.x));
-      if (Math.abs(b.y0 - ctx.datum.y) > 0.5) out.push(dimV(v.Y(ctx.datum.y), v.Y(b.y0), v.ox - 26 - (nB + k) * 27, v.X(b.x0), b.y0 - ctx.datum.y));
+      if (Math.abs(b.x0 - ctx.datum.x) > 0.5) out.push(dimH(v.X(ctx.datum.x), v.X(b.x0), v.oy + v.h + 26 + (nB + k) * DIM_PITCH, v.Y(b.y0), b.x0 - ctx.datum.x));
+      if (Math.abs(b.y0 - ctx.datum.y) > 0.5) out.push(dimV(v.Y(ctx.datum.y), v.Y(b.y0), v.ox - 26 - (nB + k) * DIM_PITCH, v.X(b.x0), b.y0 - ctx.datum.y));
       if (below) notes.push(`${tag} sits over no board below it — support it during glue-up so it cannot sag or shift.`);
       return;
     }
