@@ -237,6 +237,32 @@ export const APPLY_FIXTURES = `
   const dd = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   window.SEASON = { compName: "FSAE Michigan", compDate: dd(124), seasonStart: dd(-45),
     milestones: [{ label: "All molds cut", date: dd(38) }, { label: "Rolling chassis", date: dd(80) }] };
+  /* Two LIVE work orders. The SN5 archive is all retro, so without these the
+     dashboard's Blocked and Curing alerts and the Shop status rows are zero
+     on every screenshot, and the "nothing empty above the fold" rule from
+     the round-two design history has nothing to stand on. One is stopped at
+     an unsigned blocker gate; one is mid-cure, started two hours ago. */
+  window.onFbData("workOrders", (DB.workOrders || []).concat([
+    { id: "WO-SN6-001", partName: "NOSECONE OUTER", subteam: "Aero", status: "InWork",
+      moldEngineer: "Dana Chen", manufacturingEngineer: "Miles Okafor", dueDate: dd(6),
+      steps: [
+        { seq: 1, title: "Mold sealed and release verified", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
+        { seq: 2, title: "Layup per stack plan", status: "open", buyoff: { name: "", date: "" } },
+      ] },
+    { id: "WO-SN6-002", partName: "UT DIFFUSER REBUILD", subteam: "Aero", status: "InWork",
+      moldEngineer: "Priya Patel", manufacturingEngineer: "Dana Chen", dueDate: dd(4),
+      steps: [
+        { seq: 1, title: "Infuse", status: "done", buyoff: { name: "Dana Chen", date: dd(0) },
+          rule: { kind: "startsHold" },
+          cure: { resin: (typeof RESINS !== "undefined" && RESINS[0]) ? RESINS[0].id : "", startedAt: new Date(Date.now() - 2 * 3600000).toISOString() } },
+        { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
+      ] },
+  ]));
+  /* Pinned team shelf links, for the launchpad and the Documents shelf. */
+  window.onFbData("documents", (DB.documents || []).concat([
+    { id: "DOC-SN6-001", title: "SN6 master tracker", kind: "sheet", url: "https://docs.google.com/spreadsheets/d/fixture", pinned: true },
+    { id: "DOC-SN6-002", title: "Monday meeting deck", kind: "slides", url: "https://docs.google.com/presentation/d/fixture", pinned: true },
+  ]));
   /* Date the archive weeks. The SN5 seed ships every week with weekOf:"" —
      honest for retro data, useless for a screenshot, because an undated week
      can never be "this week" and half the tab's states never render. Walk them
