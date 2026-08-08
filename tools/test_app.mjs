@@ -1567,6 +1567,27 @@ await t("swipe pages photos, but not while you are pinch-zoomed into one", () =>
   assert(lbSwipeStep(300, 200, 260, 400, false) === 0, "vertical-dominant is a scroll");
   assert(lbSwipeStep(300, 200, 100, 205, true) === 0, "zoomed in, a sideways drag means pan this photo");
 });
+await t("lightbox zoom: toggle, pinch clamp, pan clamp, and lbZoomed as owned state", () => {
+  assert(lbZoomNext(1) === 2 && lbZoomNext(2) === 1, "double-tap toggles fit and 2x");
+  assert(lbPinchScale(100, 200, 1) === 2, "pinch out doubles from fit");
+  assert(lbPinchScale(100, 1000, 1) === 4, "clamped at 4x");
+  assert(lbPinchScale(200, 50, 3) === 1, "pinch in bottoms out at fit, never below");
+  const c = lbClampPan(2, 9999, -9999, 400, 300);
+  assert(c.tx === 200 && c.ty === -150, "pan is clamped to half the scaled overflow: " + JSON.stringify(c));
+  assert(lbClampPan(1, 50, 50, 400, 300).tx === 0, "no pan at fit");
+  lbToggleZoom();
+  assert(lbZoomed() === true, "zoomed is the viewer's own transform state");
+  lbResetZoom();
+  assert(lbZoomed() === false, "and reset clears it");
+});
+await t("the lightbox controls live in the bottom bar; the top bar keeps name and count", () => {
+  const html = lightboxHtml();
+  const bar = html.slice(html.indexOf("lb-bar"), html.indexOf("lb-stage"));
+  const actions = html.slice(html.indexOf("lb-actions"));
+  assert(!bar.includes("lb-close") && !bar.includes("lb-prev"), "no controls in the thumb-hostile top 55px: " + bar);
+  assert(actions.includes("lb-prev") && actions.includes("lb-next") && actions.includes("lb-dl") && actions.includes("lb-close"),
+    "all four controls in the bottom thumb zone, same ids");
+});
 await t("imgAttachHtml() wraps the image in a downloadable link (regression: bare <img>, no download affordance)", () => {
   const html = imgAttachHtml("https://x.test/photo.png", "photo.png");
   assert(/<a href="https:\/\/x\.test\/photo\.png" download="photo\.png"[^>]*><img src="https:\/\/x\.test\/photo\.png"/.test(html), html);

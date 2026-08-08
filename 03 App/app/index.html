@@ -715,35 +715,49 @@
     color: var(--sb-text); background: linear-gradient(to bottom, rgba(0,0,0,.55), transparent);
   }
   #lightbox .lb-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #lightbox .lb-bar button, #lightbox .lb-bar a {
+  /* The action bar sits at the BOTTOM: the thumb zone, not the top 55px that
+     a one-handed grip cannot reach. The top bar keeps only the name and the
+     count. Both bars share the button treatment. */
+  #lightbox .lb-actions {
+    position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 8px max(12px, var(--sa-r)) calc(10px + var(--sa-b)) max(12px, var(--sa-l));
+    color: var(--sb-text); background: linear-gradient(to top, rgba(0,0,0,.55), transparent);
+  }
+  #lightbox .lb-bar button, #lightbox .lb-bar a,
+  #lightbox .lb-actions button, #lightbox .lb-actions a {
     border: none; background: none; color: var(--sb-text); border-radius: var(--radius); padding: 8px 10px; text-decoration: none;
   }
-  #lightbox .lb-bar button:hover, #lightbox .lb-bar a:hover { background: var(--sb-hover); color: #fff; }
+  #lightbox .lb-bar button:hover, #lightbox .lb-bar a:hover,
+  #lightbox .lb-actions button:hover, #lightbox .lb-actions a:hover { background: var(--sb-hover); color: #fff; }
   /* Hover does not exist on a phone, and these four are now the primary way
      through a set of photos rather than an afterthought. Give the tap something
      to answer with, and give the keyboard a visible ring. */
-  #lightbox .lb-bar button:active, #lightbox .lb-bar a:active { background: var(--sb-hover); color: #fff; transform: scale(.94); }
-  #lightbox .lb-bar button:focus-visible, #lightbox .lb-bar a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  #lightbox .lb-actions button:active, #lightbox .lb-actions a:active { background: var(--sb-hover); color: #fff; transform: scale(.94); }
+  #lightbox .lb-actions button:focus-visible, #lightbox .lb-actions a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   /* The coarse-pointer floor at the foot of this file is written for `button`,
      and #lb-dl is an <a> — so the download control rendered ~34px next to three
      40px neighbours. Same rule, stated for the anchor. */
   @media (pointer: coarse) {
-    #lightbox .lb-bar button, #lightbox .lb-bar a { min-height: 40px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; }
+    #lightbox .lb-actions button, #lightbox .lb-actions a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
     /* …but `display` here outranks the UA's [hidden]{display:none}, and
        lbShow() hides the arrows with .hidden when there is only one photo. On a
        phone that left two dead controls on every single-photo set. */
-    #lightbox .lb-bar button[hidden] { display: none; }
+    #lightbox .lb-actions button[hidden] { display: none; }
   }
   #lightbox .lb-stage {
     position: relative; z-index: 1; flex: 1; min-height: 0;
     display: flex; align-items: center; justify-content: center;
-    overflow: auto; overscroll-behavior: contain;
-    padding: 0 max(8px, var(--sa-r)) calc(8px + var(--sa-b)) max(8px, var(--sa-l));
+    overflow: hidden; overscroll-behavior: contain;
+    padding: 0 max(8px, var(--sa-r)) 8px max(8px, var(--sa-l));
   }
-  /* touch-action is the OPPOSITE of .meshview canvas, which suppresses native
-     gestures because it implements its own orbit and pinch. Here native pinch
-     is exactly what is wanted, so no gesture code is needed at all. */
-  #lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--canvas); touch-action: pinch-zoom; }
+  /* touch-action: none, because the viewer owns the gesture now (see
+     installLightbox): pinch scales the photo itself, double-tap toggles fit
+     and 2x, a drag pans while zoomed. Like .meshview canvas, unlike the old
+     lightbox, which delegated pinch to the browser's page zoom and could
+     never show more detail than the fitted image had. The transform needs
+     overflow: hidden here — the zoomed photo intentionally exceeds the
+     stage, and a scrollbar would fight the pan. */
+  #lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; background: var(--canvas); touch-action: none; transform-origin: center center; }
   #toasts { position: fixed; right: max(16px, var(--sa-r)); bottom: max(16px, var(--sa-b)); z-index: 60; display: flex; flex-direction: column; gap: 8px; }
   .toast { padding: 10px 14px; border-radius: var(--radius); color: #fff; font-size: 13.5px; box-shadow: var(--shadow-md); max-width: 340px; opacity: 1; transition: opacity .3s, transform .3s; }
   .toast.hide { opacity: 0; transform: translateY(6px); }

@@ -1987,18 +1987,25 @@ function lbCollect(scope) {
       return !el.closest(".rte") && !el.closest(".avatar") && !el.closest("#lightbox");
     });
 }
+/* Controls live in a BOTTOM bar now (the sanctioned 2026-08-02 fix): the top
+   55px is the hardest place for a one-handed thumb, so the top bar keeps only
+   the name and the count, and everything you press sits in the thumb zone
+   above the home indicator. Same element ids — the UI suites find the
+   controls by id. */
 function lightboxHtml() {
   return `<div id="lightbox" role="dialog" aria-modal="true" aria-label="Photo">
     <div class="lb-scrim" onclick="closeLightbox()"></div>
     <div class="lb-bar">
       <span class="lb-name" id="lb-name"></span>
       <span id="lb-count" class="tny"></span>
+    </div>
+    <div class="lb-stage" onclick="if(event.target===this)closeLightbox()"><img id="lb-img" alt=""></div>
+    <div class="lb-actions">
       <button id="lb-prev" title="Previous" aria-label="Previous photo" onclick="lbStep(-1)">${icon("chevronLeft", 18)}</button>
       <button id="lb-next" title="Next" aria-label="Next photo" onclick="lbStep(1)">${icon("chevronRight", 18)}</button>
       <a id="lb-dl" download target="_blank" rel="noopener" title="Download" aria-label="Download this photo" onclick="lbDownload(event)">${icon("download", 18)}</a>
       <button id="lb-close" title="Close" aria-label="Close" onclick="closeLightbox()">${icon("x", 18)}</button>
     </div>
-    <div class="lb-stage" onclick="if(event.target===this)closeLightbox()"><img id="lb-img" alt=""></div>
   </div>`;
 }
 function openLightbox(img) {
@@ -2037,6 +2044,9 @@ function lbShow() {
   const cnt = document.getElementById("lb-count");
   if (cnt) cnt.textContent = LB_LIST.length > 1 ? `${LB_I + 1} / ${LB_LIST.length}` : "";
   ["lb-prev", "lb-next"].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = LB_LIST.length < 2; });
+  // Every photo starts at fit. Arrows and keys come through here too, so
+  // stepping while zoomed lands the next photo un-zoomed, never mid-pan.
+  lbResetZoom();
 }
 function lbStep(d) { if (!LB_LIST.length) return; LB_I = (LB_I + d + LB_LIST.length) % LB_LIST.length; lbShow(); }
 
@@ -2079,9 +2089,9 @@ async function lbDownload(e) {
    shouldOpenDrawerFromSwipe, so gestures behave consistently across the app and
    this is testable without a TouchEvent. Returns -1, +1 or 0.
 
-   `zoomed` is why the caller does a DOM read and this doesn't: #lightbox img
-   allows native pinch-zoom on purpose, and once someone has zoomed in, dragging
-   sideways means "pan this photo", not "next photo". */
+   `zoomed` comes from the viewer's own transform state (lbZoomed): once
+   someone has zoomed in, dragging sideways means "pan this photo", not
+   "next photo" — the pan itself is handled by the stage's touchmove. */
 function lbSwipeStep(startX, startY, endX, endY, zoomed) {
   if (zoomed) return 0;
   const dx = endX - startX, dy = endY - startY;
@@ -2089,13 +2099,32 @@ function lbSwipeStep(startX, startY, endX, endY, zoomed) {
   if (Math.abs(dy) > Math.abs(dx)) return 0;
   return dx < 0 ? 1 : -1;                       // drag left = go forward
 }
-function lbZoomed() {
-  const vv = typeof window !== "undefined" && window.visualViewport;
-  if (vv && vv.scale > 1.01) return true;
-  const stage = document.getElementById("lb-img");
-  const wrap = stage && stage.parentElement;
-  return !!(wrap && wrap.scrollWidth > wrap.clientWidth + 1);
+/* ---------- in-image zoom ----------
+   The viewer owns the gesture now: pinch scales the photo, double-tap (or
+   desktop double-click) toggles fit and 2x, and a one-finger drag pans while
+   zoomed. State is one transform on #lb-img, so "zoomed" is a fact the code
+   holds rather than a visualViewport heuristic. Pure helpers, so the math is
+   testable in the node harness without a TouchEvent. */
+let LB_Z = { scale: 1, tx: 0, ty: 0 };
+let LB_PINCH = null;   // { d0, s0 } while two fingers are down
+let LB_PAN = null;     // { x, y, tx, ty } while dragging zoomed
+let LB_TAP = null;     // { t, x, y } last touchend, for the double-tap
+function lbZoomNext(scale) { return scale > 1.01 ? 1 : 2; }
+function lbPinchScale(d0, d1, s0) { return Math.min(4, Math.max(1, s0 * (d1 / Math.max(1, d0)))); }
+/* The photo may move at most half its scaled overflow each way, so some of
+   it is always on stage — a photo panned fully off screen with no way back
+   is the failure this clamp exists for. */
+function lbClampPan(scale, tx, ty, w, h) {
+  const mx = Math.max(0, (scale - 1) * (w || 0) / 2), my = Math.max(0, (scale - 1) * (h || 0) / 2);
+  return { tx: Math.min(mx, Math.max(-mx, tx)), ty: Math.min(my, Math.max(-my, ty)) };
 }
+function lbApplyZoom() {
+  const im = document.getElementById("lb-img");
+  if (im && im.style) im.style.transform = LB_Z.scale > 1.01 ? `translate(${LB_Z.tx}px, ${LB_Z.ty}px) scale(${LB_Z.scale})` : "";
+}
+function lbResetZoom() { LB_Z = { scale: 1, tx: 0, ty: 0 }; LB_PINCH = null; LB_PAN = null; lbApplyZoom(); }
+function lbToggleZoom() { LB_Z = { scale: lbZoomNext(LB_Z.scale), tx: 0, ty: 0 }; lbApplyZoom(); }
+function lbZoomed() { return LB_Z.scale > 1.01; }
 function lbSwipeEnd(start, t) {
   if (LB_LIST.length < 2) return;
   const d = lbSwipeStep(start.x, start.y, t.clientX, t.clientY, lbZoomed());
@@ -2112,6 +2141,7 @@ function closeLightbox() {
   ["app", "modal"].forEach(id => { const n = document.getElementById(id); if (n) n.inert = false; });
   if (LB_RETURN && LB_RETURN.focus) LB_RETURN.focus();
   LB_RETURN = null; LB_LIST = [];
+  lbResetZoom();
 }
 function lightboxOpen() { const b = document.getElementById("lightbox"); return !!(b && b.classList.contains("open")); }
 function installLightbox() {
@@ -2146,4 +2176,52 @@ function installLightbox() {
     else if (e.key === "ArrowRight") lbStep(1);
     else if (e.key === "ArrowLeft") lbStep(-1);
   }, true);
+
+  /* Zoom gestures, on the stage only. touchmove is non-passive because a
+     pinch or a zoomed pan must preventDefault or the browser scrolls and
+     page-zooms underneath the transform. The unzoomed swipe-to-navigate
+     still rides the global touch router; while zoomed, lbZoomed() makes it
+     stand down and the drag pans instead. */
+  const stage = document.querySelector("#lightbox .lb-stage");
+  if (stage && stage.addEventListener) {
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    stage.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 2) { LB_PINCH = { d0: dist(e.touches), s0: LB_Z.scale }; LB_PAN = null; }
+      else if (e.touches.length === 1 && lbZoomed()) {
+        LB_PAN = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: LB_Z.tx, ty: LB_Z.ty };
+      }
+    }, { passive: true });
+    stage.addEventListener("touchmove", (e) => {
+      const im = document.getElementById("lb-img");
+      if (LB_PINCH && e.touches.length === 2) {
+        e.preventDefault();
+        LB_Z.scale = lbPinchScale(LB_PINCH.d0, dist(e.touches), LB_PINCH.s0);
+        const c = lbClampPan(LB_Z.scale, LB_Z.tx, LB_Z.ty, im && im.clientWidth, im && im.clientHeight);
+        LB_Z.tx = c.tx; LB_Z.ty = c.ty;
+        lbApplyZoom();
+      } else if (LB_PAN && e.touches.length === 1) {
+        e.preventDefault();
+        const c = lbClampPan(LB_Z.scale,
+          LB_PAN.tx + e.touches[0].clientX - LB_PAN.x,
+          LB_PAN.ty + e.touches[0].clientY - LB_PAN.y,
+          im && im.clientWidth, im && im.clientHeight);
+        LB_Z.tx = c.tx; LB_Z.ty = c.ty;
+        lbApplyZoom();
+      }
+    }, { passive: false });
+    stage.addEventListener("touchend", (e) => {
+      if (e.touches.length < 2) LB_PINCH = null;
+      if (!e.touches.length) LB_PAN = null;
+      // Double-tap: two touchends inside 300 ms and 30 px toggle fit / 2x.
+      if (!e.touches.length && e.changedTouches && e.changedTouches.length === 1) {
+        const t = e.changedTouches[0], now = Date.now();
+        if (LB_TAP && now - LB_TAP.t < 300 && Math.hypot(t.clientX - LB_TAP.x, t.clientY - LB_TAP.y) < 30) {
+          lbToggleZoom(); LB_TAP = null;
+        } else LB_TAP = { t: now, x: t.clientX, y: t.clientY };
+      }
+    }, { passive: true });
+    stage.addEventListener("dblclick", (e) => {
+      if (e.target && e.target.id === "lb-img") lbToggleZoom();
+    });
+  }
 }
