@@ -1239,10 +1239,11 @@ function openWhyHold(i) {
     <h2>Why ${r.febHoldH} hours?</h2>
     <div class="field"><label>Resin</label><div class="ro">${esc(r.label)}</div></div>
     <div class="field"><label>Datasheet</label><div class="ro">${esc(r.sheetSays)}</div></div>
-    <div class="field"><label>FEB holds it</label><div class="ro">${r.febHoldH} h — longer than the datasheet asks for, on purpose.</div></div>
+    <div class="field"><label>FEB holds it</label><div class="ro">${r.febHoldH} h — longer than the datasheet asks for, on purpose.${r.overridden ? " (set from the app by a lead, not the code table)" : ""}</div></div>
     ${r.febBy ? `<div class="field"><label>Signed off by</label><div class="ro">${esc(r.febBy)}</div></div>` : ""}
     ${h.tempC != null ? `<div class="field"><label>Shop temperature recorded</label><div class="ro">${esc(String(h.tempC))} °C${holdIsCold(h) ? ` — below the ${r.refTempC} °C the datasheet number is quoted at` : ""}</div></div>` : ""}
     <div class="foot">
+      ${typeof openEditResinHold === "function" && isLead() ? `<button onclick="closeModal();openEditResinHold('${esc(r.id)}')">Change this hold…</button>` : ""}
       <button onclick="closeModal()">Close</button>
       <button class="primary" onclick="closeModal();openDatasheet('${esc(r.doc)}')">Open the datasheet</button>
     </div>

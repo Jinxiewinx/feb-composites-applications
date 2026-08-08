@@ -42,9 +42,12 @@
        the grounds that it seals a mold rather than making a part: the failure
        mode is a surface defect you will find, not a structure you won't.
 
-   A lead-editable version of this table (fb.getConfig/setConfig) is the
-   obvious next step, so a hold can be changed without a deploy. Deliberately
-   not built yet — until it is, changing a number means editing this file.
+   A lead can now override a hold from the app: config/resins holds a
+   per-resin { febHoldH, febBy } map (see the override section below), so
+   changing a number no longer means a deploy. The datasheet provenance
+   (sheetH, sheetSays, refTempC, doc) stays here in code on purpose — an
+   override can only move the FEB number, never the floor it is checked
+   against.
 
    A note on what the West System numbers are NOT. West publishes pot life,
    working time, "cure to a solid, thin film", and "cure to working strength".
@@ -102,7 +105,81 @@ const RESINS = [
   },
 ];
 
-function resinById(id) { return RESINS.find(r => r.id === id) || null; }
+/* ---------- lead overrides (config/resins) ----------
+   { [resinId]: { febHoldH, febBy } }, lead-writable, roster-readable, same
+   trust shape as config/season. Fetched once per session; a missing doc
+   never clobbers a value a test planted (the same rule as loadSeason).
+   window.*, not a lexical binding, so fixtures and tests can reach it. */
+window.RESIN_OVERRIDES = null;
+let resinOverridesFetched = false;
+function loadResinOverrides() {
+  if (resinOverridesFetched || !window.fb || fb.state !== "ready" || !fb.getConfig) return;
+  resinOverridesFetched = true;
+  fb.getConfig("resins").then(d => { if (d) { window.RESIN_OVERRIDES = d; render(); } }).catch(() => {});
+}
+
+/* The single choke point every consumer goes through (holdState, the cure
+   modal, the why-modal, the printed traveler). The override is validated at
+   READ time as well as at write time: a doc edited by hand in the Firestore
+   console cannot weaken a hold below the datasheet or strip its sign-off —
+   an invalid override is simply ignored and the code table stands. */
+function resinById(id) {
+  const r = RESINS.find(r => r.id === id) || null;
+  const o = r && window.RESIN_OVERRIDES && window.RESIN_OVERRIDES[id];
+  if (!r || !o || typeof o.febHoldH !== "number" || o.febHoldH < r.sheetH
+      || !o.febBy || /pending|tbd|todo/i.test(o.febBy)) return r;
+  return { ...r, febHoldH: o.febHoldH, febBy: o.febBy, overridden: true };
+}
+
+/* The editor. Lead-only, reached from the "Why N hours?" modal, because that
+   is the room where the number is explained. The two writable fields are the
+   hold and its sign-off; everything else on screen is read-only datasheet
+   context. Validation mirrors resinTableProblems(), enforced here at write
+   time instead of only in the test suite. */
+function openEditResinHold(id) {
+  if (!isLead()) return;
+  const base = RESINS.find(r => r.id === id);
+  if (!base) return;
+  const cur = resinById(id);
+  openModal(`
+    <h2>Change the ${esc(base.label)} hold</h2>
+    <div class="field"><label>Datasheet</label><div class="ro">${esc(base.sheetSays)}</div></div>
+    <div class="field"><label>In the code table</label><div class="ro">${base.febHoldH} h — ${esc(base.febBy)}</div></div>
+    ${cur.overridden ? `<div class="field"><label>Current override</label><div class="ro">${cur.febHoldH} h — ${esc(cur.febBy)}</div></div>` : ""}
+    <div class="field"><label>FEB hold (hours)</label><input id="rh-hours" type="number" min="${base.sheetH}" step="0.5" value="${cur.febHoldH}"></div>
+    <div class="field"><label>Signed off by</label><input id="rh-by" value="${esc(signerName())}, ${today()}"></div>
+    <p class="muted tny">Never below the datasheet's ${base.sheetH} h. The change reaches everyone's app immediately and locks demould steps accordingly.</p>
+    <div class="foot">
+      ${cur.overridden ? `<button class="danger" onclick="revertResinHold('${esc(id)}')">Revert to the code table</button>` : ""}
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitResinHold('${esc(id)}')">Save</button>
+    </div>
+  `);
+}
+async function submitResinHold(id) {
+  const base = RESINS.find(r => r.id === id);
+  if (!base) return;
+  const hours = parseFloat(document.getElementById("rh-hours").value);
+  const by = document.getElementById("rh-by").value.trim();
+  if (!(hours >= base.sheetH)) { toast(`Not below the datasheet: ${base.label} needs at least ${base.sheetH} h.`, "error"); return; }
+  if (!by || /pending|tbd|todo/i.test(by)) { toast("Sign it — a hold nobody signed off never enforces.", "error"); return; }
+  const next = { ...(window.RESIN_OVERRIDES || {}), [id]: { febHoldH: hours, febBy: by } };
+  try {
+    await fb.setConfig("resins", next);
+    window.RESIN_OVERRIDES = next;
+    closeModal(); render(); toast(`${base.label} hold is now ${hours} h.`);
+  } catch (e) { toast("Save failed: " + e.message, "error"); }
+}
+/* Revert writes null rather than deleting the key: setConfig merges, and a
+   merge cannot remove a field. resinById treats a null override as absent. */
+async function revertResinHold(id) {
+  const next = { ...(window.RESIN_OVERRIDES || {}), [id]: null };
+  try {
+    await fb.setConfig("resins", next);
+    window.RESIN_OVERRIDES = next;
+    closeModal(); render(); toast("Back to the code table's number.");
+  } catch (e) { toast("Save failed: " + e.message, "error"); }
+}
 
 /* The enforced hold, in hours. Falls back to the datasheet figure for a resin
    this table has never heard of, which is the conservative direction: an

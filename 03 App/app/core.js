@@ -34,7 +34,11 @@ function loadSeason() {
 }
 
 /* ---------- sync hooks (called by fb.js) ---------- */
-window.onFbChange = function () { loadSeason(); render(); };
+window.onFbChange = function () {
+  loadSeason();
+  if (typeof loadResinOverrides === "function") loadResinOverrides();
+  render();
+};
 window.onFbData = function (coll, arr) {
   DB[coll] = arr;
   // Don't yank the DOM out from under someone mid-edit: another member's (or

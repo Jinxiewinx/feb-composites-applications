@@ -272,6 +272,53 @@ await t("the why-modal shows who signed the number off, next to the number", () 
   assert(/Signed off by[\s\S]*Simon Starbuck, 2026-08-01/.test(m), "with the approval: " + m);
   closeModal();
 });
+await t("a lead override raises a hold at the choke point, and can never weaken one", () => {
+  const rid = RESINS[0].id, code = RESINS[0].febHoldH, sheet = RESINS[0].sheetH;
+  window.RESIN_OVERRIDES = { [rid]: { febHoldH: code + 12, febBy: "Nick Jepsen, 2026-08-08" } };
+  assert(resinHoldHours(rid) === code + 12, "the override reaches resinHoldHours (and so holdState): " + resinHoldHours(rid));
+  assert(resinById(rid).overridden === true, "and marks itself");
+  assert(resinById(rid).sheetSays === RESINS[0].sheetSays, "datasheet provenance stays the code table's");
+  // Read-time guard: a config doc edited by hand in the console cannot
+  // weaken a hold below the datasheet or strip its sign-off.
+  window.RESIN_OVERRIDES = { [rid]: { febHoldH: Math.max(0, sheet - 1), febBy: "Someone, 2026-08-08" } };
+  assert(resinHoldHours(rid) === code, "a below-datasheet override is ignored at read time");
+  window.RESIN_OVERRIDES = { [rid]: { febHoldH: code + 12, febBy: "pending" } };
+  assert(resinHoldHours(rid) === code, "an unsigned override is ignored");
+  window.RESIN_OVERRIDES = { [rid]: null };
+  assert(resinHoldHours(rid) === code && !resinById(rid).overridden, "a reverted (null) override is absent");
+  window.RESIN_OVERRIDES = null;
+});
+await t("the hold editor refuses an under-datasheet number and an unsigned name", async () => {
+  const rid = RESINS[0].id, sheet = RESINS[0].sheetH;
+  openEditResinHold(rid);
+  assert(document.getElementById("modal").innerHTML.includes("Change the"), "lead gets the editor");
+  calls.length = 0;
+  document.getElementById("rh-hours").value = String(Math.max(0, sheet - 1));
+  document.getElementById("rh-by").value = "Nick Jepsen, 2026-08-08";
+  await submitResinHold(rid);
+  assert(!calls.some(c => c[0] === "setConfig"), "under-datasheet write refused: " + JSON.stringify(calls));
+  document.getElementById("rh-hours").value = String(sheet + 24);
+  document.getElementById("rh-by").value = "TBD";
+  await submitResinHold(rid);
+  assert(!calls.some(c => c[0] === "setConfig"), "placeholder sign-off refused");
+  document.getElementById("rh-by").value = "Nick Jepsen, 2026-08-08";
+  await submitResinHold(rid);
+  assert(calls.some(c => c[0] === "setConfig" && c[1] === "resins"), "a valid override writes config/resins");
+  assert(window.RESIN_OVERRIDES[rid].febHoldH === sheet + 24, "and lands locally at once");
+  window.RESIN_OVERRIDES = null;
+  closeModal();
+});
+await t("the why-modal offers the editor to a lead and not to a member", () => {
+  openHoldWO(holdWO("WO-HOLD-EDIT", 2, "WS-105-205"));
+  openWhyHold(1);
+  assert(document.getElementById("modal").innerHTML.includes("openEditResinHold"), "lead sees Change this hold");
+  closeModal();
+  fb.roster = { name: "Nick", role: "member" };
+  openWhyHold(1);
+  assert(!document.getElementById("modal").innerHTML.includes("openEditResinHold"), "member does not");
+  fb.roster = { name: "Simon", role: "lead" };
+  closeModal();
+});
 await t("a cure in progress locks the next step and says how long is left", () => {
   openHoldWO(holdWO("WO-HOLD-1", 7, "IN2-AT30-SLOW")); // 7 h into a 48 h hold
   const h = holdState(woById("WO-HOLD-1"), 1);
