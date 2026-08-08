@@ -1163,6 +1163,16 @@ await t("Slack push fetches the roster-gated config, never a hardcoded URL", asy
   await postToSlack("first push of the test run");
   assert(calls.some(c => c[0] === "getConfig" && c[1] === "slack"), "fetched config instead of a hardcoded secret: " + JSON.stringify(calls));
 });
+await t("season config loads once and a missing doc never clobbers a planted value", async () => {
+  window.SEASON = { compName: "PLANTED", compDate: "2027-06-17" };
+  calls.length = 0;
+  loadSeason();
+  loadSeason();
+  await Promise.resolve();          // let the stub's getConfig(null) settle
+  const fetches = calls.filter(c => c[0] === "getConfig" && c[1] === "season");
+  assert(fetches.length === 1, "fetched exactly once across two calls: " + fetches.length);
+  assert(window.SEASON && window.SEASON.compName === "PLANTED", "null fetch left the planted fixture alone");
+});
 await t("create modal → submit builds a real project ticket", async () => {
   setTab("projects");
   openNewProject();

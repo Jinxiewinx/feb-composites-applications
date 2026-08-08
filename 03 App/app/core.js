@@ -17,8 +17,24 @@ let view = {
 let rosterCache = null;
 let pendingRender = false;
 
+/* ---------- season config ----------
+   config/season = { compName, compDate, seasonStart, milestones: [{label,
+   date}] }, the dashboard's countdown source. Lives in the lead-writable
+   config collection (same trust shape as the Slack webhook) because no
+   competition date exists anywhere in the record data. Fetched once per
+   session after auth reaches ready; a missing doc never clobbers a value a
+   test fixture planted, which is also why this reads and writes
+   window.SEASON rather than a lexical binding. */
+window.SEASON = null;
+let seasonFetched = false;
+function loadSeason() {
+  if (seasonFetched || !window.fb || fb.state !== "ready" || !fb.getConfig) return;
+  seasonFetched = true;
+  fb.getConfig("season").then(d => { if (d) { window.SEASON = d; render(); } }).catch(() => {});
+}
+
 /* ---------- sync hooks (called by fb.js) ---------- */
-window.onFbChange = function () { render(); };
+window.onFbChange = function () { loadSeason(); render(); };
 window.onFbData = function (coll, arr) {
   DB[coll] = arr;
   // Don't yank the DOM out from under someone mid-edit: another member's (or

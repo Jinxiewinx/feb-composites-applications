@@ -223,6 +223,12 @@ export const APPLY_FIXTURES = `
   window.onFbData("molds", ${JSON.stringify(MOLDS)});
   window.onFbData("items", ${JSON.stringify(ITEMS)});
   window.onFbData("lots", ${JSON.stringify(LOTS)});
+  /* Season config for the dashboard countdown. Relative dates, so the module
+     photographs alive on any day the suites run; the loader in core.js never
+     overwrites a planted value with a missing doc. */
+  const dd = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  window.SEASON = { compName: "FSAE Michigan", compDate: dd(124), seasonStart: dd(-45),
+    milestones: [{ label: "All molds cut", date: dd(38) }, { label: "Rolling chassis", date: dd(80) }] };
   /* Date the archive weeks. The SN5 seed ships every week with weekOf:"" —
      honest for retro data, useless for a screenshot, because an undated week
      can never be "this week" and half the tab's states never render. Walk them
