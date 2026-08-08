@@ -2827,6 +2827,24 @@ await t("calendar is gone, not just hidden — no dead renderer shipping to ever
   assert(typeof globalThis.renderCalendar === "undefined", "renderCalendar is gone");
   assert(typeof globalThis.calItems === "undefined", "calItems is gone");
 });
+await t("status board: colored stage pills, and every record is a link, not prose", () => {
+  const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  DB.parts = [{ id: "P-R1", partName: "WING", layupProgress: "In Layup", layupDeadline: soon, moldEngineer: "Nick" }];
+  DB.projects = [];
+  DB.workOrders = [{ id: "WO-R1", partName: "WING WO", status: "InWork", manufacturingEngineer: "Nick", steps: [
+    { seq: 1, title: "Stack frozen", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } }] }];
+  view = { ...view, tab: "reports" }; render();
+  const html = main.innerHTML;
+  assert(html.includes('class="rgrid"'), "one card per section, not one 1600px card");
+  assert(html.includes('class="stage st-mid"') && html.includes('class="stage st-0"'),
+    "stage counts wear their stage's color via stageClass: " + html.slice(html.indexOf("stagerow"), html.indexOf("stagerow") + 400));
+  assert(!/<span class="chip">Not Started/.test(html), "the four identical accent chips are gone");
+  // deadlineItems rows carry coll+id, so the board links them like the dashboard.
+  assert(/class="chip"[^>]*openRecord\('workorders','WO-R1'\)/.test(html), "an in-work WO is a real chip link");
+  assert(/class="chip"[^>]*openRecord\('parts','P-R1'\)/.test(html), "a deadline row links to its record");
+  assert(!/<ul>/.test(html), "the plain-text bullet lists are gone");
+  DB.workOrders = [];
+});
 await t("people shows a member's live assignments", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
   DB.parts = [{ id: "P-N", partName: "WING", moldEngineer: "Nick", layupProgress: "In Layup" }];

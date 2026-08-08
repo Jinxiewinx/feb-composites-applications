@@ -55,18 +55,41 @@ function renderReports() {
     <button onclick="backfillPartWorkOrderLinks()" title="Link each part to the work order with the same name">Link parts to work orders</button>` : ""}
     <button class="primary" style="margin-left:auto" onclick="window.print()">Print status board</button>
   </div>
-  <div class="card">
-    <h2>Weekly status board <span class="muted" style="font-size:13px">— ${today()}</span></h2>
-    <h3>Parts by layup stage</h3>
-    <div class="stagerow">${stages.map(s => `<span class="chip">${esc(s)}: <b>${partStage[s]}</b></span>`).join("")}</div>
-    <h3>Work orders in progress (${woInWork.length})</h3>
-    ${woInWork.length ? `<ul>${woInWork.map(w => `<li>${esc(w.id)} — ${esc(w.partName || "")} <span class="muted">(${esc(w.manufacturingEngineer || w.moldEngineer || "unassigned")})</span></li>`).join("")}</ul>` : '<p class="muted">None marked in-work.</p>'}
-    <h3>Open blockers (${openBlockers.length})</h3>
-    ${openBlockers.length ? `<ul>${openBlockers.map(b => `<li>${esc(b.wo.id)} — <b>${esc(b.step.title)}</b></li>`).join("")}</ul>` : '<p class="muted">No unsigned blockers on active work orders.</p>'}
-    <h3>Deadlines in the next two weeks (${upcoming.length})</h3>
-    ${upcoming.length ? `<ul>${upcoming.map(i => `<li>${esc(i.date)} — <b>${esc(i.label)}</b> <span class="muted">(${esc(i.kind)}${i.who ? ", " + esc(i.who) : ""})</span></li>`).join("")}</ul>` : '<p class="muted">Nothing due in the next two weeks.</p>'}
-    <h3>Budget</h3>
-    <p>Season spend <b>$${spend.toFixed(0)}</b> · ${openOrders} open purchase${openOrders === 1 ? "" : "s"}.</p>
+  <h2>Weekly status board <span class="muted" style="font-size:13px">— ${today()}</span></h2>
+  <div class="rgrid">
+    <div class="card">
+      <h3>Parts by layup stage</h3>
+      <!-- stageClass, so a count wears its stage's color the way Parts draws
+           it: grey to start, amber under way, green done. The stage list here
+           intentionally differs from PART_STAGES: this board counts every
+           part's layupProgress directly, all-parts denominator. -->
+      <div class="stagerow">${stages.map(s => `<span class="stage ${stageClass(s, stages)}">${esc(s)}: <b>${partStage[s]}</b></span>`).join("")}</div>
+    </div>
+    <div class="card">
+      <h3>Work orders in progress (${woInWork.length})</h3>
+      ${woInWork.length ? woInWork.map(w => `<div class="srow">
+        <span class="sr-main"><span class="kind">WO</span> ${chip("workOrders", w.id, w.partName || w.id)}</span>
+        <span class="srow-meta">${esc(w.manufacturingEngineer || w.moldEngineer || "unassigned")}</span>
+      </div>`).join("") : '<p class="muted">None marked in-work.</p>'}
+    </div>
+    <div class="card">
+      <h3>Open blockers (${openBlockers.length})</h3>
+      ${openBlockers.length ? openBlockers.map(b => `<div class="srow">
+        <span class="sr-main">${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)} <b>${esc(stripCS(b.step.title))}</b></span>
+        <span class="srow-meta">step ${esc(b.step.seq)} · unsigned</span>
+      </div>`).join("") : '<p class="muted">No unsigned blockers on active work orders.</p>'}
+    </div>
+    <div class="card">
+      <h3>Deadlines in the next two weeks (${upcoming.length})</h3>
+      ${upcoming.length ? upcoming.map(i => `<div class="srow">
+        <span class="sr-main"><span class="kind">${i.kind}</span> ${chip(i.coll, i.id, i.label)}</span>
+        <span class="srow-meta">${esc(i.date)} (${daysUntil(i.date)}d)${i.who ? " · " + esc(i.who) : ""}</span>
+      </div>`).join("") : '<p class="muted">Nothing due in the next two weeks.</p>'}
+    </div>
+    <div class="card">
+      <h3>Budget</h3>
+      <p>Season spend <b>$${spend.toFixed(0)}</b> · ${openOrders} open purchase${openOrders === 1 ? "" : "s"}.</p>
+    </div>
   </div>`;
 }
 

@@ -310,6 +310,9 @@
   .stage.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
   .stage.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
   .stagerow { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  /* The Reports status board: one card per section instead of one 1600px
+     card whose text ran ~500px and left the rest empty. */
+  .rgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
   .stage-bar { width: 64px; height: 5px; border-radius: 999px; background: var(--fill); overflow: hidden; margin-top: 4px; }
   .stage-bar-fill { height: 100%; border-radius: 999px; }
   .stage-bar-fill.st-0 { background: var(--muted); }
