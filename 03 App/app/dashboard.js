@@ -264,7 +264,7 @@ function renderDashboard() {
     ${dashShopStatus(blocked, curing)}
     ${dashSeason()}
     ${dashWeek()}
-    ${watched.length ? dashActivity(watched) : ""}
+    ${dashFeed(watched)}
     ${dashCount(items, open)}
     ${dashBudget()}
     ${dashLaunch()}
@@ -490,20 +490,63 @@ function dashShopStatus(blocked, curing) {
   </div>`;
 }
 
-/* New activity, rebuilt as stacked rows — the structural fix for the overflow
-   Simon reported: the old 3-column table could not fit the rail, and its third
-   column printed the raw editor email. Real names via userName(), one row per
-   ticket, capped. */
-function dashActivity(watched) {
-  const shown = watched.slice(0, 4);
+/* ---------- the activity feed ----------
+   Every synced doc carries updatedAt/updatedBy and every comment a ts, and
+   until now the only surface reading any of it was the watched-tickets card.
+   One merged stream instead: record touches, comments, and step buy-offs
+   across tickets, parts, work orders and molds. Newest first, ONE event per
+   record per calendar day (a save-then-comment is one line of news, not
+   two), capped. Notifications stay out: they are per-user and the bell owns
+   them. Watched tickets with unread activity still pin to the top wearing
+   the gold dot — that is a personal signal, not program news. */
+function dashFeedEvents() {
+  const ev = [];
+  const push = (ts, who, verb, coll, id, label) => { if (ts) ev.push({ ts: String(ts), who, verb, coll, id, label }); };
+  (DB.projects || []).forEach(p => {
+    push(p.updatedAt, p.updatedBy, "updated", "projects", p.id, p.title || p.id);
+    (p.comments || []).forEach(c => push(c.ts, c.email || c.author, "commented on", "projects", p.id, p.title || p.id));
+  });
+  (DB.parts || []).forEach(p => {
+    push(p.updatedAt, p.updatedBy, "updated", "parts", p.id, p.partName || p.id);
+    (p.commentLog || []).forEach(c => push(c.ts, c.email || c.author, "commented on", "parts", p.id, p.partName || p.id));
+  });
+  (DB.workOrders || []).forEach(w => {
+    if (w.retro) return;   // the SN5 archive documents, it is not news
+    push(w.updatedAt, w.updatedBy, "updated", "workOrders", w.id, w.partName || w.id);
+    (w.noteLog || []).forEach(c => push(c.ts, c.email || c.author, "commented on", "workOrders", w.id, w.partName || w.id));
+    (w.steps || []).forEach(s => {
+      if (s.buyoff && s.buyoff.name && s.buyoff.date && !/not recorded/i.test(s.buyoff.name))
+        push(s.buyoff.date, s.buyoff.name, "signed a step on", "workOrders", w.id, w.partName || w.id);
+    });
+  });
+  (DB.molds || []).forEach(m => push(m.updatedAt, m.updatedBy, "updated", "molds", m.id, m.name || m.id));
+  ev.sort((a, b) => b.ts.localeCompare(a.ts));
+  const seen = new Set();
+  return ev.filter(e => {
+    const k = e.coll + "|" + e.id + "|" + e.ts.slice(0, 10);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+function dashFeed(watched) {
+  const wShown = watched.slice(0, 3);
+  const wIds = new Set(wShown.map(p => p.id));
+  const events = dashFeedEvents()
+    .filter(e => !(e.coll === "projects" && wIds.has(e.id)))
+    .slice(0, 8 - wShown.length);
+  if (!wShown.length && !events.length) return "";
   return `<div class="bmod b-activity">
-    <div class="bmod-hd"><span><span class="unread-dot"></span> New activity</span><span class="gh-n">tickets you watch</span></div>
-    ${shown.map(p => `<div class="srow">
+    <div class="bmod-hd"><span>${wShown.length ? '<span class="unread-dot"></span> ' : ""}Activity</span><span class="gh-n">latest across the app</span></div>
+    ${wShown.map(p => `<div class="srow">
       <span class="sr-main"><span class="kind">${isIssue(p) ? "Issue" : "Ticket"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</span>
       <span class="srow-meta"><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span>
         ${fmtWhen(p.updatedAt)} by ${esc(whoLabel(p.updatedBy) || "?")}</span>
     </div>`).join("")}
-    ${watched.length > shown.length ? `<button class="dg-more" onclick="setTab('projects')">All watched — ${watched.length}</button>` : ""}
+    ${events.map(e => `<div class="srow">
+      <span class="sr-main">${chip(e.coll, e.id, e.label)}</span>
+      <span class="srow-meta">${e.verb} by ${esc(whoLabel(e.who) || "?")} · ${fmtWhen(e.ts)}</span>
+    </div>`).join("")}
+    ${watched.length > wShown.length ? `<button class="dg-more" onclick="setTab('projects')">All watched — ${watched.length}</button>` : ""}
   </div>`;
 }
 

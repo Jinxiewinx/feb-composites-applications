@@ -217,7 +217,15 @@ export const APPLY_FIXTURES = `
 (() => {
   const U = ${JSON.stringify(USERS)};
   window.onFbData("users", U);
-  window.onFbData("projects", ${JSON.stringify(PROJECTS)});
+  /* Recent updatedAt/updatedBy stamps on a handful of tickets so the
+     dashboard's activity feed photographs alive; hours-ago, so they read as
+     today whatever day the suites run. */
+  const PR = ${JSON.stringify(PROJECTS)};
+  PR.slice(0, 5).forEach((p, i) => {
+    p.updatedAt = new Date(Date.now() - (i + 1) * 5400000).toISOString();
+    p.updatedBy = U[(i + 1) % U.length].email;
+  });
+  window.onFbData("projects", PR);
   window.onFbData("budget", ${JSON.stringify(BUDGET)});
   window.onFbData("notifications", ${JSON.stringify(NOTIFICATIONS)});
   window.onFbData("molds", ${JSON.stringify(MOLDS)});

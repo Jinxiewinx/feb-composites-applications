@@ -2222,12 +2222,31 @@ await t("dashboard Watched card uses the new colored .status pill, not the old f
   assert(html.includes('<span class="kind">Issue</span>'), "one micro-tag idiom on this page, not two: " + html.slice(0, 400));
 });
 
-await t("new activity prints a NAME, never a raw email (the overflow bug's regression test)", () => {
+await t("the feed merges touches, comments and buy-offs — one event per record per day, retro archive excluded", () => {
+  DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  DB.projects = [{ id: "TKT-F1", kind: "project", title: "fed ticket", status: "In Progress",
+    updatedAt: "2026-08-06T10:00:00", updatedBy: "nick@berkeley.edu",
+    comments: [{ ts: "2026-08-06T09:00:00", email: "nick@berkeley.edu", html: "x" }] }];
+  DB.workOrders = [
+    { id: "WO-F1", partName: "FED WO", status: "InWork", updatedAt: "2026-08-05T12:00:00", updatedBy: "nick@berkeley.edu",
+      steps: [{ seq: 1, title: "Seal mold", buyoff: { name: "Nick Jepsen", date: "2026-08-04" } }] },
+    { id: "WO-F2", partName: "OLD RETRO", status: "Complete", retro: true, updatedAt: "2026-08-06T13:00:00", updatedBy: "nick@berkeley.edu", steps: [] },
+  ];
+  const ev = dashFeedEvents();
+  assert(!ev.some(e => e.id === "WO-F2"), "the SN5 archive is history, not news");
+  const t1 = ev.filter(e => e.id === "TKT-F1");
+  assert(t1.length === 1 && t1[0].ts === "2026-08-06T10:00:00", "save-then-comment collapses to the newest event that day: " + JSON.stringify(t1));
+  assert(ev.some(e => e.id === "WO-F1" && e.verb === "updated"), "record touches flow in");
+  assert(ev.some(e => e.id === "WO-F1" && /signed/.test(e.verb) && e.ts === "2026-08-04"), "a buy-off is a feed event");
+  assert(ev[0].ts >= ev[ev.length - 1].ts, "newest first");
+  DB.workOrders = [];
+});
+await t("the feed prints a NAME, never a raw email (the overflow bug's regression test)", () => {
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
   DB.projects = [{ id: "TKT-D4", kind: "project", title: "watched thing", status: "In Progress",
     watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
   const html = renderDashboard();
-  const act = html.slice(html.indexOf("New activity"));
+  const act = html.slice(html.indexOf("b-activity"));
   assert(act.includes("Nick Jepsen"), "resolved through whoLabel/userName");
   assert(!act.includes("nick@berkeley.edu"), "the unbreakable email token is gone");
   assert(!/<table/.test(act.slice(0, act.indexOf("</div></div>"))) || !act.includes('class="list dash"'),
