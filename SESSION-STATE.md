@@ -9,6 +9,81 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-08
+Status: **Backlog batch: eight deferred items landed (2026-08-08).** Simon
+asked for a sweep of everything "left for later" across this file's history
+(46 items found), picked eight, and settled the forks: slate for On Hold,
+pinch + double-tap for lightbox zoom, measured ladders (no collision
+post-pass) for drawings. Eight commits, 64b993e..8902367. All suites green:
+test_app 405, designsystem 23, appui 1242, detailui 882 (two new states),
+drawings 9/9, packer 24, labels 32, print_mobile 14, route 38, safearea 30.
+
+What landed, in commit order:
+1. **--hold slate trio** ends the amber collision: Tickets On Hold is slate
+   in both themes/both token homes; .pill.OnHold stays red on purpose (it's
+   borrowed as a generic exception badge by Inventory and Budget).
+2. **test_drawings 9/9 for the first time.** The 19-40 findings per mold
+   were mostly each dimension's OWN two lines: inch primary and mm bracket
+   sat 9px apart at baseline, under the combined font boxes. Fixes: 15/3.5
+   offsets in dimH/dimV, LEADER_PITCH = ceil(font*1.55) for spreadLabels
+   stacks, DIM_PITCH = 30 for the layer-sheet ladders, sheet-2 gutter
+   dimension +36.
+3. **Print chrome gone** (@page margin 0). Per-page sheets (.dwg-page)
+   carry the margin as padding; the FLOWING traveler gets vertical margins
+   on both pages via table.pgflow's repeating thead/tfoot spacer rows (an
+   element's padding exists only on its first/last page). ws-foot fixed at
+   0.45in insets. Fallback tabs keep 0.45in main padding; their page-2
+   starts nearer the edge, accepted. printables.html files skipped
+   (standalone docs) — follow-up if wanted.
+4. **Reports is a card grid**: stage pills via stageClass, chip links via
+   the dashboard's srow idiom, .rgrid.
+5. **Reports prints clean**: chip print exception (the blanket
+   button{display:none} would have deleted every linked record from paper),
+   rgrid one column on paper.
+6. **Lead-editable resin holds**: config/resins {id:{febHoldH,febBy}},
+   loadResinOverrides (loadSeason twin), folded in at resinById, the ONE
+   choke point. Guarded at write AND read: an under-datasheet or unsigned
+   override is refused by the editor and ignored by resinById, so a
+   hand-edited Firestore doc can't weaken a hold either. Editor lives in
+   the "Why N hours?" modal; revert writes null (merge can't delete).
+7. **Lightbox**: controls in a bottom .lb-actions bar (same ids — detailui
+   keys on them), 44px targets over the home indicator; real transform
+   zoom, pinch 1-4x + double-tap 2x + pan clamped to half the overflow;
+   lbZoomed() is the owned transform state now; touch-action none and
+   stage overflow hidden. Zoom math is pure helpers with truth-table
+   tests.
+8. **Cut-list execution**: "Mark these boards cut" — snapshot proposal
+   (CUT_PROPOSAL set by the HANDLER, never render scope), per-plan
+   checkboxes (qty>1 rows = one per unit), rack re-check with whole-abort,
+   qty decrement / delete-at-zero, offcuts written back as plain board rows
+   (mm units, origin "cut <date> from <id>", parent's location, NO kind
+   field), and CUTS_UNDO — the app's first multi-record memento (restores
+   deleted rows exactly). Fixtures gained a stackplan + fitting board
+   (cuts mode had never been photographed); detailui states cutlist +
+   cutcommit-modal.
+
+Decisions worth keeping:
+- resinById is where overrides fold in; never read RESINS directly for
+  hold numbers. RESIN_OVERRIDES/FACTS-style globals are window.* or var
+  because the node harness reaches script globals via globalThis.
+- The traveler's pgflow spacers are print-only (zero-height on screen), so
+  measurePages needed no change. If the traveler markup ever restructures,
+  keep ONE thead/tfoot spacer pair per .ws-page.
+- Don't put a chip inside anything the print block hides wholesale;
+  the #main .chip print exception exists but is display:inline text.
+
+Still open from the 46-item sweep (Simon chose not to take these now):
+stack-plan→WO blocker wiring, Monday-assignment speedup, packer elastic
+margins, offline traveler port, printables redesign, website launch, CFD
+Windows build, CS-standards AI-writing sweep (needs his go), the operator
+actions (Firebase ownership, scan mirror, signing standards, #composites
+announcement), the two mold-stage-enum merge question, saw/blank-size
+questions, board-density mixing question, and the smaller polish items
+(numeric column alignment, delWeek undo, weekly-plan car wrap, section
+heading subtext, --scrim token, spacing tokens, .kind size).
+
+Previous status follows.
+
 Last updated: 2026-08-07 (evening)
 Status: **The board went white (2026-08-07).** Simon reviewed round four and
 asked for a white background like the rest of the app, and flagged that the

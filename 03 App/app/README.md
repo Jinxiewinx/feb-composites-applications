@@ -105,9 +105,14 @@ when they disagree rather than quietly overwriting one.
 ![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260807.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
-stamped with who signed them, blocker enforcement, enforced cure holds (the
-numbers live in `resins.js`, each signed off by a lead), and a printable
-hand-fillable sheet that is always exactly two pages.
+stamped with who signed them, blocker enforcement, enforced cure holds, and a
+printable hand-fillable sheet that is always exactly two pages. The hold
+numbers ship in `resins.js`, each signed off by a lead, and a lead can now
+override one from the app: the "Why N hours?" modal carries a "Change this
+hold" button writing a per-resin override to `config/resins`. Only the hold
+and its sign-off can move; the datasheet floor stays in code, and an
+override below it is refused at write time and ignored at read time, so
+nothing can weaken a hold from either side.
 
 It is a split view, like Parts and Molds. The rail indexes every run grouped by
 the part it builds, so the tab reads as the hierarchy above; each row shows how
@@ -347,7 +352,12 @@ the same schema engine as the mold record (`app/shop.js`).
 
 Reports does per-dataset CSV export for parts, work orders, projects and budget,
 plus a one-click printable Monday-meeting status board, and it is where you print
-labels in bulk. A lead also gets three one-off migrations there: **Find molds in
+labels in bulk. The board is a grid of cards: stage counts colored the way
+Parts colors them, and every work order, blocker and deadline a real link
+into its record; on paper it prints one section under the next, chrome-free
+like every other printout (the app prints with `@page` margin zero so the
+browser has no band to write its URL and date into; the margins live inside
+the sheets). A lead also gets three one-off migrations there: **Find molds in
 work orders** proposes a mold record per distinct free-text mold name and lets a
 human untick the duplicates (no algorithm should decide that "MOLD-UT-INLET" and
 "UT INLET MOLD" are the same mold); **Link parts to work orders** backfills the
