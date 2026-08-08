@@ -109,6 +109,17 @@
   /* carbon-fiber crosshatch overlay (sidebar) */
   --carbon: rgba(255,255,255,.04);
 
+  /* ---- the mission-control board (dashboard) ----
+     A constant-dark surface family in the sidebar's register, so the app's
+     landing page reads as the shop status board in BOTH themes. Neither
+     --gold on white nor --blue on a dark card clears contrast as a large
+     fill, so the board carries its own ink, hairline and status colors tuned
+     for the navy; the dark-theme values shift one step deeper so the board
+     still sits above the dark canvas. */
+  --board-bg: #0e1b2c; --board-card: #152539; --board-line: rgba(255,255,255,.10);
+  --board-ink: #eef3fa; --board-muted: #a3b3c9;
+  --board-ok: #3ed19a; --board-warn: #e8b04c; --board-bad: #ff7d70;
+
   /* ---- motion ---- */
   --t: .17s;          /* standard transition */
   --t-fast: .12s;     /* hover / micro-interaction */
@@ -147,6 +158,9 @@
   --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
   --shadow-edge: rgba(0,0,0,.55);
   --carbon: rgba(255,255,255,.03);
+  --board-bg: #0a1322; --board-card: #111e30; --board-line: rgba(255,255,255,.08);
+  --board-ink: #e7edf5; --board-muted: #97a8bf;
+  --board-ok: #35bd8b; --board-warn: #d9a544; --board-bad: #f27166;
 }
 
 @media print {
@@ -157,5 +171,8 @@
     --canvas: #fff; --card: #fff; --surface: #fff;
     --surface-2: #fff; --fill: #fff; --hover: #fff;
     --line: #000; --border-2: #000; --brand-ink: #003262;
+    --board-bg: #fff; --board-card: #fff; --board-line: #000;
+    --board-ink: #000; --board-muted: #333;
+    --board-ok: #000; --board-warn: #000; --board-bad: #000;
   }
 }

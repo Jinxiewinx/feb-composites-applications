@@ -68,6 +68,16 @@
        invisible against a dark surface. */
     --shadow-edge: rgba(10,22,40,.20);
     --carbon: rgba(255,255,255,.04);
+    /* the mission-control board (dashboard). A constant-dark surface family in
+       the sidebar's register, so the landing page reads as the status board in
+       BOTH themes. Neither --gold on white nor --blue on a dark card clears
+       contrast as a large fill (the logged brand-token defect), so the board
+       carries its own ink, hairline and status colors tuned for the navy. The
+       dark-theme values shift one step deeper so the board still sits above
+       the dark canvas instead of dissolving into it. */
+    --board-bg: #0e1b2c; --board-card: #152539; --board-line: rgba(255,255,255,.10);
+    --board-ink: #eef3fa; --board-muted: #a3b3c9;
+    --board-ok: #3ed19a; --board-warn: #e8b04c; --board-bad: #ff7d70;
     /* motion + type */
     --t: .17s; --t-fast: .12s; --ease: cubic-bezier(.2,.6,.2,1);
     --font: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -113,6 +123,9 @@
     --shadow: 0 1px 2px rgba(0,0,0,.5); --shadow-md: 0 4px 18px rgba(0,0,0,.55); --shadow-lg: 0 18px 44px rgba(0,0,0,.6);
     --shadow-edge: rgba(0,0,0,.55);
     --carbon: rgba(255,255,255,.03);
+    --board-bg: #0a1322; --board-card: #111e30; --board-line: rgba(255,255,255,.08);
+    --board-ink: #e7edf5; --board-muted: #97a8bf;
+    --board-ok: #35bd8b; --board-warn: #d9a544; --board-bad: #f27166;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -1766,6 +1779,142 @@
   .gitem .gn { font-size: 22px; font-weight: 700; color: var(--brand-ink); }
   .gitem .gl { font-size: 11px; color: var(--muted); text-transform: uppercase; }
 
+  /* ---- the mission-control board (dashboard round four) ----
+     The landing page becomes the shop status board: one constant-dark surface
+     in the sidebar's register (navy, carbon crosshatch, gold slash, Saira
+     numerals), the app's stated motorsport identity promoted from the nav to
+     a whole page. Constant-dark on purpose, in both themes: a status board
+     reads as a status board whatever the operator's theme is, and the
+     --board-* tokens are tuned so it also sits correctly above the dark
+     canvas. Everything inside uses board ink and the board status triad;
+     the light-theme --bad/--muted/--brand-ink values do not clear contrast
+     on navy and must not appear on board surfaces. Gold is ink and hairline
+     only, never a fill under white text. */
+  .board { display: grid; gap: 13px; padding: 15px; border-radius: var(--r-lg);
+    color: var(--board-ink); background-color: var(--board-bg);
+    background-image: repeating-linear-gradient(45deg, var(--carbon) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, var(--carbon) 0 1px, transparent 1px 7px);
+    grid-template-columns: minmax(0, 1fr);
+    /* Phone order is the day's order: what's wrong, what's mine, what's
+       booked, what's physically happening. Reference blocks sink. */
+    grid-template-areas: "alerts" "work" "week" "shop" "season" "activity" "count" "budget" "launch" "fact"; }
+  @media (min-width: 701px) and (max-width: 1100px) {
+    .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: "alerts alerts" "work shop" "work season" "work week" "count activity" "budget launch" "fact fact"; }
+  }
+  @media (min-width: 1101px) {
+    .board { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: "alerts alerts alerts" "work shop count" "work season week" "work season activity" "launch budget fact"; }
+  }
+  .b-work { grid-area: work; } .b-shop { grid-area: shop; } .b-season { grid-area: season; }
+  .b-week { grid-area: week; } .b-activity { grid-area: activity; } .b-count { grid-area: count; }
+  .b-budget { grid-area: budget; } .b-launch { grid-area: launch; } .b-fact { grid-area: fact; }
+
+  /* One module surface. The five-treatments idea from round three collapses
+     back to one here because the board itself is now the different thing;
+     inside it, rhythm comes from the headers and the numerals. */
+  .bmod { min-width: 0; background: var(--board-card); border: 1px solid var(--board-line);
+    border-radius: var(--r-md); padding: 13px 15px; font-size: 13px; align-self: start; }
+  .b-work.bmod { align-self: stretch; font-size: 13.5px; }
+  /* Module header: Saira, uppercase, and the sidebar's gold speed slash so
+     every module carries the register. Count sits at the right, quiet. */
+  .bmod-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 9px; }
+  .bmod-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
+    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--board-muted); }
+  .bmod-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
+    border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
+  .bmod-hd .gh-n { color: var(--board-muted); opacity: .85; }
+
+  /* The alert strip: the page's one-second read. Bare numerals on the board
+     itself, separated by hairlines, no cards. Red only when nonzero. */
+  .b-alerts { grid-area: alerts; display: flex; align-items: stretch; min-width: 0; }
+  .b-alert { display: block; flex: 0 1 auto; margin: 0; padding: 4px 22px; text-align: left; cursor: pointer;
+    background: none; border: none; border-left: 1px solid var(--board-line); border-radius: var(--radius); color: var(--board-ink); font: inherit; }
+  .b-alert:first-child { border-left: none; padding-left: 6px; }
+  .b-alert:hover { background: var(--sb-hover); }
+  .b-tminus { margin-left: auto; border-left: none; text-align: right; cursor: pointer; background: none; border: none;
+    border-radius: var(--radius); color: var(--board-ink); font: inherit; padding: 4px 6px 4px 22px; }
+  .b-tminus:hover { background: var(--sb-hover); }
+  .bnum { display: block; font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1.05;
+    letter-spacing: .01em; color: var(--board-ink); font-variant-numeric: tabular-nums; }
+  .bnum.bad { color: var(--board-bad); }
+  .bnum.warn { color: var(--board-warn); }
+  .bnum.ok { color: var(--board-ok); }
+  .bl { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--board-muted); margin-top: 2px; }
+  .bl b { color: var(--board-ink); }
+
+  /* Row plumbing recolored for the navy. The light-theme --muted/--line/
+     --brand-ink values these classes normally read are illegible here. */
+  .board .srow { border-top-color: var(--board-line); }
+  .board .srow-meta { color: var(--board-muted); }
+  .board .tny, .board .muted { color: var(--board-muted); }
+  .board .kind { color: var(--board-muted); border-color: var(--board-line); }
+  .board .stn-l { color: var(--board-muted); }
+  .board .cure-at { color: var(--gold); }
+  .board .sdot.bad { background: var(--board-bad); }
+  .board .sdot.warn { background: var(--board-warn); }
+  .board .sdot.ok { background: var(--board-ok); }
+  .board .chip { background: var(--sb-hover); border-color: transparent; color: var(--board-ink); }
+  .board .chip:hover { background: var(--sb-active); border-color: transparent; color: #fff; }
+  /* Inside the work list the row title is the row, same de-chroming as the
+     old white card: quiet until hovered. */
+  .b-work .chip { background: none; padding-left: 0; font-size: 13.5px; }
+  .b-work .chip:hover { background: var(--sb-hover); }
+  .board .dgrouphd .dg-label { color: var(--board-muted); }
+  .board .dgrouphd .bnum { font-size: 30px; line-height: 1; }
+  .board .dg-fold > summary:hover .dg-label { color: var(--board-ink); }
+  .board .dg-fold > summary .dgrouphd::after { color: var(--board-muted); }
+  .board .dg-more { background: var(--sb-hover); border-color: transparent; color: var(--board-muted); }
+  .board .dg-more:hover { color: var(--board-ink); border-color: var(--board-line); }
+  .board .gmod-foot { border-top-color: var(--board-line); }
+  /* Status pills keep their dot but drop the tinted paper surfaces, which
+     are light pastels that glow on navy. */
+  .board .status { background: var(--sb-hover); border-color: transparent; color: var(--board-ink); }
+  /* Season bars: track and segments re-read against the navy. Counts are
+     also printed as words beside the bar, so hue is never the only carrier. */
+  .board .sb-bar, .board .stagebreak .sb-bar { background: var(--sb-hover); }
+  .board .sb-seg.st-0 { background: var(--sb-active); }
+  .board .sb-seg.st-mid { background: var(--board-warn); }
+  .board .sb-seg.st-done { background: var(--board-ok); }
+  .board .sb-seg.st-na { background: var(--board-muted); }
+  .board .sb-nums .mid { color: var(--board-warn); }
+  .board .sb-nums .done { color: var(--board-ok); }
+  .board .sb-nums .na { color: var(--board-muted); }
+  .board .warn { color: var(--board-warn); }
+
+  /* Countdown and streaks. The T-minus numeral is the biggest thing on the
+     page after the alert strip; streak rows read like a pit wall column. */
+  .b-count .bnum { font-size: 44px; }
+  .b-streak { display: flex; align-items: baseline; gap: 9px; padding: 6px 0; border-top: 1px solid var(--board-line); }
+  .b-streak .sn { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--board-ink); flex: none; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  .b-streak .sn.bad { color: var(--board-bad); }
+  .b-streak .sl { font-size: 12px; color: var(--board-muted); min-width: 0; }
+
+  /* Launchpad tiles: real buttons, tap-target sized, quiet fills. */
+  .b-launch .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 7px; }
+  .b-tile { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 44px; min-width: 0;
+    margin: 0; padding: 7px 10px; text-align: left; cursor: pointer; font: inherit;
+    background: var(--sb-hover); border: 1px solid transparent; border-radius: var(--radius); color: var(--board-ink); }
+  .b-tile:hover { border-color: var(--board-line); background: var(--sb-active); }
+  .b-tile .tl { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-tile .tm { font-size: 11px; color: var(--board-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Fact of the day: prose, one size up, with a gold open-quote garnish. */
+  .b-fact .fq { position: relative; margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+  .b-fact .fq::before { content: "\201C"; position: absolute; left: 0; top: -4px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
+  .b-fact .fmeta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+  /* Phone: the strip becomes one scrollable chip row so four numerals do not
+     spend the first screen. The row is the scroller, never the document. */
+  @media (max-width: 700px) {
+    .board { padding: 12px; gap: 11px; }
+    .b-alerts { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .b-alert { flex: 0 0 auto; padding: 4px 14px; }
+    .b-tminus { padding-left: 14px; }
+    .bnum { font-size: 26px; }
+    .b-count .bnum { font-size: 34px; }
+    .board .dgrouphd .bnum { font-size: 24px; }
+  }
+
   /* login */
   .login { max-width: 430px; margin: 8vh auto 0; }
   .login .f { margin: 10px 0; }
@@ -2218,6 +2367,9 @@
       --ink: #000; --muted: #333; --faint: #555;
       --canvas: #fff; --card: #fff; --surface: #fff; --surface-2: #fff; --fill: #fff; --hover: #fff;
       --line: #000; --border-2: #000; --brand-ink: #003262;
+      --board-bg: #fff; --board-card: #fff; --board-line: #000;
+      --board-ink: #000; --board-muted: #333;
+      --board-ok: #000; --board-warn: #000; --board-bad: #000;
     }
     @page { size: letter; margin: 0.45in; }
     /* The token block above has just re-pointed these for paper; read them,
