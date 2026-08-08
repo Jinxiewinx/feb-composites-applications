@@ -2021,6 +2021,32 @@ await t("the strip goes all-clear only when nothing is late, blocked, unassigned
   setTab("dashboard");
   assert(!/<span class="bnum ok">/.test(main.innerHTML), "one late item silences the all-clear");
 });
+await t("countdown & streaks: T-minus from config, honest all-season counters, lead-only pencil", () => {
+  const iso = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  window.SEASON = { compName: "FSAE Michigan", compDate: iso(10),
+    milestones: [{ date: iso(-2), label: "Past milestone" }, { date: iso(3), label: "All molds cut" }] };
+  setTab("dashboard");
+  let html = main.innerHTML;
+  assert(html.includes('id="b-count"'), "the module renders");
+  assert(/<span class="bnum">10<\/span>/.test(html), "T-minus reads whole days: " + html.slice(html.indexOf("b-count"), html.indexOf("b-count") + 400));
+  assert(/days to <b>FSAE Michigan/.test(html), "named, not generic");
+  assert(/next: All molds cut/.test(html) && !/Past milestone/.test(html), "nearest FUTURE milestone only");
+  // LATE PART is open and past due, so the clean streak is zero and says why.
+  assert(/<span class="sn bad">0<\/span>/.test(html) && /1 late right now/.test(html), "an open late item zeroes the streak: " + html.slice(html.indexOf("b-streak"), html.indexOf("b-streak") + 300));
+  assert(/all season/.test(html), "counters admit their denominator-free window");
+  // The pencil is the lead's; a member sees the readout only.
+  assert(html.includes("editSeason()"), "lead can edit the season");
+  fb.roster = { name: "Simon", role: "member" };
+  setTab("dashboard");
+  assert(!main.innerHTML.includes("editSeason()"), "a member cannot");
+  fb.roster = { name: "Simon", role: "lead" };
+  // No config, lead: an invitation, not an empty numeral.
+  window.SEASON = null;
+  setTab("dashboard");
+  assert(main.innerHTML.includes("No competition date set") && main.innerHTML.includes("Set the season"),
+    "missing config renders the setup path for a lead");
+  window.SEASON = { compName: "FSAE Michigan", compDate: iso(10) };
+});
 /* One row per physical thing. A part and its work order are the same object
    seen twice, and the page counted both. On the SN5 archive that inflated
    "behind schedule" by ~40%, in the largest type on the page. */

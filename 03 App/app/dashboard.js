@@ -265,8 +265,96 @@ function renderDashboard() {
     ${dashSeason()}
     ${dashWeek()}
     ${watched.length ? dashActivity(watched) : ""}
+    ${dashCount(items, open)}
     ${dashBudget()}
   </div>`;
+}
+
+/* ---------- countdown & streaks ----------
+   The pit-wall column: T-minus to the configured competition, the next
+   milestone, and three all-season counters. Every number here is
+   denominator-free on purpose (a documented round-two decision: there is no
+   completion history and no budget cap, so no meter gets a target it would
+   have to invent). "Days since a deadline was missed" uses only due dates
+   and open/closed, both real: an open item past due zeroes it; otherwise the
+   most recent past due date among ALL items was met by definition. */
+function dashCount(items, open) {
+  const s = window.SEASON;
+  const lead = typeof isLead === "function" && isLead();
+
+  let head;
+  if (s && s.compDate) {
+    const dd = daysUntil(s.compDate);
+    const next = (s.milestones || [])
+      .filter(m => m.date && daysUntil(m.date) != null && daysUntil(m.date) >= 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+    head = `<div class="b-tmin">
+      <span class="bnum">${dd == null ? "?" : Math.abs(dd)}</span>
+      <span class="bl">${dd != null && dd < 0 ? "days since" : "days to"} <b>${esc(s.compName || "competition")}</b> · ${esc(s.compDate)}</span>
+    </div>
+    ${next ? `<div class="srow-meta">next: ${esc(next.label)} · ${esc(next.date)} (${daysUntil(next.date)}d)</div>` : ""}`;
+  } else {
+    head = `<p class="muted tny">No competition date set.</p>
+    ${lead ? `<button class="dg-more" onclick="editSeason()">Set the season</button>` : ""}`;
+  }
+
+  const lateNow = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
+  let missRow;
+  if (lateNow) {
+    missRow = { n: 0, cls: "bad", label: `days clean — ${lateNow} late right now` };
+  } else {
+    const pastDue = items.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; })
+      .map(i => daysUntil(i.date)).sort((a, b) => b - a);
+    missRow = pastDue.length
+      ? { n: -pastDue[0], cls: "ok", label: "days since a deadline was missed" }
+      : { n: "—", cls: "", label: "no deadlines missed yet" };
+  }
+  const layups = (DB.parts || []).filter(p => typeof partDone === "function" && partDone(p)).length;
+  const signed = (DB.workOrders || []).reduce((n, w) =>
+    n + (w.steps || []).filter(st => typeof isSigned === "function" && isSigned(st)).length, 0);
+  const streak = (r) => `<div class="b-streak"><span class="sn ${r.cls || ""}">${r.n}</span><span class="sl">${r.label}</span></div>`;
+
+  return `<div class="bmod b-count" id="b-count">
+    <div class="bmod-hd"><span>Countdown</span>${s && s.compDate && lead
+      ? `<button class="icon-btn" title="Edit season" aria-label="Edit season" onclick="editSeason()">✎</button>` : ""}</div>
+    ${head}
+    ${streak(missRow)}
+    ${streak({ n: layups, cls: "", label: `layup${layups === 1 ? "" : "s"} banked all season` })}
+    ${streak({ n: signed, cls: "", label: `step sign-off${signed === 1 ? "" : "s"} all season` })}
+  </div>`;
+}
+
+/* Lead-only editor for config/season. Milestones as date-label lines rather
+   than a row editor: a season has a handful, and a lead sets them twice a
+   year. Writing goes through fb.setConfig, which stamps updatedAt/By. */
+function editSeason() {
+  const s = window.SEASON || {};
+  openModal(`
+    <h2>Season settings</h2>
+    <div class="field"><label>Competition name</label><input id="sea-name" value="${esc(s.compName || "")}" placeholder="FSAE Michigan"></div>
+    <div class="field"><label>Competition date</label><input id="sea-date" type="date" value="${esc(s.compDate || "")}"></div>
+    <div class="field"><label>Season start (optional)</label><input id="sea-start" type="date" value="${esc(s.seasonStart || "")}"></div>
+    <div class="field"><label>Milestones — one per line: YYYY-MM-DD Label</label>
+      <textarea id="sea-ms" rows="4" placeholder="2027-01-20 All molds cut">${esc((s.milestones || []).map(m => `${m.date} ${m.label}`).join("\n"))}</textarea></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitSeason()">Save</button></div>
+  `);
+}
+async function submitSeason() {
+  const milestones = document.getElementById("sea-ms").value.split("\n")
+    .map(l => l.trim()).filter(Boolean)
+    .map(l => { const m = l.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/); return m ? { date: m[1], label: m[2] } : null; })
+    .filter(Boolean);
+  const data = {
+    compName: document.getElementById("sea-name").value.trim(),
+    compDate: document.getElementById("sea-date").value,
+    seasonStart: document.getElementById("sea-start").value,
+    milestones,
+  };
+  try {
+    await fb.setConfig("season", data);
+    window.SEASON = data;
+    closeModal(); render(); toast("Season saved.");
+  } catch (e) { toast("Save failed: " + e.message, "error"); }
 }
 
 /* The alert strip: the lead's one-second read, team-wide, bare numerals on
