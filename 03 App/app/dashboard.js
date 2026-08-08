@@ -223,8 +223,9 @@ function dashRow(it) {
 }
 
 /* ---------- the page ----------
-   Round four: mission control. One constant-dark board (see the .board CSS
-   block for the surface rationale) holding the whole team state as flat grid
+   Round four: mission control, on the app's ordinary light surfaces (Simon
+   liked the board, not the navy). One grid (.dboard, NOT .board, which is
+   the Tickets kanban's class) holding the whole team state as flat
    children, so the phone re-orders it with grid-template-areas alone. The
    alert strip leads because "what is late, blocked, unassigned or curing" is
    the lead's one-second read; the work list keeps round three's proven
@@ -251,7 +252,7 @@ function renderDashboard() {
   const unassigned = open.filter(i => !i.who);
 
   const raceday = window.SEASON && SEASON.compDate === today();
-  return `<div class="board${raceday ? " raceday" : ""}">
+  return `<div class="dboard${raceday ? " raceday" : ""}">
     ${dashAlerts(late.length, blocked.length, unassigned.length, curing)}
     <div class="bmod b-work" id="dash-list">
       <div class="bmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>

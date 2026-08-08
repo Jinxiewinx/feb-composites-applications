@@ -24,12 +24,14 @@ The screenshots through this file regenerate with
 
 ![Dashboard: the mission-control board](../design/dashboard-mockup-20260808.png)
 
-The landing page is the board: the one deliberately different page in the
-app, constant-dark in both themes and built from the sidebar's own register
-(navy, carbon crosshatch, gold speed slash, Saira numerals) via the
-`--board-*` token family. Read-only; every element links into the tab it
-came from; on a phone the grid re-declares its areas into a today-first
-stack with no second render path.
+The landing page is the board. It shares the app's ordinary white-card
+surfaces (Simon's call: the mission-control layout, not the navy panel it
+briefly shipped as), and reads as a status board through structure instead:
+a dense module grid, the alert strip's bare Saira numerals, and the
+sidebar's gold speed slash on every module header. Read-only; every element
+links into the tab it came from; on a phone the grid re-declares its areas
+into a today-first stack with no second render path. The grid class is
+`.dboard`, because `.board` belongs to the Tickets kanban.
 
 The **alert strip** leads with the lead's one-second read, team-wide
 regardless of the list toggle below: late, blocked, unassigned (open work

@@ -9,6 +9,33 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-07 (evening)
+Status: **The board went white (2026-08-07).** Simon reviewed round four and
+asked for a white background like the rest of the app, and flagged that the
+Tickets right pane had gone black too. Both fixed in one commit:
+
+- The dark treatment is gone entirely: the `--board-*` token family removed
+  from both token homes, the navy/carbon container removed, `.bmod` is now
+  the ordinary card recipe (card/line/shadow tokens) on its own class, and
+  all the dark-only recolor overrides (.srow/.chip/.status/season bars/
+  sdot) are deleted since the defaults are correct on light. Identity now
+  comes from structure: the module grid, bare Saira numerals
+  (--brand-ink/--bad/--amber/--ok), and the gold slash headers.
+- The black Tickets pane was a CLASS COLLISION, not a leak: `.board` has
+  been the Tickets kanban's class since the tab existed, and round four
+  stole it, so the dashboard's dark grid rules repainted the kanban. The
+  dashboard container is now **`.dboard`**; the kanban keeps `.board`
+  untouched. Do not reuse `.board` for anything new.
+- Everything else from round four stands unchanged: modules, alert strip,
+  config/season, feed, facts, launchpad, fixtures, and the round-four
+  decisions list below except its constant-dark item.
+
+Suites after the change: test_app 397, designsystem 23, appui full sweep
+1242, all green. Mockup regenerated in place (same 20260808 filename),
+READMEs and captions updated. Pushed to main and deployed.
+
+Previous status follows.
+
 Last updated: 2026-08-07 (later)
 Status: **Dashboard round four: mission control (2026-08-07).** Branch
 `mold-drawing-revamp`, nine commits on top of the Tickets revamp. All suites

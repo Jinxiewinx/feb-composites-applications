@@ -1990,11 +1990,12 @@ await t("the alert strip: team-wide numerals lead the board, money is its own mo
   DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
   setTab("dashboard");
   const html = main.innerHTML;
-  assert(html.includes('class="board"'), "the page is the dark board");
+  assert(html.includes('class="dboard"'), "the page is the board grid — dboard, since .board is the Tickets kanban");
   assert(html.includes('class="b-alerts"'), "the alert strip leads");
   assert(!html.includes("heroband") && !html.includes("glance-grid"), "rounds one to three are gone");
-  // The theme-proof audit samples .card/.stat-tile/.bignum for light-vs-dark
-  // difference; a constant-dark page must never contain them.
+  // The board keeps its own class vocabulary out of the shared selectors the
+  // theme-proof audit samples (.card/.stat-tile/.bignum), so a future surface
+  // change on this page never re-arms that audit by accident.
   assert(!/class="[^"]*\bcard\b/.test(html) && !html.includes("stat-tile") && !html.includes("bignum"),
     "no sampled surface classes inside the board: " + (html.match(/class="[^"]*(card|stat-tile|bignum)[^"]*"/) || [""])[0]);
   // LATE PART is Nick's, not Simon's — the strip counts the TEAM's lateness,
@@ -2062,7 +2063,7 @@ await t("fact of the day: deterministic per day, lore weighted double, offset ro
   const kept = window.SEASON;
   window.SEASON = { compName: "FSAE Michigan", compDate: today() };
   const rd = renderDashboard();
-  assert(rd.includes("board raceday") && rd.includes("race day"), "competition day flips the easter egg");
+  assert(rd.includes("dboard raceday") && rd.includes("race day"), "competition day flips the easter egg");
   window.SEASON = kept;
 });
 await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf is real links", () => {
