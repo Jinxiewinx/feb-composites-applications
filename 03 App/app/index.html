@@ -2250,6 +2250,14 @@
     #main .tl-cell { display: flex !important; border: none; }
     #main .tl-cell.empty { display: none !important; }
     #main .tlgrid { overflow: visible; box-shadow: none; }
+    /* ...and a chip, which is a <button> for the tap-target audit's sake but
+       on paper is just the record's name. Without this the status board's
+       every work order, blocker and deadline vanished from the printout. */
+    #main .chip { display: inline !important; border: none; background: none; padding: 0; font: inherit; color: inherit; }
+    /* The status board prints one section under the next; side-by-side cards
+       waste a page's width on paper. */
+    .rgrid { display: block; }
+    .rgrid .card { margin-bottom: 8px; break-inside: avoid; }
     /* A canvas is not a dependable printed artifact, and the exploded SVG
        already is one — it's what gets initialled for CS-003 §7.2. */
     .meshview { display: none !important; }
