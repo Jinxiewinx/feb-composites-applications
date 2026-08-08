@@ -9,6 +9,71 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-07 (later)
+Status: **Dashboard round four: mission control (2026-08-07).** Branch
+`mold-drawing-revamp`, nine commits on top of the Tickets revamp. All suites
+green: test_app 397, designsystem 23, detailui 816, appui 1242, route 38,
+safearea 30.
+
+Simon asked for a dashboard that is visually different from the rest of the
+app (within the design language), visually full, fun, and useful to a lead.
+Interrogated with options, he chose: mission-control style on a
+CONSTANT-DARK board (both themes), alerts lead (late/blocked/unassigned),
+per-person "your work" (satisfied by the existing auth + isMine, no picker),
+fun = fact of the day (team lore weighted) + countdowns/streaks + garnish,
+launchpad = app tabs + bundled docs + pinned shelf, phone = today-first.
+
+What landed, in commit order: `--board-*` tokens in BOTH token homes plus
+the .board/.bmod/.bnum class family (dark navy in the sidebar's register:
+carbon crosshatch, gold slash, Saira numerals; gold is ink/hairline only,
+neither brand token survives as a large fill); config/season plumbing
+(window.SEASON, loadSeason() fetch-once via fb.getConfig, rules already
+lead-writable, fixtures plant a relative-dated season); the board shell
+(flat grid children, grid-template-areas re-declared per breakpoint, the
+alert strip team-wide with a green all-clear cell, money as its own module
+with needsApproval surfaced, .card/.stat-tile/.bignum purged from the page
+so the theme-proof sampler never sees a constant color, with a test that
+greps for them); countdown & streaks + the lead-only editSeason modal
+(denominator-free counters per the round-two rule; "days since a missed
+deadline" uses only due dates and open/closed); the launchpad (woLate set
+AFTER setTab because setTab wipes wo* flags; invFlag survives and leads);
+the activity feed (dashFeedEvents merges updatedAt touches, comments, and
+buy-offs, one event per record per day, retro WOs excluded, watched-unread
+pinned with the gold dot); facts.js (66 facts, 47 mined from SN5 docs, lore
+doubled by appending after the list so duplicates are never adjacent,
+deterministic UTC-day index, race-day easter egg); fixtures gained two LIVE
+work orders (one blocked, one mid-cure) and pinned shelf links.
+
+Decisions worth keeping:
+- **The board contains none of .card/.stat-tile/.bignum, ever.** appui's
+  theme-proof sampler inspects those; one stray re-arms it against a
+  constant-dark surface and fails 8 ways. A test_app assertion greps the
+  rendered page for them.
+- **Board classes are NOT registered in 06/components.css or
+  conventions.md**, following the precedent of every dashboard class since
+  round one (.heroband lived only in app CSS too). Tokens ARE in both homes;
+  the designsystem suite enforces token parity, light+dark+print.
+- **Strip numbers are team-wide; the list below keeps the my/team toggle.**
+  The strip is the lead's read, the list is the member's.
+- **loadManifest() failure now leaves the manifest unloaded and retryable**
+  instead of caching an empty shelf; the dashboard triggers the load too.
+- FACTS/FACT_POOL are `var` because the node harness reaches script globals
+  through globalThis, which const/let never join.
+
+Traps hit: the live fixtures flushed three latent audit failures on OTHER
+tabs (.wflag at 10px, .pmini 35px under a finger, Documents' "Open" anchor
+collapsed to 14px around its full-size button) — fixed in the app, commit
+93f3dde. The shop-status empty state also says "All clear", so strip tests
+pin `<span class="bnum ok">`, not the words.
+
+Still open, unchanged: the sanctioned list at the 2026-08-02 section
+(lightbox thumb-reach/zoom, trash contrast, drawer close control); the
+amber collision (in-work on Parts vs on-hold on Tickets). The board's
+right-column has some air at 1440 until real data fills the feed; revisit
+only if Simon calls it out.
+
+Previous status follows.
+
 Last updated: 2026-08-07
 Status: **Tickets revamped: master-detail, genealogy, sub-tickets as real
 children (2026-08-07).** Branch `mold-drawing-revamp`, six commits. All suites

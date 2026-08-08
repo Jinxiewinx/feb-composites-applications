@@ -22,26 +22,41 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
-![Dashboard: the glance board](../design/dashboard-mockup-20260804.png)
+![Dashboard: the mission-control board](../design/dashboard-mockup-20260808.png)
 
-The landing page is a glance board: a hero band holding the page's only
-large numerals (assigned to you, blocked, late, and the unreimbursed money
-at its right end) over five compact modules, so a projected 1440x900 shows
-the whole team state with no scrolling. Read-only; every element links into
-the tab it came from.
+The landing page is the board: the one deliberately different page in the
+app, constant-dark in both themes and built from the sidebar's own register
+(navy, carbon crosshatch, gold speed slash, Saira numerals) via the
+`--board-*` token family. Read-only; every element links into the tab it
+came from; on a phone the grid re-declares its areas into a today-first
+stack with no second render path.
 
-The modules: **Up next** is one grouped deadline list, an item in exactly
-one bucket, with a part and its work order merged into one row (the SN5
-archive proved the double-counting overstated "behind" by about 40%); Late
-and This week render open, and the quieter buckets fold to one summary line
-each. **Season** is the stage bars for all parts plus the molds pipeline,
-counts printed as words for colourblind safety. **This week at RFS** lists
-only the booked stations, with the free count in the header. **Shop
-status** merges what is blocked, what is curing (a clock time, never a
-countdown), and the Inventory tab's warnings (expired lots, chemical rule
-violations, running low, unhoused) into one severity-dotted list; a clean
-shop reads a single "All clear" line rather than an absent box. **New
-activity** shows the tickets you watch that changed, capped at four.
+The **alert strip** leads with the lead's one-second read, team-wide
+regardless of the list toggle below: late, blocked, unassigned (open work
+with no owner), curing with the soonest ready-at clock, and T-minus to the
+competition. All quiet renders a green all-clear cell. The modules under
+it: **the work list** is one grouped deadline list, an item in exactly one
+bucket, with a part and its work order merged into one row (the SN5 archive
+proved the double-counting overstated "behind" by about 40%); Late and This
+week render open, the quieter buckets fold. **Shop status** merges what is
+blocked, what is curing (a clock time, never a countdown), and the
+Inventory warnings into one severity-dotted list; a clean shop reads a
+single "All clear" line. **Season** is the stage bars plus the molds
+pipeline, counts printed as words for colourblind safety. **This week at
+RFS** lists only the booked stations. **Activity** is a cross-app feed
+built from the `updatedAt`/`updatedBy` every record already carried plus
+comments and step buy-offs, one event per record per day, with watched
+tickets that changed pinned on top. **Countdown** holds T-minus, the next
+milestone, and three all-season counters (days since a missed deadline,
+layups banked, sign-offs); a lead sets the season (name, date, milestones)
+in one modal writing `config/season`, readable by the roster and writable
+by leads only. **Money** is the unreimbursed sum plus the $50 approval
+rule. **Launchpad** is filtered jumps (my tickets, late WOs, the reorder
+list, the week plan), the datasheet and standards shelves with live counts,
+and the pinned Google links. **Shop knowledge** rotates a fact a day, most
+of them mined from the team's own SN5 documentation, deterministic so the
+whole team sees the same one; on the configured competition date the board
+wears gold and the module tells you to go run the car.
 
 Empty states shrink the page instead of padding it, and nothing that
 renders empty on the team's own archive sits above the fold.
