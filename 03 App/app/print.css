@@ -30,8 +30,21 @@
 }
 .wsheet * { box-sizing: border-box; }
 
-/* Page shell. On screen this draws a Letter page; in print @page owns the
-   margins, so the padding and page furniture collapse (see index.html). */
+/* Pagination spacers for a FLOWING sheet (the traveler spans two physical
+   pages as one element). @page prints with margin 0 so the browser has no
+   band to draw its URL/date chrome into; a table's header and footer groups
+   repeat on every page it spans, so these spacer rows are the vertical page
+   margins on every page. Zero on screen: the .ws-page padding draws the
+   preview margins there. */
+.pgflow { width: 100%; border-collapse: collapse; }
+.pgflow > thead > tr > td, .pgflow > tfoot > tr > td { height: 0; padding: 0; }
+.pgflow > tbody > tr > td { padding: 0; vertical-align: top; }
+@media print {
+  .pgflow > thead > tr > td, .pgflow > tfoot > tr > td { height: 0.45in; }
+}
+
+/* Page shell. On screen this draws a Letter page; in print the element's own
+   padding is the page margin (@page prints at margin 0 — see index.html). */
 .ws-page {
   width: 8.5in;
   min-height: 11in;

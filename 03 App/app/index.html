@@ -2198,7 +2198,13 @@
       --canvas: #fff; --card: #fff; --surface: #fff; --surface-2: #fff; --fill: #fff; --hover: #fff;
       --line: #000; --border-2: #000; --brand-ink: #003262;
     }
-    @page { size: letter; margin: 0.45in; }
+    /* margin: 0, and the 0.45in lives as PADDING inside the printed elements
+       instead. The browser draws its own header and footer (the site URL and
+       the date) into the @page margin band; with no band there is no chrome,
+       and the paper carries only the sheet. The effective content box stays
+       7.6in x 10.1in, which PAGE_IN (print.js) and the drawing sheet
+       constants (drawings.js) are derived from — change one, change all. */
+    @page { size: letter; margin: 0; }
     /* The token block above has just re-pointed these for paper; read them,
        so a change to the print palette lands in one place rather than four. */
     body { background: var(--surface); }
@@ -2212,16 +2218,25 @@
     #printroot .no-print { display: none !important; }
     /* zoom:1 undoes the fit-to-screen shrink print.css applies while previewing
        on a phone. Without it the sheet prints at whatever fraction the screen
-       needed — a Letter traveler landing at half size in the corner of the page. */
-    #printroot .ws-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none !important; zoom: 1 !important; }
+       needed — a Letter traveler landing at half size in the corner of the page.
+       Horizontal padding stays (it used to collapse to 0 here): with @page
+       margin 0 the element's own padding IS the side margin now. Vertical
+       margins come from table.pgflow's repeating spacer rows instead,
+       because padding on a flowing element exists only on its first and
+       last page, and the traveler flows across two. */
+    #printroot .ws-page { width: auto; min-height: 0; padding: 0 0.45in; margin: 0; box-shadow: none !important; zoom: 1 !important; }
     /* A drawing sheet DOES want to fill its page: the title block floats to the
        foot with margin-top:auto, and with min-height:0 there is no foot to float
-       to, so it would sit halfway up under the drawing. Just under the 10.1in
-       @page content height, so rounding can't spill one sheet onto two. */
-    #printroot .dwg-page { min-height: 10.02in; }
+       to, so it would sit halfway up under the drawing. 10.92in border-box =
+       the old 10.02in content floor + 0.9in of padding, just under the 11in
+       page so rounding can't spill one sheet onto two. Full padding is fine
+       HERE, unlike the traveler: a drawing sheet is one element per physical
+       page, so its padding exists on every page it prints. */
+    #printroot .dwg-page { padding: 0.45in; min-height: 10.92in; }
     #printroot.gray .ws-page { filter: none; }   /* proof toggle is a screen aid only */
-    /* Repeats the identifying footer on every physical page. */
-    #printroot .ws-foot { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); }
+    /* Repeats the identifying footer on every physical page — inside the
+       padded band, since with @page margin 0 the paper edge is at 0. */
+    #printroot .ws-foot { position: fixed; bottom: 0.45in; left: 0.45in; right: 0.45in; background: var(--surface); }
 
     /* Fallback path: other tabs, unchanged. */
     nav.sidebar, header.topbar, .filters, .toolbar, button, .no-print, .rte-toolbar { display: none !important; }
@@ -2236,7 +2251,11 @@
        already is one — it's what gets initialled for CS-003 §7.2. */
     .meshview { display: none !important; }
     body:not(.sheet) #app { display: block; } .content { display: block; }
-    main { max-width: none; padding: 0; }
+    /* 0.45in, not 0: with @page margin 0 this padding is the only thing
+       keeping a fallback-path tab (the Reports board, Documents) off the
+       paper edge. Sheet-path prints hide #app entirely, so this never adds
+       to a traveler's margins. */
+    main { max-width: none; padding: 0.45in; }
     /* Paper wants the record, not the navigation: print the selected part (or
        the season overview when none is selected), never the index beside it. */
     .mdsplit, .tksplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }

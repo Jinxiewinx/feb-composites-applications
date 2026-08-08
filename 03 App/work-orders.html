@@ -68,10 +68,12 @@
   .sig .line { display: inline-block; width: 260px; border-bottom: 1px solid #000; margin: 0 30px 4px 0; }
   textarea { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 5px; padding: 5px; min-height: 40px; }
   @media print {
-    @page { size: letter; margin: 0.55in; }
+    /* margin 0 keeps the browser's URL/date header-footer off the paper;
+       the 0.55in moves into main's padding so nothing prints edge-to-edge. */
+    @page { size: letter; margin: 0; }
     header.app, .filters, .toolbar, button, .no-print { display: none !important; }
     body { background: #fff; font-size: 11.5px; }
-    main { max-width: none; padding: 0; }
+    main { max-width: none; padding: 0.55in; }
     .card { border: 1px solid #000; border-radius: 0; break-inside: auto; margin-bottom: 8px; padding: 10px 14px; }
     .card h2 { break-after: avoid; }
     .card h3 { break-after: avoid; margin-top: 12px; }

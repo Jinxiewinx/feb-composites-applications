@@ -180,7 +180,14 @@ function woSheetHtml(wo, opts) {
   const evRows = (blank ? [] : ev).map(t => `<tr>
       <td class="datec ${pv(t.date) ? "" : "empty"}">${esc(pv(t.date))}</td><td>${esc(strip(pv(t.note)))}</td></tr>`).join("");
 
-  return `<div class="wsheet ${L.compact ? "compact" : ""}"><div class="ws-page">
+  /* table.pgflow: the traveler is ONE element flowing across two physical
+     pages, and with @page margin 0 (no band for the browser's URL/date
+     chrome) a flowing element has no top margin on its continuation page.
+     A table's header and footer groups repeat on every page the table spans,
+     so 0.45in spacer rows in thead/tfoot ARE the vertical page margins, on
+     page 2 as well as page 1. Print-only; on screen they are zero-height and
+     the .ws-page padding draws the preview margins as before. */
+  return `<div class="wsheet ${L.compact ? "compact" : ""}"><div class="ws-page"><table class="pgflow"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td>
   <div class="ws-head">
     <div class="brand">FEB COMPOSITES <span class="sub">SN6</span></div>
     ${stampTxt ? `<div class="ws-stamp">${esc(stampTxt)}</div>` : ""}
@@ -269,6 +276,7 @@ function woSheetHtml(wo, opts) {
     </div>
   </div>
 
+  </td></tr></tbody></table>
   <div class="ws-foot">
     <span>${esc(blank ? "Blank traveler" : pv(wo.id))}${!blank && pv(wo.revision) ? " · Rev " + esc(pv(wo.revision)) : ""}</span>
     <span>${esc(pv(wo.partName))}</span>
@@ -384,10 +392,14 @@ function sheetFileHtml(bodyHtml, css, title) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title || "FEB Composites")}</title>
 <style>
-@page { size: letter; margin: 0.45in; }
+@page { size: letter; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
 .ws-page, .dwg-page { margin: 0 auto 14px; }
-@media print { .ws-page, .dwg-page { width: auto; min-height: 0; padding: 0; margin: 0; box-shadow: none; } }
+/* With @page margin 0 (no band for the browser's URL/date chrome) the
+   sheet's own padding is the page margin: side padding on the flowing
+   traveler (its vertical margins repeat via table.pgflow's spacer rows),
+   full padding on a drawing sheet, which is one element per page. */
+@media print { .ws-page, .dwg-page { width: auto; min-height: 0; padding: 0 0.45in; margin: 0; box-shadow: none; } .dwg-page { padding: 0.45in; min-height: 10.92in; } }
 ${css || ""}
 </style></head>
 <body>${clean}</body></html>`;
