@@ -153,7 +153,7 @@ function docLinkRow(d, opts) {
       <span class="di">${icon(k.icon, 18)}</span>
       <span class="dl-t">${esc(d.title || d.url)}${d.note ? `<span class="muted tny"> · ${esc(d.note)}</span>` : ""}</span>
       <span class="dsz">${esc(k.short)}
-        <a href="${esc(d.openUrl || d.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><button class="sm">Open</button></a>${rm}
+        <a class="btnwrap" href="${esc(d.openUrl || d.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><button class="sm">Open</button></a>${rm}
         ${canPreview ? `<span class="dl-cv" aria-hidden="true">${icon(open ? "chevronDown" : "chevronRight", 14)}</span>` : ""}
       </span>
     </div>

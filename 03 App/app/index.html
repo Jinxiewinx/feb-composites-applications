@@ -152,6 +152,11 @@
   /* No min-height override — the @media (pointer: coarse) block below still has
      to be able to grow these to a 40px tap target on a tablet at the bench. */
   .sm { padding: 4px 9px; font-size: 12.5px; }
+  /* An anchor wrapping a button collapses to its text's inline box (14px on
+     the Documents shelf's Open link) while the button inside is full size, so
+     the tap-target audit rightly flags the anchor. Flex makes the wrapper the
+     button's own size. */
+  .btnwrap { display: inline-flex; }
   a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   :focus:not(:focus-visible) { outline: none; }
@@ -1239,7 +1244,9 @@
   .wprog b { font-family: var(--font-display); color: var(--ink); }
   /* At most one of these per row, and never together: blocked is something to
      go and fix, curing is something to wait for. */
-  .wflag { padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  /* 11px, not 10: the type audit's floor. Found when fixtures first carried a
+     live curing run and the badge finally rendered under it. */
+  .wflag { padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
   .wflag.blocked { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad); }
   .wflag.curing { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--amber); }
   /* A group header that names a part is a way INTO that part, not just a label. */
@@ -2161,6 +2168,10 @@
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
     button, .icon-btn, .hamburger { min-height: 40px; }
+    /* A rail row is a div[onclick]. A short work-order name over one meta line
+       measured 35px at 393 in the phone mini-rail; found when fixtures first
+       carried a LIVE run. */
+    .pitem, .pmini { min-height: 44px; }
     /* A chip is a reference AND the way you get to it, and it was 22px — half a
        fingertip, and on the Dashboard the only route into a record. Padding
        rather than min-height: a chip sits inline in a sentence and in a table

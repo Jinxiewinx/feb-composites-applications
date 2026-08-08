@@ -357,7 +357,7 @@ function dashCount(items, open) {
   const lateNow = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
   let missRow;
   if (lateNow) {
-    missRow = { n: 0, cls: "bad", label: `days clean — ${lateNow} late right now` };
+    missRow = { n: 0, cls: "bad", label: `days clean, ${lateNow} late right now` };
   } else {
     const pastDue = items.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; })
       .map(i => daysUntil(i.date)).sort((a, b) => b - a);

@@ -50,8 +50,8 @@ const ONLY = arg("only", "").split(",").map(s => s.trim()).filter(Boolean);
 const SHOTS = [
   { id: "dashboard", kind: "app", badge: 1, vh: 1000,
     js: `setTab("dashboard");`,
-    title: "Dashboard · the week, read-only",
-    note: "The glance board: a hero band (assigned to you, blocked, late, and the money) over five modules — the deadline list with quiet buckets folded, the season bars for parts and molds, the booked stations, shop status with severity dots, and new activity. One projected screen, no scrolling, every element a link." },
+    title: "Dashboard · mission control",
+    note: "The board: a constant-dark page in the sidebar's register, both themes. The alert strip leads with the lead's one-second read (late, blocked, unassigned, curing, T-minus to competition), then the bucketed work list, shop status, the season gauges, this week's stations, a cross-app activity feed, countdown and streaks, money with the $50 approval rule, a launchpad of filtered jumps and pinned docs, and the fact of the day from SN5 shop lore. Every element still a link." },
   { id: "workorders", kind: "app", badge: 2, vh: 1000,
     js: `setTab("workorders");`,
     title: "Work orders · every run, under the part it builds",
