@@ -250,7 +250,8 @@ function renderDashboard() {
   const late = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
   const unassigned = open.filter(i => !i.who);
 
-  return `<div class="board">
+  const raceday = window.SEASON && SEASON.compDate === today();
+  return `<div class="board${raceday ? " raceday" : ""}">
     ${dashAlerts(late.length, blocked.length, unassigned.length, curing)}
     <div class="bmod b-work" id="dash-list">
       <div class="bmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>
@@ -268,6 +269,29 @@ function renderDashboard() {
     ${dashCount(items, open)}
     ${dashBudget()}
     ${dashLaunch()}
+    ${dashFact()}
+  </div>`;
+}
+
+/* ---------- fact of the day ----------
+   factOfTheDay (facts.js) is deterministic by UTC day, so the whole team
+   sees the same fact all day with no storage anywhere; "another one" offsets
+   the index for this session only. On the configured competition date the
+   module stops being a fact and says the only thing that matters. */
+function dashFact() {
+  if (typeof factOfTheDay !== "function") return "";
+  if (window.SEASON && SEASON.compDate === today()) {
+    return `<div class="bmod b-fact">
+      <div class="bmod-hd"><span>Race day</span></div>
+      <p class="fq">It's race day. Everything on this board already happened. Go run the car.</p>
+    </div>`;
+  }
+  const f = factOfTheDay(view.factN);
+  if (!f) return "";
+  return `<div class="bmod b-fact">
+    <div class="bmod-hd"><span>Shop knowledge</span><span class="gh-n">${f.src === "lore" ? "team lore" : "the wider world"}</span></div>
+    <p class="fq">${esc(f.t)}</p>
+    <div class="fmeta"><button class="dg-more" onclick="view={...view,factN:(view.factN||0)+1};render()">Another one</button></div>
   </div>`;
 }
 

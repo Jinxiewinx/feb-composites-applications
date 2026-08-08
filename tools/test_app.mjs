@@ -96,7 +96,7 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "labels.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "labels.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
@@ -2046,6 +2046,24 @@ await t("countdown & streaks: T-minus from config, honest all-season counters, l
   assert(main.innerHTML.includes("No competition date set") && main.innerHTML.includes("Set the season"),
     "missing config renders the setup path for a lead");
   window.SEASON = { compName: "FSAE Michigan", compDate: iso(10) };
+});
+await t("fact of the day: deterministic per day, lore weighted double, offset rotates", () => {
+  assert(FACTS.length > 60, "the pool is real: " + FACTS.length);
+  const lore = FACTS.filter(f => f.src === "lore").length;
+  assert(lore > 30, "team lore dominates: " + lore);
+  assert(FACT_POOL.length === FACTS.length + lore, "lore entries counted twice in the pool");
+  assert(FACTS.every(f => !f.t.includes("—")), "no em dashes, per the writing rule");
+  const a = factOfTheDay(0), b = factOfTheDay(0);
+  assert(a && a.t === b.t, "same fact all day for everyone, no storage");
+  assert(factOfTheDay(1).t !== a.t, "'another one' offsets the index");
+  const html = renderDashboard();
+  assert(html.includes('class="bmod b-fact"') && html.includes(esc(a.t).slice(0, 40)), "the module shows today's fact");
+  // Race day: the module stops being a fact and the board wears gold.
+  const kept = window.SEASON;
+  window.SEASON = { compName: "FSAE Michigan", compDate: today() };
+  const rd = renderDashboard();
+  assert(rd.includes("board raceday") && rd.includes("race day"), "competition day flips the easter egg");
+  window.SEASON = kept;
 });
 await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf is real links", () => {
   DB.documents = [{ id: "DOC-1", title: "Master tracker", pinned: true, url: "https://docs.google.com/x" }];

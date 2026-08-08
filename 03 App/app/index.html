@@ -1774,6 +1774,8 @@
   .b-tile .tl { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .b-tile .tm { font-size: 11px; color: var(--board-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* Race day: the one day the board wears gold. */
+  .board.raceday { border-top: 3px solid var(--gold); }
   /* Fact of the day: prose, one size up, with a gold open-quote garnish. */
   .b-fact .fq { position: relative; margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
   .b-fact .fq::before { content: "\201C"; position: absolute; left: 0; top: -4px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
@@ -2375,6 +2377,7 @@
 <script src="timeline.js"></script>
 <script src="weeklyplan.js"></script>
 <script src="budget.js"></script>
+<script src="facts.js"></script>
 <script src="dashboard.js"></script>
 <script src="slicer.js"></script>
 <script src="stlio.js"></script>
