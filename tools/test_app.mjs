@@ -2047,6 +2047,19 @@ await t("countdown & streaks: T-minus from config, honest all-season counters, l
     "missing config renders the setup path for a lead");
   window.SEASON = { compName: "FSAE Michigan", compDate: iso(10) };
 });
+await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf is real links", () => {
+  DB.documents = [{ id: "DOC-1", title: "Master tracker", pinned: true, url: "https://docs.google.com/x" }];
+  setTab("dashboard");
+  const html = main.innerHTML;
+  assert(html.includes('class="bmod b-launch"'), "the module renders");
+  // setTab() wipes woLate/woMine/woDone, so the flag must be set AFTER the
+  // switch; invFlag is not wiped, so the inventory jump may lead with it.
+  assert(html.includes("setTab('workorders');view.woLate=true;render()"), "late-WO jump survives setTab's flag clearing");
+  assert(html.includes("view.invFlag='reorder';setTab('inventory')"), "reorder jump uses the surviving flag");
+  assert(html.includes("25 PDFs") || html.includes("TDS + SDS"), "datasheet shelf carries its count once the manifest loads");
+  assert(/<a class="b-tile" href="https:\/\/docs\.google\.com\/x"/.test(html), "a pinned Google doc is an anchor, not a button");
+  DB.documents = [];
+});
 /* One row per physical thing. A part and its work order are the same object
    seen twice, and the page counted both. On the SN5 archive that inflated
    "behind schedule" by ~40%, in the largest type on the page. */

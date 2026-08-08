@@ -16,7 +16,13 @@ function loadManifest() {
   fetch("docs/manifest.json")
     .then(r => r.json())
     .then(m => { DOCS_MANIFEST = Array.isArray(m) ? m : []; render(); })
-    .catch(() => { DOCS_MANIFEST = []; render(); });
+    /* Stay unloaded rather than caching an empty shelf: the dashboard's
+       launchpad now triggers this load too, possibly offline at the field
+       station, and a failed first fetch must not lock the Documents tab (and
+       the shelf counts) empty for the whole session. Callers only invoke
+       this while DOCS_MANIFEST is null, so the retry is one fetch per
+       render, driven by the user. */
+    .catch(() => { DOCS_LOADING = false; });
 }
 
 function openDocument(src) {

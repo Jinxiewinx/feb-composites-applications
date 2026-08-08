@@ -267,6 +267,38 @@ function renderDashboard() {
     ${watched.length ? dashActivity(watched) : ""}
     ${dashCount(items, open)}
     ${dashBudget()}
+    ${dashLaunch()}
+  </div>`;
+}
+
+/* ---------- launchpad ----------
+   One tile per place people actually go: filtered jumps into the tabs (the
+   flags each tab already owns — setTab clears wo* flags, so those are set
+   AFTER the switch), the bundled document shelves with real counts from the
+   manifest, and whatever Google links the team pinned in Documents. External
+   links are <a> so a long-press/middle-click works like the web. */
+function dashLaunch() {
+  const tile = (go, label, meta) => `<button class="b-tile" onclick="${go}">
+    <span class="tl">${label}</span>${meta ? `<span class="tm">${meta}</span>` : ""}</button>`;
+  const ext = (url, label, meta) => `<a class="b-tile" href="${esc(url)}" target="_blank" rel="noopener">
+    <span class="tl">${esc(label)}</span>${meta ? `<span class="tm">${esc(meta)}</span>` : ""}</a>`;
+  if (typeof loadManifest === "function" && typeof DOCS_MANIFEST !== "undefined" && DOCS_MANIFEST == null) loadManifest();
+  const man = (typeof DOCS_MANIFEST !== "undefined" && DOCS_MANIFEST) || null;
+  const nCat = c => man ? `${man.filter(d => d.category === c).length} PDFs` : "";
+  const shelf = (DB.documents || []).filter(d => d.pinned && d.url).slice(0, 4);
+  return `<div class="bmod b-launch">
+    <div class="bmod-hd"><span>Launchpad</span></div>
+    <div class="lgrid">
+      ${tile("setTab('projects');view.tkMine=true;render()", "My tickets", "assigned to you")}
+      ${tile("setTab('workorders');view.woLate=true;render()", "Late WOs", "past due only")}
+      ${tile("view.invFlag='reorder';setTab('inventory')", "Reorder list", "low + expired")}
+      ${tile("view.schedView='week';setTab('timeline')", "Week plan", "goals by person")}
+      ${tile("setTab('reports')", "Reports", "counts + CSV")}
+      ${tile("setTab('people')", "People", "who is on what")}
+      ${tile("setTab('documents')", "Datasheets", nCat("Datasheets") || "TDS + SDS")}
+      ${tile("setTab('documents')", "Standards", nCat("Standards") || "the CS series")}
+      ${shelf.map(d => ext(d.url, d.title || d.id, "pinned · opens in Google")).join("")}
+    </div>
   </div>`;
 }
 
