@@ -1560,62 +1560,18 @@
   .carcard-seats { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .seat-open { width: 26px; height: 26px; border-radius: 50%; border: 1.5px dashed var(--border-2); color: var(--faint); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
 
-  /* dashboard */
-  .dashgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  /* Shared numeral tiles (budget, molds, parts, timeline, workorders). The
+     dashboard no longer uses these: the board has its own .bnum scale. */
   .bignum { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--brand-ink); letter-spacing: .01em; }
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat-tile { background: var(--surface-2); border-radius: var(--r-md); padding: 12px 14px; }
   .stat-tile .bignum { font-size: 22px; }
   .stat-tile .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-top: 2px; }
-  /* ---- dashboard ----
-     The old page was seven cards of equal weight, three of which drew the same
-     table with different filters, and a stat row whose numerals were clamped to
-     22px on a 3%-contrast wash. Everything below is about hierarchy: two big
-     numbers, one list whose group counts ARE the headings, and the conditional
-     sections quiet until they have something to say. */
-
-  /* Tiles are buttons now, so the button chrome has to be undone; .card supplies
-     the surface. Padding is tighter than a normal card because the numeral is
-     doing the work. */
-  /* ---- the glance board (round three) ----
-     A hero band (the page's only large numerals) over a three-column module
-     grid, so a projected 1440x900 shows the whole team state with no scroll.
-     The left column (the list) gets the wider track; empty states shrink
-     modules rather than padding them. */
-  .heroband { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-  .heroband .hb-tile {
-    display: block; text-align: left; margin: 0; flex: 0 1 190px; min-width: 140px;
-    padding: 12px 16px; font: inherit; cursor: pointer;
-  }
-  .heroband .hb-tile:hover { border-color: var(--accent); background: var(--card); }
-  .heroband .bignum { display: block; line-height: 1.1; font-size: 32px; }
-  .heroband .bignum.bad { color: var(--bad); }
-  .heroband .stat-label { display: block; }
-  /* .heroband .hb-money outranks the base .dashmoney width:100%, which
-     otherwise wraps the money onto its own row. */
-  .heroband .hb-money { width: auto; margin-left: auto; align-self: center; border-top: none; flex: 0 1 auto; }
-  /* On a phone the three numbers share one row — three stacked 90px cards
-     spent the whole first screen saying three digits. */
-  @media (max-width: 700px) {
-    .heroband { gap: 8px; }
-    .heroband .hb-tile { flex: 1 1 0; min-width: 0; padding: 10px 12px; }
-    .heroband .bignum { font-size: 24px; }
-    .heroband .hb-money { flex: 1 1 100%; margin-left: 0; }
-  }
-
-  .glance-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
-  @media (min-width: 1101px) { .glance-grid { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); } }
-  @media (min-width: 701px) and (max-width: 1100px) {
-    .glance-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .glance-grid .gcol:first-child { grid-column: 1 / -1; }
-  }
-  .gcol { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-
-  /* One header treatment for every module, so the grid reads as rhythm: the
-     name, and the count right-aligned. */
-  .gmod-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
-  .gmod-hd > span:first-child { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-  .gmod-hd .gh-n { font-size: 11px; color: var(--faint); white-space: nowrap; }
+  /* ---- dashboard row plumbing ----
+     Rounds one to three of this page are design history now (see git); what
+     survives them is the stacked row, the bucket headings and the fold, all
+     reused by round four's board. The count badge in a module header. */
+  .gh-n { font-size: 11px; color: var(--faint); white-space: nowrap; }
   .gmod-foot { padding-top: 7px; margin-top: 4px; border-top: 1px solid var(--line); }
 
   /* The stacked row every module shares. One min-content (the longest word),
@@ -1627,39 +1583,19 @@
   .srow-meta { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .srow-meta .status { font-size: 11px; padding: 1px 8px; margin-right: 4px; vertical-align: middle; }
   /* Severity dots exist only in Shop status; only there do rows indent. */
-  .dashstatus .srow { padding-left: 16px; }
+  .b-shop .srow { padding-left: 16px; }
   .sdot { position: absolute; left: 0; top: 12px; width: 8px; height: 8px; border-radius: 50%; }
   .sdot.bad { background: var(--bad); }
   .sdot.warn { background: var(--amber); }
   .sdot.ok { background: var(--ok); }
-  .dashstatus { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-md); padding: 13px 15px; box-shadow: none; }
   .ds-molds { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
 
-  /* The group heading IS the count. .bignum at its published 32px — the size
-     the design system ships and the page never used. */
+  /* The group heading IS the count: the biggest number in the work column,
+     because it is the one attached to the thing it counts. */
   .dgrouphd { display: flex; align-items: baseline; gap: 10px; margin: 12px 0 4px; }
   .dgrouphd:first-child { margin-top: 4px; }
-  /* The count of a group is the biggest number in the main column, because it
-     is the one attached to the thing it counts. The tiles were 32 and these
-     were 28 — a step too small to read as a rank, so a tile showing 0 outranked
-     "6 LATE". 30 against the tiles' 22 is a real step. */
-  .dgrouphd .bignum { font-size: 30px; line-height: 1; }
-  .dgrouphd .bignum.bad { color: var(--bad); }
   .dgrouphd .dg-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-  /* The heading that owns the list outranks the tiles above it. */
-  .dashlist h2 { margin-bottom: 2px; font-size: 24px; }
-  /* De-chromed. Each group emitted a full table.list — border, shadow, radius,
-     its own background — nested inside the one white card, so the card held
-     five smaller cards. One list, five headings. */
-  .dashlist table.list { border: none; box-shadow: none; border-radius: 0; background: none; margin-bottom: 0; }
-  /* The row title is the only fill on the row. A .chip is tinted, and ten
-     tinted blocks stacked down the page outvoted the six red dates that are
-     the actual news — the eye landed on the blue column. Inside the list the
-     chip is a link; the tint comes back on hover, where it means something. */
-  .dashlist .chip { background: none; border-color: transparent; padding-left: 0; font-size: 13.5px; }
-  .dashlist .chip:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
-  /* Kept in the DOM for labelListTables() and for screen readers; the first
-     group is the only one that needs to SHOW the column names. */
+  /* Kept in the DOM for labelListTables() and for screen readers. */
   .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
   /* A full-width row, so it clears a thumb without a bespoke control. */
   .dg-more {
@@ -1680,91 +1616,9 @@
   .dg-fold[open] > summary .dgrouphd::after { content: "▾"; }
   .dg-fold > summary:hover .dg-label { color: var(--ink); }
 
-  /* ---- one surface per block ----
-     Every block used to be the same white card with the same 12px uppercase
-     h3, so the page read as one texture and nothing was more important than
-     anything else. Five treatments instead, all from existing tokens: a raised
-     card for the numbers, a bare alert for what is blocked, the one big white
-     card for the list, quiet tinted panels in the rail, and a hairline for
-     money. Different enough to tell apart at a glance, close enough to still
-     be one family. */
-
-  /* BLOCKED — no card. It interrupts the column rather than sitting in it,
-     because a red bar inside a white box reads as a section about problems
-     rather than as a problem. */
-
-  /* THE RAIL — smaller heading, quieter surface, tighter rhythm than the main
-     column. These are readouts, not workspaces. */
-  /* Modules are readouts, not workspaces: one size down from the list. */
-  .gcol .card, .gcol .dashseason { font-size: 13px; }
-  .gcol .dg-more { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
-
-  /* THIS WEEK — a card, but flat: no shadow, a stronger border instead. It is
-     the one rail block that is a list of things, so it keeps card structure
-     while giving up card elevation. */
-  /* --surface and --card are the SAME value in dark (#141c28), and --shadow in
-     dark is barely visible on --canvas — so "raised card" and "flat card" were
-     the same surface there and only the border told them apart. The stronger
-     --border-2 is doing that work deliberately, in both themes. */
-  .dashweek { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-md); padding: 13px 15px; box-shadow: none; }
-  .dashweek .dg-more { margin-top: 10px; }
-
-  /* SEASON — an inset panel, not a card. Recessed rather than raised, so it
-     reads as a gauge set into the page rather than another thing to do.
-     --fill alone was invisible: it is within a few percent of --canvas, which
-     the rail sits on, so the block had no edge at all and the bars floated. The
-     hairline is what makes it a panel. */
-  .dashseason { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 13px 15px; box-shadow: inset 0 1px 2px rgba(10,22,40,.05); }
-  /* This block is a <section>, not a .card, so `.card h3` never reached it and
-     its heading fell through to the browser default — ~17px sentence-case
-     near-black, sitting directly beside "THIS WEEK AT RFS" at 12px uppercase
-     muted. Two adjacent rail blocks with unrelated heading treatments, and the
-     accidental one was the louder. */
-  /* The track has to differ from the panel it sits on, or a bar that does not
-     sum to 100% reads as truncated rather than partial. --fill would have been
-     the same value as this panel in both themes. */
-  .dashseason .sb-bar { background: var(--border-2); height: 14px; }
-  .dashseason .stagebreak { margin: 9px 0; }
-  .dashseason .stagebreak:last-of-type { margin-bottom: 0; }
-  .dashseason .sb-label { font-size: 11px; }
-  /* A text row, not a filled button. Inside a recessed panel a white button was
-     the loudest thing in the rail, for the least important action in it. */
-  .dashseason .ds-links { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--line); }
-  .dashseason .dg-more { display: inline-block; width: auto; background: none; border-color: transparent; padding: 8px 14px 0 0; margin-top: 0; border-radius: 0; }
-  .dashseason .dg-more:hover { background: none; border-color: transparent; color: var(--ink); }
-
-  /* CURING — the app's amber, because this is the same "waiting on something"
-     state the cure banner inside a work order already uses. */
-
-  /* NEW ACTIVITY — the gold rail, which is what gold means everywhere else in
-     this app: unread, yours, now. */
-  .dashwatched { border-left: 3px solid var(--gold); }
-
-  /* MONEY — a hairline and two words. The quietest thing on the page, and
-     deliberately the last. */
-  .dashmoney {
-    display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 12px 2px;
-    text-align: left; background: none; border: none; border-top: 1px solid var(--line);
-    border-radius: 0; font: inherit; cursor: pointer; color: var(--muted);
-  }
-  .dashmoney:hover { color: var(--ink); background: none; }
-  /* A hairline-only treatment only works when there is a block above for it to
-     be a hairline UNDER. Once the rail stacks it lands on bare canvas below the
-     last panel and reads as a page footer rather than a control, so below the
-     split it takes the same surface as its neighbours. */
-  @media (max-width: 1100px) {
-    .dashmoney {
-      background: var(--surface); border: 1px solid var(--line); border-top-color: var(--line);
-      border-radius: var(--r-md); padding: 12px 15px;
-    }
-    .dashmoney:hover { background: var(--hover); }
-  }
-  .dm-n { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--brand-ink); flex: none; }
-  .dm-l { font-size: 12px; }
   .curerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--line); }
   .curerow:first-of-type { border-top: none; }
   .cure-at { font-family: var(--font-display); font-weight: 700; color: var(--brand-ink); }
-  .dashwatched .gmod-hd .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
 
   /* Seven stations, two columns on a laptop. */
   /* Two columns, never four. At auto-fit a wide screen gave four narrow ones,
@@ -1866,6 +1720,25 @@
   .board .dg-more { background: var(--sb-hover); border-color: transparent; color: var(--board-muted); }
   .board .dg-more:hover { color: var(--board-ink); border-color: var(--board-line); }
   .board .gmod-foot { border-top-color: var(--board-line); }
+  .board .dg-more { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
+  .b-work .dg-more { margin-top: 12px; padding: 11px 14px; font-size: 13px; }
+  /* NEW ACTIVITY keeps its gold rail: gold still means unread, yours, now. */
+  .b-activity { border-left: 3px solid var(--gold); }
+  .b-activity .bmod-hd .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  /* SEASON keeps its gauge proportions, links as a quiet text row. */
+  .b-season .sb-bar { height: 14px; }
+  .b-season .stagebreak { margin: 9px 0; }
+  .b-season .stagebreak:last-of-type { margin-bottom: 0; }
+  .b-season .sb-label { font-size: 11px; }
+  .b-season .ds-links { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--board-line); }
+  .b-season .ds-links .dg-more { display: inline-block; width: auto; background: none; border-color: transparent; padding: 8px 14px 0 0; margin-top: 0; border-radius: 0; }
+  .b-season .ds-links .dg-more:hover { background: none; border-color: transparent; color: var(--board-ink); }
+  .board .ds-molds { border-top-color: var(--board-line); }
+  /* MONEY: the numeral is the module. */
+  .b-money { display: flex; align-items: baseline; gap: 9px; margin: 0; padding: 2px 0 4px; text-align: left;
+    background: none; border: none; border-radius: var(--radius); font: inherit; color: var(--board-ink); cursor: pointer; }
+  .b-money:hover { background: var(--sb-hover); }
+  .b-money .bnum { font-size: 30px; }
   /* Status pills keep their dot but drop the tinted paper surfaces, which
      are light pastels that glow on navy. */
   .board .status { background: var(--sb-hover); border-color: transparent; color: var(--board-ink); }
@@ -1997,7 +1870,6 @@
      Raising the floors here makes the extra width buy a column instead. Only
      at 1500+, because these floors would force a scrollbar on a laptop. */
   @media (min-width: 1500px) {
-    .dashgrid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
     .pgrid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
     .linkgrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
     .grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
@@ -2074,24 +1946,6 @@
     table.list td:first-child::before { display: none; }
     /* Empty trailing action cells shouldn't leave a dangling label. */
     table.list td:empty { display: none; }
-
-    /* A dashboard row stacked into a card is the title, then WHO on its own
-       line, then DEADLINE on its own line — about 125px each, so six items is
-       a screenful and the groups below it are a thousand pixels down. Who and
-       when share one line here, and lose their labels: a name and a red date
-       need no captions, and the two together are the whole row. */
-    .dashlist table.list td:nth-child(2)::before,
-    .dashlist table.list td:nth-child(3)::before,
-    /* Flex, not inline-block: two inline-blocks at 39% and 60% still wrapped,
-       because the whitespace between the two <td>s in the markup is a real
-       space and 39 + 60 + that is over 100. Flex has no such gap, and
-       margin-left:auto pins the date to the right edge whatever its length. */
-    .dashlist table.list tr {
-      display: flex; flex-wrap: wrap; align-items: baseline; padding: 9px 12px; margin-bottom: 8px;
-    }
-    .dashlist table.list td:first-child { flex: 0 0 100%; }
-    .dashlist table.list td:nth-child(2), .dashlist table.list td:nth-child(3),
-    .dashlist table.list td:nth-child(3) { margin-left: auto; }
 
     /* Narrow detail tables (BOM, quality, event log, roster) scroll sideways
        rather than blowing out their card. */
@@ -2290,7 +2144,6 @@
        rule that caps them at 210px — with one class this lost and the tiles
        stacked one per row, eating the top of the phone screen. */
     .dgrouphd { margin: 14px 0 4px; }
-    .dgrouphd .bignum { font-size: 24px; }
     /* Four at-a-glance tiles at a 70px floor still fit on one line at 393, so
        they each get about 84px — and "PURCHASES" at 11px uppercase is wider
        than that, so its last letter crossed the tile's border and "WORK

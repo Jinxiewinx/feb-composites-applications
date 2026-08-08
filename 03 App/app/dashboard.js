@@ -193,10 +193,13 @@ function dashSort(a, b) {
     || String(a.label).localeCompare(String(b.label));
 }
 /* The count is the biggest type in the group, and it is a real control: it
-   scrolls nothing, it is the heading. */
+   scrolls nothing, it is the heading. .bnum, not .bignum: the board carries
+   its own numeral class, and .bignum is one of the shared selectors the
+   theme-proof audit samples for light/dark difference, which a constant-dark
+   page must stay out of. */
 function groupHead(label, n, cls) {
   return `<div class="dgrouphd">
-    <span class="bignum ${cls || ""}">${n}</span>
+    <span class="bnum ${cls || ""}">${n}</span>
     <span class="dg-label">${esc(label)}</span>
   </div>`;
 }
@@ -220,13 +223,14 @@ function dashRow(it) {
 }
 
 /* ---------- the page ----------
-   Round three: the glance board. A hero band (the page's only large numerals)
-   over a three-column module grid, so a projected 1440x900 shows the whole
-   team state with no scrolling. Empty states SHRINK the page: Shop status
-   collapses to one all-clear line, the week module to one button, activity
-   disappears. Round one died of addition and round two of loose packing; the
-   guards here are a hard module cap, <=5 visible rows each, one numeral
-   scale, and one shared header treatment. */
+   Round four: mission control. One constant-dark board (see the .board CSS
+   block for the surface rationale) holding the whole team state as flat grid
+   children, so the phone re-orders it with grid-template-areas alone. The
+   alert strip leads because "what is late, blocked, unassigned or curing" is
+   the lead's one-second read; the work list keeps round three's proven
+   bucket behavior unchanged underneath. Round one died of addition and
+   round two of loose packing; the guards stay: <=5 visible rows a module,
+   one numeral scale, one header treatment. */
 function renderDashboard() {
   const items = mergedDeadlineItems();
   const open = items.filter(i => !i.done);
@@ -238,60 +242,77 @@ function renderDashboard() {
   const watched = (DB.projects || []).filter(p => typeof projUnread === "function" && projUnread(p))
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
-  const openOrders = DB.budget.filter(b => b.status !== "Reimbursed");
-  const openSum = openOrders.reduce((s, b) => s + num(b.cost), 0);
-
   const showTeam = view.dashTeam == null ? !mine.length : !!view.dashTeam;
   const list = showTeam ? mine.concat(team).sort(dashSort) : mine;
-  const late = list.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
   const teamLate = team.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
+  /* Strip numbers are TEAM-WIDE regardless of the list toggle: the strip is
+     the lead's read of the whole program, the list below is the member's. */
+  const late = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
+  const unassigned = open.filter(i => !i.who);
 
-  return `
-  ${dashHero(mine.length, blocked.length, late.length, openSum, openOrders.length)}
-  <div class="glance-grid">
-    <div class="gcol">
-      <div class="card dashlist" id="dash-list">
-        <div class="gmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>
-        ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
-        ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
-        ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
-          showTeam ? (mine.length ? "Show only my work" : "Hide the team's work")
-                   : `Everything else — ${team.length} open, ${teamLate} late`
-        }</button>` : ""}
-      </div>
+  return `<div class="board">
+    ${dashAlerts(late.length, blocked.length, unassigned.length, curing)}
+    <div class="bmod b-work" id="dash-list">
+      <div class="bmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>
+      ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
+      ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
+      ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
+        showTeam ? (mine.length ? "Show only my work" : "Hide the team's work")
+                 : `Everything else — ${team.length} open, ${teamLate} late`
+      }</button>` : ""}
     </div>
-    <div class="gcol">
-      ${dashSeason()}
-      ${dashWeek()}
-    </div>
-    <div class="gcol">
-      ${dashShopStatus(blocked, curing)}
-      ${watched.length ? dashActivity(watched) : ""}
-    </div>
+    ${dashShopStatus(blocked, curing)}
+    ${dashSeason()}
+    ${dashWeek()}
+    ${watched.length ? dashActivity(watched) : ""}
+    ${dashBudget()}
   </div>`;
 }
 
-/* The hero band: the three numbers the whole page hangs off, at the full
-   published 32px (round two's tiles clamped them to 22), with the money
-   hairline as the band's quiet right end. Red only when nonzero. */
-function dashHero(nMine, nBlocked, nLate, openSum, nOrders) {
-  return `<div class="heroband">
-    <button class="card hb-tile" onclick="document.getElementById('dash-list').scrollIntoView({block:'start'})">
-      <span class="bignum">${nMine}</span>
-      <span class="stat-label">Assigned to you</span>
+/* The alert strip: the lead's one-second read, team-wide, bare numerals on
+   the board itself. Red/amber only when nonzero; when everything is quiet a
+   green all-clear cell leads, because "the program is fine" is real
+   information at a Monday meeting. The T-minus readout holds the strip's
+   right end once a season is configured. */
+function dashAlerts(nLate, nBlocked, nUnassigned, curing) {
+  const toList = "document.getElementById('dash-list').scrollIntoView({block:'start'})";
+  const toShop = "var el=document.getElementById('dash-status');if(el)el.scrollIntoView({block:'start'})";
+  const cell = (n, label, cls, go, sub) => `<button class="b-alert" onclick="${go}">
+    <span class="bnum ${n ? cls : ""}">${n}</span><span class="bl">${label}${sub || ""}</span>
+  </button>`;
+  const allClear = !nLate && !nBlocked && !nUnassigned && !curing.length;
+  let tminus = "";
+  if (window.SEASON && SEASON.compDate) {
+    const dd = daysUntil(SEASON.compDate);
+    tminus = `<button class="b-tminus" onclick="var el=document.getElementById('b-count');if(el)el.scrollIntoView({block:'start'})">
+      <span class="bnum">${dd == null ? "?" : Math.abs(dd)}</span>
+      <span class="bl">${dd != null && dd < 0 ? "days since" : "days to"} <b>${esc(SEASON.compName || "competition")}</b></span>
+    </button>`;
+  }
+  return `<div class="b-alerts">
+    ${allClear ? `<div class="b-alert"><span class="bnum ok">✓</span><span class="bl">All clear</span></div>` : ""}
+    ${cell(nLate, "Late", "bad", toList)}
+    ${cell(nBlocked, "Blocked", "bad", nBlocked ? toShop : "setTab('workorders')")}
+    ${cell(nUnassigned, "Unassigned", "warn", toList)}
+    ${cell(curing.length, "Curing", "warn", nBlocked || curing.length ? toShop : "setTab('workorders')",
+      curing.length ? ` · ready ${esc(curing[0].hold.readyAt)}` : "")}
+    ${tminus}
+  </div>`;
+}
+
+/* Money: the unreimbursed sum, and the $50 approval rule finally surfaced —
+   needsApproval() existed in budget.js all season and nothing showed it. */
+function dashBudget() {
+  const openOrders = DB.budget.filter(b => b.status !== "Reimbursed");
+  const openSum = openOrders.reduce((s, b) => s + num(b.cost), 0);
+  const approvals = typeof needsApproval === "function" ? DB.budget.filter(needsApproval) : [];
+  return `<div class="bmod b-budget">
+    <div class="bmod-hd"><span>Money</span>${openOrders.length ? `<span class="gh-n">${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"}</span>` : ""}</div>
+    <button class="b-money" onclick="setTab('budget')">
+      <span class="bnum">$${openSum.toFixed(0)}</span><span class="bl">unreimbursed</span>
     </button>
-    <button class="card hb-tile" onclick="${nBlocked ? "document.getElementById('dash-status').scrollIntoView({block:'start'})" : "setTab('workorders')"}">
-      <span class="bignum ${nBlocked ? "bad" : ""}">${nBlocked}</span>
-      <span class="stat-label">Blocked</span>
-    </button>
-    <button class="card hb-tile" onclick="document.getElementById('dash-list').scrollIntoView({block:'start'})">
-      <span class="bignum ${nLate ? "bad" : ""}">${nLate}</span>
-      <span class="stat-label">Late</span>
-    </button>
-    <button class="dashmoney hb-money" onclick="setTab('budget')">
-      <span class="dm-n">$${openSum.toFixed(0)}</span>
-      <span class="dm-l">unreimbursed${nOrders ? ` · ${nOrders} open purchase${nOrders === 1 ? "" : "s"}` : ""}</span>
-    </button>
+    ${approvals.length ? `<div class="srow"><span class="sr-main">
+      <button class="chip" onclick="setTab('budget')">${approvals.length} over $50 awaiting sign-off</button></span></div>` : ""}
   </div>`;
 }
 
@@ -343,8 +364,8 @@ function dashShopStatus(blocked, curing) {
   const body = rows.length
     ? rows.join("")
     : `<div class="srow">${dot("ok")}<span class="sr-main">All clear — nothing blocked, curing or flagged</span></div>`;
-  return `<div class="card dashstatus" id="dash-status">
-    <div class="gmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
+  return `<div class="bmod b-shop" id="dash-status">
+    <div class="bmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
     ${body}${footer}
   </div>`;
 }
@@ -355,8 +376,8 @@ function dashShopStatus(blocked, curing) {
    ticket, capped. */
 function dashActivity(watched) {
   const shown = watched.slice(0, 4);
-  return `<div class="card dashwatched">
-    <div class="gmod-hd"><span><span class="unread-dot"></span> New activity</span><span class="gh-n">tickets you watch</span></div>
+  return `<div class="bmod b-activity">
+    <div class="bmod-hd"><span><span class="unread-dot"></span> New activity</span><span class="gh-n">tickets you watch</span></div>
     ${shown.map(p => `<div class="srow">
       <span class="sr-main"><span class="kind">${isIssue(p) ? "Issue" : "Ticket"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</span>
       <span class="srow-meta"><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span>
@@ -376,13 +397,13 @@ function dashWeek() {
   const booked = STATIONS.filter(([k]) => String(week[k] || "").trim());
   const open = `onclick="view.schedView='stations';setTab('timeline')"`;
   if (!booked.length) {
-    return `<div class="card dashweek">
-      <div class="gmod-hd"><span>This week at RFS</span><span class="gh-n">wk of ${esc(week.weekOf)}</span></div>
+    return `<div class="bmod b-week">
+      <div class="bmod-hd"><span>This week at RFS</span><span class="gh-n">wk of ${esc(week.weekOf)}</span></div>
       <button class="dg-more" ${open}>Nothing booked yet — open the schedule</button>
     </div>`;
   }
-  return `<div class="card dashweek">
-    <div class="gmod-hd"><span>This week at RFS</span><span class="gh-n">${booked.length} of ${STATIONS.length} booked</span></div>
+  return `<div class="bmod b-week">
+    <div class="bmod-hd"><span>This week at RFS</span><span class="gh-n">${booked.length} of ${STATIONS.length} booked</span></div>
     ${booked.map(([k, label]) => {
       const v = String(week[k]).trim();
       const part = recById("parts", v);
@@ -401,8 +422,8 @@ function dashSeason() {
   const parts = DB.parts || [];
   if (!parts.length || typeof PART_STAGES === "undefined") return "";
   const liveMolds = (DB.molds || []).filter(m => m.stage !== "Retired");
-  return `<section class="dashseason">
-    <div class="gmod-hd"><span>Season</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
+  return `<section class="bmod b-season">
+    <div class="bmod-hd"><span>Season</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
     ${PART_STAGES.map(st => {
       const b = stageBreakdown(st.key, st.vals, parts);
       const tot = b["st-0"] + b["st-mid"] + b["st-done"] + b["st-na"] || 1;

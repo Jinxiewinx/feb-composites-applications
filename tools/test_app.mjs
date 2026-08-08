@@ -1986,20 +1986,40 @@ await t("one grouped list, and every item appears in exactly one group", () => {
   assert((listOnly.match(/SOON PART/g) || []).length === 1, "listed once, not once per filter: " + listOnly);
   assert(/dg-label">This week/.test(html), "and it is grouped by when it is due: " + html);
 });
-await t("the hero band: three real buttons at 32px scale, money at its right end", () => {
+await t("the alert strip: team-wide numerals lead the board, money is its own module", () => {
   DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
   setTab("dashboard");
   const html = main.innerHTML;
-  assert(html.includes('class="heroband"'), "has the hero band");
-  assert(/<span class="bignum">1<\/span>\s*<span class="stat-label">Assigned to you/.test(html),
-    "one item is Simon's, and the tile is a button so its size is measured: " + html.slice(0, 600));
-  assert(/<span class="stat-label">Blocked/.test(html), "Blocked is the second number");
-  assert(/<span class="stat-label">Late/.test(html), "Late is the third — the page's headline exception");
+  assert(html.includes('class="board"'), "the page is the dark board");
+  assert(html.includes('class="b-alerts"'), "the alert strip leads");
+  assert(!html.includes("heroband") && !html.includes("glance-grid"), "rounds one to three are gone");
+  // The theme-proof audit samples .card/.stat-tile/.bignum for light-vs-dark
+  // difference; a constant-dark page must never contain them.
+  assert(!/class="[^"]*\bcard\b/.test(html) && !html.includes("stat-tile") && !html.includes("bignum"),
+    "no sampled surface classes inside the board: " + (html.match(/class="[^"]*(card|stat-tile|bignum)[^"]*"/) || [""])[0]);
+  // LATE PART is Nick's, not Simon's — the strip counts the TEAM's lateness,
+  // because the strip is the lead's read while the list below is the member's.
+  assert(/<span class="bnum bad">1<\/span>\s*<span class="bl">Late/.test(html),
+    "one late item team-wide, red because nonzero: " + html.slice(html.indexOf("b-alerts"), html.indexOf("b-alerts") + 700));
+  assert(/<span class="bnum ">0<\/span>\s*<span class="bl">Blocked/.test(html), "Blocked reads an honest 0, not red");
+  assert(/class="bl">Unassigned/.test(html), "unassigned work is a first-class alert");
+  assert(/class="bl">Curing/.test(html), "so is what is in the oven");
   // A running total with no cap, no target and no trend prompts no decision.
   assert(!/Season spend/.test(html), "season spend is not a number anyone acts on");
   // Unreimbursed money IS: its correct value is zero, so it needs no denominator.
-  assert(/\$120<\/span>\s*<span class="dm-l">unreimbursed/.test(html), "the band carries what is owed: " + html.slice(-900));
-  assert(html.includes('class="glance-grid"'), "and the module grid follows");
+  assert(html.includes('class="bmod b-budget"'), "money is its own quiet module");
+  assert(/\$120<\/span><span class="bl">unreimbursed/.test(html), "the module carries what is owed: " + html.slice(-900));
+});
+await t("the strip goes all-clear only when nothing is late, blocked, unassigned or curing", () => {
+  const keepParts = DB.parts, keepBudget = DB.budget;
+  DB.parts = []; DB.budget = [];
+  setTab("dashboard");
+  // The strip's own green cell, not Shop status's "All clear —" empty line,
+  // which renders on a quiet shop regardless of deadlines.
+  assert(/<span class="bnum ok">/.test(main.innerHTML), "quiet program says so in green");
+  DB.parts = keepParts; DB.budget = keepBudget;
+  setTab("dashboard");
+  assert(!/<span class="bnum ok">/.test(main.innerHTML), "one late item silences the all-clear");
 });
 /* One row per physical thing. A part and its work order are the same object
    seen twice, and the page counted both. On the SN5 archive that inflated
