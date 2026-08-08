@@ -258,6 +258,21 @@ export const APPLY_FIXTURES = `
         { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
       ] },
   ]));
+  /* One stack plan and a board that fits it, so the cut list and the
+     mark-cut confirm photograph as transactions instead of empty states
+     (no fixture carried a stackplan before). */
+  window.onFbData("stackplans", (DB.stackplans || []).concat([
+    { id: "STK-SN6-001", name: "NOSECONE PLUG", density: 30,
+      layers: [
+        { thickness: 50.8, blanks: [{ x0: 0, x1: 610, y0: 0, y1: 406 }] },
+        { thickness: 50.8, blanks: [{ x0: 0, x1: 508, y0: 0, y1: 305 }] },
+      ] },
+  ]));
+  window.onFbData("stock", (DB.stock || []).concat([
+    { id: "BRD-SN6-901", label: "2IN 30LB SHEET", density: 30, qty: 2,
+      len: { value: 48, unit: "in" }, wid: { value: 24, unit: "in" }, thk: { value: 2, unit: "in" },
+      origin: "Fixture rack", location: "BIN-SN6-001" },
+  ]));
   /* Pinned team shelf links, for the launchpad and the Documents shelf. */
   window.onFbData("documents", (DB.documents || []).concat([
     { id: "DOC-SN6-001", title: "SN6 master tracker", kind: "sheet", url: "https://docs.google.com/spreadsheets/d/fixture", pinned: true },

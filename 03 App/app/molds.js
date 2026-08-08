@@ -506,7 +506,8 @@ function renderMoldsTab() {
   else if (sel.kind === "board") pane = moldsBoardPane(sel.rec);
   else if (sel.kind === "plan") pane = moldsPlanPane(sel.rec);
   else pane = `<section class="mddetail" aria-label="Mold detail">${renderShopDetail("molds", { embedded: true })}</section>`;
-  const undo = typeof shopUndoBar === "function" ? shopUndoBar() : "";
+  const undo = (typeof shopUndoBar === "function" ? shopUndoBar() : "")
+    + (typeof cutsUndoBar === "function" ? cutsUndoBar() : "");
   return `${undo}<div class="mdsplit ${sel ? "has-sel" : ""}">${renderMoldsRail()}${pane}</div>`;
 }
 

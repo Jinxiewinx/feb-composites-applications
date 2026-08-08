@@ -638,16 +638,18 @@ function renderCutList() {
   const plans = (DB.stackplans || []).filter(p => !view.cutSel || view.cutSel === p.id);
   const blanks = blanksFromPlans(plans);
   const boards = boardsForPacking();
-  const back = `<div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft", 16)} All stock</button>
+  const res = blanks.length && boards.length ? packAll(blanks, boards, {}) : null;
+  const back = (typeof cutsUndoBar === "function" ? cutsUndoBar() : "") +
+    `<div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft", 16)} All stock</button>
     <select onchange="view.cutSel=this.value;render()">
       <option value="">Every planned mold (${(DB.stackplans || []).length})</option>
       ${(DB.stackplans || []).map(p => `<option value="${esc(p.id)}" ${view.cutSel === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
     </select>
-    <button onclick="printCutList()">${icon("print", 15)} Print</button></div>`;
+    <button onclick="printCutList()">${icon("print", 15)} Print</button>
+    ${res && res.plans.length ? `<button class="primary" style="margin-left:auto" onclick="openCommitCutsModal()">Mark these boards cut…</button>` : ""}</div>`;
   if (!blanks.length) return back + `<div class="card">Nothing to cut yet — plan a mold first.</div>`;
   if (!boards.length) return back + `<div class="card">No board stock recorded, so there is nothing to cut from. Add boards first.</div>`;
 
-  const res = packAll(blanks, boards, {});
   const util = utilisation(res.plans);
   return back + `
   <div class="card">
@@ -681,6 +683,141 @@ function cutDiagram(pl) {
       : `<line x1="${(c.from * s).toFixed(1)}" y1="${((pl.board.h - c.at) * s).toFixed(1)}" x2="${(c.to * s).toFixed(1)}" y2="${((pl.board.h - c.at) * s).toFixed(1)}" stroke="currentColor" stroke-width="0.8" stroke-dasharray="4 3"/>`).join("")}
   </svg>`;
 }
+/* ---------- marking the cut done ----------
+   The approved phase-2 piece: the list stops being advice and becomes a
+   transaction. Cut boards leave the rack (qty down, row deleted at zero) and
+   every leftover the packer kept (already tagged with its boardId and
+   filtered to >= MIN_REMNANT_MM) goes back on it as a new, smaller board
+   row — a remnant is not a separate kind of thing, origin carries the
+   provenance.
+
+   Two hard rules, both learned elsewhere in this file's history:
+   - The proposal is SNAPSHOTTED by the button handler, never read from the
+     render path: renderCutList() re-runs packAll on every render and a
+     Firestore snapshot can re-render at any moment, so the thing confirmed
+     must be frozen the moment the modal opens.
+   - The commit re-checks the rack before writing and aborts whole if a
+     board vanished or thinned under the snapshot — a partial write of a
+     stale plan would silently eat somebody's stock. */
+let CUT_PROPOSAL = null;
+let CUTS_UNDO = null;
+
+function openCommitCutsModal() {
+  const plans = (DB.stackplans || []).filter(p => !view.cutSel || view.cutSel === p.id);
+  const res = packAll(blanksFromPlans(plans), boardsForPacking(), {});
+  if (!res.plans.length) { toast("Nothing to cut.", "info"); return; }
+  CUT_PROPOSAL = res.plans.map(pl => ({
+    boardId: pl.board.src.id, label: pl.board.src.label || "",
+    w: pl.board.w, h: pl.board.h, thickness: pl.thickness, density: pl.density,
+    yields: pl.placed.map(p => p.part.id),
+    leftovers: pl.leftover.map(o => ({ w: o.w, h: o.h })),
+  }));
+  const nOff = CUT_PROPOSAL.reduce((s, p) => s + p.leftovers.length, 0);
+  openModal(`
+    <h2>Mark these boards cut?</h2>
+    <p class="muted tny">${CUT_PROPOSAL.length} board${CUT_PROPOSAL.length === 1 ? " leaves" : "s leave"} the rack;
+      ${nOff ? `${nOff} reusable offcut${nOff === 1 ? "" : "s"} go${nOff === 1 ? "es" : ""} back on it as new stock.` : "nothing reusable comes back."}
+      Untick anything you did not actually cut.</p>
+    ${CUT_PROPOSAL.map((p, i) => `<label class="cutrow"><input type="checkbox" id="cc-${i}" checked>
+      <span><b>${esc(p.boardId)}</b>${p.label ? " · " + esc(p.label) : ""} — ${mmIn(p.w)} &times; ${mmIn(p.h)} &times; ${mmIn(p.thickness)}
+        <span class="muted tny">yields ${p.yields.map(esc).join(", ")}${p.leftovers.length ? ` · keeps ${p.leftovers.length} offcut${p.leftovers.length === 1 ? "" : "s"}` : ""}</span></span>
+    </label>`).join("")}
+    <div class="foot">
+      <button onclick="CUT_PROPOSAL=null;closeModal()">Cancel</button>
+      <button class="primary" onclick="submitCommitCuts()">Mark cut</button>
+    </div>
+  `);
+}
+
+async function submitCommitCuts() {
+  const prop = CUT_PROPOSAL || [];
+  /* Checkboxes read BEFORE any await: an offline allocId opens its own modal
+     over this one, and the form must already be read by then. */
+  const checked = prop.filter((p, i) => { const el = document.getElementById("cc-" + i); return el ? !!el.checked : true; });
+  if (!checked.length) { toast("Nothing ticked — nothing marked.", "info"); return; }
+  const perBoard = new Map();
+  checked.forEach(p => perBoard.set(p.boardId, (perBoard.get(p.boardId) || 0) + 1));
+  for (const [id, k] of perBoard) {
+    const b = boardById(id);
+    if (!b || (b.qty || 1) < k) { toast("The rack changed under this plan — re-check the cut list.", "error"); return; }
+  }
+  const undo = { decremented: [], created: [], nBoards: 0, nOff: 0 };
+  for (const [id, k] of perBoard) {
+    const b = boardById(id);
+    undo.nBoards += k;
+    if ((b.qty || 1) - k >= 1) {
+      b.qty = (b.qty || 1) - k;
+      save("stock", b, "qty");
+      undo.decremented.push({ id, by: k, deleted: null });
+    } else {
+      // Keep the full row so undo can put it back exactly as it was.
+      undo.decremented.push({ id, by: k, deleted: { ...b } });
+      del("stock", id);
+      DB.stock = (DB.stock || []).filter(x => x.id !== id);
+    }
+  }
+  for (const p of checked) {
+    const parent = undo.decremented.find(d => d.id === p.boardId);
+    const live = boardById(p.boardId);
+    const loc = (parent && parent.deleted ? parent.deleted.location : live && live.location) || "";
+    for (const o of p.leftovers) {
+      const nid = await allocId("stock");
+      if (!nid) continue;                        // offline and declined: skip this offcut, keep the rest honest
+      const row = {
+        id: nid, label: `offcut of ${p.boardId}`,
+        // mm, as the packer measured them — never round-tripped through the
+        // entry units (the header rule of this file).
+        len: { value: Math.round(o.w), unit: "mm" }, wid: { value: Math.round(o.h), unit: "mm" },
+        thk: { value: p.thickness, unit: "mm" }, qty: 1, density: p.density,
+        origin: `cut ${today()} from ${p.boardId}`, location: loc,
+        createdBy: myEmail(), ts: new Date().toISOString(),
+      };
+      (DB.stock = DB.stock || []).push(row);
+      save("stock", row);
+      undo.created.push(nid);
+      undo.nOff++;
+    }
+  }
+  CUTS_UNDO = undo; CUT_PROPOSAL = null;
+  closeModal();
+  toast(`${undo.nBoards} board${undo.nBoards === 1 ? "" : "s"} marked cut${undo.nOff ? ` — ${undo.nOff} offcut${undo.nOff === 1 ? "" : "s"} added` : ""}.`);
+  view = { ...view, mode: "list" };
+  render();
+}
+
+/* The first multi-record undo in the app: the memento holds every decrement
+   (with the full row when the decrement deleted it) and every created offcut
+   id, so one press restores the exact rack. Same single-slot semantics as
+   PART_UNDO and SHOP_UNDO: the next commit replaces it. */
+function undoCuts() {
+  const u = CUTS_UNDO; CUTS_UNDO = null;
+  if (!u) { render(); return; }
+  u.created.forEach(id => { del("stock", id); DB.stock = (DB.stock || []).filter(x => x.id !== id); });
+  u.decremented.forEach(d => {
+    if (d.deleted) {
+      const row = { ...d.deleted };
+      (DB.stock = DB.stock || []).push(row);
+      save("stock", row);
+    } else {
+      const b = boardById(d.id);
+      if (b) { b.qty = (b.qty || 1) + d.by; save("stock", b, "qty"); }
+    }
+  });
+  toast("Undone — boards back on the rack.");
+  render();
+}
+function dismissCutsUndo() { CUTS_UNDO = null; render(); }
+function cutsUndoBar() {
+  const u = CUTS_UNDO;
+  if (!u) return "";
+  return `<div class="undobar no-print">
+    <span class="ub-i">${icon("check", 15)}</span>
+    <span class="ub-t"><b>${u.nBoards} board${u.nBoards === 1 ? "" : "s"} marked cut</b>${u.nOff ? ` · ${u.nOff} offcut${u.nOff === 1 ? "" : "s"} added` : ""} — saved for everyone.</span>
+    <button class="sm" onclick="undoCuts()">Undo</button>
+    <button class="sm ib" onclick="dismissCutsUndo()">${icon("x", 14)}</button>
+  </div>`;
+}
+
 function printCutList() {
   const host = printRoot();
   if (!host) { toast("Nothing to print.", "error"); return; }

@@ -3193,6 +3193,52 @@ await t("a leftover is just a smaller board, and says where it came from", async
   assert(b.origin === "WO-SN6-004", "provenance should survive");
   assert(toMm(b.len) > 0 && toMm(b.wid) > 0, "it is measured like any other board");
 });
+await t("mark cut: stock decremented, offcuts written back in mm with provenance, undo restores the rack", async () => {
+  DB.stackplans = [{ id: "STK-CUT-1", name: "CUTTEST", density: 30, layers: [
+    { thickness: 25.4, blanks: [{ x0: 0, x1: 762, y0: 0, y1: 508 }] }] }];
+  DB.stock = [{ id: "BRD-CUT-1", label: "BIG", len: { value: 1220, unit: "mm" }, wid: { value: 610, unit: "mm" },
+    thk: { value: 25.4, unit: "mm" }, qty: 1, density: 30, location: "BIN-X" }];
+  view = { ...view, cutSel: "" };
+  openCommitCutsModal();
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Mark these boards cut?") && m.includes("BRD-CUT-1"), "the modal lists the board: " + m.slice(0, 300));
+  document.getElementById("cc-0").checked = true;
+  await submitCommitCuts();
+  assert(!boardById("BRD-CUT-1"), "a qty-1 board leaves the rack entirely");
+  const offs = DB.stock.filter(b => /offcut of BRD-CUT-1/.test(b.label || ""));
+  assert(offs.length >= 1, "the packer's leftovers came back as stock: " + JSON.stringify(DB.stock));
+  assert(offs.every(o => o.len.unit === "mm" && o.wid.unit === "mm" && o.qty === 1 && o.kind === undefined),
+    "mm as the packer measured them, qty 1, and still no kind field");
+  assert(offs.every(o => /^cut \d{4}-\d{2}-\d{2} from BRD-CUT-1$/.test(o.origin)), "origin carries provenance: " + offs[0].origin);
+  assert(offs.every(o => o.location === "BIN-X"), "an offcut inherits its parent's home");
+  assert(view.mode === "list", "lands back on the rack, where the change is visible");
+  undoCuts();
+  assert(boardById("BRD-CUT-1") && boardById("BRD-CUT-1").qty === 1, "undo re-creates the deleted board exactly");
+  assert(!DB.stock.some(b => /offcut of/.test(b.label || "")), "and withdraws the offcuts it wrote");
+});
+await t("mark cut: an unticked unit stays, and a rack changed under the plan aborts whole", async () => {
+  DB.stackplans = [{ id: "STK-CUT-2", name: "TWO", density: 30, layers: [
+    { thickness: 25.4, blanks: [{ x0: 0, x1: 762, y0: 0, y1: 508 }, { x0: 0, x1: 762, y0: 0, y1: 508 }] }] }];
+  DB.stock = [{ id: "BRD-CUT-2", label: "PAIR", len: { value: 813, unit: "mm" }, wid: { value: 610, unit: "mm" },
+    thk: { value: 25.4, unit: "mm" }, qty: 2, density: 30 }];
+  openCommitCutsModal();
+  // Two plans on two units of ONE qty-2 row: the decrement counts plans per
+  // board id, so unticking one commits one.
+  document.getElementById("cc-0").checked = true;
+  document.getElementById("cc-1").checked = false;
+  await submitCommitCuts();
+  const b = boardById("BRD-CUT-2");
+  assert(b && b.qty === 1, "one unit cut, one still on the rack: " + JSON.stringify(b));
+  // Stale snapshot: the rack thins between the modal opening and Mark cut.
+  openCommitCutsModal();
+  document.getElementById("cc-0").checked = true;
+  DB.stock = DB.stock.filter(x => x.id !== "BRD-CUT-2");
+  calls.length = 0; lastToast = "";
+  await submitCommitCuts();
+  assert(!calls.some(c => c[0] === "save" || c[0] === "del"), "no partial writes against a stale plan: " + JSON.stringify(calls));
+  assert(/rack changed/.test(lastToast), "told to re-check: " + lastToast);
+  DB.stackplans = []; DB.stock = [];
+});
 await t("the rack shows one row per size, and escapes labels where they appear", async () => {
   DB.stock = [];
   view = { ...view, tab: "molds", mode: "list", id: null, q: "", fSub: "" }; render();

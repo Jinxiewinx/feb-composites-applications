@@ -120,6 +120,12 @@ const VIEWS = [
     needs: "CAM notes" },
   { id: "dashboard", tab: "dashboard", what: "the dashboard, with populated records behind it",
     needs: "" },
+  { id: "cutlist", tab: "molds", what: "the cut list in cuts mode, with its mark-cut toolbar",
+    open: `view = { ...view, mode: "cuts", cutSel: "" }; render()`,
+    needs: "" },
+  { id: "cutcommit-modal", tab: "molds", what: "the mark-these-boards-cut confirm, checkboxes and all",
+    open: `view = { ...view, mode: "cuts", cutSel: "" }; render(); if (typeof openCommitCutsModal === "function") openCommitCutsModal();`,
+    needs: "" },
 
   /* ---- the states that only exist while you are doing something ----
      Everything above is a page you can photograph. These are not: each is an
