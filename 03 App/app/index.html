@@ -531,21 +531,40 @@
      into this inner one — here the left column is content you need alongside
      the discussion, not a list you navigate away from.
 
-     The DOM puts .tkmain FIRST and grid areas put the metadata visually left,
-     so a phone (which stacks by source order) reads the description and
+     The DOM puts .tkmain FIRST and grid areas put the metadata visually on
+     top, so a phone (which stacks by source order) reads the description and
      thread before the metadata. That is what finally retires the forced-open
      details rail: the phone problem is solved by rendering, not by fighting
      a browser primitive. The postmortem for the CSS-over-details attempt
      lives in tools/README.md; do not reintroduce a details element here. */
   /* Both panes need min-width:0. A grid item's automatic minimum is its
-     min-content width, so ONE unbreakable thing in the rail — a filename in a
+     min-content width, so ONE unbreakable thing in the band — a filename in a
      file card, a long assignee list — sizes the track to fit it and the whole
      page grows with it. .tkmain had this and .tkmeta did not, which is why a
      populated ticket measured 1030px wide inside a 393px phone. */
-  .tksplit { display: grid; grid-template-columns: clamp(300px, 24vw, 420px) minmax(0, 1fr); grid-template-areas: "meta main"; gap: 16px; align-items: start; }
-  .tkmeta { grid-area: meta; position: sticky; top: calc(var(--topbar-h) + 10px); min-width: 0; }
+  /* The metadata was a clamp(300px,24vw,420px) LEFT column, the third left
+     column on the page after the nav sidebar and the tickets rail, and the
+     description/sub-tickets/thread were squeezed to ~730px on a 1600px
+     content box. Now it is a horizontal band above the discussion and the
+     wide column really is wide. Same DOM, flipped by grid areas. */
+  .tksplit { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "meta" "main"; gap: 12px 16px; align-items: start; }
+  .tkmeta { grid-area: meta; min-width: 0; }
   .tkmain { grid-area: main; min-width: 0; }
-  .tkmeta .stagerow, .tkmeta .linkrow { margin-top: 4px; }
+  /* Band internals: people and chips share one wrapping row; documents and
+     files split a second. h3 labels shrink to eyebrow size so six of them in
+     a strip read as labels, not section headings. */
+  .tkmeta .tkband-row { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: start; }
+  .tkmeta .tkband-g { min-width: 0; }
+  .tkmeta .tkband-g.grow { flex: 1 1 320px; }
+  .tkmeta h3 { margin: 0 0 4px; font-size: 11px; }
+  .tkmeta .stagerow, .tkmeta .linkrow { margin-top: 0; }
+  /* Cap: a ticket with 20 photos must not push the description below the
+     fold, which is the exact disease the old rail had. Two tile rows, a fade,
+     and a "Show all" BUTTON — never a details element, see above. */
+  .tkmeta .tkband-attach.capped { max-height: 168px; overflow: hidden; position: relative; }
+  .tkmeta .tkband-attach.capped::after { content: ""; position: absolute; inset: auto 0 0 0; height: 28px;
+    background: linear-gradient(to top, var(--card), transparent); pointer-events: none; }
+  .tkband-more { margin-top: 4px; }
   @media (max-width: 900px) {
     .tksplit { display: block; }
     .tkmeta { position: static; }
@@ -1156,6 +1175,13 @@
      the thing you scan, so it grows too — but slowly, and it stops at 420
      because a wider rail just pads its two-line rows. */
   .mdsplit { display: grid; grid-template-columns: clamp(300px, 24vw, 420px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  /* A record open in the detail pane yields the rail's clamp() track to the
+     discussion; a toolbar toggle brings the rail back for browsing. Generic
+     name on purpose — any .mdsplit tab can add the class later. Deliberately
+     NOT the <=900 one-pane-at-a-time selected flag: that one is pinned to the
+     responsive block by test_app and may not appear up here, even in prose. */
+  .mdsplit.rail-off { grid-template-columns: minmax(0, 1fr); }
+  .mdsplit.rail-off > .mdindex { display: none; }
   .mddetail { min-width: 0; }
   /* The index outlives the detail, so it gets the card chrome and its own
      scroll: walking 33 parts must never scroll the part you're reading. */
@@ -2021,6 +2047,9 @@
        a way to end up with icons and no labels in a panel you opened
        deliberately. */
     .sb-toggle { display: none; }
+    /* Same logic for the tickets-rail toggle: at this width has-sel already
+       hides the rail and back/Esc is the navigation, so the button is a no-op. */
+    .tkrail-btn { display: none; }
   }
   /* Tablet band — the intersection of the two breakpoints either side of it,
      not a third breakpoint of its own. What it buys: between 641 and 900 the
@@ -2288,6 +2317,9 @@
     /* Paper wants the record, not the navigation: print the selected part (or
        the season overview when none is selected), never the index beside it. */
     .mdsplit, .tksplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }
+    /* Paper never truncates: the attachment cap is a screen affordance. */
+    .tkmeta .tkband-attach.capped { max-height: none; overflow: visible; }
+    .tkmeta .tkband-attach.capped::after { display: none; }
     /* Paper can't be tapped: a stage prints as the value it is, not as six
        buttons one of which is filled in. */
     .pstep:not(.cur) { display: none !important; }

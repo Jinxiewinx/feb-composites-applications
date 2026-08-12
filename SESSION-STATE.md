@@ -9,8 +9,24 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-08
-Status: **Backlog batch: eight deferred items landed (2026-08-08).** Simon
+Last updated: 2026-08-11
+Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
+ticket as "too horizontal": three left columns (nav sidebar, tickets rail,
+then the .tkmeta column) squeezed the description/sub-tickets/thread to
+~730px on a 1600px content box. Decisions confirmed with him: meta becomes a
+horizontal band under the title, the tickets rail auto-collapses while a
+ticket is open (toolbar toggle brings it back, session-scoped view.tkRail),
+one layout for all desktop widths. Implementation: .tksplit grid-areas flip
+(DOM order untouched, so phone stacking and the main-first assertion hold),
+.tkband-row / .tkband-g band internals, attachment row capped at 168px with
+a fade and a "Show all N attachments" BUTTON (view.tkMetaAll, reset by
+selectTicket — never a details element, postmortem still applies), new
+.mdsplit.rail-off class (generic on purpose; workorders/parts/molds can
+adopt later; NOT has-sel, which test_app pins to the responsive block, even
+as a comment string). New rail-off test in test_app. Suites: test_app 406,
+detailui 882, appui 1242, all green.
+
+Previous status (2026-08-08): **Backlog batch: eight deferred items landed.** Simon
 asked for a sweep of everything "left for later" across this file's history
 (46 items found), picked eight, and settled the forks: slate for On Hold,
 pinch + double-tap for lightbox zoom, measured ladders (no collision

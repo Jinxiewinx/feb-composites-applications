@@ -312,17 +312,23 @@ function delProject(id) {
    between statuses is how the Monday meeting actually runs. */
 function renderProjects() {
   const sel = selectedTicket();
-  return `<div class="mdsplit tkouter ${sel ? "has-sel" : ""}">
+  /* rail-off: with a ticket open the index yields its clamp() track to the
+     discussion, unless the toolbar toggle asked for it back (view.tkRail).
+     The board never gets the class, so leaving a ticket restores the rail
+     for free. The rail stays in the DOM either way — CSS hides it. */
+  const railOff = sel && !view.tkRail;
+  return `<div class="mdsplit tkouter ${sel ? "has-sel" : ""}${railOff ? " rail-off" : ""}">
     ${renderTicketIndex()}${sel ? renderProjDetail() : renderTicketOverview()}
   </div>`;
 }
+function toggleTicketRail() { view = { ...view, tkRail: !view.tkRail }; render(); }
 
 /* ---------- selection ----------
    view.mode === "detail" stays the switch, exactly as on Work Orders: a dozen
    tests set it directly, and openRecord()/consumePendingLink() write it. */
 function selectedTicket() { return view.mode === "detail" ? projById(view.id) : null; }
 function selectTicket(id) {
-  view = { ...view, mode: "detail", id, edit: false };
+  view = { ...view, mode: "detail", id, edit: false, tkMetaAll: false };
   render();
   const el = document.getElementById("pi-" + id);
   if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
@@ -632,6 +638,16 @@ function ticketBackBtn() {
   return `<button class="ib" title="${esc(label)}" onclick="navBack({tab:'projects',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(label)}</button>`;
 }
 
+/* The rail collapses when a ticket opens (renderProjects adds rail-off) so the
+   discussion gets the width; this toggle brings it back for browsing ticket to
+   ticket. Hidden <=900 where has-sel hides the rail regardless. */
+function ticketRailBtn() {
+  const on = !!view.tkRail;
+  return `<button class="ib tkrail-btn" title="${on ? "Hide the tickets list" : "Show the tickets list"}"
+    aria-label="${on ? "Hide the tickets list" : "Show the tickets list"}" aria-pressed="${on}"
+    onclick="toggleTicketRail()">${icon("menu", 16)}</button>`;
+}
+
 /* ---------- the jump bar ----------
    Same idea as WO_SECTIONS, with one difference: a ticket's shape varies by
    kind, so the sections are a FUNCTION returning the filtered list — the bar
@@ -688,7 +704,7 @@ function renderProjDetail() {
   if (E) {
     return `<section class="mddetail" aria-label="Ticket detail">
     <div class="toolbar no-print">
-      ${ticketBackBtn()}
+      ${ticketBackBtn()}${ticketRailBtn()}
       <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
       <button class="primary" onclick="saveProjectEdits()">Save</button>
       <button onclick="view.edit=false;render()">Cancel</button>
@@ -726,7 +742,7 @@ function renderProjDetail() {
   const kids = !isIssue(p) && !p.parentId ? subTickets(p) : [];
   return `<section class="mddetail" aria-label="Ticket detail">
   <div class="toolbar no-print">
-    ${ticketBackBtn()}
+    ${ticketBackBtn()}${ticketRailBtn()}
     <span class="kindbadge ${ticketKind(p)}">${kindLabel}</span>
     <div class="statusdrop ${projStatusClass(st)}"><select onchange="setTicketStatus('${p.id}',this.value)">${PROJ_STATUS.map(s => `<option ${st === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     <button class="primary" onclick="editProject()">Edit</button>
@@ -756,8 +772,10 @@ function renderProjDetail() {
          metadata lands below them. That retires the forced-open details rail
          (and the accepted phone cost documented with it) by rendering the rail
          differently instead of fighting the element — the fix the postmortem
-         in tools/README.md said to wait for. Grid areas keep the metadata
-         column visually left on wide screens, so nothing moves on desktop. -->
+         in tools/README.md said to wait for. Grid areas put the metadata BAND
+         visually on top on wide screens: it was the page's third left column
+         (nav sidebar, tickets rail, then this) and the discussion was squeezed
+         to ~730px on a 1600px content box. -->
     <!-- data-lbgroup: one photo set for the whole ticket. The Files grid is in
          the rail and the comment photos are in the wide column, and "next
          photo" should walk both — a photo belongs to the ticket, not to the
@@ -856,22 +874,37 @@ function renderProjDetail() {
           ].filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? "" : "s"}`);
           return `<div class="tny muted">Details, files and links${n.length ? ` — ${esc(n.join(", "))}` : ""}</div>`;
         })()}
-    <h3>Assignees</h3>
-    <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div>
-    <h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
-    <div class="stagerow">${(p.watchers || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">none</span>'}</div>
-    ${isIssue(p) ? "" : `<h3>Related parts</h3><div class="stagerow">${partChips}</div>`}
-    ${(ticketChips || woChips) ? `<h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div>` : ""}
-
-
-    <h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets</span></h3>
-    ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
-    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div>
-    <h3>Files</h3>
-    <div class="filegrid">
-      ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+    ${/* Two wrapping rows: people and chips share the first, documents and
+          files split the second. The attachment row is height-capped with a
+          fade and a "Show all" BUTTON — a class toggle on view.tkMetaAll,
+          reset by selectTicket() so every ticket opens capped. Never a
+          details element here; see the comment above .tksplit and the
+          postmortem in tools/README.md. */""}
+    <div class="tkband-row">
+      <div class="tkband-g"><h3>Assignees</h3>
+        <div class="stagerow">${(p.assignees || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">unassigned</span>'}</div></div>
+      <div class="tkband-g"><h3>Watchers <span class="muted nocaps">— flagged on their Dashboard when there's new activity (per browser)</span></h3>
+        <div class="stagerow">${(p.watchers || []).map(e => `<span class="chip">${avatar(e, 20)} ${esc(userName(e))}</span>`).join("") || '<span class="muted">none</span>'}</div></div>
+      ${isIssue(p) ? "" : `<div class="tkband-g"><h3>Related parts</h3><div class="stagerow">${partChips}</div></div>`}
+      ${(ticketChips || woChips) ? `<div class="tkband-g"><h3>Linked</h3><div class="linkrow">${ticketChips}${woChips}</div></div>` : ""}
     </div>
-    <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div>
+    ${(() => {
+      const nAtt = (p.docs || []).length + (p.files || []).length;
+      const expanded = !!view.tkMetaAll;
+      const capped = !expanded && nAtt > 6;
+      return `<div class="tkband-row tkband-attach${capped ? " capped" : ""}">
+      <div class="tkband-g grow"><h3>Documents <span class="muted nocaps">— Google Docs, Slides and Sheets</span></h3>
+        ${docLinkList(p.docs, { onRemove: `rmProjDoc`, empty: "None linked yet.", addLabel: "+ Link a document" })}
+        <div class="no-print" style="margin-top:8px"><button class="sm" onclick="openDocLinkModal({ coll: 'projects', id: '${p.id}' })">+ Link a document</button></div></div>
+      <div class="tkband-g grow"><h3>Files</h3>
+        <div class="filegrid">
+          ${(p.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+        </div>
+        <div class="no-print" style="margin-top:8px"><button class="sm" onclick="addProjectFiles()">+ Add files</button></div></div>
+    </div>
+    ${capped ? `<div class="no-print tkband-more"><button class="sm" onclick="view.tkMetaAll=true;render()">Show all ${nAtt} attachments</button></div>` : ""}
+    ${expanded && nAtt > 6 ? `<div class="no-print tkband-more"><button class="sm" onclick="view.tkMetaAll=false;render()">Show less</button></div>` : ""}`;
+    })()}
       </aside>
     </div>
   </div></section>`;

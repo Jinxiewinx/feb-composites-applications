@@ -495,7 +495,10 @@ for (const vp of widths) {
     /* The ticket metadata, both widths. The details disclosure is GONE — the
        phone problem it fought over is solved structurally now: .tkmain comes
        first in the DOM, so below 901px (where .tksplit stacks by source order)
-       the discussion leads and the metadata follows. Two behaviours to hold:
+       the discussion leads and the metadata follows. On desktop the metadata
+       is a horizontal BAND above the discussion (grid areas flip it, the DOM
+       order stays), so wide screens only assert that it paints, not where it
+       sits. Two behaviours to hold:
        the metadata must actually PAINT everywhere (the regression that took
        the desktop page down was metadata with real boxes the browser never
        drew — checkVisibility() is the one API that tells the truth about
