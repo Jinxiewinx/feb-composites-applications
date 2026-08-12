@@ -326,6 +326,44 @@ const INPUT_RULES = [
   [/^1\.\s$/, t => rteExec(t, "insertOrderedList")],
   [/^>\s$/, t => rteBlock(t, "blockquote")],
 ];
+/* Every rule command acts on the caret's BLOCK, but the caret's line and the
+   caret's block are not always the same thing: after a Shift+Enter (or a
+   pasted soft wrap) the "new line" is a <br> inside the previous paragraph.
+   "* " typed there used to hand the whole paragraph to insertUnorderedList
+   and the line above got swallowed into the first bullet — same story for
+   "# " and "> ". So before a rule runs, the caret's line is cut out into its
+   own block: everything from the caret's line to the block's end moves to a
+   fresh sibling block and the <br> that separated the lines goes with it. A
+   line that already owns its block (the common case) is left alone. */
+function rteOwnLine(targetId) {
+  const ed = document.getElementById(targetId);
+  const sel = window.getSelection && window.getSelection();
+  if (!ed || !sel || !sel.anchorNode) return;
+  let block = sel.anchorNode;
+  while (block && block.parentNode !== ed) block = block.parentNode;
+  // Inside a list or table the rules mean something else (or nothing); only a
+  // plain text block is worth splitting.
+  if (!block || block.nodeType !== 1 || !/^(P|DIV|H1|H2|H3|H4|BLOCKQUOTE|PRE)$/.test(block.nodeName)) return;
+  let top = sel.anchorNode;
+  while (top.parentNode !== block) top = top.parentNode;
+  if (!top.previousSibling) return;                 // the line already leads its block
+  const nb = document.createElement(block.nodeName === "DIV" ? "div" : "p");
+  const move = [top];
+  for (let s = top.nextSibling; s; s = s.nextSibling) move.push(s);
+  const brBefore = top.previousSibling;
+  move.forEach(node => nb.appendChild(node));
+  if (brBefore && brBefore.nodeName === "BR") brBefore.remove();
+  /* The marker was the line's only content and it is already deleted, so the
+     new block can be visually empty — and a caret cannot sit in an empty
+     text node; the browser snaps it back to the previous block, which is
+     exactly the wrap-the-wrong-line bug again. The <br> filler is the same
+     idiom rteSeed uses for an empty editor. */
+  if (nb.textContent === "" && !nb.querySelector("br, img")) nb.appendChild(document.createElement("br"));
+  block.parentNode.insertBefore(nb, block.nextSibling);
+  const r = document.createRange();
+  r.selectNodeContents(nb); r.collapse(true);
+  sel.removeAllRanges(); sel.addRange(r);
+}
 function rteInputRules(e, targetId) {
   if (e.key !== " " ) return;
   const sel = window.getSelection && window.getSelection();
@@ -339,6 +377,7 @@ function rteInputRules(e, targetId) {
     const r = document.createRange();
     r.setStart(n, sel.anchorOffset - (before.length - 1)); r.setEnd(n, sel.anchorOffset);
     r.deleteContents();
+    rteOwnLine(targetId);
     run(targetId);
     return;
   }

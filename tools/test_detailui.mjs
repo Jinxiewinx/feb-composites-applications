@@ -576,6 +576,36 @@ for (const vp of widths) {
           } finally { host.remove(); }
         });
         ok(`${at} backspace exits an empty bullet`, unlisted === "empty-exits/full-native", unlisted);
+
+        /* "* " typed on a soft-wrapped line (a <br> inside the paragraph,
+           i.e. Shift+Enter) must start a bullet on THAT line only — it used
+           to hand the whole paragraph to insertUnorderedList and swallow the
+           previous line into the first bullet. The caret sits after the "*"
+           and the space keydown goes through rteKeys, same as typing. */
+        const softline = await page.evaluate(() => {
+          const host = document.createElement("div");
+          host.id = "rte-scratch"; host.contentEditable = "true";
+          host.innerHTML = "<p>prev line<br>*</p>";
+          document.body.appendChild(host);
+          try {
+            // Focus FIRST, then place the caret — that is the state real
+            // typing is in. Setting a range in an unfocused editor and then
+            // letting rteExec's focus() run resets the caret to the start,
+            // which is a test artifact, not a path a keystroke can reach.
+            host.focus();
+            const star = host.querySelector("p").lastChild;   // the "*" text node
+            const r = document.createRange(); r.setStart(star, 1); r.collapse(true);
+            const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+            rteKeys({ key: " ", preventDefault: () => {} }, "rte-scratch");
+            const ul = host.querySelector("ul");
+            return [
+              ul ? "list" : "no-list",
+              ul && ul.textContent.includes("prev line") ? "swallowed" : "prev-free",
+              host.textContent.includes("prev line") ? "prev-kept" : "prev-lost",
+            ].join("/");
+          } finally { host.remove(); }
+        });
+        ok(`${at} "* " on a soft-wrapped line bullets only that line`, softline === "list/prev-free/prev-kept", softline);
       }
     }
 

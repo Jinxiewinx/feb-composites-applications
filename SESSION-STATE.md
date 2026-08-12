@@ -35,7 +35,15 @@ Real-DOM test in test_detailui's ticket-detail desktop pass, menu drift
 guard in test_app. Third follow-up: Backspace on an EMPTY bullet now exits
 the list via outdent (rteSelLi + guarded branch in rteKeys; collapsed caret
 only, non-empty items keep native merge); real-DOM test beside the table
-one.
+one. Fourth follow-up: "* " (and every input rule) typed on a soft-wrapped
+line (<br> inside the paragraph, i.e. Shift+Enter) used to hand the WHOLE
+paragraph to the command and swallow the previous line into the first
+bullet. rteOwnLine() in rte.js now splits the caret's line into its own
+block before any rule runs; the empty new block gets a <br> filler because
+a caret can't sit in an empty text node (browser snaps it back to the
+previous block — that was the second half of the bug). Real-DOM test in
+detailui (focus the scratch editor BEFORE setting the range, or rteExec's
+focus() resets the caret — test artifact to remember).
 
 Previous status (2026-08-08): **Backlog batch: eight deferred items landed.** Simon
 asked for a sweep of everything "left for later" across this file's history
