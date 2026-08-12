@@ -550,6 +550,32 @@ for (const vp of widths) {
           } finally { host.remove(); }
         });
         ok(`${at} composer table growth`, grown === "3/4/4/5/0", grown);
+
+        /* Backspace on an empty bullet leaves the list (Enter already does,
+           natively; deleting your way out never worked). Same scratch-editor
+           idiom: caret in the empty second item, fake Backspace through
+           rteKeys, the <ul> must lose that item — and a caret in a NON-empty
+           item must fall through to the browser (preventDefault not called). */
+        const unlisted = await page.evaluate(() => {
+          const host = document.createElement("div");
+          host.id = "rte-scratch"; host.contentEditable = "true";
+          host.innerHTML = "<ul><li>keep</li><li><br></li></ul>";
+          document.body.appendChild(host);
+          try {
+            const put = li => { const r = document.createRange(); r.selectNodeContents(li); r.collapse(true);
+              const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+            let prevented = 0;
+            const ev = { key: "Backspace", preventDefault: () => { prevented++; } };
+            put(host.querySelectorAll("li")[1]);
+            rteKeys(ev, "rte-scratch");
+            const emptyGone = host.querySelectorAll("li").length === 1 && prevented === 1;
+            put(host.querySelector("li"));
+            rteKeys(ev, "rte-scratch");
+            const fullKept = host.querySelectorAll("li").length === 1 && prevented === 1;
+            return [emptyGone ? "empty-exits" : "empty-stuck", fullKept ? "full-native" : "full-hijacked"].join("/");
+          } finally { host.remove(); }
+        });
+        ok(`${at} backspace exits an empty bullet`, unlisted === "empty-exits/full-native", unlisted);
       }
     }
 

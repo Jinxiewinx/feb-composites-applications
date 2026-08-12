@@ -32,7 +32,10 @@ follow-up: comment tables can now GROW (they were stuck at the inserted
 back, and "Table row"/"Table column" live in the composer's insert menu
 (rteTableAddRow/Col in rte.js; rows grown from the header land in tbody).
 Real-DOM test in test_detailui's ticket-detail desktop pass, menu drift
-guard in test_app.
+guard in test_app. Third follow-up: Backspace on an EMPTY bullet now exits
+the list via outdent (rteSelLi + guarded branch in rteKeys; collapsed caret
+only, non-empty items keep native merge); real-DOM test beside the table
+one.
 
 Previous status (2026-08-08): **Backlog batch: eight deferred items landed.** Simon
 asked for a sweep of everything "left for later" across this file's history

@@ -91,6 +91,16 @@ function rteSelCell(targetId) {
     if (n.nodeName === "TD" || n.nodeName === "TH") return n;
   return null;
 }
+/* The list item holding a COLLAPSED caret, or null. A real selection returns
+   null on purpose: backspace over selected text must stay a plain delete. */
+function rteSelLi(targetId) {
+  const ed = document.getElementById(targetId);
+  const sel = window.getSelection && window.getSelection();
+  if (!ed || !sel || !sel.anchorNode || !sel.isCollapsed || !ed.contains(sel.anchorNode)) return null;
+  for (let n = sel.anchorNode; n && n !== ed; n = n.parentNode)
+    if (n.nodeName === "LI") return n;
+  return null;
+}
 function rteCaretIn(cell) {
   const r = document.createRange();
   r.selectNodeContents(cell); r.collapse(true);
@@ -560,6 +570,17 @@ function rteKeys(e, targetId) {
   if (e.key === "Tab") {
     const cell = rteSelCell(targetId);
     if (cell) { e.preventDefault(); rteTableTab(targetId, cell, e.shiftKey); return; }
+  }
+  /* Backspace on an EMPTY bullet leaves the list, matching what Enter on an
+     empty bullet already does natively. Without this, backspace merges the
+     empty item into the previous one and the only way out of a list you're
+     done with was Enter — which nobody reaches for while deleting. outdent
+     lifts one level at a time, so a nested item steps out to its parent list
+     first and a top-level one becomes a paragraph. Non-empty items keep the
+     native merge behavior untouched. */
+  if (e.key === "Backspace") {
+    const li = rteSelLi(targetId);
+    if (li && li.textContent.trim() === "") { e.preventDefault(); rteExec(targetId, "outdent"); return; }
   }
   rteMaybeSlash(e, targetId);
   rteInputRules(e, targetId);
