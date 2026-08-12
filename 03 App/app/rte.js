@@ -70,6 +70,80 @@ function tableHtml(rows, cols) {
   return `<table>${head}${body}</table>`;
 }
 
+/* ---------- growing a table in place ----------
+   The insert command makes a 3x3 and that used to be the table's final size:
+   nothing could add a row or column, so a pull-test table with a fourth
+   coupon meant retyping the whole thing. Two ways to grow now, both acting
+   on the table the caret is sitting in:
+   - Tab walks the cells, and Tab in the LAST cell appends a row (the muscle
+     memory every spreadsheet and every other editor has taught).
+   - "Table row" / "Table column" in the insert menu, for columns (which Tab
+     can't add) and for coarse pointers (no Tab key on a phone).
+   The mutations are plain DOM edits on the contenteditable, so the sanitizer
+   never sees anything the 3x3 didn't already contain; the manual input event
+   afterwards is what keeps the draft autosave honest, because programmatic
+   DOM edits don't fire oninput on their own. */
+function rteSelCell(targetId) {
+  const ed = document.getElementById(targetId);
+  const sel = window.getSelection && window.getSelection();
+  if (!ed || !sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return null;
+  for (let n = sel.anchorNode; n && n !== ed; n = n.parentNode)
+    if (n.nodeName === "TD" || n.nodeName === "TH") return n;
+  return null;
+}
+function rteCaretIn(cell) {
+  const r = document.createRange();
+  r.selectNodeContents(cell); r.collapse(true);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function rteTouched(targetId) {
+  const ed = document.getElementById(targetId);
+  if (ed) ed.dispatchEvent(new Event("input", { bubbles: true }));
+}
+function rteNewRowAfter(row) {
+  const tr = document.createElement("tr");
+  for (let i = 0; i < row.cells.length; i++) { const td = document.createElement("td"); td.innerHTML = "&nbsp;"; tr.appendChild(td); }
+  // A row "after" the header lands at the top of the body, so growing from
+  // the <th> row never puts <td>s inside <thead>.
+  if (row.parentNode.nodeName === "THEAD") {
+    const tbody = row.closest("table").querySelector("tbody") || row.closest("table").appendChild(document.createElement("tbody"));
+    tbody.insertBefore(tr, tbody.firstChild);
+  } else row.parentNode.insertBefore(tr, row.nextSibling);
+  return tr;
+}
+function rteTableTab(targetId, cell, back) {
+  const table = cell.closest("table");
+  const cells = [...table.querySelectorAll("th, td")];
+  const i = cells.indexOf(cell) + (back ? -1 : 1);
+  if (i < 0) return;
+  if (i < cells.length) { rteCaretIn(cells[i]); return; }
+  const tr = rteNewRowAfter(table.rows[table.rows.length - 1]);
+  rteCaretIn(tr.cells[0]);
+  rteTouched(targetId);
+}
+function rteTableAddRow(t) {
+  const cell = rteSelCell(t);
+  if (!cell) { toast("Click into a table first", "warn"); return; }
+  rteCaretIn(rteNewRowAfter(cell.closest("tr")).cells[0]);
+  rteTouched(t);
+}
+function rteTableAddCol(t) {
+  const cell = rteSelCell(t);
+  if (!cell) { toast("Click into a table first", "warn"); return; }
+  const table = cell.closest("table");
+  const idx = cell.cellIndex;
+  let focus = null;
+  for (const row of table.rows) {
+    const el = document.createElement(row.cells[0] && row.cells[0].nodeName === "TH" ? "th" : "td");
+    el.innerHTML = "&nbsp;";
+    const at = row.cells[Math.min(idx, row.cells.length - 1)];
+    at ? at.insertAdjacentElement("afterend", el) : row.appendChild(el);
+    if (row === cell.closest("tr")) focus = el;
+  }
+  if (focus) rteCaretIn(focus);
+  rteTouched(t);
+}
+
 const COMMANDS = [
   { id: "bold", label: "Bold", short: "<b>B</b>", key: "b", bar: 1, bubble: 1,
     run: t => rteExec(t, "bold"), active: () => rteQuery("bold") },
@@ -93,6 +167,10 @@ const COMMANDS = [
     run: t => insertAtCaret(t, "<pre>&nbsp;</pre>") },
   { id: "table", label: "Table", short: "&#8862;", insert: 1, icon: "reports",
     run: t => insertAtCaret(t, tableHtml(3, 3)) },
+  { id: "trow", label: "Table row", short: "&#8862;+", insert: 1, icon: "reports",
+    run: t => rteTableAddRow(t) },
+  { id: "tcol", label: "Table column", short: "&#8862;+", insert: 1, icon: "reports",
+    run: t => rteTableAddCol(t) },
   { id: "hr", label: "Divider", short: "&mdash;", insert: 1, icon: "x",
     run: t => insertAtCaret(t, "<hr>") },
   { id: "image", label: "Photo", short: "&#128247;", bar: 1, insert: 1, icon: "image",
@@ -475,6 +553,13 @@ function rteKeys(e, targetId) {
     const shell = el && el.closest && el.closest(".composer");
     const btn = shell && shell.querySelector("[data-rte-post]");
     if (btn && !btn.disabled) { e.preventDefault(); btn.click(); return; }
+  }
+  /* Tab inside a table walks the cells; in the last cell it appends a row.
+     Outside a table, Tab keeps its browser meaning (focus moves on), which is
+     also why this cannot be an input rule: it must not fire on plain text. */
+  if (e.key === "Tab") {
+    const cell = rteSelCell(targetId);
+    if (cell) { e.preventDefault(); rteTableTab(targetId, cell, e.shiftKey); return; }
   }
   rteMaybeSlash(e, targetId);
   rteInputRules(e, targetId);

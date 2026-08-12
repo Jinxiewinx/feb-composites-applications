@@ -26,7 +26,13 @@ adopt later; NOT has-sel, which test_app pins to the responsive block, even
 as a comment string). New rail-off test in test_app. Suites: test_app 406,
 detailui 882, appui 1242, all green. Follow-up same day: the .prose 68ch
 measure cap is lifted inside .tkmain only (Simon: comments should span the
-width now that the column has it); the cap stands everywhere else.
+width now that the column has it); the cap stands everywhere else. Second
+follow-up: comment tables can now GROW (they were stuck at the inserted
+3x3): Tab walks cells and appends a row from the last cell, Shift+Tab goes
+back, and "Table row"/"Table column" live in the composer's insert menu
+(rteTableAddRow/Col in rte.js; rows grown from the header land in tbody).
+Real-DOM test in test_detailui's ticket-detail desktop pass, menu drift
+guard in test_app.
 
 Previous status (2026-08-08): **Backlog batch: eight deferred items landed.** Simon
 asked for a sweep of everything "left for later" across this file's history

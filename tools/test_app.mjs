@@ -1492,6 +1492,12 @@ await t("the markup builders are pure, escape their input, and size correctly", 
   assert((t3.match(/<tr>/g) || []).length === 3, "3 rows incl. the header: " + t3);
   assert((t3.match(/<td>/g) || []).length === 6, "2 body rows x 3 cols");
   assert((tableHtml(99, 99).match(/<td>/g) || []).length <= 20 * 12, "clamped, so a typo can't emit a 99x99 table");
+  // The 3x3 is a starting size, not a final one: the grow commands must stay
+  // in the insert menu (the DOM behavior itself is exercised in test_detailui,
+  // which has a real browser to Tab around in).
+  const trow = cmdById("trow"), tcol = cmdById("tcol");
+  assert(trow && trow.insert === 1, "Table row lives in the insert menu");
+  assert(tcol && tcol.insert === 1, "Table column lives in the insert menu");
 });
 await t("input rules are the six that match the sanitizer's tags", () => {
   // A rule that emits a tag the sanitizer unwraps would appear to work and then

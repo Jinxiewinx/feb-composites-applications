@@ -521,6 +521,36 @@ for (const vp of widths) {
       });
       ok(`${at} ticket metadata`,
         vp.w <= 900 ? rail === "painted/main-first" : rail.startsWith("painted"), rail);
+
+      /* Table growth (desktop pass only, it needs no viewport): the composer's
+         3x3 used to be a table's final size. Exercises the real DOM path —
+         Tab in the last cell appends a row, the insert-menu commands add a
+         column and a row — on a scratch contenteditable, and checks the
+         header stays td-free (a row grown from the <th> row must land in
+         tbody, not thead). */
+      if (vp.w > 900) {
+        const grown = await page.evaluate(() => {
+          const host = document.createElement("div");
+          host.id = "rte-scratch"; host.contentEditable = "true";
+          host.innerHTML = tableHtml(3, 3);
+          document.body.appendChild(host);
+          try {
+            const cells = host.querySelectorAll("th, td");
+            const last = cells[cells.length - 1];
+            const r = document.createRange(); r.selectNodeContents(last); r.collapse(true);
+            const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+            const rows0 = host.querySelectorAll("tr").length;
+            rteTableTab("rte-scratch", last, false);
+            const rowsTab = host.querySelectorAll("tr").length;
+            rteTableAddCol("rte-scratch");
+            const cols = host.querySelector("tr").cells.length;
+            rteTableAddRow("rte-scratch");
+            const rowsAdd = host.querySelectorAll("tr").length;
+            return [rows0, rowsTab, cols, rowsAdd, host.querySelectorAll("thead td").length].join("/");
+          } finally { host.remove(); }
+        });
+        ok(`${at} composer table growth`, grown === "3/4/4/5/0", grown);
+      }
     }
 
     if (SHOTS) {
