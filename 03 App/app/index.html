@@ -886,6 +886,14 @@
   .prose { font-size: 15px; line-height: 1.65; color: var(--ink); }
   .prose > *, .prose p, .prose ul, .prose ol, .prose h1, .prose h2, .prose h3,
   .prose h4, .prose blockquote { max-width: 68ch; }
+  /* The ticket detail's wide column is the exception: the whole point of the
+     widescreen revamp (metadata band, collapsed rail) was to hand this column
+     the width, and a 68ch cap left the right half of every comment card
+     empty. Simon asked for the text to use it. Everywhere else the measure
+     cap stands. */
+  .tkmain .prose > *, .tkmain .prose p, .tkmain .prose ul, .tkmain .prose ol,
+  .tkmain .prose h1, .tkmain .prose h2, .tkmain .prose h3, .tkmain .prose h4,
+  .tkmain .prose blockquote { max-width: none; }
   /* ---- long tokens ----
      A pasted Drive URL is about 120 characters with no space in it, and a CAD
      filename in the team's own convention (SN6_Undertray_..._REV-C.SLDPRT) is

@@ -24,7 +24,9 @@ selectTicket — never a details element, postmortem still applies), new
 .mdsplit.rail-off class (generic on purpose; workorders/parts/molds can
 adopt later; NOT has-sel, which test_app pins to the responsive block, even
 as a comment string). New rail-off test in test_app. Suites: test_app 406,
-detailui 882, appui 1242, all green.
+detailui 882, appui 1242, all green. Follow-up same day: the .prose 68ch
+measure cap is lifted inside .tkmain only (Simon: comments should span the
+width now that the column has it); the cap stands everywhere else.
 
 Previous status (2026-08-08): **Backlog batch: eight deferred items landed.** Simon
 asked for a sweep of everything "left for later" across this file's history
