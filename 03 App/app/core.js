@@ -310,7 +310,10 @@ function chip(coll, id, label) {
   if (!id) return "";
   const tab = { workOrders: "workorders", parts: "parts", projects: "projects", budget: "budget" }[coll] || coll;
   const known = recById(coll, id);
-  return `<button type="button" class="chip" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</button>`;
+  // data-open: the ctrl/cmd/middle-click hook (see the delegated listeners by
+  // the routing block) — a modified click opens #/<ID> in a new tab instead
+  // of navigating this one.
+  return `<button type="button" class="chip" data-open="${esc(id)}" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</button>`;
 }
 /* ---------- lineage: where a record sits in the chain ----------
    Part > Run > Mold > Plan > Drawings, drawn identically on every record that
@@ -579,6 +582,41 @@ function syncUrl() {
   if (typeof history === "undefined" || !history.replaceState || typeof location === "undefined") return;
   const frag = view.mode === "detail" && view.id ? "#/" + view.id : "#/" + view.tab;
   if (location.hash !== frag) history.replaceState(null, "", frag);
+}
+
+/* ---------- open in a new tab ----------
+   The URL already describes every record (#/<ID>, above), and a fresh tab
+   signs itself in off Firebase's persisted session and redeems the hash via
+   the pending-link machinery — so multi-window "just works" once there is a
+   browser-native way to ask for it. Chips and rail rows are buttons, not
+   anchors (they carry app semantics a bare href cannot), so the modifier
+   click is delegated: ctrl/cmd-click or middle-click on anything carrying
+   data-open, or on a rail row (.pitem, whose DOM id is pi-<record id>),
+   opens that record's deep link in a new tab. Capture phase + stopPropagation
+   so the element's own onclick never also navigates this tab. */
+function newTabIdFrom(target) {
+  if (!target || typeof target.closest !== "function") return null;
+  const t = target.closest("[data-open]") || target.closest('.pitem[id^="pi-"]');
+  if (!t) return null;
+  return (t.dataset && t.dataset.open) || String(t.id || "").slice(3) || null;
+}
+function openIdInNewTab(id) { if (typeof window !== "undefined" && window.open) window.open("#/" + id, "_blank"); }
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("click", e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const id = newTabIdFrom(e.target);
+    if (!id) return;
+    e.preventDefault(); e.stopPropagation();
+    openIdInNewTab(id);
+  }, true);
+  // Middle click arrives as auxclick, button 1.
+  document.addEventListener("auxclick", e => {
+    if (e.button !== 1) return;
+    const id = newTabIdFrom(e.target);
+    if (!id) return;
+    e.preventDefault(); e.stopPropagation();
+    openIdInNewTab(id);
+  }, true);
 }
 
 /* The one case replaceState cannot cover: the hash changing from OUTSIDE the

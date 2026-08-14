@@ -390,6 +390,11 @@
   .goalnum { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
   .goalnum.over { color: var(--bad); }
   .owedcard .orow { display: flex; justify-content: space-between; gap: 10px; margin: 5px 0; font-size: 13px; }
+  /* Flex, not a floated button: float sat the button above the heading's
+     baseline and it read as vertically off-center (Simon, 2026-08-13). */
+  .goalcard .goalhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .buy-cat { font: inherit; font-size: 12.5px; padding: 4px 6px; max-width: 160px;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
   .buy-cost { white-space: nowrap; }
   .buy-cost input { width: 72px; text-align: right; font: inherit; font-size: 12.5px; padding: 4px 6px; margin-left: 1px;
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
@@ -2353,7 +2358,7 @@
     #main .chip { display: inline !important; border: none; background: none; padding: 0; font: inherit; color: inherit; }
     /* The budget list's inline editors print as the plain values they show:
        a form control on paper is chrome around a number. */
-    .list .statusdrop select, .buy-cost input { border: none; background: none; padding: 0; appearance: none; color: inherit; }
+    .list .statusdrop select, .buy-cost input, .buy-cat { border: none; background: none; padding: 0; appearance: none; color: inherit; }
     /* The status board prints one section under the next; side-by-side cards
        waste a page's width on paper. columns:1 because the screen layout is
        masonry columns now, and display:block alone would leave it multi-column

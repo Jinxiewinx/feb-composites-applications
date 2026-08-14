@@ -70,7 +70,7 @@ function budgetBoardsHtml(totalSpent) {
   const owed = owedRows();
   return `<div class="budget-boards">
     <div class="card goalcard">
-      <h3>Budget goals ${isLead() ? `<button class="sm no-print" style="float:right" onclick="openBudgetGoals()">Edit goals</button>` : ""}</h3>
+      <h3 class="goalhead">Budget goals ${isLead() ? `<button class="sm no-print" onclick="openBudgetGoals()">Edit goals</button>` : ""}</h3>
       ${cap ? goalBar("Season", totalSpent, cap, {
         season: true,
         // The quiet split: the tick marks where base ends and contingency begins.
@@ -224,15 +224,25 @@ function renderBuyList() {
           click into the detail and Edit for each one. The row still opens
           the detail; the two live cells stopPropagation so editing never
           navigates. */""}
-    ${rows.map(b => `<tr onclick="view={...view,mode:'detail',id:'${b.id}',edit:false};render()">
+    ${rows.map(b => {
+      /* The category (purpose) is editable here too — tagging a purchase to a
+         section is what makes the goal bars true, and a purchase that landed
+         uncategorized should be one click to fix. A purpose that matches no
+         category stays as its own selected option, so opening the dropdown
+         never silently recategorizes. */
+      const cats = budgetCats().length ? budgetCats().map(c => c.name) : PURPOSE;
+      const opts = (cats.some(c => c.toLowerCase() === String(b.purpose || "").toLowerCase()) || !b.purpose ? cats : [b.purpose, ...cats]);
+      return `<tr data-open="${b.id}" onclick="view={...view,mode:'detail',id:'${b.id}',edit:false};render()">
       <td><b>${esc(b.item || b.id)}</b>${b.retro ? ' <span class="pill retro">retro</span>' : ""}${needsApproval(b) ? ' <span class="pill OnHold" title="Over $50 — needs #purchasing sign-off before ordering">needs approval</span>' : ""}</td>
-      <td>${esc(b.purchaser || "—")}</td><td>${esc(b.purpose || "")}</td>
+      <td>${esc(b.purchaser || "—")}</td>
+      <td onclick="event.stopPropagation()"><select class="buy-cat" onchange="setBuyField('${b.id}','purpose',this.value)" aria-label="Category of ${esc(b.item || b.id)}">
+        ${opts.map(o => `<option ${String(b.purpose || "") === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></td>
       <td onclick="event.stopPropagation()"><div class="statusdrop ${buyStatusClass(b.status)}">
         <select onchange="setBuyField('${b.id}','status',this.value)" aria-label="Status of ${esc(b.item || b.id)}">${BUY_STATUS.map(s => `<option ${b.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></div></td>
       <td class="buy-cost" onclick="event.stopPropagation()">$<input value="${num(b.cost).toFixed(2)}"
         onchange="setBuyField('${b.id}','cost',this.value)" aria-label="Cost of ${esc(b.item || b.id)}"></td>
       <td>${esc(b.dateOrdered || "")}</td>
-    </tr>`).join("")}
+    </tr>`; }).join("")}
   </table>`;
 }
 

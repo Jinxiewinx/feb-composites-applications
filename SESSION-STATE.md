@@ -57,6 +57,16 @@ screenshots show the bars. Declined extras (inline category edit, CSV
 w/ categories) NOT built. Suites: app 410, appui 1242, budget detailui
 35, green.
 
+Also 2026-08-13 (evening): multi-window + budget polish. (1) Ctrl/Cmd-click
+and middle-click open records in a new tab: chips gained data-open, rail
+rows resolve via their pi-<id> DOM ids, delegated capture listeners in
+core.js (newTabIdFrom + openIdInNewTab) — rides the EXISTING #/<ID>
+deep-link routing (test_route.mjs), no history/pushState change. (2) Budget
+rows also tag the category inline (buy-cat select; off-list purposes
+preserved as their own selected option, never silently recategorized), and
+rows carry data-open. (3) goalhead flex fix — Edit goals button was
+vertically off-center (was float:right in the h3).
+
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,

@@ -1923,6 +1923,22 @@ await t("status and cost are editable in the budget list, without breaking row n
   assert(main.innerHTML.includes("needs approval"), "the over-$50 pill appears without opening anything");
   setBuyField("B-E1", "status", "Ordered");
   assert(buyById("B-E1").status === "Ordered" && !main.innerHTML.includes("needs approval"), "Ordered clears the approval flag in place");
+  // The category is inline too — tagging a purchase to a section is what
+  // makes the goal bars true — and the row advertises its deep link.
+  assert(/setBuyField\('B-E1','purpose'/.test(main.innerHTML), "the category cell is a select wired to the row");
+  assert(main.innerHTML.includes('data-open="B-E1"'), "the row carries data-open for modified clicks");
+  DB.budget.push({ id: "B-E2", item: "van", cost: "10", status: "Submitted", purchaser: "S", purpose: "Gas run" });
+  render();
+  assert(/<option selected>Gas run<\/option>/.test(main.innerHTML), "a purpose outside the list survives as its own selected option");
+});
+await t("modified clicks resolve a new-tab id from chips and rail rows, and nowhere else", () => {
+  assert(chip("parts", "P-NT", "x").includes('data-open="P-NT"'), "chips carry the deep-link id");
+  const viaData = { closest: sel => sel === "[data-open]" ? { dataset: { open: "WO-7" } } : null };
+  assert(newTabIdFrom(viaData) === "WO-7", "data-open wins");
+  const viaRow = { closest: sel => sel === '.pitem[id^="pi-"]' ? { id: "pi-MOLD-SN6-004", dataset: {} } : null };
+  assert(newTabIdFrom(viaRow) === "MOLD-SN6-004", "a rail row's pi- DOM id is the record id");
+  assert(newTabIdFrom({ closest: () => null }) === null, "anywhere else the click stays a normal click");
+  assert(newTabIdFrom(null) === null, "and a null target is inert");
 });
 await t("budget goals: bars against goals, quiet season split, owed list, category-driven purpose", () => {
   window.BUDGET_CFG = { categories: [{ name: "Resin & hardener", goal: 1500 }, { name: "Consumables", goal: 100 }],
