@@ -1308,7 +1308,13 @@
   .pgrouphd .pg-open:hover { color: var(--brand-ink); text-decoration: underline; }
   /* A part with no runs. Dashed, because there is nothing under it to select —
      it is the shape of a gap, and the button is the only thing to do with it. */
-  .pgrouphd.norows { border: 1px dashed var(--border-2); background: none; }
+  /* NOT sticky, unlike its parent rule: a header sticks so the rows scrolling
+     under it stay labelled, and this one has no rows. Sticky, two adjacent
+     "no run yet" headers parked in the same slot and — with the transparent
+     background below — printed their names through each other. Static also
+     removes it from the positioned stacking order, so it slides UNDER a stuck
+     opaque header instead of painting over it in transit. */
+  .pgrouphd.norows { position: static; border: 1px dashed var(--border-2); background: none; }
   .pgrouphd .pg-start { margin-left: auto; padding: 2px 8px; }
 
   /* The section jump bar. Geometry borrowed from .jumpbar (which Parts still

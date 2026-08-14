@@ -1178,6 +1178,15 @@ await t("the rail admits that it scrolls", () => {
   assert(/\.plistfade \{[^}]*position: sticky/.test(css), "which rides the bottom of the visible area");
   assert(/\.plist::-webkit-scrollbar-thumb/.test(css), "and a scrollbar you can see");
 });
+await t("a 'no run yet' group header is not sticky, so two of them can never pile up", () => {
+  // Sticky + background:none meant two adjacent run-less part headers parked
+  // in the same sticky slot and printed their names through each other
+  // (Simon's screenshot, 2026-08-13). A header sticks to label the rows
+  // scrolling under it; a header with no rows scrolls like a row.
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  assert(/\.pgrouphd \{[^}]*position: sticky/.test(css), "real group headers still stick");
+  assert(/\.pgrouphd\.norows \{ position: static;/.test(css), "run-less headers are static, as written");
+});
 await t("Group: subteam heads each run without disturbing keyboard navigation", () => {
   partsFixture();
   sortPartsBy("group");
