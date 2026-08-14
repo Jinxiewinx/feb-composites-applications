@@ -67,6 +67,11 @@ preserved as their own selected option, never silently recategorized), and
 rows carry data-open. (3) goalhead flex fix — Edit goals button was
 vertically off-center (was float:right in the h3).
 
+Also 2026-08-13 (night): tickets rail sub-tickets fold — caret on parent
+rows (▾ / ▸ + hidden count), state per-parent in view.tkFold, fold lives
+in tkRailPlan so keyboard rows skip hidden children; the open ticket
+stays pinned under a folded parent (same never-hide rule as the filters).
+
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,
