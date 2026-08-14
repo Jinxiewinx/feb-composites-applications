@@ -2,7 +2,10 @@
 /* people.js — the People tab.
    Team directory: everyone on the roster with their photo, role, email, and
    what they're currently on the hook for (parts / projects / work orders),
-   pulled live. Leads can bump a role; you set your own photo from the topbar. */
+   pulled live. Leads can bump a role or remove someone from the roster
+   (rosterDel in core.js — same confirmed flow as the topbar Roster screen,
+   and the firestore rules enforce lead-only server-side); you set your own
+   photo from the topbar. */
 
 // Records currently assigned to a given person (by email / name match).
 function assignmentsFor(email) {
@@ -45,7 +48,8 @@ function renderPeople() {
           <div><div class="pname">${esc(u.name || u.email)}${me ? ' <span class="muted tny">(you)</span>' : ""}</div>
           <div class="muted tny">${esc(u.email)}</div></div></div></td>
         <td>${isLead() && !me
-          ? `<select onchange="setRole('${esc(u.email)}',this.value)"><option ${u.role === "member" ? "selected" : ""}>member</option><option ${u.role === "lead" ? "selected" : ""}>lead</option></select>`
+          ? `<select onchange="setRole('${esc(u.email)}',this.value)"><option ${u.role === "member" ? "selected" : ""}>member</option><option ${u.role === "lead" ? "selected" : ""}>lead</option></select>
+             <button class="sm danger no-print" onclick="rosterDel('${esc(u.email)}')">Remove</button>`
           : `<span class="pill">${esc(u.role || "member")}</span>`}
           ${me ? ` <button class="sm" onclick="setMyAvatar()">Set photo</button>` : ""}</td>
         <td>${a.parts.length + a.projects.length + a.wos.length === 0 ? '<span class="muted tny">no open assignments</span>' : `

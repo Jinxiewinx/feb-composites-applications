@@ -2951,6 +2951,19 @@ await t("people renders as a table (not the old card grid), keeps role-editing a
   assert(!main.innerHTML.includes("setRole('simon@berkeley.edu'"), "no self-role-edit dropdown for you");
   assert(main.innerHTML.includes("Set photo"), "signed-in user still gets a self photo-set button");
 });
+await t("a lead can remove someone from the roster on People, behind the confirm", async () => {
+  DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }, { email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
+  DB.parts = []; DB.projects = []; DB.workOrders = [];
+  view = { ...view, tab: "people", q: "" }; render();
+  assert(/rosterDel\('nick@b\.edu'\)/.test(main.innerHTML), "a Remove button on the other person's row");
+  assert(!main.innerHTML.includes("rosterDel('simon@berkeley.edu'"), "but never on your own row here");
+  calls.length = 0;
+  rosterDel("nick@b.edu");
+  assert(!calls.some(c => c[0] === "rosterDelete"), "nothing is deleted before the confirm");
+  confirmProceed();
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  assert(calls.some(c => c[0] === "rosterDelete"), "confirming removes the roster entry (rules enforce lead-only server-side)");
+});
 await t("a Cancelled ticket doesn't count as an open assignment on People", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
   DB.parts = [];
