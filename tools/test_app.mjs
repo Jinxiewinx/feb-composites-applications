@@ -2917,6 +2917,12 @@ await t("status board: colored stage pills, and every record is a link, not pros
   assert(/class="chip"[^>]*openRecord\('workorders','WO-R1'\)/.test(html), "an in-work WO is a real chip link");
   assert(/class="chip"[^>]*openRecord\('parts','P-R1'\)/.test(html), "a deadline row links to its record");
   assert(!/<ul>/.test(html), "the plain-text bullet lists are gone");
+  // Masonry columns, not an auto-fit grid: five cards of unequal height in a
+  // grid gave ragged rows, an orphan stretched card, and gulfs of empty page
+  // ("blocks all over the screen"). Pinned so a tidy-up doesn't bring it back.
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  assert(css.includes(".rgrid { columns: 320px; column-gap: 14px; }"), "the board packs into masonry columns");
+  assert(css.includes(".rgrid > .card { break-inside: avoid; }"), "and a card never splits across columns");
   DB.workOrders = [];
 });
 await t("people shows a member's live assignments", () => {

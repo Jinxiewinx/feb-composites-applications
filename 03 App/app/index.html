@@ -311,8 +311,15 @@
   .stage.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
   .stagerow { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }
   /* The Reports status board: one card per section instead of one 1600px
-     card whose text ran ~500px and left the rest empty. */
-  .rgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+     card whose text ran ~500px and left the rest empty. Masonry columns, not
+     a grid: five cards of wildly unequal height (a one-line Budget next to an
+     N-row deadline list) in an auto-fit grid gave ragged rows, a lone
+     stretched card when the tracks didn't divide, and gulfs of empty page —
+     "blocks all over the screen" (Simon, 2026-08-13). Columns pack each card
+     under the previous one; the card's own 14px bottom margin is the vertical
+     gutter, matching column-gap, where the grid's gap had doubled it. */
+  .rgrid { columns: 320px; column-gap: 14px; }
+  .rgrid > .card { break-inside: avoid; }
   .stage-bar { width: 64px; height: 5px; border-radius: 999px; background: var(--fill); overflow: hidden; margin-top: 4px; }
   .stage-bar-fill { height: 100%; border-radius: 999px; }
   .stage-bar-fill.st-0 { background: var(--muted); }
@@ -2310,8 +2317,10 @@
        every work order, blocker and deadline vanished from the printout. */
     #main .chip { display: inline !important; border: none; background: none; padding: 0; font: inherit; color: inherit; }
     /* The status board prints one section under the next; side-by-side cards
-       waste a page's width on paper. */
-    .rgrid { display: block; }
+       waste a page's width on paper. columns:1 because the screen layout is
+       masonry columns now, and display:block alone would leave it multi-column
+       on paper. */
+    .rgrid { display: block; columns: 1; }
     .rgrid .card { margin-bottom: 8px; break-inside: avoid; }
     /* A canvas is not a dependable printed artifact, and the exploded SVG
        already is one — it's what gets initialled for CS-003 §7.2. */

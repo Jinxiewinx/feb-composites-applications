@@ -9,7 +9,18 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-11
+Last updated: 2026-08-13
+Newest: **Reports "Weekly status board" scatter fixed (2026-08-13).** Simon
+reported "blocks all over the screen"; two investigation agents confirmed
+no regression — the 640ec38 card-grid layout itself was the problem:
+auto-fit minmax(320px,1fr) orphaned the fifth card, align-items:start left
+ragged gulfs, and .card's 14px margin doubled the grid's 14px row gap.
+Fix: .rgrid is masonry columns now (columns: 320px; column-gap: 14px;
+cards break-inside: avoid; print block gets columns: 1). Both rules pinned
+in test_app's status-board test. Suites: test_app 406, appui 1242,
+print_mobile 14, green.
+
+Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,
 then the .tkmeta column) squeezed the description/sub-tickets/thread to
