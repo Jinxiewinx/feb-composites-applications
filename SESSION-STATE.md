@@ -36,6 +36,14 @@ classes + -webkit-line-clamp 2 + new .lbl-rid 9.5pt row in print.css; old
 one line" replaced by "fully readable in <=2 lines", new FLAMMABLES CABINET
 BIN fixture. Suites: labels 36, qr 69, app 406, print_mobile 14, green.
 
+Also 2026-08-13 (later): three quick Simon asks, all live:
+(1) ticket rail default flipped to visible (view.tkRailOff), (2) WO "no run
+yet" headers un-stickied (overlap bug), (3) roster removal surfaced on
+People for leads (reuses rosterDel), (4) Budget list rows edit status+cost
+inline (setBuyField in budget.js, statusdrop Draft/InWork/Complete CSS
+variants, .buy-cost input, print rule strips the control chrome; New
+Purchase + row-click detail unchanged).
+
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,

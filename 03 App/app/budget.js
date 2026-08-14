@@ -84,13 +84,33 @@ function renderBuyList() {
   ${D.length === 0 ? `<div class="card">No purchases logged yet. <b>New Purchase</b> to start.</div>` : ""}
   <table class="list">
     <tr><th>Item</th><th>Purchaser</th><th>Purpose</th><th>Status</th><th>Cost</th><th>Ordered</th></tr>
+    ${/* Status and cost are edited HERE, in the row (Simon, 2026-08-13): the
+          week's real workflow is walking the list marking things Ordered or
+          Reimbursed and fixing a price off the receipt, and that took a
+          click into the detail and Edit for each one. The row still opens
+          the detail; the two live cells stopPropagation so editing never
+          navigates. */""}
     ${rows.map(b => `<tr onclick="view={...view,mode:'detail',id:'${b.id}',edit:false};render()">
       <td><b>${esc(b.item || b.id)}</b>${b.retro ? ' <span class="pill retro">retro</span>' : ""}${needsApproval(b) ? ' <span class="pill OnHold" title="Over $50 — needs #purchasing sign-off before ordering">needs approval</span>' : ""}</td>
       <td>${esc(b.purchaser || "—")}</td><td>${esc(b.purpose || "")}</td>
-      <td><span class="pill ${buyStatusClass(b.status)}">${esc(b.status)}</span></td>
-      <td>$${num(b.cost).toFixed(2)}</td><td>${esc(b.dateOrdered || "")}</td>
+      <td onclick="event.stopPropagation()"><div class="statusdrop ${buyStatusClass(b.status)}">
+        <select onchange="setBuyField('${b.id}','status',this.value)" aria-label="Status of ${esc(b.item || b.id)}">${BUY_STATUS.map(s => `<option ${b.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></div></td>
+      <td class="buy-cost" onclick="event.stopPropagation()">$<input value="${num(b.cost).toFixed(2)}"
+        onchange="setBuyField('${b.id}','cost',this.value)" aria-label="Cost of ${esc(b.item || b.id)}"></td>
+      <td>${esc(b.dateOrdered || "")}</td>
     </tr>`).join("")}
   </table>`;
+}
+
+/* Row-level edit from the list. Same write path as updBuy but keyed by id
+   rather than view.id, because nothing is "open". Rerender always: status and
+   cost both feed the stat tiles and the needs-approval pill. */
+function setBuyField(id, key, val) {
+  const b = buyById(id);
+  if (!b) return;
+  b[key] = val;
+  saveBuy(b, key);
+  render();
 }
 
 function buyFld(b, label, key, opts) {

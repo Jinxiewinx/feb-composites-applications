@@ -1906,6 +1906,24 @@ await t("budget stat row counts over-$50-and-still-Submitted, not just over-$50"
   view = { ...view, tab: "budget", mode: "list" }; render();
   assert(main.innerHTML.includes('bignum">1</div><div class="stat-label">Over $50, unapproved'), "only B3 counts: " + main.innerHTML);
 });
+await t("status and cost are editable in the budget list, without breaking row navigation", () => {
+  DB.budget = [{ id: "B-E1", item: "epoxy", cost: "40", status: "Submitted", purchaser: "Simon" }];
+  view = { ...view, tab: "budget", mode: "list", q: "", fStatus: "" }; render();
+  // The two live cells, guarded so editing never opens the detail.
+  assert(/setBuyField\('B-E1','status'/.test(main.innerHTML), "the status cell is a select wired to the row's id");
+  assert(/setBuyField\('B-E1','cost'/.test(main.innerHTML), "the cost cell is an input wired to the row's id");
+  assert((main.innerHTML.match(/event\.stopPropagation\(\)/g) || []).length >= 2, "both cells swallow the click the row would navigate on");
+  assert(main.innerHTML.includes("mode:'detail',id:'B-E1'"), "the row itself still opens the detail");
+  // Editing writes scoped and rerenders: cost over $50 while Submitted must
+  // surface the needs-approval pill and bump the stat tile.
+  calls.length = 0;
+  setBuyField("B-E1", "cost", "80");
+  assert(buyById("B-E1").cost === "80", "cost written");
+  assert(calls.some(c => c[0] === "save" && c[1] === "budget" && c[3] === "cost"), "saved field-scoped, not whole-doc");
+  assert(main.innerHTML.includes("needs approval"), "the over-$50 pill appears without opening anything");
+  setBuyField("B-E1", "status", "Ordered");
+  assert(buyById("B-E1").status === "Ordered" && !main.innerHTML.includes("needs approval"), "Ordered clears the approval flag in place");
+});
 await t("newBuy starts with empty receipt fields", async () => { await newBuy(); const b = buyById(view.id); assert(b.receiptUrl === "" && b.receiptPath === "", "no receipt yet"); });
 await t("purchase detail shows add-receipt prompt when none, thumbnail when attached", () => {
   view = { ...view, tab: "budget", mode: "detail", id: "B-R1", edit: false };
