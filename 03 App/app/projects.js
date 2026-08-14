@@ -312,16 +312,18 @@ function delProject(id) {
    between statuses is how the Monday meeting actually runs. */
 function renderProjects() {
   const sel = selectedTicket();
-  /* rail-off: with a ticket open the index yields its clamp() track to the
-     discussion, unless the toolbar toggle asked for it back (view.tkRail).
-     The board never gets the class, so leaving a ticket restores the rail
-     for free. The rail stays in the DOM either way — CSS hides it. */
-  const railOff = sel && !view.tkRail;
+  /* rail-off: the toolbar toggle can hand the rail's clamp() track to the
+     discussion, but the DEFAULT with a ticket open is rail visible — Simon
+     tried auto-collapse for two days and asked for the list back
+     (2026-08-13). The board never gets the class, and the rail stays in the
+     DOM either way — CSS hides it. view.tkRailOff persists across ticket-to-
+     ticket navigation because every view spread carries it. */
+  const railOff = sel && !!view.tkRailOff;
   return `<div class="mdsplit tkouter ${sel ? "has-sel" : ""}${railOff ? " rail-off" : ""}">
     ${renderTicketIndex()}${sel ? renderProjDetail() : renderTicketOverview()}
   </div>`;
 }
-function toggleTicketRail() { view = { ...view, tkRail: !view.tkRail }; render(); }
+function toggleTicketRail() { view = { ...view, tkRailOff: !view.tkRailOff }; render(); }
 
 /* ---------- selection ----------
    view.mode === "detail" stays the switch, exactly as on Work Orders: a dozen
@@ -638,11 +640,11 @@ function ticketBackBtn() {
   return `<button class="ib" title="${esc(label)}" onclick="navBack({tab:'projects',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(label)}</button>`;
 }
 
-/* The rail collapses when a ticket opens (renderProjects adds rail-off) so the
-   discussion gets the width; this toggle brings it back for browsing ticket to
-   ticket. Hidden <=900 where has-sel hides the rail regardless. */
+/* The rail stays visible when a ticket opens; this toggle hides it (rail-off)
+   when the discussion wants the full width, and shows it again. Hidden <=900
+   where has-sel hides the rail regardless. */
 function ticketRailBtn() {
-  const on = !!view.tkRail;
+  const on = !view.tkRailOff;
   return `<button class="ib tkrail-btn" title="${on ? "Hide the tickets list" : "Show the tickets list"}"
     aria-label="${on ? "Hide the tickets list" : "Show the tickets list"}" aria-pressed="${on}"
     onclick="toggleTicketRail()">${icon("menu", 16)}</button>`;

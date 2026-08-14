@@ -4753,24 +4753,26 @@ await t("digit keys jump to the filtered section list and return 'section'", () 
   view = { ...view, mode: "list", id: null };
   assert(tkKeydown(ev("1")) === null, "digits are inert on the overview");
 });
-await t("opening a ticket collapses the rail; the toggle brings it back and survives switching tickets", () => {
-  view = { ...view, tab: "projects", mode: "list", id: null, tkRail: false };
+await t("a ticket opens WITH the rail; the toggle hides it and the choice survives switching tickets", () => {
+  view = { ...view, tab: "projects", mode: "list", id: null, tkRailOff: false };
   render();
   assert(!main.innerHTML.includes("rail-off"), "the board never collapses the rail");
   view = { ...view, mode: "detail", id: "TKT-P", edit: false };
   render();
-  assert(main.innerHTML.includes("rail-off"), "a ticket open hands the rail's track to the discussion");
-  assert(main.innerHTML.includes('class="mdindex"'), "the rail is hidden by CSS, never destroyed");
+  // Default flipped 2026-08-13: Simon tried auto-collapse for two days and
+  // asked for the list back. Visible is the default; hiding is the option.
+  assert(!main.innerHTML.includes("rail-off"), "a ticket opens with the rail still visible");
+  assert(main.innerHTML.includes('class="mdindex"'), "the rail renders beside the detail");
   toggleTicketRail();
-  assert(view.tkRail === true && !main.innerHTML.includes("rail-off"), "the toolbar toggle shows the rail again");
+  assert(view.tkRailOff === true && main.innerHTML.includes("rail-off"), "the toolbar toggle hands the track to the discussion");
   selectTicket("TKT-S");
-  assert(view.tkRail === true && !main.innerHTML.includes("rail-off"), "and the choice survives switching tickets");
+  assert(view.tkRailOff === true && main.innerHTML.includes("rail-off"), "and the choice survives switching tickets");
   toggleTicketRail();
-  assert(main.innerHTML.includes("rail-off"), "toggling back collapses it again");
+  assert(!main.innerHTML.includes("rail-off"), "toggling back shows the rail again");
   // Pinned like the responsive collapse rule is: a tidy-up must not lose it.
   const css = readFileSync(join(root, "index.html"), "utf8");
   assert(css.includes(".mdsplit.rail-off > .mdindex { display: none; }"), "the desktop hide rule exists as written");
-  view = { ...view, mode: "list", id: null, tkRail: false };
+  view = { ...view, mode: "list", id: null, tkRailOff: false };
 });
 await t("ticket filter keys are their own: tkLate does not leak into fLate or woLate", () => {
   view = { ...view, tab: "projects", tkLate: true };

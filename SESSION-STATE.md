@@ -18,7 +18,11 @@ ragged gulfs, and .card's 14px margin doubled the grid's 14px row gap.
 Fix: .rgrid is masonry columns now (columns: 320px; column-gap: 14px;
 cards break-inside: avoid; print block gets columns: 1). Both rules pinned
 in test_app's status-board test. Suites: test_app 406, appui 1242,
-print_mobile 14, green.
+print_mobile 14, green. Same day: ticket rail default FLIPPED — Simon
+tried the auto-collapse for two days and wants the rail visible when a
+ticket opens; the toggle now hides it instead (state renamed
+view.tkRail -> view.tkRailOff, default falsy = visible; test flipped to
+match). The rail-off CSS and button are unchanged.
 
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
