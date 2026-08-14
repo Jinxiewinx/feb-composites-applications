@@ -1298,6 +1298,13 @@
      a hairline guide is the whole genealogy at rail altitude; the lineage bar
      on the pane carries the named version. */
   .pitem.pi-child { margin-left: 14px; border-left: 2px solid var(--line); border-radius: 0 7px 7px 0; }
+  /* The sub-ticket fold caret on a parent row. Compact on purpose — it lives
+     inside the name slot of a dense rail row; when folded it carries the
+     hidden-child count so a collapsed parent still admits what's under it. */
+  .pi-fold { font: inherit; font-size: 11px; line-height: 1; padding: 2px 5px; margin-right: 4px;
+    border: none; border-radius: var(--radius); background: none; color: var(--muted); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 2px; vertical-align: -1px; }
+  .pi-fold:hover { background: var(--fill); color: var(--ink); }
   .pitem.pi-child.sel { border-left-color: var(--accent); }
   /* Tickets' filter row has two controls after the search box (kind select,
      clear button); the select spans the two flexible tracks so the button

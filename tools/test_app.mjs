@@ -4771,6 +4771,23 @@ await t("a sub-ticket appears on the board and in the rail, nested under its par
   const rows = tkIndexRows();
   assert(rows[0].id === "TKT-P" && rows[1].id === "TKT-S", "j/k walks parent then child");
 });
+await t("a parent's sub-tickets fold in the rail, and the open one stays pinned", () => {
+  // Same two-ticket fixture as above (the previous test left it in DB.projects).
+  view = { ...view, tab: "projects", mode: "list", id: null, q: "", tkFilter: "", tkFold: {} };
+  render();
+  assert(main.innerHTML.includes("toggleTkFold('TKT-P')"), "a parent with children carries the fold caret");
+  assert(!main.innerHTML.includes("toggleTkFold('TKT-S')"), "a childless row does not");
+  toggleTkFold("TKT-P");
+  assert(!tkIndexRows().some(r => r.id === "TKT-S"), "folded children leave the plan, so j/k skips them too");
+  assert(main.innerHTML.includes("Show 1 sub-ticket"), "the collapsed caret admits what it hides");
+  // The rail never hides what you are reading: select the child from elsewhere
+  // (board, deep link) while its parent is folded and it stays pinned.
+  selectTicket("TKT-S");
+  assert(tkIndexRows().some(r => r.id === "TKT-S"), "the open sub-ticket stays visible under a folded parent");
+  toggleTkFold("TKT-P");
+  assert(main.innerHTML.includes("Hide 1 sub-ticket"), "expanding again flips the caret");
+  view = { ...view, mode: "list", id: null, tkFold: {} };
+});
 await t("rail group headers are not rows: j/k can never land on one", () => {
   const entries = tkRailPlan();
   assert(entries.some(e => e.head), "headers exist in the plan");

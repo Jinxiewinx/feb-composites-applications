@@ -402,8 +402,17 @@ function tkRailPlan() {
   const entries = [];
   if (tops.length || loose.length) entries.push({ head: "Projects", rows: tops.concat(loose) });
   tops.forEach(p => {
-    entries.push({ row: p });
-    (kids.get(p.id) || []).sort(byDue).forEach(k => entries.push({ row: k, child: true }));
+    /* Collapsible sub-tickets (Simon, 2026-08-13). Fold state is per-parent in
+       view.tkFold (session-scoped, survives view spreads like tkRailOff).
+       Folded children leave the plan entirely, so the keyboard rows derived
+       from this same plan skip them too — j/k never lands on a hidden row.
+       The one exception is the OPEN ticket: the rail never hides what you
+       are reading (same rule the filters follow above), so a selected child
+       stays pinned under its folded parent. */
+    const ks = (kids.get(p.id) || []).sort(byDue);
+    const folded = !!((view.tkFold || {})[p.id]) && ks.length > 0;
+    entries.push({ row: p, kids: ks.length, folded });
+    ks.forEach(k => { if (!folded || (sel && k.id === sel.id)) entries.push({ row: k, child: true }); });
   });
   loose.sort(tkCmp).forEach(p => entries.push({ row: p }));
   if (issues.length) entries.push({ head: "Issues", rows: issues });
@@ -411,6 +420,12 @@ function tkRailPlan() {
   return entries;
 }
 function tkIndexRows() { return tkRailPlan().filter(e => e.row).map(e => e.row); }
+function toggleTkFold(id) {
+  const f = { ...(view.tkFold || {}) };
+  f[id] = !f[id];
+  view = { ...view, tkFold: f };
+  render();
+}
 
 function tkSummary() {
   const D = DB.projects || [];
@@ -435,7 +450,9 @@ function tkIndexItem(p, opts) {
   return `<div class="pitem ${sel ? "sel" : ""} ${tkClosed(p) ? "isdone" : ""} ${opts.child ? "pi-child" : ""}" id="pi-${esc(p.id)}"
       role="option" aria-selected="${sel}" title="${esc(p.id)} · ${esc(st)}"
       onclick="selectTicket('${esc(p.id)}')">
-    <span class="pi-name">${isIssue(p) ? `<span class="kindbadge issue">Issue</span> ` : ""}${esc(p.title || p.id)}${
+    <span class="pi-name">${opts.kids ? `<button class="pi-fold no-print" aria-expanded="${!opts.folded}"
+      title="${opts.folded ? "Show" : "Hide"} ${opts.kids} sub-ticket${opts.kids === 1 ? "" : "s"}"
+      onclick="event.stopPropagation();toggleTkFold('${esc(p.id)}')">${opts.folded ? `▸<span class="tny">${opts.kids}</span>` : "▾"}</button>` : ""}${isIssue(p) ? `<span class="kindbadge issue">Issue</span> ` : ""}${esc(p.title || p.id)}${
       projUnread(p) ? ' <span class="unread-dot" title="New activity"></span>' : ""}<span class="tny muted"> ${esc(p.id)}</span></span>
     <span class="pi-due ${late ? "warn" : ""}">${p.dueDate ? shortDate(p.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub"><span class="status ${projStatusClass(st)}"><span class="dot"></span>${esc(st)}</span>${
@@ -483,7 +500,7 @@ function renderTicketIndex() {
       </div>
     </div>
     <div class="plist" role="listbox" aria-label="Tickets">
-      ${nRows ? entries.map(e => e.head ? tkGroupHead(e.head, e.rows) : tkIndexItem(e.row, { child: e.child })).join("")
+      ${nRows ? entries.map(e => e.head ? tkGroupHead(e.head, e.rows) : tkIndexItem(e.row, { child: e.child, kids: e.kids, folded: e.folded })).join("")
         : `<div class="pempty muted">${D.length ? "No tickets match these filters." : "No tickets yet — <b>New ticket</b> to start one."}</div>`}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
