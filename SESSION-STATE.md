@@ -44,6 +44,19 @@ inline (setBuyField in budget.js, statusdrop Draft/InWork/Complete CSS
 variants, .buy-cost input, print rule strips the control chrome; New
 Purchase + row-click detail unchanged).
 
+Also 2026-08-13 (latest): **budget goals + owed tracker.** Simon's picks:
+lead-editable categories w/ dollar goals (config/budget via
+getConfig/setConfig, same pattern as resins), progress bars under the stat
+row, who-is-owed card, over-goal warning at entry, PLUS a season total
+that deliberately need not equal the category sum (slack), split
+base+contingency kept quiet (tick on the bar + tooltip only). Categories
+replace PURPOSE in the purchase form once defined; unmatched purposes
+show as "not in any category". Editor modal openBudgetGoals() lead-only
+(config rules already enforce). shoot_ui stub seeds BUDGET_CFG so budget
+screenshots show the bars. Declined extras (inline category edit, CSV
+w/ categories) NOT built. Suites: app 410, appui 1242, budget detailui
+35, green.
+
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,

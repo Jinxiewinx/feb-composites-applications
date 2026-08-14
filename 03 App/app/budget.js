@@ -14,11 +14,143 @@ function num(v) { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); ret
 // FEB purchasing rule: anything over $50 needs sign-off before it's ordered.
 function needsApproval(b) { return num(b.cost) > 50 && b.status === "Submitted"; }
 
+/* ---------- goals ----------
+   Lead-set spending targets, stored in config/budget (the same lead-writable,
+   roster-readable doc family the resin cure overrides use):
+     { categories: [{ name, goal }], total: { base, contingency } }
+   The categories REPLACE the fixed PURPOSE list in the purchase form once
+   defined; old purchases keep whatever purpose string they have and roll up
+   as "not in a category" if it matches nothing. The season total is its own
+   number on purpose — Simon wants slack, so it does not have to equal the
+   category sum — and its base/contingency split stays quiet (a tick on the
+   bar and a tooltip), not a headline. */
+let budgetCfgFetched = false;
+window.BUDGET_CFG = window.BUDGET_CFG || null;
+function fetchBudgetCfg() {
+  if (budgetCfgFetched || !window.fb || fb.state !== "ready" || !fb.getConfig) return;
+  budgetCfgFetched = true;
+  fb.getConfig("budget").then(d => { if (d) { window.BUDGET_CFG = d; render(); } }).catch(() => {});
+}
+function budgetCats() { return ((window.BUDGET_CFG || {}).categories || []).filter(c => c && c.name); }
+function budgetTotal() { const t = (window.BUDGET_CFG || {}).total || {}; return { base: num(t.base), contingency: num(t.contingency) }; }
+function catSpend(name) {
+  const k = String(name || "").toLowerCase();
+  return DB.budget.filter(b => String(b.purpose || "").toLowerCase() === k).reduce((s, b) => s + num(b.cost), 0);
+}
+// Members front their own money and wait; this is the treasurer's nag list.
+function owedRows() {
+  const m = new Map();
+  DB.budget.filter(b => b.status !== "Reimbursed" && num(b.cost)).forEach(b => {
+    const k = b.purchaser || "—";
+    m.set(k, (m.get(k) || 0) + num(b.cost));
+  });
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function goalBar(label, spent, goal, opts) {
+  opts = opts || {};
+  const pct = goal > 0 ? Math.min(100, spent / goal * 100) : 0;
+  const cls = goal > 0 && spent > goal ? "over" : (goal > 0 && spent / goal >= 0.8 ? "warn" : "");
+  return `<div class="goalrow ${opts.season ? "season" : ""}" ${opts.title ? `title="${opts.title}"` : ""}>
+    <span class="goallabel">${esc(label)}</span>
+    <span class="goaltrack"><span class="goalfill ${cls}" style="width:${pct.toFixed(1)}%"></span>${opts.tickPct != null ? `<span class="goaltick" style="left:${opts.tickPct.toFixed(1)}%"></span>` : ""}</span>
+    <span class="goalnum ${cls === "over" ? "over" : ""}">$${spent.toFixed(0)} / $${goal.toFixed(0)}${cls === "over" ? " · OVER" : ""}</span>
+  </div>`;
+}
+function budgetBoardsHtml(totalSpent) {
+  const cats = budgetCats();
+  const T = budgetTotal();
+  const cap = T.base + T.contingency;
+  if (!cats.length && !cap) {
+    return isLead() ? `<div class="card no-print"><span class="muted">No budget goals set yet.</span>
+      <button class="sm" onclick="openBudgetGoals()">Set budget goals</button></div>` : "";
+  }
+  const categorized = cats.reduce((s, c) => s + catSpend(c.name), 0);
+  const loose = totalSpent - categorized;
+  const owed = owedRows();
+  return `<div class="budget-boards">
+    <div class="card goalcard">
+      <h3>Budget goals ${isLead() ? `<button class="sm no-print" style="float:right" onclick="openBudgetGoals()">Edit goals</button>` : ""}</h3>
+      ${cap ? goalBar("Season", totalSpent, cap, {
+        season: true,
+        // The quiet split: the tick marks where base ends and contingency begins.
+        tickPct: cap > 0 ? Math.min(100, T.base / cap * 100) : null,
+        title: `base $${T.base.toFixed(0)} + contingency $${T.contingency.toFixed(0)}`,
+      }) : ""}
+      ${cats.map(c => goalBar(c.name, catSpend(c.name), num(c.goal))).join("")}
+      ${loose > 0.005 && cats.length ? `<div class="muted tny" style="margin-top:6px">$${loose.toFixed(2)} not in any category</div>` : ""}
+    </div>
+    ${owed.length ? `<div class="card owedcard">
+      <h3>Waiting on reimbursement</h3>
+      ${owed.map(([who, amt]) => `<div class="orow"><span>${esc(who)}</span><b>$${amt.toFixed(2)}</b></div>`).join("")}
+    </div>` : ""}
+  </div>`;
+}
+
+/* The purchase's category is over its goal (counting this purchase): shown on
+   the detail as a warning, never a block — the part still gets bought, the
+   lead just finds out now instead of at the spreadsheet reckoning. */
+function buyGoalWarning(b) {
+  const cat = budgetCats().find(c => String(c.name).toLowerCase() === String(b.purpose || "").toLowerCase());
+  if (!cat || !num(cat.goal)) return null;
+  const spent = catSpend(cat.name);
+  if (spent <= num(cat.goal)) return null;
+  return `${cat.name} is $${(spent - num(cat.goal)).toFixed(0)} over its $${num(cat.goal).toFixed(0)} goal, counting this purchase.`;
+}
+
+/* ---------- the goals editor (lead only; config rules enforce it) ---------- */
+let bgDraft = null;
+function openBudgetGoals() {
+  bgDraft = {
+    categories: budgetCats().map(c => ({ name: c.name, goal: num(c.goal) || "" })),
+    total: budgetTotal(),
+  };
+  if (!bgDraft.categories.length) bgDraft.categories = [{ name: "", goal: "" }];
+  bgModal();
+}
+function bgModal() {
+  openModal(`<h3>Budget goals</h3>
+    <p class="muted tny">Categories become the Purpose choices on new purchases. The season total is separate on purpose — it may carry slack beyond the category goals.</p>
+    ${bgDraft.categories.map((c, i) => `<div class="row" style="gap:8px;margin-bottom:6px">
+      <input class="bg-name" placeholder="Category" value="${esc(c.name)}" style="flex:2">
+      <input class="bg-goal" placeholder="Goal $" value="${esc(c.goal)}" style="flex:1;max-width:110px">
+      <button class="sm" onclick="bgRmRow(${i})" title="Remove this category">✕</button>
+    </div>`).join("")}
+    <div class="no-print" style="margin-bottom:10px"><button class="sm" onclick="bgAddRow()">+ Add category</button></div>
+    <div class="row" style="gap:8px">
+      <div class="f" style="flex:1"><label>Season base ($)</label><input id="bg-base" value="${esc(bgDraft.total.base || "")}"></div>
+      <div class="f" style="flex:1"><label>Contingency ($)</label><input id="bg-cont" value="${esc(bgDraft.total.contingency || "")}"></div>
+    </div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveBudgetGoals()">Save</button></div>`);
+}
+function bgReadDom() {
+  const names = [...document.querySelectorAll(".bg-name")];
+  const goals = [...document.querySelectorAll(".bg-goal")];
+  bgDraft.categories = names.map((n, i) => ({ name: n.value.trim(), goal: goals[i] ? goals[i].value : "" }));
+  const base = document.getElementById("bg-base"), cont = document.getElementById("bg-cont");
+  bgDraft.total = { base: base ? base.value : "", contingency: cont ? cont.value : "" };
+}
+function bgAddRow() { bgReadDom(); bgDraft.categories.push({ name: "", goal: "" }); bgModal(); }
+function bgRmRow(i) { bgReadDom(); bgDraft.categories.splice(i, 1); if (!bgDraft.categories.length) bgDraft.categories = [{ name: "", goal: "" }]; bgModal(); }
+async function saveBudgetGoals() {
+  bgReadDom();
+  const cfg = {
+    categories: bgDraft.categories.filter(c => c.name).map(c => ({ name: c.name, goal: num(c.goal) })),
+    total: { base: num(bgDraft.total.base), contingency: num(bgDraft.total.contingency) },
+  };
+  try {
+    await fb.setConfig("budget", cfg);
+    window.BUDGET_CFG = cfg;
+    closeModal(); render(); toast("Budget goals saved.");
+  } catch (e) { toast("Couldn't save goals: " + e.message, "error"); }
+}
+
 async function newBuy() {
   const id = await allocId("budget");
   if (!id) return;
   const b = {
-    id, item: "", purchaser: signerName(), purpose: "Manufacturing", status: "Submitted",
+    id, item: "", purchaser: signerName(), purpose: (budgetCats()[0] || {}).name || "Manufacturing", status: "Submitted",
     cost: "", dateOrdered: today(), source: "", notes: "", retro: false, createdBy: myEmail(),
     receiptUrl: "", receiptPath: "",
   };
@@ -67,12 +199,14 @@ function renderBuyList() {
   const open = D.filter(b => b.status !== "Reimbursed");
   const openSum = open.reduce((s, b) => s + num(b.cost), 0);
   const unapproved = D.filter(needsApproval).length;
+  fetchBudgetCfg();
   return `
   <div class="stat-row">
     <div class="stat-tile"><div class="bignum">$${total.toFixed(0)}</div><div class="stat-label">Season total</div></div>
     <div class="stat-tile"><div class="bignum">${open.length}</div><div class="stat-label">Open orders ($${openSum.toFixed(0)})</div></div>
     <div class="stat-tile"><div class="bignum">${unapproved}</div><div class="stat-label">Over $50, unapproved</div></div>
   </div>
+  ${budgetBoardsHtml(total)}
   <div class="toolbar no-print"><button class="primary" onclick="newBuy()">+ New Purchase</button></div>
   <div class="filters no-print">
     <select onchange="view.fStatus=this.value;render()">
@@ -116,7 +250,7 @@ function setBuyField(id, key, val) {
 function buyFld(b, label, key, opts) {
   const v = b[key] ?? "";
   if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(v) || "—"}</div></div>`;
-  if (opts) return `<div class="f"><label>${label}</label><select onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${v === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>`;
+  if (opts) return `<div class="f"><label>${label}</label><select onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
   return `<div class="f"><label>${label}</label><input value="${esc(v)}" onchange="updBuy('${key}',this.value)"></div>`;
 }
 
@@ -134,9 +268,10 @@ function renderBuyDetail() {
     <h2>${esc(b.item || "(unnamed purchase)")}</h2>
     <div class="muted">${esc(b.id)} · <span class="pill ${buyStatusClass(b.status)}">${esc(b.status)}</span>${b.updatedAt ? " · saved " + fmtWhen(b.updatedAt) + " by " + esc(b.updatedBy || "?") : ""}</div>
     ${needsApproval(b) ? `<p class="warn">Over $50 — needs #purchasing sign-off before it's ordered.</p>` : ""}
+    ${(() => { const gw = buyGoalWarning(b); return gw ? `<p class="warn">${esc(gw)}</p>` : ""; })()}
     <h3>Details</h3>
     <div class="grid">
-      ${buyFld(b, "Item", "item")}${buyFld(b, "Purchaser", "purchaser")}${buyFld(b, "Purpose", "purpose", PURPOSE)}
+      ${buyFld(b, "Item", "item")}${buyFld(b, "Purchaser", "purchaser")}${buyFld(b, "Purpose", "purpose", budgetCats().length ? budgetCats().map(c => c.name) : PURPOSE)}
       ${buyFld(b, "Status", "status", BUY_STATUS)}${buyFld(b, "Cost ($)", "cost")}${buyFld(b, "Date ordered", "dateOrdered")}
       ${buyFld(b, "Source / vendor", "source")}
     </div>
@@ -158,4 +293,4 @@ function renderBuyDetail() {
   </div>`;
 }
 
-function updBuy(key, val) { const b = buyById(view.id); b[key] = val; saveBuy(b, key); if (key === "status" || key === "cost") render(); }
+function updBuy(key, val) { const b = buyById(view.id); b[key] = val; saveBuy(b, key); if (key === "status" || key === "cost" || key === "purpose") render(); }

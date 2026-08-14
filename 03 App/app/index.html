@@ -372,6 +372,24 @@
   .statusdrop.InWork select { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); }
   .statusdrop.Complete select { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
   .list .statusdrop select { padding: 4px 22px 4px 9px; font-size: 12px; }
+  /* Budget goals: one bar per category, spent against the lead-set goal, and
+     a Season bar whose tick marks where base ends and contingency begins (the
+     split is deliberately quiet — tooltip, not headline). The owed card is
+     the treasurer's nag list. */
+  .budget-boards { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  .budget-boards .goalcard { flex: 2 1 400px; }
+  .budget-boards .owedcard { flex: 1 1 240px; }
+  .goalrow { display: grid; grid-template-columns: minmax(110px, 170px) 1fr auto; gap: 10px; align-items: center; margin: 7px 0; font-size: 13px; }
+  .goalrow.season { font-weight: 700; }
+  .goallabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .goaltrack { position: relative; height: 9px; border-radius: 999px; background: var(--fill); overflow: hidden; }
+  .goalfill { display: block; height: 100%; border-radius: 999px; background: var(--blue); }
+  .goalfill.warn { background: var(--amber); }
+  .goalfill.over { background: var(--bad); }
+  .goaltick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .35; }
+  .goalnum { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .goalnum.over { color: var(--bad); }
+  .owedcard .orow { display: flex; justify-content: space-between; gap: 10px; margin: 5px 0; font-size: 13px; }
   .buy-cost { white-space: nowrap; }
   .buy-cost input { width: 72px; text-align: right; font: inherit; font-size: 12.5px; padding: 4px 6px; margin-left: 1px;
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }

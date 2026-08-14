@@ -125,6 +125,18 @@ window.fb = {
   signOut: async () => {}, refreshRoster: async () => {},
   getConfig: async () => null, setConfig: async () => {},
 };
+/* Budget goals config, set directly (the stubbed getConfig returns null):
+   without it the Budget tab photographs the "no goals yet" hint instead of
+   the bars, and the screenshots stop representing the shipped feature. */
+window.BUDGET_CFG = {
+  categories: [
+    { name: "Resin & hardener", goal: 1500 },
+    { name: "Consumables", goal: 1000 },
+    { name: "Transportation", goal: 500 },
+    { name: "Tooling", goal: 1300 },
+  ],
+  total: { base: 7700, contingency: 300 },
+};
 /* Reported, never swallowed — an empty DB photographs as a working empty state
    and nobody notices the seed failed. Same lesson as tools/lib/browser.mjs. */
 window.__seedError = null;

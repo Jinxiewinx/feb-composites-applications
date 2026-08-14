@@ -1924,6 +1924,32 @@ await t("status and cost are editable in the budget list, without breaking row n
   setBuyField("B-E1", "status", "Ordered");
   assert(buyById("B-E1").status === "Ordered" && !main.innerHTML.includes("needs approval"), "Ordered clears the approval flag in place");
 });
+await t("budget goals: bars against goals, quiet season split, owed list, category-driven purpose", () => {
+  window.BUDGET_CFG = { categories: [{ name: "Resin & hardener", goal: 1500 }, { name: "Consumables", goal: 100 }],
+                        total: { base: 7700, contingency: 300 } };
+  DB.budget = [
+    { id: "B-G1", item: "resin", purpose: "Resin & hardener", status: "Ordered", cost: "400", purchaser: "Ana" },
+    { id: "B-G2", item: "tape", purpose: "Consumables", status: "Submitted", cost: "120", purchaser: "Nick" },
+    { id: "B-G3", item: "misc", purpose: "old string", status: "Reimbursed", cost: "80", purchaser: "Ana" },
+  ];
+  view = { ...view, tab: "budget", mode: "list", q: "", fStatus: "" }; render();
+  assert(main.innerHTML.includes("Budget goals"), "the goals card renders");
+  assert(main.innerHTML.includes("$600 / $8000"), "season spends against base+contingency, one number");
+  assert(/base \$7700 \+ contingency \$300/.test(main.innerHTML), "the split is a tooltip, not a headline");
+  assert(main.innerHTML.includes("goaltick"), "with a tick where base ends");
+  assert(main.innerHTML.includes("$120 / $100 · OVER"), "an over-goal category says so on its bar");
+  assert(main.innerHTML.includes("$80.00 not in any category"), "spend matching no category is named, not lost");
+  assert(main.innerHTML.includes("Waiting on reimbursement"), "the owed card renders");
+  assert(/Ana[\s\S]{0,60}\$400\.00/.test(main.innerHTML) && /Nick[\s\S]{0,60}\$120\.00/.test(main.innerHTML),
+    "owed sums per person, Reimbursed excluded");
+  // The detail: purpose choices come from the categories, and going over the
+  // category goal warns on the purchase itself (a warning, never a block).
+  view = { ...view, mode: "detail", id: "B-G2", edit: true }; render();
+  assert(main.innerHTML.includes("Resin &amp; hardener"), "purpose select is the category list once goals exist");
+  assert(/Consumables is \$20 over its \$100 goal/.test(main.innerHTML), "the over-goal warning names the damage");
+  window.BUDGET_CFG = null;
+  view = { ...view, mode: "list", id: null };
+});
 await t("newBuy starts with empty receipt fields", async () => { await newBuy(); const b = buyById(view.id); assert(b.receiptUrl === "" && b.receiptPath === "", "no receipt yet"); });
 await t("purchase detail shows add-receipt prompt when none, thumbnail when attached", () => {
   view = { ...view, tab: "budget", mode: "detail", id: "B-R1", edit: false };
