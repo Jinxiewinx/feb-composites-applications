@@ -80,6 +80,10 @@ const RECS = [
       mold: { moldId: "MOLD-SN6-004" }, stackNote: "6X 195 TWILL + .125 NOMEX" } },
   // Over the QR character budget: must render text-only, not a denser code.
   { coll: "items", o: { id: "PNL-SN6-006-C03", cls: "PNL", partName: "COUPON 3" } },
+  // The complaint that flipped the layout name-first (2026-08-13): 18 chars,
+  // one character over the OLD shared-line budget, printed "FLAMMABLES CA…".
+  { coll: "items", o: { id: "BIN-SN6-002", cls: "BIN", name: "Flammables cabinet",
+      site: "RFS CONTAINER", locKind: "CABINET", flam: "Yes" } },
 ];
 
 const HARNESS = `<!doctype html><meta charset="utf-8">
@@ -243,14 +247,40 @@ const qrInside = await page.evaluate(() => {
 });
 eq(qrInside, 0, "every QR is full size and inside its cell, even next to a 55-character name");
 
-// The long name must be clipped, not wrapped: wrapping at 1in of height pushes
-// the stack line off the label, and the stack line is the point of the label.
+/* The name must be READ in full — that is the label's primary use (Simon,
+   2026-08-13; the QR is secondary). nameTier picks a size where the whole
+   name fits in at most two clamped lines, and the mid row merges into the
+   footer to pay for the second line. So: the 55-char monster renders complete
+   (nothing scroll-clipped in either axis), within two lines, and its key row
+   is still on the label. */
 const lines = await page.evaluate(() => {
   const el = [...document.querySelectorAll(".lbl")].find(l => l.dataset.id === "MOLD-SN6-005");
   const name = el.querySelector(".lbl-name");
-  return { h: name.getBoundingClientRect().height, lbl: el.getBoundingClientRect().height };
+  return {
+    h: name.getBoundingClientRect().height,
+    clippedY: name.scrollHeight > name.clientHeight + 1,
+    clippedX: name.scrollWidth > name.clientWidth + 1,
+    hasKey: !!el.querySelector(".lbl-r2"),
+    hasId: (el.querySelector(".lbl-rid") || {}).textContent === "MOLD-SN6-005",
+  };
 });
-ok(lines.h < 24, "a 55-character name stays on one line", `${lines.h.toFixed(1)}px tall`);
+ok(!lines.clippedY && !lines.clippedX, "a 55-character name is fully readable (wrapped, not ellipsized)",
+  `clippedY=${lines.clippedY} clippedX=${lines.clippedX}`);
+ok(lines.h < 30, "and takes at most two lines", `${lines.h.toFixed(1)}px tall`);
+ok(lines.hasKey && lines.hasId, "the key row and the ID row survive the two-line name");
+
+// The complaint itself: FLAMMABLES CABINET printed as "FLAMMABLES CA…" when
+// the 16pt ID shared its line. Name-first, it is one full 14pt line.
+const flam = await page.evaluate(() => {
+  const el = [...document.querySelectorAll(".lbl")].find(l => l.dataset.id === "BIN-SN6-002");
+  const name = el.querySelector(".lbl-name");
+  // One 14pt line at 96dpi is ~20.5px (14pt = 18.7px, line-height 1.1);
+  // two would be ~41. 24 splits them with margin.
+  return { text: name.textContent, oneLine: name.getBoundingClientRect().height < 24,
+           clipped: name.scrollWidth > name.clientWidth + 1, tier: name.className };
+});
+eq(flam.text, "FLAMMABLES CABINET", "the cabinet label carries the whole name");
+ok(flam.oneLine && !flam.clipped, "on one uncut 14pt line", `tier=${flam.tier} clipped=${flam.clipped}`);
 
 /* Caught by looking at a screenshot, not by any assertion above: with
    overflow:hidden on the flex ROW, a long footer clipped the FEB tag mid-glyph

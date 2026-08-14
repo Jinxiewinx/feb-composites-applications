@@ -199,32 +199,62 @@ function pubStatus(coll, o) {
  * thermal path after the printer arrives. The fallback is the same design on
  * worse stock, not a degraded design.
  *
- * Vertical budget: 25.4mm less 2mm margin top and bottom = 21.4mm. Five lines
- * at 5.6/4.2/3.4/3.1/3.1mm fills 19.4mm. There is no room for a masthead bar at
- * this height, so the FEB mark is a 6.5pt tag on the last line.
+ * THE NAME LEADS (2026-08-13). The label's primary use is being READ; the QR
+ * is secondary (Simon's words). The old layout put the 16pt ID first and gave
+ * the name whatever was left of one shared line — about 13 characters, so
+ * "FLAMMABLES CABINET" printed as "FLAMMABLES CA…". Now the name is the top
+ * row at the largest size that fits, wrapping to two lines when it must
+ * (nameTier below), and the ID is a 9.5pt row of its own beneath it.
  *
- * Line 3 is the one this whole system exists for. On a part or panel it is the
- * layup stack in CS-002 shorthand ("6X 195 TWILL + .125 NOMEX"), which is the
- * literal question PP-09 records nobody being able to answer. On a mold it is
- * the sealing record, which is the equivalent question for a tool. It is set in
- * bold at 8.5pt rather than dropped to the 7pt tier for that reason.
+ * Vertical budget: 25.4mm less 2mm margin top and bottom = 21.4mm. One-line
+ * name: 5.4 (14pt) + 4.0 (id) + 3.6 (key) + 2.9 + 2.9 = 18.8mm. Two-line
+ * name: the mid row merges into the footer (Simon's pick: drop the least
+ * useful row rather than shrink everything), 10.1 (2 x 13pt) + 4.0 + 3.6 +
+ * 2.9 = 20.6mm. Still no room for a masthead bar; FEB stays a 6.5pt tag.
+ *
+ * The key row is the one this whole system exists for. On a part or panel it
+ * is the layup stack in CS-002 shorthand ("6X 195 TWILL + .125 NOMEX"), which
+ * is the literal question PP-09 records nobody being able to answer. On a
+ * mold it is the sealing record. Bold at 8.5pt for that reason, and it is
+ * never the row that gets merged away.
  */
+
+/* Which size/line-count the name prints at. Pure and deterministic (char
+ * count, not measurement) for the same reason labelLines uppercases in JS:
+ * the width must not lie at layout time. Thresholds assume the NARROW text
+ * track — the 5522 stock's 27mm QR leaves ~68mm — so both stocks fit; at
+ * ~0.236mm per pt per Arial-Bold-uppercase glyph that is 20 chars at 14pt,
+ * 22/line at 13pt, 26/line at 11pt, 32/line at 9pt, 36/line at 8pt. Beyond
+ * two 8pt lines (72 chars) the clamp ellipsis finally wins — nothing the
+ * team names comes close (worst real name: 55). */
+function nameTier(name) {
+  const n = String(name || "").length;
+  if (n <= 20) return { cls: "n1", merge: false };   // 14pt, one line
+  if (n <= 44) return { cls: "n2a", merge: true };   // 13pt, two lines
+  if (n <= 52) return { cls: "n2b", merge: true };   // 11pt, two lines
+  if (n <= 64) return { cls: "n2c", merge: true };   // 9pt, two lines
+  return { cls: "n2d", merge: true };                // 8pt, two lines, may clip
+}
+
 function labelHtml(coll, o, opts) {
   opts = opts || {};
   const p = pubProjection(coll, o);
   if (!p) return "";
   const L = labelLines(coll, o, p);
+  const t = nameTier(L.name);
   // No QR when the caller says so, or when the ID is too long to stay at
   // version 3 (coupons). Silently dropping to a denser code would be worse:
   // the label would look identical and scan worse.
   const qr = (opts.noQr || !fitsQrBudget(o.id)) ? "" : qrSvg(scanUrl(o.id), opts.qrMm || 21.4);
+  const foot = t.merge ? [L.mid, L.foot].filter(Boolean).join(" · ") : L.foot;
 
   return `<div class="lbl" data-id="${esc(o.id)}" data-cls="${esc(p.cls)}">
     <div class="lbl-txt">
-      <div class="lbl-r1"><span class="lbl-id">${esc(o.id)}</span><span class="lbl-name">${esc(L.name)}</span></div>
+      <div class="lbl-name ${t.cls}">${esc(L.name)}</div>
+      <div class="lbl-rid">${esc(o.id)}</div>
       <div class="lbl-r2">${esc(L.key)}</div>
-      <div class="lbl-r3">${esc(L.mid)}</div>
-      <div class="lbl-r4"><span>${esc(L.foot)}</span><span class="lbl-feb">FEB</span></div>
+      ${t.merge ? "" : `<div class="lbl-r3">${esc(L.mid)}</div>`}
+      <div class="lbl-r4"><span>${esc(foot)}</span><span class="lbl-feb">FEB</span></div>
     </div>
     <div class="lbl-code">${qr}</div>
   </div>`;

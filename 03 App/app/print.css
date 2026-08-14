@@ -510,10 +510,14 @@ tr.blk td.seq {
 }
 .label-cell { position: absolute; overflow: hidden; }
 
-/* One label. Vertical budget at 1in: 25.4mm less 2mm of margin top and bottom
-   leaves 21.4mm, which four rows at 5.6/4.2/3.4/3.1mm fill with slack to spare.
-   There is no room for a masthead bar at this height, so the FEB mark is a
-   6.5pt tag riding the last line. */
+/* One label. The name leads: the label's primary use is being read, the QR is
+   secondary, so the name is the top row at the largest size that fits
+   (nameTier in labels.js picks the class) and the ID is a 9.5pt row of its
+   own. Vertical budget at 1in: 25.4mm less 2mm of margin top and bottom
+   leaves 21.4mm; a one-line name runs 5.4+4.0+3.6+2.9+2.9 = 18.8mm and a
+   two-line name drops the mid row (merged into the footer by labelHtml) for
+   10.1+4.0+3.6+2.9 = 20.6mm. There is no room for a masthead bar at this
+   height, so the FEB mark is a 6.5pt tag riding the last line. */
 .lbl {
   width: 100%; height: 100%;
   display: flex; align-items: center; gap: 2mm;
@@ -530,9 +534,22 @@ tr.blk td.seq {
 .lbl-code { flex: 0 0 auto; display: flex; align-items: center; }
 .lbl-qr { display: block; }
 
-.lbl-r1 { display: flex; align-items: baseline; gap: 2mm; white-space: nowrap; overflow: hidden; }
-.lbl-id { font-size: 16pt; font-weight: 700; letter-spacing: -.01em; line-height: 1.05; }
-.lbl-name { font-size: 11pt; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+/* The name row. One-line tier keeps nowrap+ellipsis as a belt-and-braces
+   guard; the two-line tiers use a line clamp so a runaway name can never push
+   the key row (the point of the label) off the bottom. Tier thresholds are
+   char counts chosen in labels.js so the ellipsis should never actually fire
+   below the n2d tier. */
+.lbl-name { font-weight: 700; letter-spacing: -.01em; line-height: 1.1;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbl-name.n1  { font-size: 14pt; }
+.lbl-name.n2a, .lbl-name.n2b, .lbl-name.n2c, .lbl-name.n2d {
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lbl-name.n2a { font-size: 13pt; }
+.lbl-name.n2b { font-size: 11pt; }
+.lbl-name.n2c { font-size: 9pt; }
+.lbl-name.n2d { font-size: 8pt; }
+.lbl-rid { font-size: 9.5pt; font-weight: 700; letter-spacing: -.01em; line-height: 1.2;
+           margin-top: .3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* The line the system exists for: layup stack on a part or panel, sealing
    record on a mold. Bold at 8.5pt rather than dropped to the 7pt tier. */

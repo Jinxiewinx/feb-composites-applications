@@ -24,6 +24,18 @@ ticket opens; the toggle now hides it instead (state renamed
 view.tkRail -> view.tkRailOff, default falsy = visible; test flipped to
 match). The rail-off CSS and button are unchanged.
 
+Also 2026-08-13: **labels are name-first.** Simon: the label's primary use
+is being READ ("Flammables Cabinet" printed as "FLAMMABLES CA…"); QR is
+secondary. Decisions (all his picks): name wraps to 2 lines + tiered
+auto-shrink, name biggest / ID second, mid row merges into footer only when
+the name wraps, QR stays 21.4mm. Implementation: nameTier() in labels.js
+(pure char-count ladder, n1 14pt 1-line / n2a 13pt / n2b 11pt / n2c 9pt /
+n2d 8pt, thresholds sized for the narrower 5522 track), .lbl-name tier
+classes + -webkit-line-clamp 2 + new .lbl-rid 9.5pt row in print.css; old
+.lbl-r1/.lbl-id shared-line layout gone. test_labels rewritten: "stays on
+one line" replaced by "fully readable in <=2 lines", new FLAMMABLES CABINET
+BIN fixture. Suites: labels 36, qr 69, app 406, print_mobile 14, green.
+
 Previous (2026-08-11):
 Status: **Ticket detail went widescreen (2026-08-11).** Simon flagged the open
 ticket as "too horizontal": three left columns (nav sidebar, tickets rail,
