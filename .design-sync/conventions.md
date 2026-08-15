@@ -31,7 +31,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Kanban | `.col` + `.col-inprogress`/`.col-collecting`/`.col-onhold`/`.col-done`, holding `.pcard` with `.t` and `.meta`. |
 | Feedback | `.gate` (+ `.blocked`) for blocking notices; `.toast` + `.ok`/`.err`/`.info`; `.modal-backdrop` > `.modal` > `.foot`. |
 | WO hero | `.wo-facts` band of `.wo-fact` slots (`.wf-lab` label + `.wf-num` value, `.late` red) plus `.wf-eng` engineer avatars. |
-| WO sections | `.wosec-hd` — per-card section header (gold speed-slash + uppercase label + `.wosec-n` count pill + `.wosec-w` warn word); as a `<summary>` inside `details.wo-fold` it is the always-visible face of a folded section. `.addrow` spaces a trailing add-button. `details.wo-subfold` + `summary.wo-subhd` fold reference blocks (BOM, event log) inside a card. |
+| WO sections | `.wosec-hd` — per-card section header (gold speed-slash + uppercase label + `.wosec-n` count pill + `.wosec-w` warn word); as a `<summary>` inside `details.wo-fold` it is the always-visible face of a folded section. `.addrow` spaces a trailing add-button. `details.wo-subfold` + `summary.wo-subhd` fold reference blocks (BOM, event log) inside a card. `.fgroup-label` is the second-tier group label above a field grid. |
 | Photos | `.photogrid` of `.phtile` (`.phimg` lazy `<img>` + caption), `.phgrp` group label, `.phmini` 48px step-row thumbs inside `.step-photos`, `.ph-uploading` placeholder. |
 | Navigation | `.sidebar` > `.sb-brand`/`.sb-brand-txt`, `.sb-nav` > `.sb-item` (+ `.active`, `.ic`); `.topbar` > `h1`, `.icon-btn` (+ `.badge`). |
 | Avatars | `.avatar`, grouped in `.avatar-stack`. |

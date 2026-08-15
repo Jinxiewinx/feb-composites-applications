@@ -910,7 +910,7 @@ const WO_SECTIONS = [
     warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
     warnWord: w => (woFlags(w).blocked ? "blocked" : "curing"),
     body: (w, E) => woSecSteps(w, E) },
-  { id: "overview", label: "Overview", anchor: "wo-overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
+  { id: "overview", label: "Details", anchor: "wo-overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
   { id: "stack", label: "Stack & BOM", anchor: "wo-stack",
     badge: w => String((w.layupStack || []).length || ""),
     body: (w, E) => woSecStack(w, E) },
@@ -1055,21 +1055,40 @@ function renderWODetail() {
     }).join("")}
   </nav>
   ${WO_SECTIONS.map(s => woSectionCard(s, wo, E)).join("")}
+  ${woThreadCard(wo)}
   </section>`;
 }
 
 function woSecOverview(wo, E) {
   const moldRows = wo.mold ? `
-    <h3>Mold</h3><div class="grid">
+    <div class="fgroup-label">Mold</div><div class="grid">
       ${mf(wo, "Mold ID", "moldId")}${mf(wo, "Layers", "layers")}${mf(wo, "Density (lb/ft³)", "density")}
       ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
     </div>` : "";
-  return `
+  // Edit mode keeps every field on one grid — no edit path is lost to the
+  // hero. View mode shows the remainder the hero does not carry, in labeled
+  // clusters instead of one sixteen-cell wall; mass repeats here because
+  // duplication is fine and dropping is not.
+  if (E) return `
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
       ${fld(wo, "Process", "processType", "select-process")}${engFld("workOrders", wo, "Mold Engineer", "moldEngineer")}
       ${engFld("workOrders", wo, "Manufacturing Engineer", "manufacturingEngineer")}${fld(wo, "Created", "createdDate")}${fld(wo, "Due", "dueDate")}
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
+    </div>
+    ${moldRows}`;
+  return `
+    <div class="fgroup-label">Identity</div>
+    <div class="grid">
+      ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Revision", "revision")}${fld(wo, "Created", "createdDate")}
+    </div>
+    <div class="fgroup-label">People</div>
+    <div class="grid">
+      ${engFld("workOrders", wo, "Mold Engineer", "moldEngineer")}${engFld("workOrders", wo, "Manufacturing Engineer", "manufacturingEngineer")}
+    </div>
+    <div class="fgroup-label">Mass</div>
+    <div class="grid">
+      ${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
     ${moldRows}`;
 }
@@ -1305,9 +1324,18 @@ function woSecFiles(wo, E) {
          buy-off now wants it here (or linked above — either satisfies the
          check; the CAD really does live in Drive). -->
     <h3 id="wo-files">Files</h3>
-    <div class="filegrid">
-      ${(wo.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
-    </div>
+    ${(() => {
+      // A record with a season of files shouldn't scroll forever: cap the
+      // grid at eight and put the rest behind a real button (a button, not a
+      // details — the tickets attachment cap set that precedent).
+      const files = wo.files || [];
+      const capped = files.length > 8 && !view.woFilesAll;
+      const shown = capped ? files.slice(0, 8) : files;
+      return `<div class="filegrid">
+        ${shown.map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
+      </div>
+      ${capped ? `<div class="no-print addrow"><button class="sm" onclick="view.woFilesAll=true;render()">Show all ${files.length}</button></div>` : ""}`;
+    })()}
     <div class="no-print addrow"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>`;
 }
 
@@ -1340,6 +1368,16 @@ function woSecNotes(wo, E) {
       empty: "Anything about this job that isn't a step.",
       upload: name => `projects/${wo.id}/${Date.now()}-${name}`,
     })}
+    `;
+}
+
+/* The note thread gets its own card, after the section cards — the tickets
+   argument applies verbatim: inside one big card a comment reads as a
+   paragraph in a form; framed like the ticket itself it reads as the
+   document it is meant to be. Order unchanged (oldest first, composer
+   after), only the frame moved. */
+function woThreadCard(wo) {
+  return `<div class="card thread-card">
     ${threadHtml("workOrders", wo.id, (wo.noteLog || []), { noun: "Note", empty: "No notes yet. Anything worth telling the next person goes here." })}
     ${(() => {
       rteSetUpload(name => `projects/${wo.id}/${Date.now()}-${name}`);
@@ -1353,7 +1391,8 @@ function woSecNotes(wo, E) {
         oncancel: `closeComposer('wo-note')`,
         postLabel: "Add note as " + signerName(),
       });
-    })()}`;
+    })()}
+  </div>`;
 }
 
 /* field update helpers (operate on current WO; each saves only its field) */
