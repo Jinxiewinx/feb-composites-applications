@@ -2024,15 +2024,24 @@ function lbNameOf(el) {
   try { return decodeURIComponent(raw).slice(0, 80); } catch (e) { return raw.slice(0, 80); }
 }
 function lbCollect(scope) {
+  const seen = new Set();
   return Array.from((scope || document).querySelectorAll(LB_SEL))
     .filter(el => {
       const src = lbSrcOf(el);
       if (!src || src.startsWith("data:")) return false;
-      if (!el.closest) return true;
-      // #lightbox is a child of <body>, so the `document` fallback scope would
-      // otherwise collect the viewer's OWN <img> — whose src survives a close —
-      // and every set would carry a ghost frame of the last photo looked at.
-      return !el.closest(".rte") && !el.closest(".avatar") && !el.closest("#lightbox");
+      if (el.closest) {
+        // #lightbox is a child of <body>, so the `document` fallback scope would
+        // otherwise collect the viewer's OWN <img> — whose src survives a close —
+        // and every set would carry a ghost frame of the last photo looked at.
+        if (el.closest(".rte") || el.closest(".avatar") || el.closest("#lightbox")) return false;
+      }
+      // A work order shows the same photo on its step row and in the Photos
+      // grid; without this the arrows would visit it twice and the count would
+      // lie. First occurrence wins; openLightbox() maps a click on a later
+      // duplicate back onto it by src.
+      if (seen.has(src)) return false;
+      seen.add(src);
+      return true;
     });
 }
 /* Controls live in a BOTTOM bar now (the sanctioned 2026-08-02 fix): the top
@@ -2062,11 +2071,14 @@ function openLightbox(img) {
   // The whole record first, then a .cgal run, then the one comment.
   const scope = (img.closest && (img.closest("[data-lbgroup]") || img.closest(".cgal") || img.closest(".prose"))) || document;
   LB_LIST = lbCollect(scope);
-  const at = LB_LIST.indexOf(img);
-  // Not in the list means it was filtered out — a src-less <img> left behind
-  // when the sanitizer dropped an upload placeholder, say. Opening "photo 0"
-  // instead would show an unrelated photo from elsewhere on the record, which
-  // is worse than doing nothing.
+  let at = LB_LIST.indexOf(img);
+  // A click on a deduped duplicate (same photo on the step row and in the
+  // Photos grid) maps back onto the kept copy by src.
+  if (at < 0) { const src = lbSrcOf(img); if (src) at = LB_LIST.findIndex(el => lbSrcOf(el) === src); }
+  // Still not in the list means it was filtered out — a src-less <img> left
+  // behind when the sanitizer dropped an upload placeholder, say. Opening
+  // "photo 0" instead would show an unrelated photo from elsewhere on the
+  // record, which is worse than doing nothing.
   if (at < 0) return;
   LB_I = at;
   LB_RETURN = img;

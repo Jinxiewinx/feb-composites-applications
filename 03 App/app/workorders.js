@@ -271,6 +271,92 @@ function stepEvidence(wo, i) {
 }
 function evidenceLabels(keys) { return keys.map(k => (EVIDENCE[k] || {}).label || k); }
 
+/* ---------- photos ----------
+   Photos are the documentation this record exists to hold: what the bag
+   looked like before pull is a fact nobody can reconstruct in March. Three
+   pools already exist and stay where they are written — a step's photoRefs,
+   image-typed record files, and <img>s inside step notes and the note log.
+   woAllPhotos() is the one read that unifies them for the Photos section;
+   uploads go to the step's own photoRefs so a photo travels with its step
+   through the same saveField("steps") concurrency machinery as a buy-off.
+
+   photoRefs entries were never written before 2026-08 (every seed row is []),
+   so the object shape below is the shape; `filename` mirrors `name` only for
+   the legacy `p.filename || p` reader. Bare-string legacy entries are still
+   tolerated on read. */
+function woPhotoEntry(up) {
+  return { id: "P" + Date.now() + Math.random().toString(36).slice(2, 5),
+    name: up.name, filename: up.name, url: up.url, path: up.path,
+    type: up.type, size: up.size, by: myEmail(), ts: new Date().toISOString(), caption: "" };
+}
+function htmlImgSrcs(html) {
+  const out = [];
+  for (const m of String(html || "").matchAll(/<img[^>]+src=["']([^"']+)["']/gi))
+    if (!m[1].startsWith("data:")) out.push(m[1]);
+  return out;
+}
+// [{url, name, caption?, by?, ts?, stepIndex?, stepTitle?, source}], deduped
+// by url with the first pool winning (a step photo pasted into a note counts
+// once, as the step's).
+function woAllPhotos(wo) {
+  const out = [], seen = new Set();
+  const push = (p) => { if (p.url && !seen.has(p.url)) { seen.add(p.url); out.push(p); } };
+  (wo.steps || []).forEach((s, i) => {
+    (s.photoRefs || []).forEach(p => {
+      if (typeof p === "string") push({ url: p, name: p, stepIndex: i, stepTitle: stripCS(s.title), source: "step" });
+      else push({ url: p.url || "", name: p.name || p.filename || "photo", caption: p.caption || "",
+        by: p.by, ts: p.ts, stepIndex: i, stepTitle: stripCS(s.title), source: "step" });
+    });
+    htmlImgSrcs(s.noteHtml).forEach(u => push({ url: u, name: "step note photo", stepIndex: i, stepTitle: stripCS(s.title), source: "note" }));
+  });
+  (wo.files || []).forEach(f => {
+    if ((f.type || "").startsWith("image/")) push({ url: f.url, name: f.name || "photo", by: f.by, ts: f.ts, source: "file" });
+  });
+  (wo.noteLog || []).forEach(c => {
+    htmlImgSrcs(c.html).forEach(u => push({ url: u, name: "note photo", by: c.email || c.author, ts: c.ts, source: "note" }));
+  });
+  return out;
+}
+/* Capture, one tap from the step row — view mode included, because the bench
+   is not in edit mode. No `capture` attribute on purpose: with it, iOS and
+   Android drop the photo-library option, and half the photos worth attaching
+   were taken minutes ago. */
+function addStepPhotos(woId, i, opts) {
+  const w = woById(woId);
+  if (!w || !w.steps || !w.steps[i]) return;
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+  inp.onchange = async () => {
+    const files = Array.from(inp.files || []);
+    if (!files.length) return;
+    const slot = document.querySelector && document.querySelector(`[data-photo-slot="step"][data-wo="${woId}"][data-step="${i}"]`);
+    let ghost = null;
+    if (slot && slot.appendChild) { ghost = document.createElement("span"); ghost.className = "ph-uploading"; ghost.textContent = "uploading…"; slot.appendChild(ghost); }
+    const entries = [];
+    for (const f of files) {
+      try {
+        const up = await fb.upload(`projects/${woId}/${Date.now()}-${f.name}`, f);
+        entries.push(woPhotoEntry(up));
+      } catch (e) { toast("Upload failed: " + e.message, "error"); }
+    }
+    if (ghost) ghost.remove();
+    if (entries.length) {
+      w.steps[i].photoRefs = (w.steps[i].photoRefs || []).concat(entries);
+      saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], photoRefs: (steps[i].photoRefs || []).concat(entries) }; return steps; });
+      render();
+    }
+    if (opts && opts.then) opts.then();
+  };
+  inp.click();
+}
+function setStepPhotoCaption(woId, i, photoId, caption) {
+  const w = woById(woId);
+  if (!w || !w.steps || !w.steps[i]) return;
+  const apply = refs => (refs || []).map(p => (p && p.id === photoId ? { ...p, caption } : p));
+  w.steps[i].photoRefs = apply(w.steps[i].photoRefs);
+  saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], photoRefs: apply(steps[i].photoRefs) }; return steps; });
+}
+
 /* ---------- cure holds ----------
    A hold step waits on the clock started by the step before it. That is a
    deliberate non-generalisation: in all four templates the cure directly

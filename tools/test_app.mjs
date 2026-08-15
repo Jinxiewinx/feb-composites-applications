@@ -5054,5 +5054,62 @@ await t("the per-person modal grants and revokes through the roster API", async 
   closeModal();
 });
 
+/* ---- work-order photos --------------------------------------------------
+   Photos live in three pools (step photoRefs, image-typed record files,
+   <img>s inside notes); woAllPhotos() is the one unified read. Uploads write
+   object entries to the step's photoRefs — a shape nothing wrote before, so
+   there is no migration, only tolerance for hypothetical bare strings. */
+console.log("wo photos:");
+await t("woAllPhotos unifies the three pools, keeps step identity, and dedupes by url", () => {
+  const wo = {
+    steps: [
+      { title: "Machine mold", photoRefs: [
+        { id: "P1", name: "cut.jpg", filename: "cut.jpg", url: "https://x/cut.jpg", by: "nick@b.edu", ts: "2026-08-15T10:00:00Z", caption: "3mm ball" },
+        "https://x/legacy.jpg",
+      ], noteHtml: '<p>zeroed</p><img src="https://x/cut.jpg"><img src="data:image/gif;base64,x">' },
+      { title: "Infuse", photoRefs: [] },
+    ],
+    files: [
+      { name: "bag.jpg", url: "https://x/bag.jpg", type: "image/jpeg", by: "sander@b.edu", ts: "t" },
+      { name: "cad.step", url: "https://x/cad.step", type: "" },
+    ],
+    noteLog: [{ author: "Nick", email: "nick@b.edu", ts: "t2", html: '<img src="https://x/note.jpg">' }],
+  };
+  const all = woAllPhotos(wo);
+  assert(all.length === 4, "cut (once), legacy, bag, note: " + JSON.stringify(all.map(p => p.url)));
+  const cut = all.find(p => p.url.endsWith("cut.jpg"));
+  assert(cut.source === "step" && cut.stepIndex === 0 && cut.stepTitle === "Machine mold" && cut.caption === "3mm ball", "the step pool wins the dedupe and keeps its identity");
+  assert(all.find(p => p.url.endsWith("legacy.jpg")).stepIndex === 0, "a bare-string legacy entry still counts");
+  assert(all.find(p => p.url.endsWith("bag.jpg")).source === "file" && !all.some(p => p.url.endsWith("cad.step")), "only image-typed files");
+  assert(all.find(p => p.url.endsWith("note.jpg")).by === "nick@b.edu", "note photos carry their author");
+});
+await t("a photoRefs entry satisfies the photo suggestion, and a photo is still never required", () => {
+  const wo = { steps: [{ title: "Machine mold", status: "open", rule: { needs: ["note"] }, notes: "cut it", photoRefs: [] }] };
+  assert(stepEvidence(wo, 0).suggested.includes("photo"), "no photo yet, so it is suggested");
+  wo.steps[0].photoRefs = [{ id: "P9", url: "https://x/a.jpg", name: "a.jpg" }];
+  assert(!stepEvidence(wo, 0).suggested.includes("photo"), "an uploaded photo clears the nudge");
+  assert(!stepEvidence(wo, 0).missing.includes("photo"), "and it is never in missing");
+});
+await t("addStepPhotos writes object entries through the steps transaction", async () => {
+  signInAsLead();
+  DB.workOrders = [{ id: "WO-PH-1", steps: [{ seq: 1, title: "Machine mold", status: "open", buyoff: { name: "", date: "" }, photoRefs: [] }], timeline: [] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-PH-1", edit: false };
+  // The shared createElement stub swallows onchange behind a no-op setter, so
+  // hand addStepPhotos a real object and drive the handler by hand.
+  const orig = document.createElement;
+  let input = null;
+  document.createElement = () => { input = { click() {}, files: [] }; return input; };
+  addStepPhotos("WO-PH-1", 0);
+  document.createElement = orig;
+  assert(input && typeof input.onchange === "function", "an input with a live onchange was created");
+  input.files = [{ name: "bag.jpg", type: "image/jpeg" }];
+  calls.length = 0;
+  await input.onchange();
+  const refs = DB.workOrders[0].steps[0].photoRefs;
+  assert(refs.length === 1 && refs[0].url.includes("projects/WO-PH-1/") && refs[0].by === "simon@berkeley.edu" && refs[0].ts && refs[0].filename === "bag.jpg", JSON.stringify(refs));
+  assert(calls.some(c => c[0] === "upload" && String(c[1]).startsWith("projects/WO-PH-1/")), "uploaded under the WO's own tree");
+  assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "written through the steps transaction");
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
