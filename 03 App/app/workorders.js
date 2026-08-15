@@ -1097,13 +1097,18 @@ function woSecStack(wo, E) {
   })();
   return `
     ${stack}
-    <h3 id="wo-bom">BOM</h3>
+    ${/* Reference data, read at material-pull time, not continuously — so it
+          folds even when populated, with the count on the always-visible
+          summary. Edit mode opens it: that is when the rows get typed. */""}
+    <details class="wo-subfold" ${E ? "open" : ""}>
+    <summary id="wo-bom" class="wo-subhd">BOM${(wo.bom || []).length ? ` <span class="wosec-n">${(wo.bom || []).length}</span>` : ' <span class="tny muted nocaps">empty</span>'}</summary>
     <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
       ${(wo.bom || []).map((b, i) => E
         ? `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`
         : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
     </tbody></table>
-    ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}`;
+    ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
+    </details>`;
 }
 
 function woSecSteps(wo, E) {
@@ -1140,9 +1145,9 @@ function woSecSteps(wo, E) {
       // What a signed row can tuck away: everything historical. Open rows
       // keep it all inline — that is what you act on.
       const metas = `
-          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. See the event log.</div>` : ""}
-          ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. See the event log.</div>` : ""}
-          ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
+          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
+          ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
+          ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
           ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
           ${stepPhotoStrip(wo, i, s)}`;
@@ -1307,14 +1312,21 @@ function woSecFiles(wo, E) {
 }
 
 function woSecNotes(wo, E) {
+  const tl = wo.timeline || [];
+  const lastEv = tl.length ? tl[tl.length - 1].date : "";
   return `
-    <h3>Event log</h3>
-    <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
-      ${(wo.timeline || []).map((t, i) => E
+    ${/* Append-only audit that grows unbounded on real records; the step
+          metas that cite it link straight here, and woJump opens the fold.
+          Edit mode opens it too — that is when events get corrected. */""}
+    <details class="wo-subfold" ${E ? "open" : ""}>
+    <summary id="wo-eventlog" class="wo-subhd">Event log${tl.length ? ` <span class="wosec-n">${tl.length}</span>${lastEv ? ` <span class="tny muted nocaps">last ${esc(lastEv)}</span>` : ""}` : ' <span class="tny muted nocaps">empty</span>'}</summary>
+    <table class="sub"><thead><tr><th class="w110">Date</th><th>Event</th></tr></thead><tbody>
+      ${tl.map((t, i) => E
         ? `<tr><td><input value="${esc(t.date)}" onchange="ut(${i},'date',this.value)"></td><td><input value="${esc(t.note)}" onchange="ut(${i},'note',this.value)"></td></tr>`
         : `<tr><td>${esc(t.date)}</td><td>${esc(t.note)}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').timeline.push({date:'',note:''});saveWO(woById('${wo.id}'),'timeline');render()">+ event</button>` : ""}
+    </details>
     <!-- The old free-text notes blob had no author and no timestamp, and any
          edit silently replaced whatever was there. It stays, authoritative and
          editable, because it is what somebody typed; the log beside it is

@@ -205,6 +205,15 @@ summary.wosec-hd::after { content: "▸"; font-size: 13px; color: var(--faint); 
 .wo-fold[open] > summary.wosec-hd::after { content: "▾"; }
 .wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
 .addrow { margin-top: 8px; }
+/* Sub-fold inside a section card (BOM, event log): folds even when
+   populated; the summary wears the h3 register plus a count. */
+.wo-subfold > summary.wo-subhd { cursor: pointer; list-style: none; min-height: 40px;
+  display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 10px; }
+.wo-subfold > summary.wo-subhd::-webkit-details-marker { display: none; }
+.wo-subfold > summary.wo-subhd::before { content: "▸"; color: var(--faint); transition: transform var(--t-fast) var(--ease); }
+.wo-subfold[open] > summary.wo-subhd::before { content: "▾"; }
+.w110 { width: 110px; }
 
 /* ---- photos ----
    Real <img loading="lazy"> tiles so the lightbox collects them and offscreen

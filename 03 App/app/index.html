@@ -1431,6 +1431,16 @@
   .wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
   /* Row that holds a trailing add-button under a list. */
   .addrow { margin-top: 8px; }
+  /* Sub-fold inside a section card (BOM, event log): reference data that
+     folds even when populated. The summary wears the h3 register plus a
+     count, stays a ≥40px target, and is a real anchor woJump can open. */
+  .wo-subfold > summary.wo-subhd { cursor: pointer; list-style: none; min-height: 40px;
+    display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 10px; }
+  .wo-subfold > summary.wo-subhd::-webkit-details-marker { display: none; }
+  .wo-subfold > summary.wo-subhd::before { content: "▸"; color: var(--faint); transition: transform var(--t-fast) var(--ease); }
+  .wo-subfold[open] > summary.wo-subhd::before { content: "▾"; }
+  .w110 { width: 110px; }
   /* ---- WO photos ----
      Real <img loading="lazy"> tiles (not CSS backgrounds) so the lightbox
      collects them and the browser defers offscreen loads. */
