@@ -202,6 +202,16 @@ function myEmail() { return (window.fb && fb.user && fb.user.email) || ""; }
 function usersSorted() { return (DB.users || []).slice().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email)); }
 function userByEmail(email) { return (DB.users || []).find(u => u.email === email); }
 function userName(email) { const u = userByEmail(email); return (u && u.name) || email || "?"; }
+/* ---------- trainings ----------
+   Grants live on roster docs (trainings.<id> = {by, at}, lead-written), so
+   they're already in DB.users and these are synchronous pure lookups. The
+   catalog itself (TRAININGS) is a const in workorders.js, next to the step
+   templates that reference its ids. */
+function hasTraining(email, id) {
+  const u = userByEmail(String(email || "").toLowerCase());
+  return !!(u && u.trainings && u.trainings[id]);
+}
+function qualifiedFor(id) { return usersSorted().filter(u => u.trainings && u.trainings[id]); }
 function initials(name) { return String(name || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?"; }
 // Stable color from a string, so a person's initials-avatar is always the same hue.
 function hueOf(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }

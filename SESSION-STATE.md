@@ -9,8 +9,28 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-13
-Newest: **Reports "Weekly status board" scatter fixed (2026-08-13).** Simon
+Last updated: 2026-08-15
+Newest: **Trainings gate buy-offs and engineer assignment (2026-08-15,
+mold-drawing-revamp worktree).** Simon asked for trainings on people (mold
+design, ShopSabre, wet layup, infusion, foam core, forged CF) gating step
+buy-offs and mold-engineer assignment; two design agents explored visuals and
+integration, Simon confirmed the four forks: catalog fixed in code, buyoff =
+hard block + reasoned lead override (leads NOT implicitly qualified),
+assignment = warn-don't-block, client-only enforcement. Shipped: TRAININGS /
+TRAINING_CODES / MFG_ENG_TRAINING consts + training tags in STD_STEPS rules
+(no title fallback, deliberately inverse of BLOCKER_WORDS — untagged/retro
+stay ungated), grants on roster docs (trainings.<id> = {by,at}, lead-only by
+existing rules; fb.rosterGrant/rosterRevoke), gate in buyoff() after blockers
+(openTrainingGate shows who's qualified; override writes step.trainingOverride
++ timeline), engFld() datalist of qualified people + *Email sidecar on parts
+AND WOs + amber warn, People tab Trainings column of .tpill capsules +
+"Record training session" bulk modal + per-person checkbox modal +
+qualified-for filter. New CSS .tpill/.trwrap/.trrow in index.html + design
+system + conventions.md. Drive-by: .bg-name/.bg-goal phantom classes fixed
+(pre-existing designsystem failure on this branch). Suites: app 426, rules 95,
+designsystem 23, all green; appui sweep run before push.
+
+Previous newest: **Reports "Weekly status board" scatter fixed (2026-08-13).** Simon
 reported "blocks all over the screen"; two investigation agents confirmed
 no regression — the 640ec38 card-grid layout itself was the problem:
 auto-fit minmax(320px,1fr) orphaned the fifth card, align-items:start left

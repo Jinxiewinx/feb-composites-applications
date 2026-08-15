@@ -172,6 +172,28 @@ table.list.dash td { cursor: default; }
   margin-right: 3px; vertical-align: 1px; text-transform: uppercase;
 }
 
+/* ---- badges: training capsule ----
+   A credential, not a status: fully-rounded silhouette and one quiet color so
+   it can never be misread as done/in-work/blocked. Carries a short code
+   ("INF", "CNC"); the long name and grant provenance ride in the tooltip. */
+.tpill {
+  display: inline-flex; align-items: center; padding: 1px 8px;
+  border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  color: var(--muted); white-space: nowrap;
+}
+/* Wrap container for a row of training capsules. */
+.trwrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+/* One training per row in the grant/revoke modal; the whole row is the tap
+   target so the checkbox is reachable with gloves on. */
+.trrow {
+  display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px;
+  min-height: 40px; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.trrow:last-of-type { border-bottom: 0; }
+.trrow input[type="checkbox"] { margin-top: 3px; width: 16px; height: 16px; }
+
 /* ---- badges: status (dot + label, the 6-state enum) ---- */
 .status {
   display: inline-flex; align-items: center; gap: 6px;

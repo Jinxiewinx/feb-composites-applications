@@ -62,7 +62,7 @@ up top, then Build, Planning, and Team):
 - **Budget:** purchases through Submitted, Ordered and Reimbursed, with a receipt-scan button on phones.
 - **Documents:** datasheets, CS standards and printables in one filterable shelf, plus pinned Google Docs. Paste a Drive URL anywhere in the app and it resolves the title and offers a preview, with no Google sign-in.
 - **Reports:** CSV exports, the Monday status board as a grid of linked cards that prints clean, and the bulk label builder.
-- **People:** the roster with roles and each person's live assignments.
+- **People:** the roster with roles, each person's live assignments, and their trainings (mold design, ShopSabre CNC, wet layup, resin infusion, foam core, forged CF) shown as capsule pills. Leads certify a whole training session in one modal, correct or revoke per person, and filter the roster by "qualified for". Trainings gate work: a work-order step tagged with a training refuses an untrained signer (a lead can override with a written reason that lands in the event log), and the mold / manufacturing engineer fields suggest qualified people and warn, without blocking, when the assignee isn't trained for the process.
 
 ![Inventory: the storage map, one card per shelf with contents and warnings](03%20App/design/inventory-mockup-20260804.png)
 

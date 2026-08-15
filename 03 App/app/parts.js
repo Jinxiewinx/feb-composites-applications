@@ -744,6 +744,7 @@ async function newRunForPart(partId) {
   const wo = {
     id, partName: p.partName || "", subteam: p.subteam || "AERO", revision: "A", status: "Draft",
     processType: proc, moldEngineer: p.moldEngineer || "", manufacturingEngineer: p.manufacturingEngineer || "",
+    moldEngineerEmail: p.moldEngineerEmail || "", manufacturingEngineerEmail: p.manufacturingEngineerEmail || "",
     createdDate: today(), dueDate: p.layupDeadline || "", partId: p.id,
     mold: { moldId: p.mold || "", layers: "", density: "", sealingType: "XCR", location: p.moldLocation || "" },
     layupStack: JSON.parse(JSON.stringify(p.layupStack || [])), stackSource: "spec",
@@ -868,7 +869,7 @@ function renderPartDetail() {
               <span class="chip" onclick="openRecord('molds','${esc(pm.mold.id)}')">${esc(pm.mold.name || pm.mold.id)}</span>
               <span class="muted tny">via ${esc(pm.through ? pm.through.id : "a run")}</span></div></div>`; })()
           : pfld(p, "Mold", "mold", null, "mold")}
-        ${pfld(p, "Mold Engineer", "moldEngineer")}${pfld(p, "Manufacturing Engineer", "manufacturingEngineer")}${pfld(p, "Layup schedule (text note)", "layupSchedule")}
+        ${engFld("parts", p, "Mold Engineer", "moldEngineer")}${engFld("parts", p, "Manufacturing Engineer", "manufacturingEngineer")}${pfld(p, "Layup schedule (text note)", "layupSchedule")}
         ${pfld(p, "Target weight (g)", "weightG")}${pfld(p, "Actual weight (g)", "weightActualG")}
         ${(() => {
           // Derived, so it is never an input; and absent entirely on the many

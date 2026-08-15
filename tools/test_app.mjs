@@ -87,6 +87,8 @@ globalThis.fb = {
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
   async rosterDelete() { calls.push(["rosterDelete"]); },
+  async rosterGrant(email, id) { calls.push(["rosterGrant", email, id]); },
+  async rosterRevoke(email, id) { calls.push(["rosterRevoke", email, id]); },
   async notify(to, type, text, link) { calls.push(["notify", to, type]); },
   async markNotifRead(id) { calls.push(["markNotifRead", id]); },
   async signOut() {}, async refreshRoster() {},
@@ -103,7 +105,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -4878,6 +4880,178 @@ await t("ticket filter keys are their own: tkLate does not leak into fLate or wo
   assert(!view.fLate && !view.woLate, "one tab's toggle, one tab's key");
   resetTicketFilters();
   assert(!view.tkLate && !view.tkDone && !view.tkMine && !view.tkOpen, "reset clears them all");
+});
+
+/* ---- trainings ----------------------------------------------------------
+   Who may sign, not just what the signature needs. Grants live on roster docs
+   (DB.users), the requirement lives in the step template's rule object, and
+   the gate is the first check in buyoff() after blockers. Untagged steps and
+   retro WOs are deliberately ungated — the inverse of BLOCKER_WORDS, so the
+   feature turning on can't newly block records already in Firestore. */
+console.log("trainings:");
+await t("every training a template step demands exists in the catalog", () => {
+  for (const [proc, steps] of Object.entries(STD_STEPS))
+    for (const row of steps) {
+      const tr = row[1] && row[1].training;
+      if (tr) assert(TRAININGS[tr], `${proc} step "${row[0]}" wants unknown training "${tr}"`);
+    }
+  for (const tr of Object.values(MFG_ENG_TRAINING)) if (tr) assert(TRAININGS[tr], "MFG_ENG_TRAINING refers to a real training");
+  for (const id of Object.keys(TRAININGS)) assert(TRAINING_CODES[id], id + " has a pill code");
+});
+await t("stepTraining reads the rule field and nothing else — untagged means ungated", () => {
+  assert(stepTraining({ title: "Infuse", rule: { kind: "startsHold", training: "infusion" } }) === "infusion");
+  assert(stepTraining({ title: "Infuse" }) === null, "no title matching, ever");
+  assert(stepTraining({ title: "Seal and release mold", rule: { kind: "blocker" } }) === null);
+});
+await t("hasTraining is a plain roster lookup", () => {
+  DB.users = [
+    { email: "nick@b.edu", name: "Nick Jepsen", role: "member", trainings: { infusion: { by: "simon@berkeley.edu", at: "2026-08-15T00:00:00Z" } } },
+    { email: "sander@b.edu", name: "Sander Green", role: "member" },
+  ];
+  assert(hasTraining("nick@b.edu", "infusion") && !hasTraining("nick@b.edu", "cnc"));
+  assert(!hasTraining("sander@b.edu", "infusion") && !hasTraining("nobody@b.edu", "infusion"));
+});
+const trainWO = () => ({
+  id: "WO-TR-1", partName: "TR PART", subteam: "AERO", processType: "MoldInfusion", revision: "A",
+  status: "InWork", bom: [], qualityChecks: [], layupStack: [], timeline: [], retro: false,
+  createdBy: "someoneelse@b.edu",
+  steps: [{ seq: 1, title: "Practice infusion", status: "open", buyoff: { name: "", date: "" }, rule: { training: "infusion" }, notes: "", photoRefs: [] }],
+});
+await t("an untrained member is stopped, told who can sign, and nothing is written", async () => {
+  fb.user = { uid: "u2", email: "sander@b.edu", name: "Sander Green" };
+  fb.roster = { name: "Sander", role: "member" };
+  DB.workOrders = [trainWO()];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-TR-1", edit: false };
+  calls.length = 0;
+  await buyoff(0);
+  assert(!isSigned(DB.workOrders[0].steps[0]), "must not sign");
+  assert(!calls.some(c => c[0] === "mutateField"), "no write of any kind");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Resin infusion training"), "names the training: " + m.slice(0, 200));
+  assert(m.includes("Nick Jepsen"), "shows who is qualified to sign");
+  assert(!m.includes("Sign without it"), "a member gets no override button");
+  closeModal();
+});
+await t("the row says so before the tap, quietly, and only to the unqualified", () => {
+  render();
+  assert(main.innerHTML.includes("Needs Resin infusion training to sign"), "caption under the step");
+  fb.user = { uid: "u3", email: "nick@b.edu", name: "Nick Jepsen" };
+  fb.roster = { name: "Nick", role: "member" };
+  render();
+  assert(!main.innerHTML.includes("Needs Resin infusion training to sign"), "invisible to the trained");
+});
+await t("a trained member signs normally", async () => {
+  calls.length = 0;
+  await buyoff(0);
+  assert(isSigned(DB.workOrders[0].steps[0]), "signs");
+  assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "through the transaction");
+});
+await t("an untrained lead overrides with a written reason, and it lands on the step and in the event log", async () => {
+  signInAsLead(); // simon holds no trainings in this fixture
+  DB.workOrders = [trainWO()];
+  view = { ...view, id: "WO-TR-1" };
+  await buyoff(0);
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Sign without it"), "a lead gets the override path");
+  openTrainingOverride(0, "infusion");
+  document.getElementById("tr-why").value = "";
+  lastToast = ""; submitTrainingOverride(0, "infusion");
+  assert(lastToast.includes("reason"), "an empty reason is refused");
+  assert(!isSigned(DB.workOrders[0].steps[0]), "and nothing signs");
+  openTrainingOverride(0, "infusion");
+  document.getElementById("tr-why").value = "Nick supervised the whole infusion";
+  await submitTrainingOverride(0, "infusion");
+  const s = DB.workOrders[0].steps[0];
+  assert(s.trainingOverride && s.trainingOverride.training === "infusion" && s.trainingOverride.reason.includes("supervised"));
+  assert(isSigned(s), "with the reason recorded it signs");
+  const tl = DB.workOrders[0].timeline;
+  assert(tl.length === 1 && tl[0].note.includes("without Resin infusion training"), "one event-log line: " + JSON.stringify(tl));
+});
+await t("retro WOs and untagged steps bypass the gate entirely", async () => {
+  fb.user = { uid: "u2", email: "sander@b.edu", name: "Sander Green" };
+  fb.roster = { name: "Sander", role: "member" };
+  const r = trainWO(); r.retro = true;
+  DB.workOrders = [r]; view = { ...view, id: "WO-TR-1" };
+  await buyoff(0);
+  assert(isSigned(r.steps[0]), "retro documents, it does not enforce");
+  const u = trainWO(); delete u.steps[0].rule;
+  DB.workOrders = [u];
+  await buyoff(0);
+  assert(isSigned(u.steps[0]), "an untagged step is ungated for anyone");
+  signInAsLead();
+});
+await t("an open blocker still wins over the training gate", async () => {
+  fb.user = { uid: "u2", email: "sander@b.edu", name: "Sander Green" };
+  fb.roster = { name: "Sander", role: "member" };
+  const w = trainWO();
+  w.steps.unshift({ seq: 0, title: "Stack frozen", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" }, notes: "", photoRefs: [] });
+  DB.workOrders = [w]; view = { ...view, id: "WO-TR-1" };
+  document.getElementById("modal").innerHTML = "";
+  lastToast = ""; await buyoff(1);
+  assert(lastToast.includes("Blocked"), "the blocker answers first");
+  assert(!document.getElementById("modal").innerHTML.includes("training"), "not the training modal");
+  signInAsLead();
+});
+await t("engineer fields suggest only the qualified, stamp the email sidecar, and warn — never block", () => {
+  DB.users = [
+    { email: "nick@b.edu", name: "Nick Jepsen", role: "member", trainings: { moldDesign: { by: "s", at: "" } } },
+    { email: "sander@b.edu", name: "Sander Green", role: "member" },
+  ];
+  DB.parts = [{ id: "P-TR", partName: "TR", layupType: "MOLD INFUSION", moldEngineer: "", manufacturingEngineer: "" }];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-TR", edit: true };
+  const html = engFld("parts", DB.parts[0], "Mold Engineer", "moldEngineer");
+  assert(html.includes('<option value="Nick Jepsen">') && !html.includes("Sander"), "datalist is the qualified list: " + html);
+  calls.length = 0;
+  setEngineer("parts", "P-TR", "moldEngineer", "Nick Jepsen");
+  assert(DB.parts[0].moldEngineerEmail === "nick@b.edu", "a roster match stamps the sidecar");
+  assert(calls.some(c => c[0] === "save" && c[3] === "moldEngineer") && calls.some(c => c[0] === "save" && c[3] === "moldEngineerEmail"));
+  setEngineer("parts", "P-TR", "moldEngineer", "Sander Green");
+  assert(DB.parts[0].moldEngineer === "Sander Green", "an unqualified name still saves — assignment is planning");
+  assert(engFld("parts", DB.parts[0], "Mold Engineer", "moldEngineer").includes("not Mold design-trained"), "but wears the warning");
+  setEngineer("parts", "P-TR", "moldEngineer", "External Contractor");
+  assert(DB.parts[0].moldEngineerEmail === "" && engFld("parts", DB.parts[0], "Mold Engineer", "moldEngineer").includes("not matched to the roster"));
+  view = { ...view, edit: false };
+});
+await t("People shows training capsules; leads grant, members only look", () => {
+  DB.users = [
+    { email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" },
+    { email: "nick@b.edu", name: "Nick Jepsen", role: "member", trainings: { infusion: { by: "simon@berkeley.edu", at: "2026-08-15T00:00:00Z" } } },
+  ];
+  DB.parts = []; DB.projects = []; DB.workOrders = [];
+  view = { ...view, tab: "people", mode: "list", q: "", fTrain: "" }; render();
+  assert(main.innerHTML.includes('class="tpill"') && main.innerHTML.includes(">INF<"), "capsule with the short code");
+  assert(main.innerHTML.includes("Record training session") && main.innerHTML.includes("openPersonTrainings"), "lead controls");
+  fb.roster = { name: "Nick", role: "member" }; render();
+  assert(!main.innerHTML.includes("Record training session") && !main.innerHTML.includes("openPersonTrainings"), "members see, they don't grant");
+  fb.roster = { name: "Simon", role: "lead" };
+});
+await t("the qualified-for filter answers 'who can do X'", () => {
+  view = { ...view, fTrain: "infusion" }; render();
+  assert(main.innerHTML.includes("Nick Jepsen") && !main.innerHTML.includes("Simon Starbuck</"), "only holders pass the filter");
+  view = { ...view, fTrain: "cnc" }; render();
+  assert(main.innerHTML.includes("Nobody holds ShopSabre CNC yet"), "an empty answer says so");
+  view = { ...view, fTrain: "" };
+});
+await t("a training session certifies everyone picked, one grant per person", async () => {
+  openTrainingSession();
+  document.getElementById("ts-training").value = "wetLayup";
+  pickerToggle("ts", "nick@b.edu"); pickerToggle("ts", "simon@berkeley.edu");
+  calls.length = 0;
+  await saveTrainingSession();
+  const grants = calls.filter(c => c[0] === "rosterGrant");
+  assert(grants.length === 2 && grants.every(g => g[2] === "wetLayup"), JSON.stringify(grants));
+  assert(lastToast.includes("2 people certified"), lastToast);
+});
+await t("the per-person modal grants and revokes through the roster API", async () => {
+  openPersonTrainings("nick@b.edu");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Resin infusion") && m.includes("granted by"), "shows what he holds and who granted it");
+  calls.length = 0;
+  await togglePersonTraining("nick@b.edu", "cnc", true);
+  await togglePersonTraining("nick@b.edu", "infusion", false);
+  assert(calls.some(c => c[0] === "rosterGrant" && c[2] === "cnc"));
+  assert(calls.some(c => c[0] === "rosterRevoke" && c[2] === "infusion"));
+  closeModal();
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

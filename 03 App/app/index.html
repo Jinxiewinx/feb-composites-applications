@@ -332,6 +332,23 @@
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 5px; font: inherit; font-size: 12px; line-height: 1.5; text-align: left; min-height: 0; background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent); cursor: pointer; }
   .chip:hover { filter: brightness(.97); }
   .kind { display: inline-block; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 3px; vertical-align: 1px; text-transform: uppercase; }
+  /* Budget-goals modal row inputs. bgReadDom() reads these back by class, so
+     the flex sizing lives on the class rather than inline — a class the
+     stylesheet never defines is a phantom the design-system test rejects. */
+  .bg-name { flex: 2; }
+  .bg-goal { flex: 1; max-width: 110px; }
+  /* ---- trainings: credential capsules ----
+     A credential, not a status: fully-rounded silhouette and one quiet color,
+     so an INF pill next to a green Complete pill can't be misread as done.
+     The 5px-radius rectangles above stay statuses; capsules mean "holds a
+     training". Long name + who granted it ride in the title tooltip. */
+  .tpill { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: var(--surface-2); border: 1px solid var(--border-2); color: var(--muted); white-space: nowrap; }
+  .trwrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  /* One training per row in the per-person modal; the whole row is the tap
+     target so a checkbox is reachable with gloves on. */
+  .trrow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px; min-height: 40px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .trrow:last-of-type { border-bottom: 0; }
+  .trrow input[type="checkbox"] { margin-top: 3px; width: 16px; height: 16px; }
 
   /* ---- tickets: kind badge, colored status, gates, sub-tickets ---- */
   .kindfilter { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }

@@ -112,8 +112,8 @@ function bgModal() {
   openModal(`<h3>Budget goals</h3>
     <p class="muted tny">Categories become the Purpose choices on new purchases. The season total is separate on purpose — it may carry slack beyond the category goals.</p>
     ${bgDraft.categories.map((c, i) => `<div class="row" style="gap:8px;margin-bottom:6px">
-      <input class="bg-name" placeholder="Category" value="${esc(c.name)}" style="flex:2">
-      <input class="bg-goal" placeholder="Goal $" value="${esc(c.goal)}" style="flex:1;max-width:110px">
+      <input class="bg-name" placeholder="Category" value="${esc(c.name)}">
+      <input class="bg-goal" placeholder="Goal $" value="${esc(c.goal)}">
       <button class="sm" onclick="bgRmRow(${i})" title="Remove this category">✕</button>
     </div>`).join("")}
     <div class="no-print" style="margin-bottom:10px"><button class="sm" onclick="bgAddRow()">+ Add category</button></div>

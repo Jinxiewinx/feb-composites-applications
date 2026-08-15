@@ -9,6 +9,82 @@ const WO_STATUSES = ["Draft", "Released", "InWork", "Complete", "OnHold"];
 const PROCESSES = ["MoldInfusion", "GlassInfusion", "MoldWetLay", "FoamWrapped", "Other"];
 const BLOCKER_WORDS = ["frozen", "design review", "drop test", "acceptance criterion"];
 
+/* The training catalog. Ids are referenced from step templates below and from
+   the engineer gating map, so they are stable code keys; labels are display
+   only. Grants live per-person on roster docs (see fb.rosterGrant). Unlike
+   BLOCKER_WORDS there is deliberately NO title fallback: a training gate that
+   matched on titles would newly block every record already in Firestore, so
+   the gate exists exactly where a template's rule object put it. */
+const TRAININGS = {
+  moldDesign: "Mold design",
+  cnc: "ShopSabre CNC",
+  wetLayup: "Wet layup",
+  infusion: "Resin infusion",
+  foamCore: "Foam core",
+  forgedCarbon: "Forged carbon fiber",
+};
+// Short codes for the capsule pills; long names go in tooltips.
+const TRAINING_CODES = {
+  moldDesign: "MOLD", cnc: "CNC", wetLayup: "WL",
+  infusion: "INF", foamCore: "CORE", forgedCarbon: "FCF",
+};
+// Which training a manufacturing engineer needs, by process. Mold engineer is
+// always gated by moldDesign.
+const MFG_ENG_TRAINING = {
+  MoldInfusion: "infusion", GlassInfusion: "infusion",
+  MoldWetLay: "wetLayup", FoamWrapped: "wetLayup", Other: null,
+};
+
+/* ---------- engineer fields ----------
+   One field renderer for both parts and work orders. The name string stays
+   authoritative (20+ read sites, travellers, reports — none change); the input
+   gains a datalist of people who hold the relevant training, and picking or
+   typing a roster name also sets the *Email sidecar so the face is exact.
+   Unqualified or off-roster names still save — assignment is planning, the
+   buy-off is the enforced record — they just carry a quiet warning. */
+function recProcess(rec) {
+  if (rec.processType) return rec.processType;
+  return { "MOLD INFUSION": "MoldInfusion", "GLASS INFUSION": "GlassInfusion",
+    "MOLD WET LAY": "MoldWetLay", "FOAM WRAPPED": "FoamWrapped" }[rec.layupType] || "Other";
+}
+function engTrainingFor(rec, key) {
+  return key === "moldEngineer" ? "moldDesign" : MFG_ENG_TRAINING[recProcess(rec)] || null;
+}
+function engWarnHtml(rec, key) {
+  const v = String(rec[key] || "").trim();
+  if (!v || (typeof notAPerson === "function" && notAPerson(v))) return "";
+  const tr = engTrainingFor(rec, key);
+  if (!tr) return "";
+  const email = partEngineerEmail(rec, key);
+  if (!email) return ` <span class="tny muted">not matched to the roster</span>`;
+  if (!hasTraining(email, tr)) return ` <span class="warn tny">not ${esc(TRAININGS[tr] || tr)}-trained</span>`;
+  return "";
+}
+function engFld(coll, rec, label, key) {
+  const v = rec[key] ?? "";
+  const warn = engWarnHtml(rec, key);
+  if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(v) || "—"}${warn}</div></div>`;
+  const tr = engTrainingFor(rec, key);
+  const dl = `dl-${coll}-${key}`;
+  const q = tr ? qualifiedFor(tr) : usersSorted();
+  return `<div class="f"><label>${label}</label>
+    <input list="${dl}" value="${esc(v)}" onchange="setEngineer('${coll}','${esc(rec.id)}','${key}',this.value)">
+    <datalist id="${dl}">${q.map(u => `<option value="${esc(u.name || u.email)}">`).join("")}</datalist>
+    ${warn}</div>`;
+}
+function setEngineer(coll, id, key, val) {
+  const rec = recById(coll, id);
+  if (!rec) return;
+  val = String(val || "");
+  rec[key] = val;
+  const nm = val.trim().toLowerCase();
+  const u = nm ? (DB.users || []).find(u => (u.name || "").toLowerCase() === nm || u.email.toLowerCase() === nm) : null;
+  rec[key + "Email"] = u ? u.email : "";
+  save(coll, rec, key);
+  save(coll, rec, key + "Email");
+  render();
+}
+
 /* Step titles are what someone reads at the bench with gloves on, so they stay
    short and plain. Standard numbers used to be baked into every title; they made
    the printed sheet dense and hard to scan, and the standards themselves live in
@@ -36,24 +112,24 @@ const BLOCKER_WORDS = ["frozen", "design review", "drop test", "acceptance crite
    and the two agree. */
 const STD_STEPS = {
   MoldInfusion: [
-    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"] }],
-    ["Glue mold stock"], ["Machine mold", { needs: ["note"] }],
-    ["Seal and release mold"], ["Dry stack and bag"],
-    ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"] }], ["Infuse", { kind: "startsHold" }],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"], training: "moldDesign" }],
+    ["Glue mold stock", { training: "cnc" }], ["Machine mold", { needs: ["note"], training: "cnc" }],
+    ["Seal and release mold"], ["Dry stack and bag", { training: "infusion" }],
+    ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"], training: "infusion" }], ["Infuse", { kind: "startsHold", training: "infusion" }],
     ["Cure and demould", { kind: "hold", from: "resin" }], ["Trim and finish"]],
   GlassInfusion: [
     ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Prepare plate and release"],
-    ["Dry stack and bag"], ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"] }],
-    ["Infuse", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
+    ["Dry stack and bag", { training: "infusion" }], ["Drop test, 1 inHg or less over 10 min", { kind: "blocker", needs: ["note"], training: "infusion" }],
+    ["Infuse", { kind: "startsHold", training: "infusion" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Cut to DXF, confirm revision"], ["Finish"]],
   MoldWetLay: [
-    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"] }],
-    ["Glue and machine mold", { needs: ["note"] }], ["Seal and release mold"],
-    ["Wet layup and bag", { kind: "startsHold" }], ["Cure and demould", { kind: "hold", from: "resin" }],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Mold design review", { kind: "blocker", needs: ["file"], training: "moldDesign" }],
+    ["Glue and machine mold", { needs: ["note"], training: "cnc" }], ["Seal and release mold"],
+    ["Wet layup and bag", { kind: "startsHold", training: "wetLayup" }], ["Cure and demould", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
   FoamWrapped: [
-    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Shape foam core"],
-    ["Wet layup over core", { kind: "startsHold" }], ["Cure", { kind: "hold", from: "resin" }],
+    ["Stack frozen", { kind: "blocker", needs: ["stack"] }], ["Shape foam core", { training: "foamCore" }],
+    ["Wet layup over core", { kind: "startsHold", training: "wetLayup" }], ["Cure", { kind: "hold", from: "resin" }],
     ["Trim and finish"]],
   Other: [["Define acceptance criterion: target and method, set before work starts", { kind: "blocker", needs: ["note"] }],
           ["Execute"], ["Verify against criterion"]],
@@ -133,6 +209,9 @@ function isBlocker(step) {
   return BLOCKER_WORDS.some(g => t.includes(g));
 }
 function isHoldStep(s) { return !!(stepRule(s) && s.rule.kind === "hold"); }
+// The training a step's signer needs, or null. Rule-field only, no title
+// fallback (see the TRAININGS comment): untagged steps stay ungated.
+function stepTraining(s) { const r = stepRule(s); return (r && r.training) || null; }
 function startsHold(s) { return !!(stepRule(s) && s.rule.kind === "startsHold"); }
 
 /* ---------- evidence on a buy-off ----------
@@ -843,8 +922,8 @@ function woSecOverview(wo, E) {
     <h3 id="wo-overview">Overview</h3>
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
-      ${fld(wo, "Process", "processType", "select-process")}${fld(wo, "Mold Engineer", "moldEngineer")}
-      ${fld(wo, "Manufacturing Engineer", "manufacturingEngineer")}${fld(wo, "Created", "createdDate")}${fld(wo, "Due", "dueDate")}
+      ${fld(wo, "Process", "processType", "select-process")}${engFld("workOrders", wo, "Mold Engineer", "moldEngineer")}
+      ${engFld("workOrders", wo, "Manufacturing Engineer", "manufacturingEngineer")}${fld(wo, "Created", "createdDate")}${fld(wo, "Due", "dueDate")}
       ${fld(wo, "Revision", "revision")}${fld(wo, "Mass target (g)", "weightTargetG")}${fld(wo, "Mass actual (g)", "weightActualG")}
     </div>
     ${moldRows}`;
@@ -911,6 +990,13 @@ function woSecSteps(wo, E) {
                 you walk over to sign. One line, no citation, same register as
                 the hold banner. */""}
           ${needsEv ? `<p class="gate"><span class="gi">⚠</span><span>Needs ${esc(evidenceLabels(ev.missing).join(" and "))} before it can be signed.</span></p>` : ""}
+          ${(() => { /* Personal, not a record truth like the evidence line: said
+                quietly on the row so you know before you walk over to sign,
+                never as a disabled button. */
+            const tr = stepTraining(s);
+            return tr && state !== "done" && state !== "failed" && !wo.retro && !s.trainingOverride && !hasTraining(myEmail(), tr)
+              ? `<div class="meta no-print">Needs ${esc(TRAININGS[tr] || tr)} training to sign.</div>` : ""; })()}
+          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. See the event log.</div>` : ""}
           ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. See the event log.</div>` : ""}
           ${held ? holdBanner(hold, i) : ""}
           ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
@@ -1372,10 +1458,75 @@ function submitEvidenceOverride(i) {
   signStep(i, { evidenceOverride: ov });
 }
 
+/* Who may sign, before what the signature needs. The gate names the training,
+   shows who on the roster holds it, and for a lead puts the override one tap
+   away — same bargain as evidence and cure holds. Leads are NOT implicitly
+   qualified: an untrained lead signing leaves a reasoned record, not a silent
+   pass. Retro WOs and untagged steps never get here. */
+function openTrainingGate(i, tr) {
+  const w = woById(view.id);
+  const s = w.steps[i];
+  const q = qualifiedFor(tr);
+  const who = q.length
+    ? `<p class="muted" style="margin-bottom:4px">Any of these people can sign this step:</p>
+       <div class="trwrap">${q.map(u => `<span class="chip">${avatar(u, 20)} ${esc(u.name || u.email)}</span>`).join("")}</div>`
+    : `<p class="muted">Nobody on the roster holds this training yet — a lead can grant it on the People tab.</p>`;
+  openModal(`
+    <h2>Not yet — this step needs ${esc(TRAININGS[tr] || tr)} training</h2>
+    <p class="muted">${esc(stripCS(s.title))} — step ${s.seq} of ${esc(w.id)}.</p>
+    <p class="gate blocked"><span class="gi">✕</span><span><b>You're not recorded as ${esc(TRAININGS[tr] || tr)}-trained.</b>
+      Trainings are granted by a lead on the People tab.</span></p>
+    ${who}
+    <div class="foot">
+      <button onclick="closeModal()">Close</button>
+      ${isLead() ? `<button class="danger" onclick="openTrainingOverride(${i},'${tr}')">Sign without it</button>` : ""}
+    </div>
+  `);
+}
+function openTrainingOverride(i, tr) {
+  openModal(`
+    <h2>Sign without ${esc(TRAININGS[tr] || tr)} training?</h2>
+    <p class="gate"><span class="gi">⚠</span><span>This goes in the event log with your name, the time, and the missing training.</span></p>
+    <div class="field"><label for="tr-why">Why is this being signed by someone untrained?</label>
+      <textarea id="tr-why" autofocus rows="3" placeholder="Who supervised, or why the training doesn't apply here"></textarea>
+    </div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="submitTrainingOverride(${i},'${tr}')">Sign it anyway</button>
+    </div>
+  `);
+}
+function submitTrainingOverride(i, tr) {
+  const el = document.getElementById("tr-why");
+  const why = (el ? el.value : "").trim();
+  if (!why) { toast("An override needs a reason. That's the whole point of it.", "error"); return; }
+  const w = woById(view.id);
+  closeModal();
+  const ov = { by: signerName(), email: myEmail(), at: new Date().toISOString(), training: tr, reason: why };
+  w.timeline = w.timeline || [];
+  w.timeline.push({
+    date: today(),
+    note: `“${stripCS(w.steps[i].title)}” signed by ${ov.by} without ${TRAININGS[tr] || tr} training. Reason: ${why}`,
+  });
+  saveWO(w, "timeline");
+  // Merge the override onto the step, then rejoin the normal pipeline so the
+  // evidence, photo, and cure gates still apply to this signature.
+  Object.assign(w.steps[i], { trainingOverride: ov });
+  saveField("workOrders", w, "steps", steps => { steps[i] = { ...steps[i], trainingOverride: ov }; return steps; });
+  buyoff(i);
+}
+
 async function buyoff(i) {
   const w = woById(view.id);
   const blocked = blockerOpenBefore(w, i);
   if (blocked) { toast("Blocked by unfinished blocker: " + blocked.title, "error"); return; }
+  // Who may sign, before what the signature needs: identity is the cheapest
+  // check, and failing it after someone typed an evidence note wastes the note.
+  const tr = stepTraining(w.steps[i]);
+  if (tr && !w.retro && !hasTraining(myEmail(), tr) && !w.steps[i].trainingOverride) {
+    openTrainingGate(i, tr);
+    return;
+  }
   // What the signature has to come with. Before the cure path, because a cure
   // modal that collects a resin and a time and THEN refuses to sign has wasted
   // the one moment somebody was standing at the part with the answer.

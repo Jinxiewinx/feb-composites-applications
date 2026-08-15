@@ -126,6 +126,11 @@ await expect(403, "member", "PATCH", "/roster/member@feb.test", { role: S("lead"
 await expect(403, "member", "PATCH", "/roster/lead@feb.test", { avatar: S("http://x/b.jpg") }, ["avatar"]); // someone else's doc blocked
 await expect(200, "lead", "PATCH", "/roster/member@feb.test", { avatar: S("http://x/c.jpg") }, ["avatar"]); // lead can edit anyone
 
+console.log("trainings (the one server-side property the buyoff gate relies on):");
+const trGrant = { trainings: { mapValue: { fields: { infusion: { mapValue: { fields: { by: S("member@feb.test"), at: S("2026-08-15T00:00:00Z") } } } } } } };
+await expect(403, "member", "PATCH", "/roster/member@feb.test", trGrant, ["trainings.infusion"]); // self-grant blocked
+await expect(200, "lead", "PATCH", "/roster/member@feb.test", trGrant, ["trainings.infusion"]);   // a lead grants
+
 console.log("lead:");
 await expect(200, "lead", "PATCH", "/roster/new@feb.test", { name: S("New"), role: S("member") });
 await expect(200, "lead", "DELETE", "/roster/new@feb.test");

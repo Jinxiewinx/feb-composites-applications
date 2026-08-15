@@ -19,7 +19,7 @@ import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   connectFirestoreEmulator, collection, doc, onSnapshot, setDoc, updateDoc,
   deleteDoc, getDoc, getDocs, runTransaction, serverTimestamp, writeBatch, arrayUnion,
-  query, where,
+  query, where, deleteField,
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import {
   getStorage, connectStorageEmulator, ref as sRef, uploadBytes, getDownloadURL, deleteObject,
@@ -312,6 +312,20 @@ const fb = {
     }, { merge: true });
   },
   async rosterDelete(email) { await deleteDoc(doc(db, "roster", email)); },
+  /* Trainings live on the roster doc as trainings.<id> = {by, at}. Lead-only
+     per rules (member self-edit is restricted to avatar/name, so a member
+     granting themselves a training is rejected server-side). Dot-path writes
+     so a grant can't clobber the rest of the map. */
+  async rosterGrant(email, trainingId) {
+    await updateDoc(doc(db, "roster", email.trim().toLowerCase()), {
+      ["trainings." + trainingId]: { by: fb.user ? fb.user.email : "?", at: new Date().toISOString() },
+    });
+  },
+  async rosterRevoke(email, trainingId) {
+    await updateDoc(doc(db, "roster", email.trim().toLowerCase()), {
+      ["trainings." + trainingId]: deleteField(),
+    });
+  },
   // Any member editing their OWN roster doc — rules allow avatar/name only.
   async rosterUpdateSelf(fields) {
     await updateDoc(doc(db, "roster", fb.user.email), fields);
