@@ -214,7 +214,8 @@ await t("blocker gets a real badge (not bold text), and the first actionable ste
   render();
   assert(main.innerHTML.includes('<span class="step-badge">blocker</span>'), "blocker renders as a badge, not bold text: " + main.innerHTML);
   assert(!main.innerHTML.includes("<b>· BLOCKER</b>"), "old bold-text marker is gone");
-  const stepDivs = main.innerHTML.match(/<div class="step[^"]*">/g);
+  // "step " with the space: the row class; .step-title/.step-photos are children.
+  const stepDivs = main.innerHTML.match(/<div class="step [^"]*">/g);
   assert(stepDivs && stepDivs.length === 3, "one div per step: " + JSON.stringify(stepDivs));
   assert(!stepDivs[0].includes("upnext"), "step 1 is already done, not up-next: " + stepDivs[0]);
   assert(stepDivs[1].includes("blocker") && stepDivs[1].includes("upnext"), "step 2 is both the blocker and the up-next step: " + stepDivs[1]);
@@ -328,7 +329,10 @@ await t("a cure in progress locks the next step and says how long is left", () =
   assert(h.hours === 48, "IN2 SLOW holds 48 h, got " + h.hours);
   assert(Math.round(h.msLeft / 3600000) === 41, "41 h left, got " + (h.msLeft / 3600000));
   const html = main.innerHTML;
-  assert(html.includes('<span class="step-badge">hold 48 h</span>'), "the step is badged: " + html.slice(0, 600));
+  // The hold badge wears the slate hold class and a clock glyph — a hold is
+  // the clock, not a person, and no longer shares the blocker's amber.
+  assert(html.includes('<span class="step-badge hold">◷ hold 48 h</span>'), "the step is badged: " + html.slice(0, 600));
+  assert(html.includes("is-held") && !html.includes('step is-blocker  is-held'), "held row wears is-held");
   assert(/class="gate"/.test(html), "amber gate, not the red blocked variant");
   assert(!/gate blocked/.test(html), "a cure that hasn't finished is not an error state");
   assert(html.includes("41 h left"), "countdown is on screen: " + html);
@@ -5109,6 +5113,27 @@ await t("addStepPhotos writes object entries through the steps transaction", asy
   assert(refs.length === 1 && refs[0].url.includes("projects/WO-PH-1/") && refs[0].by === "simon@berkeley.edu" && refs[0].ts && refs[0].filename === "bag.jpg", JSON.stringify(refs));
   assert(calls.some(c => c[0] === "upload" && String(c[1]).startsWith("projects/WO-PH-1/")), "uploaded under the WO's own tree");
   assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "written through the steps transaction");
+});
+
+await t("a signed step folds its history one tap away; the up-next button is the one primary", () => {
+  DB.workOrders = [{ id: "WO-ROW-1", partName: "ROW", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [
+    { seq: 1, title: "Prep plate", status: "done", buyoff: { name: "Nick Jepsen", email: "nick@b.edu", date: "2026-08-14" },
+      notes: "wiped with acetone", photoRefs: [{ id: "P1", url: "https://x/p.jpg", name: "p.jpg" }] },
+    { seq: 2, title: "Execute", status: "open", buyoff: { name: "", date: "" } },
+    { seq: 3, title: "Verify", status: "open", buyoff: { name: "", date: "" } },
+  ] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-ROW-1", edit: false };
+  render();
+  const html = main.innerHTML;
+  assert(html.includes('class="step-disclose">1 photo · note</summary>'), "the fold's summary says what is inside: " + (html.match(/step-disclose[^<]*/) || [])[0]);
+  assert(html.includes("wiped with acetone"), "the note is still in the DOM, just folded");
+  const primaries = html.match(/<button class="primary" onclick="buyoff\(\d\)"/g) || [];
+  assert(primaries.length === 1 && primaries[0].includes("buyoff(1)"), "exactly one primary buy-off, on the up-next row: " + JSON.stringify(primaries));
+  assert(html.includes('<span class="step-badge now">now</span>'), "the up-next row is badged NOW");
+  assert(html.includes('data-lb-src="https://x/p.jpg"'), "the step photo renders as a lightbox thumb, not a filename");
+  view = { ...view, edit: true }; render();
+  assert(main.innerHTML.includes("wiped with acetone") && !main.innerHTML.includes("step-disclose"), "edit mode keeps everything inline");
+  view = { ...view, edit: false };
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

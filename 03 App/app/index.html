@@ -1224,10 +1224,24 @@
   .step .num { font-weight: 700; color: var(--brand-ink); min-width: 22px; }
   .step .body { flex: 1; } .step .meta { font-size: 12px; color: var(--muted); }
   .step .buyoff { display: flex; gap: 6px; align-items: center; font-size: 12px; }
-  .step.blocker { background: var(--warn-bg); margin: 0 -8px; padding: 8px; }
+  /* A blocker is a person withholding a signature — amber, the in-work
+     shape. A hold is the clock — slate, the parked color, with a clock
+     glyph in its badge. They deliberately no longer share one wash. */
+  .step.is-blocker { background: var(--warn-bg); margin: 0 -8px; padding: 8px; }
+  .step.is-held { background: var(--hold-bg); margin: 0 -8px; padding: 8px; }
   .step.done { opacity: .72; } .step.failed { background: var(--bad-bg); margin: 0 -8px; padding: 8px; }
   .step.upnext { border-left: 3px solid var(--accent); margin-left: -13px; padding-left: 10px; }
   .step-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--amber); vertical-align: 1px; }
+  .step-badge.hold { background: var(--hold-bg); border-color: var(--hold-border); color: var(--hold); }
+  .step-badge.now { background: var(--gold-bg); border-color: var(--gold); color: var(--brand-ink); }
+  .step.upnext .step-title { font-weight: 700; }
+  .step .buyoff .ok { display: inline-flex; align-items: center; gap: 4px; }
+  /* A signed row's history, one tap away. The summary is a ≥40px target. */
+  .step-more > summary.step-disclose { cursor: pointer; list-style: none; font-size: 12px; color: var(--muted);
+    min-height: 40px; display: inline-flex; align-items: center; gap: 4px; }
+  .step-more > summary.step-disclose::-webkit-details-marker { display: none; }
+  .step-more > summary.step-disclose::before { content: "▸"; color: var(--faint); transition: transform var(--t-fast) var(--ease); }
+  .step-more[open] > summary.step-disclose::before { content: "▾"; }
 
   /* ============================================================
      PARTS — master–detail split.

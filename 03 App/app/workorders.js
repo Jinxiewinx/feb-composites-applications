@@ -1126,10 +1126,43 @@ function woSecSteps(wo, E) {
       const held = !!hold && !hold.ready && !hold.overridden && state !== "done" && state !== "failed";
       const ev = stepEvidence(wo, i);
       const needsEv = state !== "done" && state !== "failed" && ev.missing.length;
-      return `<div class="step ${blocker || held ? "blocker" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${i === nextIdx ? "upnext" : ""}">
+      const isNow = i === nextIdx;
+      /* Blocker and hold finally look different, because they are: a blocker
+         is a person withholding a signature (amber, in-work-shaped), a hold
+         is the clock (slate — the parked color — with a clock glyph). They
+         used to share one amber wash. */
+      const rowCls = `step ${blocker ? "is-blocker" : ""} ${held ? "is-held" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${isNow ? "upnext" : ""}`;
+      const titleLine = `<div class="step-title">${esc(stripCS(s.title))}
+        ${isNow ? '<span class="step-badge now">now</span>' : ""}
+        ${blocker ? '<span class="step-badge">blocker</span>' : ""}
+        ${hold && state !== "done" ? ` <span class="step-badge hold">◷ hold ${hold.hours} h</span>` : ""}
+        ${/frozen/i.test(s.title) ? `<button class="link no-print" onclick="woJump('wo-stack')">View stack</button>` : ""}</div>`;
+      // What a signed row can tuck away: everything historical. Open rows
+      // keep it all inline — that is what you act on.
+      const metas = `
+          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. See the event log.</div>` : ""}
+          ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. See the event log.</div>` : ""}
+          ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
+          ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
+          ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
+          ${stepPhotoStrip(wo, i, s)}`;
+      const hasExtras = !!(s.trainingOverride || s.evidenceOverride || (hold && hold.overridden) ||
+        (startsHold(s) && s.cure) || String(s.notes || "").trim() || (s.photoRefs || []).length);
+      /* A signed run of ten steps used to dominate the page. Done rows fold
+         their history behind a one-line <details> summary saying what is in
+         there — everything stays in the DOM, one tap away. Edit mode keeps
+         it all inline: editing is when you need the note input on screen. */
+      const foldDone = state === "done" && !E && hasExtras;
+      const doneSummary = [
+        (s.photoRefs || []).length ? `${(s.photoRefs || []).length} photo${(s.photoRefs || []).length > 1 ? "s" : ""}` : "",
+        String(s.notes || "").trim() ? "note" : "",
+        startsHold(s) && s.cure ? "cure record" : "",
+        (s.trainingOverride || s.evidenceOverride || (hold && hold.overridden)) ? "override" : "",
+      ].filter(Boolean).join(" · ");
+      return `<div class="${rowCls}">
         <div class="num">${s.seq}</div>
         <div class="body">
-          <div>${esc(stripCS(s.title))} ${blocker ? '<span class="step-badge">blocker</span>' : ""}${hold && state !== "done" ? ` <span class="step-badge">hold ${hold.hours} h</span>` : ""}</div>
+          ${titleLine}
           ${/* Said on the row, not only in the modal you get after pressing a
                 disabled button — the point is to know what to go and do BEFORE
                 you walk over to sign. One line, no citation, same register as
@@ -1141,12 +1174,10 @@ function woSecSteps(wo, E) {
             const tr = stepTraining(s);
             return tr && state !== "done" && state !== "failed" && !wo.retro && !s.trainingOverride && !hasTraining(myEmail(), tr)
               ? `<div class="meta no-print">Needs ${esc(TRAININGS[tr] || tr)} training to sign.</div>` : ""; })()}
-          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. See the event log.</div>` : ""}
-          ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. See the event log.</div>` : ""}
           ${held ? holdBanner(hold, i) : ""}
-          ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. See the event log.</div>` : ""}
-          ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
-          ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
+          ${foldDone
+            ? `<details class="step-more"><summary class="step-disclose">${esc(doneSummary)}</summary>${metas}</details>`
+            : metas}
           <!-- Deliberately still a one-line control at rest. This is filled in
                at the bench, on a phone, with gloves on; a bubble menu and a
                slash menu there would be worse than what was here. The button
@@ -1156,14 +1187,13 @@ function woSecSteps(wo, E) {
                photo was to TYPE THE FILENAME. -->
           ${E ? `<div class="meta no-print stepnote"><input placeholder="notes" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)">
             <button class="ib sm" title="Write a longer note, with photos" aria-label="Write a longer note for step ${s.seq}" onclick="openStepNote('${wo.id}',${i})">${icon("image", 14)}</button></div>` : ""}
-          ${stepPhotoStrip(wo, i, s)}
         </div>
         <div class="buyoff">
           ${state === "failed"
             ? `<span class="warn">✗ ${esc(s.status)}</span>`
             : state === "done"
               ? (isSigned(s)
-                ? `<span class="ok">✔ ${esc(s.buyoff.name)} ${esc(s.buyoff.date || "")}</span>`
+                ? `<span class="ok">✔ ${avatar(s.buyoff.email || s.buyoff.name, 18)} ${esc(s.buyoff.name)} ${esc(s.buyoff.date || "")}</span>`
                 : `<span class="muted">done, buy-off not recorded (retro)</span>`)
               : (wo.retro ? `<span class="muted">${esc(s.status || "open")}</span>`
                 : held && !isLead()
@@ -1171,8 +1201,9 @@ function woSecSteps(wo, E) {
                   : /* Not disabled when evidence is missing: pressing it is how
                        you find out WHAT is missing and get the button that
                        fixes it. A dead grey button with a tooltip nobody on a
-                       phone can hover is the version of this that fails. */
-                    `<button onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
+                       phone can hover is the version of this that fails. The
+                       up-next row's button is the section's one primary. */
+                    `<button ${isNow ? 'class="primary"' : ""} onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
       </div>`;
       }).join("");
@@ -1737,13 +1768,13 @@ async function buyoff(i) {
   // the one moment somebody was standing at the part with the answer.
   const ev = stepEvidence(w, i);
   if (ev.missing.length) { openEvidenceModal(i); return; }
-  // Suggested, not required — Cancel here means "I'll go add one first", so it
-  // says where. confirmModal's cancel button has fixed wording, hence the toast
-  // rather than a second label.
+  // Suggested, not required — and Cancel now IS the camera: it opens the
+  // picker for this step, and when the photo lands the buy-off resumes on
+  // its own. One gesture covers "sign it, with the photo it deserves".
   if (ev.suggested.includes("photo") && !(await confirmAsync(
       "No photo on this step. A photo of what you signed for is the difference between a record and a name.",
       { title: "Sign without a photo?", ok: "Sign it anyway", danger: false }))) {
-    toast("Press Edit, then the camera beside this step's note, to add one.", "info");
+    addStepPhotos(w.id, i, { then: () => buyoff(i) });
     return;
   }
   // CS-013: a design review signed by whoever made the thing isn't a review.
