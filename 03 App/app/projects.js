@@ -977,11 +977,11 @@ function fileItem(f) {
    still satisfies every "the CAD" evidence check, because for a model anyone
    else needs to OPEN, the Drive copy is the useful one. */
 const CAD_EXT = ".step,.stp,.sldprt,.sldasm,.iges,.igs,.x_t,.x_b,.3mf,.f3d,.dxf,.dwg,.stl";
-function addRecordFiles(coll, id, tree) {
+function addRecordFiles(coll, id, tree, accept) {
   const rec = recById(coll, id);
   if (!rec) return;
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = "image/*,application/pdf,.doc,.docx,.txt,.csv," + CAD_EXT;
+  inp.type = "file"; inp.accept = accept || "image/*,application/pdf,.doc,.docx,.txt,.csv," + CAD_EXT;
   inp.multiple = true;
   inp.onchange = async () => {
     const files = Array.from(inp.files || []);

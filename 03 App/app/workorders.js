@@ -908,22 +908,54 @@ const WO_SECTIONS = [
   { id: "steps", label: "Steps", anchor: "wo-steps",
     badge: w => { const p = woProgress(w); return p.total ? `${p.done}/${p.total}` : ""; },
     warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
+    warnWord: w => (woFlags(w).blocked ? "blocked" : "curing"),
     body: (w, E) => woSecSteps(w, E) },
   { id: "overview", label: "Overview", anchor: "wo-overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
   { id: "stack", label: "Stack & BOM", anchor: "wo-stack",
     badge: w => String((w.layupStack || []).length || ""),
     body: (w, E) => woSecStack(w, E) },
+  { id: "photos", label: "Photos", anchor: "wo-photos",
+    badge: w => String(woAllPhotos(w).length || ""),
+    body: (w, E) => woSecPhotos(w, E) },
   { id: "quality", label: "Quality", anchor: "wo-quality",
     badge: w => String((w.qualityChecks || []).length || ""),
     warn: w => (w.qualityChecks || []).some(q => q.pass === false) || undisposedIssuesForWO(w.id).length > 0,
+    warnWord: w => { const nf = (w.qualityChecks || []).filter(q => q.pass === false).length; return nf ? `${nf} failed` : "open issue"; },
+    // Reference-shaped when empty: nothing to read, nothing wrong. Edit mode
+    // keeps it open so "+ check" is on screen.
+    foldWhen: (w, E) => !E && !(w.qualityChecks || []).length && !issuesForWO(w.id).length,
     body: (w, E) => woSecQuality(w, E) },
   { id: "files", label: "Files & docs", anchor: "wo-docs",
     badge: w => String(((w.docs || []).length + (w.files || []).length) || ""),
+    foldWhen: (w, E) => !E && !(w.docs || []).length && !(w.files || []).length,
     body: (w, E) => woSecFiles(w, E) },
   { id: "notes", label: "Notes & log", anchor: "wo-log",
     badge: w => String((w.noteLog || []).length || ""),
     body: (w, E) => woSecNotes(w, E) },
 ];
+
+/* One card per section — the card gap is the zone boundary Simon asked for
+   ("distinct zones, quiet inside"). The header replaces the bare h3: same
+   label the jump bar uses, the same badge()/warn() answers (one source of
+   truth, they cannot disagree), and the attention dot always paired with a
+   word because hue is never the only carrier. Sections that are pure
+   reference while empty render as a closed <details> whose summary IS the
+   header — everything stays one tap away, and woJump() opens it before
+   scrolling. The anchor id lives on the header now, not on an h3 inside. */
+function woSectionCard(s, wo, E) {
+  const n = s.badge ? s.badge(wo) : "";
+  const warn = !!(s.warn && s.warn(wo));
+  const word = warn ? (s.warnWord ? s.warnWord(wo) : "attention") : "";
+  const hd = tag => `<${tag} class="wosec-hd${warn ? " warn" : ""}" id="${esc(s.anchor)}">
+      <span>${esc(s.label)}</span>
+      ${n ? `<span class="wosec-n">${esc(n)}</span>` : ""}
+      ${warn ? `<span class="secnav-dot" aria-hidden="true"></span><span class="wosec-w">${esc(word)}</span>` : ""}
+    </${tag}>`;
+  if (s.foldWhen && s.foldWhen(wo, E)) {
+    return `<details class="card wosec wo-fold">${hd("summary")}${s.body(wo, E)}</details>`;
+  }
+  return `<div class="card wosec">${hd("div")}${s.body(wo, E)}</div>`;
+}
 /* Scroll, rather than an <a href="#wo-steps">. The app keeps a deep link in the
    URL hash (syncUrl writes #/WO-SN6-004), and an anchor would overwrite it with
    #wo-steps — so the address bar would stop naming the record you are reading
@@ -932,7 +964,13 @@ const WO_SECTIONS = [
 
    scroll-margin-top on #main [id^="wo-"] (index.html) is what keeps the heading
    clear of the topbar and this bar. */
-function woJump(anchor) { secJump(anchor); }
+function woJump(anchor) {
+  // A folded section's header is its <summary>, always visible — but a jump
+  // to it means "show me", so open the fold before scrolling.
+  const el = document.getElementById && document.getElementById(anchor);
+  if (el && el.closest) { const d = el.closest("details"); if (d && !d.open) d.open = true; }
+  secJump(anchor);
+}
 
 /* The part this run belongs to, for the header chip and for stackDrift().
    Deliberately the ORIGINAL loose lookup and not woPart()/partOf(): partOf
@@ -992,9 +1030,7 @@ function renderWODetail() {
         onclick="woJump('${esc(s.anchor)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
     }).join("")}
   </nav>
-  <div class="card wosec">
-    ${WO_SECTIONS.map(s => s.body(wo, E)).join("")}
-  </div>
+  ${WO_SECTIONS.map(s => woSectionCard(s, wo, E)).join("")}
   </section>`;
 }
 
@@ -1005,7 +1041,6 @@ function woSecOverview(wo, E) {
       ${mf(wo, "Sealing", "sealingType")}${mf(wo, "Location (update on every move)", "location")}
     </div>` : "";
   return `
-    <h3 id="wo-overview">Overview</h3>
     <div class="grid">
       ${fld(wo, "Part name", "partName")}${fld(wo, "Subteam", "subteam")}${fld(wo, "Status", "status", "select-status")}
       ${fld(wo, "Process", "processType", "select-process")}${engFld("workOrders", wo, "Mold Engineer", "moldEngineer")}
@@ -1027,9 +1062,9 @@ function woSecStack(wo, E) {
     const diverged = wo.stackSource === "asbuilt" && drift.n > 0;
     const src = !linkedPart ? ""
       : diverged
-        ? ` <span class="muted" style="text-transform:none">· as built on this run</span>`
-        : ` <span class="muted" style="text-transform:none">· follows the plan on ${esc(linkedPart.id)}</span>`;
-    return `<h3 id="wo-stack">Layup stack${src} ${wo.stackNote ? `<span class="muted" style="text-transform:none">· ${esc(wo.stackNote)}</span>` : ""}</h3>
+        ? ` <span class="muted nocaps">· as built on this run</span>`
+        : ` <span class="muted nocaps">· follows the plan on ${esc(linkedPart.id)}</span>`;
+    return `<h3>Layup stack${src} ${wo.stackNote ? `<span class="muted nocaps">· ${esc(wo.stackNote)}</span>` : ""}</h3>
     ${diverged ? `<div class="stack-diff no-print">${icon("warning", 14)}
       <span>${drift.n} ${drift.n === 1 ? "ply differs" : "plies differ"} from ${esc(linkedPart.partName || linkedPart.id)}'s plan.</span>
       <button class="link" onclick="openStackCompare('${esc(wo.id)}')">Compare</button></div>` : ""}
@@ -1049,7 +1084,7 @@ function woSecStack(wo, E) {
 
 function woSecSteps(wo, E) {
   return `
-    <h3 id="wo-steps">Steps and buy-offs (shaded: no sign-off, no moving on. A hold waits on the clock instead)</h3>
+    <div class="tny muted no-print">Shaded steps are blockers: no sign-off, no moving on. A hold waits on the clock instead.</div>
     ${(() => {
       // The first not-done, not-failed step is the one to act on right now —
       // computed from existing state (open/done/failed), not a new status
@@ -1097,7 +1132,7 @@ function woSecSteps(wo, E) {
                photo was to TYPE THE FILENAME. -->
           ${E ? `<div class="meta no-print stepnote"><input placeholder="notes" value="${esc(s.notes)}" onchange="us(${i},'notes',this.value)">
             <button class="ib sm" title="Write a longer note, with photos" aria-label="Write a longer note for step ${s.seq}" onclick="openStepNote('${wo.id}',${i})">${icon("image", 14)}</button></div>` : ""}
-          ${(s.photoRefs || []).length ? `<div class="meta">photos: ${s.photoRefs.map(p => esc(p.filename || p)).join(", ")}</div>` : ""}
+          ${stepPhotoStrip(wo, i, s)}
         </div>
         <div class="buyoff">
           ${state === "failed"
@@ -1125,13 +1160,73 @@ function woSecQuality(wo, E) {
   return `
     ${issues.length ? `<h3>Issues</h3>
     <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>` : ""}
-    <h3 id="wo-quality">Quality checks / acceptance criteria</h3>
+    <h3>Quality checks / acceptance criteria</h3>
     <table class="sub"><thead><tr><th>Criterion</th><th>Target (set at creation!)</th><th>Actual</th><th>Pass</th></tr></thead><tbody>
       ${(wo.qualityChecks || []).map((q, i) => E
         ? `<tr><td><input value="${esc(q.criterion)}" onchange="uq(${i},'criterion',this.value)"></td><td><input value="${esc(q.target)}" onchange="uq(${i},'target',this.value)"></td><td><input value="${esc(q.actual)}" onchange="uq(${i},'actual',this.value)"></td><td><select onchange="uq(${i},'pass',this.value==='true'?true:this.value==='false'?false:null)"><option ${q.pass == null ? "selected" : ""}>—</option><option value="true" ${q.pass === true ? "selected" : ""}>pass</option><option value="false" ${q.pass === false ? "selected" : ""}>FAIL</option></select></td></tr>`
         : `<tr><td>${esc(q.criterion)}</td><td>${esc(q.target)}</td><td>${esc(q.actual)}</td><td>${q.pass === true ? '<span class="ok">pass</span>' : q.pass === false ? '<span class="warn">FAIL</span>' : "—"}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').qualityChecks.push({criterion:'',target:'',actual:'',pass:null});saveWO(woById('${wo.id}'),'qualityChecks');render()">+ check</button>` : ""}`;
+}
+
+/* The Photos section: every photo on the record, wherever it was written
+   (step photoRefs, image files, note <img>s — woAllPhotos), grouped by step
+   because that is the review question ("show me the bag before pull"). Tiles
+   are real <img loading="lazy"> with data-lb-src, so the existing lightbox
+   collects them and the arrows walk the whole record. Record-level adds go
+   to wo.files through the same picker every record uses. */
+function addWOPhotos(id) { addRecordFiles("workOrders", id, null, "image/*"); }
+function phTile(p, wo, E) {
+  const label = p.caption || p.name;
+  const tip = [p.name, p.by ? "by " + userName(p.by) : "", p.ts ? String(p.ts).slice(0, 10) : ""].filter(Boolean).join(" · ");
+  return `<figure class="phtile">
+    <img class="phimg" loading="lazy" src="${esc(p.url)}" data-lb-src="${esc(p.url)}" data-lb-name="${esc(p.name)}" alt="${esc(label)}" title="${esc(tip)}">
+    ${E && p.source === "step" && p.id
+      ? `<input class="phcap" placeholder="caption" value="${esc(p.caption || "")}" onchange="setStepPhotoCaption('${esc(wo.id)}',${p.stepIndex},'${esc(p.id)}',this.value)">`
+      : `<figcaption class="tny muted">${esc(label)}</figcaption>`}
+  </figure>`;
+}
+function woSecPhotos(wo, E) {
+  const all = woAllPhotos(wo).map(p => {
+    // phTile edits captions by photoRefs id; carry it through the aggregate.
+    if (p.source === "step" && p.stepIndex != null) {
+      const ref = ((wo.steps[p.stepIndex] || {}).photoRefs || []).find(r => r && r.url === p.url);
+      if (ref && ref.id) p.id = ref.id;
+    }
+    return p;
+  });
+  if (!all.length) {
+    return `<p class="muted">Photos are the record — what did the bag look like before pull? Nobody remembers in March.</p>
+      <div class="no-print addrow"><button class="primary" onclick="addWOPhotos('${wo.id}')">+ Add photos</button></div>`;
+  }
+  const bySteps = new Map();
+  for (const p of all) {
+    const k = p.stepIndex != null ? p.stepIndex : -1;
+    if (!bySteps.has(k)) bySteps.set(k, []);
+    bySteps.get(k).push(p);
+  }
+  const groups = [...bySteps.keys()].sort((a, b) => (a === -1 ? 1 : b === -1 ? -1 : a - b));
+  return `
+    ${groups.map(k => `
+      <div class="tny muted phgrp">${k === -1 ? "General" : `Step ${k + 1} · ${esc(bySteps.get(k)[0].stepTitle || "")}`}</div>
+      <div class="photogrid">${bySteps.get(k).map(p => phTile(p, wo, E)).join("")}</div>`).join("")}
+    <div class="no-print addrow"><button onclick="addWOPhotos('${wo.id}')">+ Add photos</button></div>`;
+}
+/* The per-step strip: the photos live where the work happened. View mode and
+   edit mode both get the camera — the bench is not in edit mode, and a photo
+   is documentation, not editing. */
+function stepPhotoStrip(wo, i, s) {
+  const refs = s.photoRefs || [];
+  const shown = refs.slice(0, 5);
+  return `<div class="step-photos" data-photo-slot="step" data-wo="${esc(wo.id)}" data-step="${i}">
+    ${shown.map(p => {
+      const url = typeof p === "string" ? p : p.url;
+      const name = typeof p === "string" ? p : (p.caption || p.name || "photo");
+      return url ? `<img class="phmini" loading="lazy" src="${esc(url)}" data-lb-src="${esc(url)}" data-lb-name="${esc(name)}" alt="${esc(name)}">` : "";
+    }).join("")}
+    ${refs.length > 5 ? `<button class="sm no-print" onclick="woJump('wo-photos')">+${refs.length - 5} more</button>` : ""}
+    <button class="ib sm no-print" title="Add photos to this step" aria-label="Add photos to step ${s.seq}" onclick="addStepPhotos('${esc(wo.id)}',${i})">${icon("image", 14)}</button>
+  </div>`;
 }
 
 /* Documents and Files are one section because EVIDENCE.file.has() accepts
@@ -1142,9 +1237,9 @@ function woSecFiles(wo, E) {
     <!-- The mold drawing, the CAM notes, the DRB deck: the documents that
          explain this job. They used to be a Slack paste, which meant they were
          findable for a day (PP-09). -->
-    <h3 id="wo-docs">Documents</h3>
+    <h3>Documents</h3>
     ${docLinkList(wo.docs, { onRemove: `rmWoDoc`, empty: "No documents linked yet.", addLabel: "+ Link a document" })}
-    <div class="no-print" style="margin-top:8px"><button onclick="openDocLinkModal({ coll: 'workOrders', id: '${wo.id}' })">+ Link a document</button></div>
+    <div class="no-print addrow"><button onclick="openDocLinkModal({ coll: 'workOrders', id: '${wo.id}' })">+ Link a document</button></div>
     <!-- Files: a work order could link a Google Doc but not hold a file, so the
          mold CAD lived wherever somebody last pasted it. The design review
          buy-off now wants it here (or linked above — either satisfies the
@@ -1153,12 +1248,12 @@ function woSecFiles(wo, E) {
     <div class="filegrid">
       ${(wo.files || []).map(fileItem).join("") || '<span class="muted">No files yet.</span>'}
     </div>
-    <div class="no-print" style="margin-top:8px"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>`;
+    <div class="no-print addrow"><button onclick="addRecordFiles('workOrders','${wo.id}')">+ Add files</button></div>`;
 }
 
 function woSecNotes(wo, E) {
   return `
-    <h3 id="wo-log">Event log</h3>
+    <h3>Event log</h3>
     <table class="sub"><thead><tr><th style="width:110px">Date</th><th>Event</th></tr></thead><tbody>
       ${(wo.timeline || []).map((t, i) => E
         ? `<tr><td><input value="${esc(t.date)}" onchange="ut(${i},'date',this.value)"></td><td><input value="${esc(t.note)}" onchange="ut(${i},'note',this.value)"></td></tr>`
@@ -1771,12 +1866,12 @@ function woKeydown(e) {
     return "search";
   }
   if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
-  /* 1-6 scroll to a section of the open record. Digits are free here in a way
+  /* 1-7 scroll to a section of the open record. Digits are free here in a way
      they are not on Parts, which spends 1/2/3 advancing stages: a work order
      has no stage enum to advance. There is no ←/→ any more, because with the
      whole record in one scroll there is no "current section" for them to step
      from — that was a switch, and this is a jump. */
-  if (view.mode === "detail" && /^[1-6]$/.test(k) && WO_SECTIONS[+k - 1]) {
+  if (view.mode === "detail" && /^[1-7]$/.test(k) && WO_SECTIONS[+k - 1]) {
     if (e.preventDefault) e.preventDefault();
     woJump(WO_SECTIONS[+k - 1].anchor);
     return "section";

@@ -172,6 +172,48 @@ table.list.dash td { cursor: default; }
   margin-right: 3px; vertical-align: 1px; text-transform: uppercase;
 }
 
+/* ---- WO section header + folds ----
+   One card per section on a work order; this header replaces the bare h3.
+   Same recipe as the dashboard module header (gold speed-slash + Saira
+   uppercase), plus a count pill and, when something needs attention, a red
+   slash and a word beside the dot — hue is never the only carrier. As a
+   <summary> it is the always-visible face of a folded section. */
+.wosec-hd { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; list-style: none; }
+.wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
+  font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
+  border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
+.wosec-hd.warn > span:first-child::before { background: var(--bad); }
+.wosec-n { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+.wosec-w { font-size: 11.5px; font-weight: 600; color: var(--bad); }
+summary.wosec-hd { cursor: pointer; margin: 0; min-height: 40px; align-items: center; }
+summary.wosec-hd::-webkit-details-marker { display: none; }
+summary.wosec-hd::after { content: "▸"; font-size: 13px; color: var(--faint); margin-left: auto;
+  transition: transform var(--t-fast) var(--ease); }
+.wo-fold[open] > summary.wosec-hd::after { content: "▾"; }
+.wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
+.addrow { margin-top: 8px; }
+
+/* ---- photos ----
+   Real <img loading="lazy"> tiles so the lightbox collects them and offscreen
+   loads defer. .photogrid is the section grid, .phmini the 48px step strip. */
+.phgrp { margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.phgrp:first-of-type { margin-top: 0; }
+.photogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.phtile { margin: 0; min-width: 0; }
+.phimg { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius);
+  border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+.phtile figcaption { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phcap { width: 100%; margin-top: 2px; font-size: 12px; padding: 3px 6px; }
+.step-photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.step-photos:empty { display: none; }
+.phmini { width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius);
+  border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+.ph-uploading { font-size: 11px; color: var(--muted); border: 1px dashed var(--border-2);
+  border-radius: var(--radius); padding: 14px 10px; animation: phpulse 1.2s ease-in-out infinite; }
+@keyframes phpulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
 /* ---- badges: training capsule ----
    A credential, not a status: fully-rounded silhouette and one quiet color so
    it can never be misread as done/in-work/blocked. Carries a short code

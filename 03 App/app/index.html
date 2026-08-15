@@ -1393,7 +1393,48 @@
   .secnav-n { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
   .secnav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
   .secnav-btn.warn .secnav-dot { background: var(--bad); }
-  .wosec { min-width: 0; }
+  .wosec { min-width: 0; margin-bottom: 12px; }
+  /* ---- WO section header ----
+     The .bmod-hd recipe applied per section card: gold speed-slash + Saira
+     uppercase label, the SAME badge()/warn() answers the jump bar shows (one
+     source of truth), and the attention dot always beside a word — hue is
+     never the only carrier. On a folded section this element is the
+     <summary>, so the header is always visible and the fold is one tap. */
+  .wosec-hd { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; list-style: none; }
+  .wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
+    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
+    border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
+  .wosec-hd.warn > span:first-child::before { background: var(--bad); }
+  .wosec-n { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+  .wosec-w { font-size: 11.5px; font-weight: 600; color: var(--bad); }
+  summary.wosec-hd { cursor: pointer; margin: 0; min-height: 40px; align-items: center; }
+  summary.wosec-hd::-webkit-details-marker { display: none; }
+  summary.wosec-hd::after { content: "▸"; font-size: 13px; color: var(--faint); margin-left: auto;
+    transition: transform var(--t-fast) var(--ease); }
+  .wo-fold[open] > summary.wosec-hd::after { content: "▾"; }
+  .wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
+  /* Row that holds a trailing add-button under a list. */
+  .addrow { margin-top: 8px; }
+  /* ---- WO photos ----
+     Real <img loading="lazy"> tiles (not CSS backgrounds) so the lightbox
+     collects them and the browser defers offscreen loads. */
+  .phgrp { margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+  .phgrp:first-of-type { margin-top: 0; }
+  .photogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+  .phtile { margin: 0; min-width: 0; }
+  .phimg { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius);
+    border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+  .phtile figcaption { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phcap { width: 100%; margin-top: 2px; font-size: 12px; padding: 3px 6px; }
+  .step-photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .step-photos:empty { display: none; }
+  .phmini { width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius);
+    border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+  .ph-uploading { font-size: 11px; color: var(--muted); border: 1px dashed var(--border-2);
+    border-radius: var(--radius); padding: 14px 10px; animation: phpulse 1.2s ease-in-out infinite; }
+  @keyframes phpulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
   /* Five controls in the rail head where Parts has four, so the third select
      (group/sort) is told to span the two flexible columns and leave the `auto`
      one to the reverse button. Without this it lands in the auto track and a
