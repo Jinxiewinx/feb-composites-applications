@@ -10,7 +10,33 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-15
-Newest: **Trainings gate buy-offs and engineer assignment (2026-08-15,
+Newest: **WO detail redesign shipped (2026-08-15, later).** Simon: the WO
+detail read as a wall of text; sections should feel separated, photos should
+become a major documentation feature; ignore the traveler; "distinct zones,
+quiet inside"; visibility tiers mine to pick; no data lost; one-scroll stays
+(pagination was rejected historically). Two design agents (architecture +
+photos). Shipped in six commits: (1) photos data layer — woAllPhotos()
+unifies step photoRefs / image files / note <img>s, addStepPhotos() writes
+object entries {id,name,filename,url,path,type,size,by,ts,caption} through
+the steps transaction (photoRefs had NO writer before, so no migration),
+lightbox dedupes by src; (2) one card per section with .wosec-hd headers
+(bmod-hd recipe + count + warn word), Photos section registered in
+WO_SECTIONS (keys 1-7), per-step 48px thumb strip + camera in view mode,
+empty Quality/Files fold as details; (3) hero .wo-facts band — statusdrop
+status (CS-003 gate intact), promoted woProgBar, due, mass, engineer
+avatars; (4) steps — .is-blocker (amber, person) vs .is-held (slate --hold-*,
+clock glyph) split, done rows fold history behind a counted summary, gold
+NOW badge + single .primary buyoff on the up-next row, buyoff avatars,
+"View stack" link on frozen steps, photo nudge Cancel now captures then
+resumes buyoff; (5) BOM + event log fold even when populated (wo-subfold),
+"See the event log" metas are woJump('wo-eventlog') links that open the
+fold; (6) thread + composer in their own .card.thread-card, Overview →
+"Details" with .fgroup-label clusters in view mode (edit keeps all 16
+fields), Files grid caps at 8 behind "Show all". Fixtures gained step
+photos (inline SVGs); detailui scans cover .phtile/.photogrid/.step-photos.
+Suites: app 430, designsystem 23, appui + detailui run pre-push.
+
+Previous newest: **Trainings gate buy-offs and engineer assignment (2026-08-15,
 mold-drawing-revamp worktree).** Simon asked for trainings on people (mold
 design, ShopSabre, wet layup, infusion, foam core, forged CF) gating step
 buy-offs and mold-engineer assignment; two design agents explored visuals and

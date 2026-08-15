@@ -348,7 +348,7 @@ const AUDIT = `(() => {
      line. Reported with its text length so the ratio is judgable: 600
      characters in 400px is prose, 600 characters in 2000px is a column one
      word wide. */
-  const blocks = [...main.querySelectorAll(".comment, .doclink, .fileitem, .richfield, .prose, .step, .gitem, .docrow")]
+  const blocks = [...main.querySelectorAll(".comment, .doclink, .fileitem, .richfield, .prose, .step, .gitem, .docrow, .phtile")]
     .filter(vis)
     .map(el => ({ cls: name(el), h: Math.round(el.getBoundingClientRect().height),
       chars: (el.textContent || "").trim().length }))
@@ -364,7 +364,7 @@ const AUDIT = `(() => {
      small. Text links inside .prose are exempt for the opposite reason: a link
      in the middle of a sentence cannot be 40px tall without breaking the
      sentence, and nobody expects it to be. */
-  const targets = [...main.querySelectorAll(".comment button, .doclink button, .doclink a, .fileitem a, .fileitem button, .filegrid button, .docrow button")]
+  const targets = [...main.querySelectorAll(".comment button, .doclink button, .doclink a, .fileitem a, .fileitem button, .filegrid button, .docrow button, .photogrid img, .step-photos img, .step-photos button")]
     .filter(vis)
     .filter(el => el.children.length === 0)
     .filter(el => !el.closest(".prose"))

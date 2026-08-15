@@ -254,9 +254,20 @@ export const APPLY_FIXTURES = `
       steps: [
         { seq: 1, title: "Infuse", status: "done", buyoff: { name: "Dana Chen", date: dd(0) },
           rule: { kind: "startsHold" },
-          cure: { resin: (typeof RESINS !== "undefined" && RESINS[0]) ? RESINS[0].id : "", startedAt: new Date(Date.now() - 2 * 3600000).toISOString() } },
+          cure: { resin: (typeof RESINS !== "undefined" && RESINS[0]) ? RESINS[0].id : "", startedAt: new Date(Date.now() - 2 * 3600000).toISOString() },
+          /* Step photos, so the Photos section, the per-step thumb strip and
+             the done-row fold all photograph populated. Inline SVGs — the
+             suite runs offline. */
+          photoRefs: [
+            { id: "PFIX1", name: "bag-before-pull.jpg", filename: "bag-before-pull.jpg", by: "dana@feb.test", ts: new Date().toISOString(), caption: "bag before pull",
+              url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23335'/%3E%3C/svg%3E" },
+            { id: "PFIX2", name: "flow-front.jpg", filename: "flow-front.jpg", by: "dana@feb.test", ts: new Date().toISOString(), caption: "",
+              url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23533'/%3E%3C/svg%3E" },
+          ] },
         { seq: 2, title: "Cure and demould", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "hold", from: "resin" } },
-      ] },
+      ],
+      files: [{ id: "FFIX1", name: "trimmed-part.jpg", type: "image/jpeg", by: "dana@feb.test", ts: new Date().toISOString(),
+        url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23353'/%3E%3C/svg%3E" }] },
   ]));
   /* One stack plan and a board that fits it, so the cut list and the
      mark-cut confirm photograph as transactions instead of empty states
