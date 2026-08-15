@@ -1012,7 +1012,31 @@ function renderWODetail() {
         walked past. */""}
   <div class="card wohead">
     <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
-    <div class="muted">Rev ${esc(wo.revision)} · <span class="pill ${esc(wo.status)}">${esc(wo.status)}</span> · ${esc(wo.processType || "")}${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.dueDate ? ` · due ${esc(wo.dueDate)}${isWoLate(wo) ? ' <span class="warn">late</span>' : ""}` : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
+    ${/* The facts band replaces the old middle-dot run-on line: the answers
+          someone actually comes for (can I work it, how far along, when is it
+          due, is it on mass, whose is it) each get their own labeled slot.
+          Status is the colored select — the statusdrop pattern Budget and
+          tickets already use — so changing it needs no edit mode; updWO()
+          still carries the CS-003 completion gate. */""}
+    <div class="wo-facts">
+      <span class="statusdrop ${esc(wo.status)}"><select aria-label="Status" onchange="updWO('status',this.value)">
+        ${WO_STATUSES.map(s => `<option ${wo.status === s ? "selected" : ""}>${s}</option>`).join("")}
+      </select></span>
+      ${(() => { const p = woProgress(wo); return p.total ? woProgBar(p) : ""; })()}
+      ${wo.dueDate ? `<span class="wo-fact"><span class="wf-lab">Due</span><b class="wf-num ${isWoLate(wo) ? "late" : ""}">${esc(wo.dueDate)}</b>${isWoLate(wo) ? '<span class="warn tny">late</span>' : ""}</span>` : ""}
+      ${wo.weightTargetG || wo.weightActualG ? `<span class="wo-fact"><span class="wf-lab">Mass</span><b class="wf-num ${wo.weightActualG && wo.weightTargetG && +wo.weightActualG > +wo.weightTargetG ? "late" : ""}">${esc(wo.weightActualG || "—")}</b><span class="tny muted">/ ${esc(wo.weightTargetG || "—")} g</span></span>` : ""}
+      ${(() => {
+        const engs = [["moldEngineer", "Mold engineer"], ["manufacturingEngineer", "Manufacturing engineer"]]
+          .map(([k, role]) => {
+            const nm = String(wo[k] || "").trim();
+            if (!nm || (typeof notAPerson === "function" && notAPerson(nm))) return "";
+            const email = partEngineerEmail(wo, k);
+            return `<span class="wf-eng" title="${esc(role)} — ${esc(nm)}">${avatar(email || nm, 24)}</span>`;
+          }).filter(Boolean).join("");
+        return engs ? `<span class="wo-fact">${engs}</span>` : "";
+      })()}
+    </div>
+    <div class="muted tny">Rev ${esc(wo.revision)} · ${esc(wo.processType || "")}${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
     ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
     ${fl.blocked ? `<p class="gate blocked"><span class="gi">✕</span><span>Blocked by an unsigned blocker: <b>${esc(stripCS(fl.blocked.title))}</b>. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}
     ${fl.curing ? `<p class="gate"><span class="gi">⚠</span><span>Curing until <b>${esc(fl.curing.readyAt)}</b>${fl.curing.resin ? ` · ${esc(fl.curing.resin.label)}` : ""}. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}

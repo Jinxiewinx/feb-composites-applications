@@ -172,6 +172,17 @@ table.list.dash td { cursor: default; }
   margin-right: 3px; vertical-align: 1px; text-transform: uppercase;
 }
 
+/* ---- WO hero facts band ----
+   Labeled fact slots instead of a middle-dot sentence: status (statusdrop),
+   steps progress, due, mass, engineer avatars. */
+.wo-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 8px 0 6px; }
+.wo-fact { display: inline-flex; align-items: baseline; gap: 5px; }
+.wf-lab { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.wf-num { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.wf-num.late { color: var(--bad); }
+.wf-eng { display: inline-flex; }
+.wf-eng + .wf-eng { margin-left: -6px; }
+
 /* ---- WO section header + folds ----
    One card per section on a work order; this header replaces the bare h3.
    Same recipe as the dashboard module header (gold speed-slash + Saira

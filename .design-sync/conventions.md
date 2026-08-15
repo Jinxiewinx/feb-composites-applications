@@ -30,6 +30,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Tiles | `.stat-row` of `.stat-tile`, each holding `.bignum` and `.stat-label`. |
 | Kanban | `.col` + `.col-inprogress`/`.col-collecting`/`.col-onhold`/`.col-done`, holding `.pcard` with `.t` and `.meta`. |
 | Feedback | `.gate` (+ `.blocked`) for blocking notices; `.toast` + `.ok`/`.err`/`.info`; `.modal-backdrop` > `.modal` > `.foot`. |
+| WO hero | `.wo-facts` band of `.wo-fact` slots (`.wf-lab` label + `.wf-num` value, `.late` red) plus `.wf-eng` engineer avatars. |
 | WO sections | `.wosec-hd` — per-card section header (gold speed-slash + uppercase label + `.wosec-n` count pill + `.wosec-w` warn word); as a `<summary>` inside `details.wo-fold` it is the always-visible face of a folded section. `.addrow` spaces a trailing add-button. |
 | Photos | `.photogrid` of `.phtile` (`.phimg` lazy `<img>` + caption), `.phgrp` group label, `.phmini` 48px step-row thumbs inside `.step-photos`, `.ph-uploading` placeholder. |
 | Navigation | `.sidebar` > `.sb-brand`/`.sb-brand-txt`, `.sb-nav` > `.sb-item` (+ `.active`, `.ic`); `.topbar` > `h1`, `.icon-btn` (+ `.badge`). |

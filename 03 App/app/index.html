@@ -1445,6 +1445,19 @@
      outside every section on purpose — a gate you can navigate away from is a
      gate that gets walked past. */
   .wohead { margin-bottom: 10px; }
+  /* The hero facts band: status (colored select), steps progress, due, mass,
+     engineer faces. Labeled slots instead of a middle-dot sentence; the
+     leftover quiet facts (rev, process, last saved) stay a tny muted line. */
+  .wo-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 8px 0 6px; }
+  .wo-facts .wprog { font-size: 12px; }
+  .wo-facts .wprog .wp-bar { width: 90px; height: 7px; }
+  .wo-facts .wprog b { font-size: 15px; }
+  .wo-fact { display: inline-flex; align-items: baseline; gap: 5px; }
+  .wf-lab { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .wf-num { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink); }
+  .wf-num.late { color: var(--bad); }
+  .wf-eng { display: inline-flex; }
+  .wf-eng + .wf-eng { margin-left: -6px; }
   .wohead h2 { margin-top: 0; }
   .wohead .gate { margin-top: 10px; }
 
