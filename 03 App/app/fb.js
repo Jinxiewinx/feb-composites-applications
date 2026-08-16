@@ -147,6 +147,20 @@ function pubSync(coll, obj) {
    mutateField() or appendTo(), which bypass save() entirely. */
 function pubWarn(e) { console.warn("pub mirror not updated (the record itself saved fine):", e && e.message || e); }
 
+/* The Google Sheet mirror feed. Only parts have a tracker tab, so only parts
+   trigger it. The debounce, the projection and the size guard all live in
+   tracker.js; this is just the hook, kept here so save() has one obvious place
+   where every downstream mirror is fired.
+
+   Guarded the same way pubSync() guards pubProjection: tracker.js is a classic
+   script and its top-level declarations become globals, but the test harness
+   and any future page that loads fb.js without it must still save records. */
+function trackerSync(coll) {
+  if (coll !== "parts") return;
+  if (typeof trackerQueue !== "function") return;   // tracker.js not loaded
+  try { trackerQueue(); } catch (e) { pubWarn(e); }
+}
+
 /* Bulk republish, for the lead-only "Rebuild scan mirror" action.
 
    Deliberately NOT importMany(): that stamps every document with `updatedAt`
@@ -197,17 +211,22 @@ const fb = {
       const val = JSON.parse(JSON.stringify(obj[field] ?? null)); // strip undefined etc.
       await updateDoc(ref, { [field]: val, ...stamp });
       pubSync(coll, obj);
+      trackerSync(coll);
       return;
     }
     const clean = JSON.parse(JSON.stringify(obj));
     delete clean.updatedAt; delete clean.updatedBy;
     await setDoc(ref, { ...clean, ...stamp });
     pubSync(coll, obj);
+    trackerSync(coll);
   },
   async del(coll, id) {
     await deleteDoc(doc(db, coll, id));
     // A public nameplate outliving its record is worse than a missed delete.
     deleteDoc(doc(db, "pub", id)).catch(pubWarn);
+    // The tracker feed is a whole-table snapshot, so a deleted part only
+    // leaves the spreadsheet once the snapshot is rewritten without it.
+    trackerSync(coll);
   },
 
   // Concurrency-safe edit of one field via a transaction: reads the CURRENT
@@ -261,6 +280,18 @@ const fb = {
   // Republish every public scan nameplate. See pubPublish() above for why this
   // is not importMany().
   async publishPub(recs) { await pubPublish(recs); },
+
+  /* Write the Google Sheet mirror feed to tracker/<token>.
+
+     Deliberately NOT importMany() and NOT stamped, for the same reason
+     pubPublish() is not: importMany() adds updatedAt and updatedBy:<email>,
+     and updatedBy is (a) rejected by the hasOnly() clause on /tracker so the
+     whole write would fail, and (b) precisely the kind of thing that must
+     never appear on a URL that needs no login. The snapshot is written exactly
+     as tracker.js builds it, with nothing added. */
+  async publishTracker(token, snap) {
+    await setDoc(doc(db, "tracker", token), snap);
+  },
 
   // Bulk write (seed load / JSON import). Overwrites by id; chunked under the
   // 500-writes-per-batch limit.

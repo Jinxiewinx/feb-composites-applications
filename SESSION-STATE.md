@@ -2809,6 +2809,50 @@ Storage-backed features (avatar and file upload) still need the Firebase Blaze
 plan. They're built and tested against the emulator. Emulator hosting port is
 5050, because macOS AirPlay squats on 5000.
 
+## Google Sheet sync (2026-08-15)
+
+The app now mirrors itself into the live Composites Master Tracker
+(`1qvA8fRl5sdj8__Fh09OzrMAviyqoNtWHELdtvXjkMlU`, Nick owns it). Built because
+adopting the app otherwise meant double-entering every part into the sheet the
+team already watches.
+
+Simon's decisions on it: app is the source of truth, one-way, roughly every 15
+minutes, roll out on a trial tab first, orphan rows kept and flagged rather than
+deleted, and Simon installs the script himself.
+
+The design was forced, not chosen. There is no server here (static hosting, no
+Cloud Functions, no service account), and `gdocs.js` rules out adding Google
+OAuth to the app. So the timer lives inside the spreadsheet as a bound Apps
+Script that PULLS, and the app publishes one snapshot document it can fetch with
+no credentials: `tracker/<token>`, public `get`, `list` denied to everyone
+including leads. The 32-char token lives in `config/tracker`, never in source.
+
+Two things learned the hard way and worth not re-deriving:
+
+- **The 1 MiB document limit is not the binding constraint; index entries are.**
+  7.5 KiB per index entry and 20,000 per document. An array of maps would make
+  thousands of entries; the snapshot therefore stores one compact JSON *string*
+  per part. That also means the Apps Script decodes with one `JSON.parse` per
+  row instead of walking Firestore's `{mapValue:{fields:{…:{stringValue}}}}`.
+- **Unauthenticated Firestore REST honours `firestore.rules`.** Verified against
+  the live project: an anonymous GET of `pub/<id>` returns 404 (read allowed,
+  doc absent) while `parts/<id>` returns 403. No API key, no OAuth. That is the
+  whole reason this works without a server.
+
+The `Extra Comments` column and full engineer names are published, which
+`pubProjection()`'s never-add list would normally forbid. That is deliberate and
+is what the secret token buys: the sheet has those columns, so a mirror that
+dropped them would not be a mirror. Simon also made the spreadsheet itself
+link-viewable on 2026-08-15, so the same data is already world-readable. **If
+the sheet is ever locked back down, revisit the feed in the same breath.**
+
+Rollout state: `TARGET_SHEET` in `Sync.gs` is `'Part Tracker (App)'`, a trial
+duplicate. Going live is that one string. Not yet installed in the spreadsheet.
+
+The trigger runs under whoever installs it. When the program passes to Nick, he
+has to re-run `installTrigger` under his own account or the sync dies with
+Simon's access.
+
 ## Next up (not started)
 
 - Port the traveler to the offline single-file `work-orders.html`, which still

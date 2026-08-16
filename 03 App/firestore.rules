@@ -134,5 +134,52 @@ service cloud.firestore {
            ]);
       allow delete: if onRoster();
     }
+
+    /* tracker/<token> = the Google Sheet mirror feed: ONE document holding the
+       whole season's part list, so the Composites Master Tracker in Drive can
+       mirror the app without anybody typing everything twice.
+
+       It exists because there is nowhere else to put it. Hosting is static,
+       there are no Cloud Functions and no service account, so the 15-minute
+       timer has to live inside the spreadsheet as a bound Apps Script — which
+       means the spreadsheet PULLS, over plain HTTPS, with no credential it
+       could safely be given. An unauthenticated REST GET is evaluated as
+       request.auth == null and comes through these rules, so `allow get: if
+       true` is what makes that fetch work with no API key and no OAuth. The
+       app must not grow a Google sign-in (see app/gdocs.js).
+
+       THIS IS A WIDER HOLE THAN /pub AND THE DIFFERENCE IS DELIBERATE, so say
+       it plainly rather than leaving it to be discovered. /pub is `get` and
+       not `read` precisely so nobody can dump the collection and learn the
+       season's part list. This IS the season's part list, and unlike a
+       nameplate it also carries engineer names and comment text.
+
+       What protects it is the document id: a 32-char CSPRNG token, minted once
+       by a lead and kept in config/tracker, never in source (this repo is
+       public). The URL is the whole capability — the same trust model already
+       applied to the Slack webhook next door in config/<key>. That is also
+       what buys the extra columns: a guessable path would have forced dropping
+       comments and shortening names, and the sheet would no longer match.
+
+       `list` is denied to EVERYONE, not merely to the unauthenticated. A
+       roster member can already read config/tracker, so this is not a wall
+       against members — it is a belt-and-braces guarantee that the token
+       cannot be recovered by enumerating the collection from a stolen session
+       or a future bug that widens config.
+
+       hasOnly() is the server-side backstop: if the projection in tracker.js
+       ever regresses and starts spreading whole records, the write is rejected
+       rather than silently publishing a layup stack. rows is capped so a
+       runaway import cannot publish an unbounded document. Keep this list in
+       sync with trackerSnapshot() — they are two halves of one contract, and
+       tools/test_pub_rules.mjs checks both. */
+    match /tracker/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if onRoster()
+        && request.resource.data.keys().hasOnly(['rows', 'count', 'updatedAt'])
+        && request.resource.data.rows.size() <= 500;
+      allow delete: if isLead();
+    }
   }
 }
