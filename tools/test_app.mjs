@@ -5136,5 +5136,97 @@ await t("a signed step folds its history one tap away; the up-next button is the
   view = { ...view, edit: false };
 });
 
+console.log("section folds:");
+await t("sections are class folds with sticky per-record state, not <details>", () => {
+  signInAsLead();
+  DB.workOrders = [
+    { id: "WO-FOLD-1", partName: "F1", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [],
+      steps: [{ seq: 1, title: "Do it", status: "open", buyoff: { name: "", date: "" } }] },
+    { id: "WO-FOLD-2", partName: "F2", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [],
+      steps: [{ seq: 1, title: "Do it", status: "open", buyoff: { name: "", date: "" } }] },
+  ];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-FOLD-1", edit: false, secFold: undefined };
+  render();
+  // Details is reference and folds by default; the header is a button (a
+  // closed <details> skips painting, which would drop sections from a
+  // browser print — the print block force-shows .wosec-body instead).
+  assert(/<button type="button" class="wosec-hd" id="wo-overview"/.test(main.innerHTML), "the section header is a button carrying the anchor");
+  assert(/class="card wosec folded">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "Details defaults folded");
+  assert(!main.innerHTML.includes("wo-fold"), "no details-based section folds remain");
+  toggleSecFold("WO-FOLD-1", "overview", 0); // open it
+  assert(/class="card wosec">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "the toggle opened it");
+  render();
+  assert(/class="card wosec">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "and it SURVIVES a re-render — the old details snapped shut on every buy-off");
+  view = { ...view, id: "WO-FOLD-2" }; render();
+  assert(/class="card wosec folded">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "switching records falls back to the defaults");
+  // A warned section never defaults folded: give FOLD-2 a failed check.
+  DB.workOrders[1].qualityChecks = [{ criterion: "mass", target: "1", actual: "2", pass: false }];
+  render();
+  assert(/class="card wosec">\s*<button[^>]*class="wosec-hd warn" id="wo-quality"/.test(main.innerHTML), "a failed quality check holds its section open");
+});
+await t("a jump into a folded section opens it before scrolling", () => {
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-FOLD-1", edit: false, secFold: undefined };
+  render();
+  woJump("wo-overview");
+  assert(view.secFold && view.secFold.id === "WO-FOLD-1" && view.secFold.m.overview === false,
+    "woJump recorded the section open: " + JSON.stringify(view.secFold));
+  assert(/class="card wosec">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "and the pane re-rendered with it open");
+});
+await t("the folded-section print rule exists — paper always gets the whole record", () => {
+  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const print = css.slice(css.indexOf("@media print"));
+  assert(print.includes(".wosec-body { display: block !important; }"),
+    "the print block force-shows .wosec-body; without it a folded section vanishes from a browser print");
+});
+await t("Parts renders through PART_SECTIONS: same machinery, anchors preserved, reference folded", () => {
+  DB.parts = [{ id: "PRT-FOLD-1", partName: "FOLDY", subteam: "AERO", layupType: "MOLD INFUSION",
+    cadProgress: "Complete", moldProgress: "Not Started", layupProgress: "Not Started",
+    layupStack: [], commentLog: [], docs: [], files: [] }];
+  DB.workOrders = [];
+  view = { ...view, tab: "parts", mode: "detail", id: "PRT-FOLD-1", edit: false, secFold: undefined };
+  render();
+  const html = main.innerHTML;
+  assert(/<button type="button" class="wosec-hd" id="pt-progress"/.test(html) || /class="wosec-hd warn" id="pt-progress"/.test(html),
+    "pt-progress lives on a section header");
+  assert(html.includes('id="pt-children"'), "pt-children survives (the runs section)");
+  assert(html.includes('id="ptsec-progress"') && html.includes('id="ptsec-notes"'), "the jump bar renders from the same table");
+  assert(!html.includes('class="jumpbar'), "the legacy anchor jumpbar is gone");
+  assert(!/<a href="#pt-/.test(html), "no anchor links that would clobber the deep-link hash");
+  assert(/class="card wosec folded">\s*<button[^>]*id="pt-details"/.test(html), "Details folds by default on a part too");
+  assert(/class="card wosec">\s*<button[^>]*id="pt-progress"/.test(html), "Progress stays open — it is what you come for");
+});
+console.log("traveler spine:");
+await t("the spine and the progress badge can never disagree about done", () => {
+  DB.workOrders = [{ id: "WO-SPINE-1", partName: "SP", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [
+    { seq: 1, title: "One", status: "done", buyoff: { name: "N", email: "n@b.edu", date: "2026-08-01" } },
+    { seq: 2, title: "Two", status: "done", buyoff: { name: "N", email: "n@b.edu", date: "2026-08-02" } },
+    { seq: 3, title: "Three", status: "open", buyoff: { name: "", date: "" } },
+    { seq: 4, title: "Four", status: "open", buyoff: { name: "", date: "" } },
+  ] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-SPINE-1", edit: false, secFold: undefined };
+  render();
+  const doneRows = (main.innerHTML.match(/class="step [^"]*\bdone\b[^"]*"/g) || []).length;
+  const p = woProgress(DB.workOrders[0]);
+  assert(doneRows === p.done, `spine shows ${doneRows} done nodes, the badge says ${p.done}`);
+  assert((main.innerHTML.match(/class="step [^"]*\bfuture\b[^"]*"/g) || []).length === 1,
+    "exactly the rows past NOW are dashed future");
+  assert(/<div class="num" title="step 1">✓<\/div>/.test(main.innerHTML), "a done node wears the check, the seq stays in the title");
+});
+await t("four or more consecutive signed steps compress into one counted group", () => {
+  const done = i => ({ seq: i, title: "S" + i, status: "done", buyoff: { name: "N", email: "n@b.edu", date: "2026-08-0" + i },
+    photoRefs: i === 2 ? [{ id: "P" + i, url: "https://x/" + i + ".jpg", name: i + ".jpg" }] : [] });
+  DB.workOrders = [{ id: "WO-GRP-1", partName: "G", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [],
+    steps: [done(1), done(2), done(3), done(4), done(5), { seq: 6, title: "Last", status: "open", buyoff: { name: "", date: "" } }] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-GRP-1", edit: false, secFold: undefined };
+  render();
+  assert(main.innerHTML.includes("Steps 1–5 · 5 done · 1 photo"), "the group summary counts steps and photos: " +
+    (main.innerHTML.match(/step-group[^<]*<[^>]*>[^<]*<\/span>[^<]*/) || [""])[0]);
+  assert((main.innerHTML.match(/class="step-group"/g) || []).length === 1, "one group for the run");
+  assert(main.innerHTML.includes(">S3<") || main.innerHTML.includes("S3"), "the full rows are inside the group, nothing left the DOM");
+  view = { ...view, edit: true }; render();
+  assert(!main.innerHTML.includes("step-group"), "edit mode never groups — the note inputs must be on screen");
+  view = { ...view, edit: false };
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

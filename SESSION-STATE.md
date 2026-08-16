@@ -9,8 +9,35 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-15
-Newest: **WO detail redesign shipped (2026-08-15, later).** Simon: the WO
+Last updated: 2026-08-15 (round: folds/trainings/issues)
+Newest: **Detail-page folds + traveler spine (2026-08-15, chunk 1 of 3).**
+Simon's round: (1) more collapsible WO/Parts detail + visually distinct
+steps, (2) training matrix + lead-editable catalog, (3) streamlined issues
+(quick capture from a step w/ photos, in-place resolve, dispo-at-WO-close).
+Forks he picked: full scope, reopen CLEARS disposition, instant matrix cell
+toggles, sticky-per-session folds, People list stays default. Chunk 1
+landed: sectionCard/secNav/secFolded/toggleSecFold/secJumpOpen hoisted to
+core.js; sections are CLASS folds (view.secFold {id, m}) not <details>
+(closed details skip painting → vanish from browser print; @media print
+force-shows .wosec-body — test-pinned); warned sections never default
+folded, E opens all; WO defaults: Steps+Stack open, Details/Photos/Files
+folded, Quality folds-when-empty, Notes folds unless a note is newer than
+your localStorage stamp (WO_NOTES_NEW session map keeps the gold "new" dot
++ auto-open stable across re-renders; gold=new, amber=trouble). Parts got
+PART_SECTIONS (Progress/Stack/Runs open; Details/Mold/Links/Notes folded),
+pt-progress/pt-children anchors kept, legacy anchor jumpbar deleted, files
+capped at 8 (view.ptFilesAll). Steps wear the traveler spine: per-row
+::before/::after segments (solid walked, dashed below NOW), 28px circular
+.num nodes (✓ done / gold NOW w/ --ink numeral / amber-ring blocker /
+slate ◷ held / red ✗ failed / outline future), washes gone, ≥4 consecutive
+done rows compress into details.step-group with counted summary — rows
+inside render metas INLINE (their own step-more inside a closed group is
+the detailui orphan audit's exact target; hit it, fixed it). Parts keeps
+1/2/3 = advance stages (NOT digit-jumps — that key is taken). Suites:
+app 436, designsystem 23, detailui 885, appui 1242, print_mobile 14,
+route 38, safearea 30, all green.
+
+Previous newest: **WO detail redesign shipped (2026-08-15, later).** Simon: the WO
 detail read as a wall of text; sections should feel separated, photos should
 become a major documentation feature; ignore the traveler; "distinct zones,
 quiet inside"; visibility tiers mine to pick; no data lost; one-scroll stays

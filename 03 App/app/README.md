@@ -122,13 +122,34 @@ the SN5 archive is most of them and is the to-do list for linking them up.
 Parts nobody has started appear too, with the button that starts a run. Group,
 sort and filter are yours to set.
 
-The pane is one scroll, ordered Steps, Overview, Stack & BOM, Quality, Files &
-docs, Notes & log. Steps leads because that is what you came to do. A bar above
-it jumps to any section (`1`-`6` from the keyboard) and carries a count per
-section and a dot when something in one wants attention, so you can see there
-are five plies or that a check failed without scrolling to find out. It is
-buttons rather than anchors on purpose: an `href="#wo-stack"` would overwrite
-the deep link the app keeps in the URL hash.
+The pane is one scroll, ordered Steps, Details, Stack & BOM, Photos, Quality,
+Files & docs, Notes & log. Steps leads because that is what you came to do. A
+bar above it jumps to any section (`1`-`7` from the keyboard) and carries a
+count per section and a dot when something in one wants attention, so you can
+see there are five plies or that a check failed without scrolling to find out.
+It is buttons rather than anchors on purpose: an `href="#wo-stack"` would
+overwrite the deep link the app keeps in the URL hash.
+
+Every section header is also a fold. Steps and Stack & BOM open by default
+(you read the stack while signing "Stack frozen"); the reference sections
+(Details, Photos, Files, Notes & log) start closed, a warned section never
+starts closed, and edit mode opens everything. Folds keep their state while
+you stay on the record — a buy-off no longer snaps them all back — and reset
+when you switch to another one. Notes & log opens itself with a gold "new"
+dot when somebody wrote a note since you last looked; gold means new, amber
+means trouble, and the two dots never trade jobs. Folding is a class on the
+card, not a `<details>`, because a closed `details` skips painting and folded
+sections would silently vanish from a browser print; the print stylesheet
+force-shows every section body instead.
+
+The steps themselves read as a traveler spine: a hairline runs down the
+number column and each step's number is a circular node on it — green ✓
+walked, the one gold node is the step to act on NOW, an amber ring is a
+blocker, slate ◷ waits on a cure clock, red ✗ failed, and an outline node on
+a dashed spine has not been walked yet. Four or more consecutive signed
+steps compress into one counted line ("Steps 1–8 · 8 done · 9 photos") with
+the full rows one tap inside, so a half-signed record reads solid green,
+one gold node, then dashed, from across the bench.
 
 What is true of the whole record stays above that bar: which run it is, its
 status, the lineage bar, and anything blocking it, including a cure hold, which
@@ -165,10 +186,17 @@ because the part is where the work starts. Each part carries three parallel
 progress stages (CAD, Mold, Layup) plus subteam, layup type and schedule,
 engineers, target weight, and a layup deadline.
 
-Its **Children** section is the rest of the picture: every run against the part
-with status, due date and ply count; the mold and its **mold file**, with
-buttons straight to the 3D view and the drawings; then tickets and scheduled
-weeks.
+The page is built from the same section cards as a work order: a jump bar
+with a count per section and a warn dot, Progress, the layup stack and the
+runs open by default, and the reference sections (Details, Mold, Links &
+files, Notes) folded until asked for — same sticky fold state, same
+print-safe class fold. The old anchor jump bar is gone with them; anchors
+would have overwritten the record deep link in the URL hash.
+
+Its **Runs** section is the rest of the picture: every run against the part
+with status, due date and ply count. The **Mold** section holds the mold and
+its **mold file**, with buttons straight to the 3D view and the drawings;
+tickets and scheduled weeks live under **Links & files**.
 
 ("Mold file" is the stack plan record, `STK-…`: the slicer's output for how the
 mold gets cut out of tooling board. The lineage bar and the part page call it

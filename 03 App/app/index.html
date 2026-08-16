@@ -450,15 +450,9 @@
   .grid .f input, .grid .f select, .field input, .field select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
   .grid .f .ro { padding: 5px 0; min-height: 1.5em; }
   .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-  /* Work-order section jumps. Sticky under the topbar (which is 5) so it stays
-     reachable through a long traveler. */
-  .jumpbar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
-    position: sticky; top: var(--topbar-h); z-index: 4; background: var(--canvas);
-    padding: 6px 0; border-bottom: 1px solid var(--line); }
-  .jumpbar a { font-size: 12.5px; padding: 4px 9px; border-radius: 5px; text-decoration: none;
-    color: var(--muted); border: 1px solid transparent; }
-  .jumpbar a:hover { background: var(--hover); color: var(--ink); border-color: var(--line); }
-  /* Anchored headings clear the sticky topbar + jumpbar instead of hiding under them. */
+  /* The old .jumpbar (anchor links) is gone: Parts was its last consumer and
+     now shares the WO .secnav. Anchored headings still clear the sticky
+     topbar + section bar instead of hiding under them. */
   #main [id^="wo-"], #main [id^="pt-"], #main [id^="tk-"] { scroll-margin-top: calc(var(--topbar-h) + 56px); }
   .muted { color: var(--muted); }
   .warn { color: var(--bad); font-weight: 600; }
@@ -1218,24 +1212,66 @@
   .stkcmp h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   @media (max-width: 640px) { .stkcmp { grid-template-columns: 1fr; } }
 
-  /* ---- steps (work orders, carried) ---- */
-  .step { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
-  .step:first-of-type { border-top: none; }
-  .step .num { font-weight: 700; color: var(--brand-ink); min-width: 22px; }
-  .step .body { flex: 1; } .step .meta { font-size: 12px; color: var(--muted); }
+  /* ---- steps: the traveler spine ----
+     Identity from structure, not washes: a hairline spine runs down the
+     number column and each step's number sits on it as a circular node whose
+     fill is the step's state — green ✓ walked, gold NOW, outline future,
+     amber ring blocker, slate ◷ hold, red ✗ failed. The spine is solid where
+     the run has been walked and dashed below the NOW node. A 22-step record
+     reads as solid green → one gold node → dashed, from arm's length. */
+  .steps { position: relative; }
+  .step { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+  .steps .num { position: relative; z-index: 1; width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+    background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+  /* Spine segments, per row so solid/dashed can switch: top half above the
+     node, bottom half below. Trimmed at the container's ends. */
+  .step::before, .step::after { content: ""; position: absolute; left: 13px; width: 2px; background: var(--line); }
+  .step::before { top: 0; height: 10px; }
+  .step::after { top: 38px; bottom: 0; }
+  .steps > .step:first-child::before, .steps > :first-child .step:first-child::before { display: none; }
+  .steps > .step:last-child::after, .steps > :last-child .step:last-child::after { display: none; }
+  /* Not walked yet: dashed. The NOW row's own lower segment is the switch. */
+  .step.future::before, .step.future::after, .step.upnext::after {
+    background: none; width: 0; border-left: 2px dashed var(--line); }
+  .step .body { flex: 1; min-width: 0; } .step .meta { font-size: 12px; color: var(--muted); }
   .step .buyoff { display: flex; gap: 6px; align-items: center; font-size: 12px; }
-  /* A blocker is a person withholding a signature — amber, the in-work
-     shape. A hold is the clock — slate, the parked color, with a clock
-     glyph in its badge. They deliberately no longer share one wash. */
-  .step.is-blocker { background: var(--warn-bg); margin: 0 -8px; padding: 8px; }
-  .step.is-held { background: var(--hold-bg); margin: 0 -8px; padding: 8px; }
-  .step.done { opacity: .72; } .step.failed { background: var(--bad-bg); margin: 0 -8px; padding: 8px; }
-  .step.upnext { border-left: 3px solid var(--accent); margin-left: -13px; padding-left: 10px; }
+  /* A blocker is a person withholding a signature (amber ring + edge), a hold
+     is the clock (slate node wearing the ◷). They stopped sharing a wash long
+     ago; now neither is a wash at all. */
+  .step.is-blocker:not(.done):not(.failed) .num { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
+  .step.is-held .num { background: var(--hold-bg); border-color: var(--hold-border); color: var(--hold); }
+  .step.done .num, .steps .num.done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+  .step.failed .num { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+  .step.done .body { color: var(--muted); }
+  .step.done .step-title { color: var(--muted); }
+  /* An accent edge only where a row needs to shout: amber blocker, red fail,
+     gold NOW. The row shifts 13px left to carry it, so its spine segments
+     move to 26px to stay plumb with the others. */
+  .step.is-blocker:not(.done):not(.failed), .step.failed, .step.upnext {
+    border-left: 3px solid var(--warn-border); margin-left: -13px; padding-left: 13px; }
+  .step.failed { border-left-color: var(--bad); }
+  .step.upnext { border-left-color: var(--gold); }
+  .step.is-blocker:not(.done):not(.failed)::before, .step.is-blocker:not(.done):not(.failed)::after,
+  .step.failed::before, .step.failed::after, .step.upnext::before, .step.upnext::after { left: 26px; }
+  /* The one gold node; its numeral is ink, never white. Redundant cues on
+     purpose: the only gold node, the only gold edge, the only .primary. */
+  .step.upnext .num { background: var(--gold); border-color: var(--gold); color: var(--brand-ink); }
+  .step.upnext .step-title { font-weight: 700; background: var(--gold-bg); border-radius: var(--radius);
+    padding: 2px 8px; margin-left: -8px; }
   .step-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--amber); vertical-align: 1px; }
   .step-badge.hold { background: var(--hold-bg); border-color: var(--hold-border); color: var(--hold); }
   .step-badge.now { background: var(--gold-bg); border-color: var(--gold); color: var(--brand-ink); }
-  .step.upnext .step-title { font-weight: 700; }
   .step .buyoff .ok { display: inline-flex; align-items: center; gap: 4px; }
+  /* A signed run compressed to one line: the group summary wears a done node
+     and the count; the full rows are inside, one tap away. */
+  details.step-group > summary.step-disclose { display: flex; align-items: center; gap: 12px; min-height: 40px;
+    cursor: pointer; list-style: none; font-size: 12px; color: var(--muted); }
+  details.step-group > summary.step-disclose::-webkit-details-marker { display: none; }
+  details.step-group > summary.step-disclose .num { flex: none; }
+  details.step-group > summary.step-disclose::after { content: "▸"; color: var(--faint); }
+  details.step-group[open] > summary.step-disclose::after { content: "▾"; }
   /* A signed row's history, one tap away. The summary is a ≥40px target. */
   .step-more > summary.step-disclose { cursor: pointer; list-style: none; font-size: 12px; color: var(--muted);
     min-height: 40px; display: inline-flex; align-items: center; gap: 4px; }
@@ -1389,10 +1425,9 @@
   .pgrouphd.norows { position: static; border: 1px dashed var(--border-2); background: none; }
   .pgrouphd .pg-start { margin-left: auto; padding: 2px 8px; }
 
-  /* The section jump bar. Geometry borrowed from .jumpbar (which Parts still
-     uses), but these are buttons rather than anchors, because an <a href="#…">
-     would overwrite the deep link this app keeps in the URL hash. They scroll;
-     they do not switch. What they add over the old jumpbar is a count per
+  /* The section jump bar (WO, Parts and Tickets). Buttons rather than anchors,
+     because an <a href="#…"> would overwrite the deep link this app keeps in
+     the URL hash. They scroll; they do not switch. Each carries a count per
      section and a dot when something in one needs attention. */
   .secnav { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 12px;
     position: sticky; top: var(--topbar-h); z-index: 4; background: var(--canvas); padding: 6px 0; border-bottom: 1px solid var(--line); }
@@ -1408,13 +1443,17 @@
   .secnav-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
   .secnav-btn.warn .secnav-dot { background: var(--bad); }
   .wosec { min-width: 0; margin-bottom: 12px; }
-  /* ---- WO section header ----
+  /* ---- section header (WO + Parts, core.js sectionCard) ----
      The .bmod-hd recipe applied per section card: gold speed-slash + Saira
      uppercase label, the SAME badge()/warn() answers the jump bar shows (one
      source of truth), and the attention dot always beside a word — hue is
-     never the only carrier. On a folded section this element is the
-     <summary>, so the header is always visible and the fold is one tap. */
-  .wosec-hd { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; list-style: none; }
+     never the only carrier. The header is a <button> that toggles the fold:
+     a class fold, not a <details>, because a closed details skips painting
+     its content and folded sections would vanish from a browser print. The
+     print block force-shows .wosec-body instead. */
+  .wosec-hd { display: flex; align-items: center; gap: 8px; margin: 0; list-style: none; }
+  button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; background: none; border: 0;
+    padding: 0; font: inherit; text-align: left; cursor: pointer; min-height: 40px; color: inherit; }
   .wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
     font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
   .wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
@@ -1423,12 +1462,14 @@
   .wosec-n { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2);
     border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
   .wosec-w { font-size: 11.5px; font-weight: 600; color: var(--bad); }
-  summary.wosec-hd { cursor: pointer; margin: 0; min-height: 40px; align-items: center; }
-  summary.wosec-hd::-webkit-details-marker { display: none; }
-  summary.wosec-hd::after { content: "▸"; font-size: 13px; color: var(--faint); margin-left: auto;
+  /* Gold is "new", amber/red is "trouble" — the dot colors never trade jobs. */
+  .secnav-dot.gold { background: var(--gold); }
+  .wosec-new { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .wosec-hd::after { content: "▾"; font-size: 13px; color: var(--faint); margin-left: auto;
     transition: transform var(--t-fast) var(--ease); }
-  .wo-fold[open] > summary.wosec-hd::after { content: "▾"; }
-  .wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
+  .wosec.folded > .wosec-hd::after { content: "▸"; }
+  .wosec:not(.folded) > .wosec-hd { margin-bottom: 10px; }
+  .wosec.folded > .wosec-body { display: none; }
   /* Row that holds a trailing add-button under a list. */
   .addrow { margin-top: 8px; }
   /* Sub-fold inside a section card (BOM, event log): reference data that
@@ -2280,7 +2321,7 @@
        so it still reads as belonging to that step. */
     .step { flex-wrap: wrap; }
     .step .body { flex: 1 1 100%; min-width: 0; }
-    .step .buyoff { flex: 1 1 100%; margin-left: 32px; }
+    .step .buyoff { flex: 1 1 100%; margin-left: 40px; }
     .step .buyoff button { width: 100%; justify-content: center; }
 
     /* Modals: single-column two-up rows, tighter padding on a small screen. */
@@ -2484,6 +2525,9 @@
     /* Paper wants the record, not the navigation: print the selected part (or
        the season overview when none is selected), never the index beside it. */
     .mdsplit, .tksplit { display: block; } .mdindex, .keyhint, .mdnav, .secnav { display: none !important; }
+    /* Folds are screen furniture. Paper gets the whole record — without this,
+       a section somebody left folded silently vanishes from the printout. */
+    .wosec-body { display: block !important; }
     /* Paper never truncates: the attachment cap is a screen affordance. */
     .tkmeta .tkband-attach.capped { max-height: none; overflow: visible; }
     .tkmeta .tkband-attach.capped::after { display: none; }

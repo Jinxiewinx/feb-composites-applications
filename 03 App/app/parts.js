@@ -805,53 +805,21 @@ function postPartComment(id) {
   render();
 }
 
-function renderPartDetail() {
-  const p = selectedPart();
-  if (!p) return renderPartOverview();
-  const E = view.edit;
+/* ---------- detail sections ----------
+   The same section machinery Work Orders uses (core.js sectionCard/secNav):
+   one descriptor per section drives the jump bar and the cards, folds are
+   sticky per session (view.secFold), and a warned section never defaults
+   closed. Progress, the stack and the runs stay open — they are what you
+   come for; the reference sections fold. */
+
+function ptSecProgress(p, E) {
+  return `<div class="pstages">${PART_STAGES.map(st => partStageRow(p, st)).join("")}</div>`;
+}
+
+function ptSecDetails(p, E) {
   const linkedWO = linkedCounterpart("parts", p);
-  const dd = daysUntil(p.layupDeadline);
-  const late = partLate(p);
-  const runs = partRuns(p);
-  const wos = runs.map(r => r.wo);
-  const tickets = partTickets(p);
-  const weeks = partScheduleWeeks(p);
   const engs = partEngineers(p);
-  const comments = (p.commentLog || []).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   return `
-  <section class="mddetail" aria-label="Part detail" data-lbgroup="parts:${esc(p.id)}">
-    <div class="toolbar no-print">
-      <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
-      <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
-      ${labelBtn("parts", p.id)}
-      ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
-      <span class="mdnav no-print">
-        <button class="sm" title="Previous part (↑)" onclick="movePartSelection(-1)">${icon("chevronLeft", 14)}</button>
-        <button class="sm" title="Next part (↓)" onclick="movePartSelection(1)">${icon("chevronRight", 14)}</button>
-      </span>
-    </div>
-    ${lineageBar("parts", p.id)}
-    <nav class="jumpbar no-print" aria-label="Jump to section">
-      <a href="#pt-progress"><b>Progress</b></a><a href="#pt-details">Details</a><a href="#pt-stack">Stack</a>
-      <a href="#pt-children">Children</a><a href="#pt-notes">Notes</a>
-    </nav>
-    ${/* Finding 5: the season used to vanish the moment a part was opened, so a
-          lead had to press Esc to see it and Enter to get back. Pinned. */""}
-    ${partStatRow(true)}
-    <div class="card">
-      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
-      <div class="muted">${esc(p.id)}${p.subteam ? " · " + esc(p.subteam) : ""}${p.layupType ? " · " + esc(p.layupType) : ""}${
-        linkedWO ? " · work order " + chip("workOrders", linkedWO.id, linkedWO.id) : ""}${
-        p.updatedAt ? " · saved " + fmtWhen(p.updatedAt) + " by " + esc(p.updatedBy || "?") : ""}</div>
-      ${p.layupDeadline ? `<div class="pdue ${late ? "late" : ""}">${icon(late ? "warning" : "calendar", 15)}
-        <b>Layup deadline ${esc(p.layupDeadline)}</b>
-        <span class="muted">${dd != null ? (dd < 0 ? Math.abs(dd) + " days late" : dd === 0 ? "today" : dd + " days out") : ""}</span></div>` : ""}
-      ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
-
-      <h3 id="pt-progress">Progress</h3>
-      <div class="pstages">${PART_STAGES.map(st => partStageRow(p, st)).join("")}</div>
-
-      <h3 id="pt-details">Details</h3>
       <div class="grid pgrid">
         ${pfld(p, "Part name", "partName")}${pfld(p, "Subteam", "subteam", SUBTEAMS)}${pfld(p, "Layup type", "layupType", LAYUP_TYPES)}
         ${pfld(p, "Layup deadline", "layupDeadline", null, "date")}${pfld(p, "Mold location", "moldLocation")}${
@@ -882,43 +850,45 @@ function renderPartDetail() {
         })()}
       </div>
       ${engs.length ? `<div class="pengrow"><div class="lg-label tny">On this part</div>
-        <div class="linkrow">${engs.map(engineerChip).join("")}</div></div>` : ""}
+        <div class="linkrow">${engs.map(engineerChip).join("")}</div></div>` : ""}`;
+}
 
-      ${(() => {
-        // The part holds the PLAN. Runs that have diverged are named here, so
-        // editing the plan never feels like it silently rewrote history.
-        const diverged = wos.filter(w => w.stackSource === "asbuilt" && stackDrift(p, w).n > 0);
-        const frozen = wos.filter(w => stackFrozen(w) && !diverged.includes(w));
-        /* Every SN5 part has an empty stack and every SN5 work order has a full
-           one — the tracker recorded the layup against the job, not the part.
-           Showing "no plies recorded" on all 33 of them would be true and
-           useless, so the run's stack stands in as the plan, clearly labelled
-           as borrowed, with one click to make it the part's own. */
-        const borrow = !(p.layupStack || []).length && wos.find(w => (w.layupStack || []).length);
-        if (borrow) {
-          return `<h3 id="pt-stack">Layup stack <span class="muted" style="text-transform:none">— as laid on ${esc(borrow.id)}</span></h3>
-          <div class="stack-diff no-print">${icon("warning", 14)}
-            <span>This part has no plan of its own. Showing what ${esc(borrow.id)} actually laid.</span>
-            ${E ? `<button class="link" onclick="adoptStackAsSpec('${esc(borrow.id)}')">Adopt as the plan</button>` : ""}</div>
-          ${plyTable(null, borrow, { edit: false })}`;
-        }
-        return `<h3 id="pt-stack">Layup stack <span class="muted" style="text-transform:none">— the plan${
-          wos.length ? `, followed by ${wos.length - diverged.length - frozen.length} of ${wos.length} run${wos.length === 1 ? "" : "s"}` : ""}</span></h3>
-        ${diverged.length ? `<div class="stack-diff no-print">${icon("warning", 14)}
-          <span>${diverged.map(w => esc(w.id)).join(", ")} laid something different.</span>
-          ${diverged.length === 1 ? `<button class="link" onclick="openStackCompare('${esc(diverged[0].id)}')">Compare</button>` : ""}</div>` : ""}
-        ${frozen.length ? `<div class="tny muted no-print">${frozen.map(w => esc(w.id)).join(", ")} ${frozen.length === 1 ? "has" : "have"} frozen the stack — changes here will not move ${frozen.length === 1 ? "it" : "them"}.</div>` : ""}
-        ${plyTable("parts", p, { edit: E })}`;
-      })()}
+/* The runs whose as-built stack no longer matches this part's plan. */
+function partDivergedRuns(p) {
+  return partRuns(p).map(r => r.wo).filter(w => w.stackSource === "asbuilt" && stackDrift(p, w).n > 0);
+}
 
-      ${/* The part is the parent record, so its children get the app's
-            sub-collection grammar (table.sub) rather than a flat row of chips
-            that said nothing about status, provenance or what to do next.
-            Runs first: they are what the part is waiting on. */""}
-      <h3 id="pt-children">Children${runs.length + tickets.length + weeks.length ? ` <span class="muted" style="text-transform:none">— ${runs.length} run${runs.length === 1 ? "" : "s"}${
-        tickets.length ? `, ${tickets.length} ticket${tickets.length === 1 ? "" : "s"}` : ""}</span>` : ""}</h3>
+function ptSecStack(p, E) {
+  const wos = partWorkOrders(p);
+  // The part holds the PLAN. Runs that have diverged are named here, so
+  // editing the plan never feels like it silently rewrote history.
+  const diverged = wos.filter(w => w.stackSource === "asbuilt" && stackDrift(p, w).n > 0);
+  const frozen = wos.filter(w => stackFrozen(w) && !diverged.includes(w));
+  /* Every SN5 part has an empty stack and every SN5 work order has a full
+     one — the tracker recorded the layup against the job, not the part.
+     Showing "no plies recorded" on all 33 of them would be true and
+     useless, so the run's stack stands in as the plan, clearly labelled
+     as borrowed, with one click to make it the part's own. */
+  const borrow = !(p.layupStack || []).length && wos.find(w => (w.layupStack || []).length);
+  if (borrow) {
+    return `<div class="stack-diff no-print">${icon("warning", 14)}
+      <span>This part has no plan of its own. Showing what ${esc(borrow.id)} actually laid.</span>
+      ${E ? `<button class="link" onclick="adoptStackAsSpec('${esc(borrow.id)}')">Adopt as the plan</button>` : ""}</div>
+    ${plyTable(null, borrow, { edit: false })}`;
+  }
+  return `<div class="stack-cap tny muted">The plan${
+      wos.length ? `, followed by ${wos.length - diverged.length - frozen.length} of ${wos.length} run${wos.length === 1 ? "" : "s"}` : ""}.</div>
+    ${diverged.length ? `<div class="stack-diff no-print">${icon("warning", 14)}
+      <span>${diverged.map(w => esc(w.id)).join(", ")} laid something different.</span>
+      ${diverged.length === 1 ? `<button class="link" onclick="openStackCompare('${esc(diverged[0].id)}')">Compare</button>` : ""}</div>` : ""}
+    ${frozen.length ? `<div class="tny muted no-print">${frozen.map(w => esc(w.id)).join(", ")} ${frozen.length === 1 ? "has" : "have"} frozen the stack — changes here will not move ${frozen.length === 1 ? "it" : "them"}.</div>` : ""}
+    ${plyTable("parts", p, { edit: E })}`;
+}
 
-      <div class="lg-label tny">Work orders <span class="muted" style="text-transform:none">— each one is a run at making this part</span></div>
+function ptSecRuns(p, E) {
+  const runs = partRuns(p);
+  return `
+      <div class="tny muted">Each run is one work order — one attempt at making this part.</div>
       ${runs.length ? `<table class="sub">
         <thead><tr><th>Run</th><th>Status</th><th>Due</th><th>Stack</th><th>Linked</th></tr></thead>
         <tbody>${runs.map(r => {
@@ -940,31 +910,32 @@ function renderPartDetail() {
           </tr>`;
         }).join("")}</tbody></table>`
         : '<div class="muted tny">No runs yet — nothing has been made from this part.</div>'}
-      <div class="no-print" style="margin-top:6px"><button class="sm" onclick="newRunForPart('${esc(p.id)}')">+ New run</button></div>
+      <div class="no-print" style="margin-top:6px"><button class="sm" onclick="newRunForPart('${esc(p.id)}')">+ New run</button></div>`;
+}
 
-      ${/* The mold file: the part could not reach any of this before. */""}
-      <div class="pengrow">
-        <div class="lg-label tny">Mold and mold file</div>
-        ${(() => {
-          const pm = partMold(p);
-          if (!pm) return `<span class="muted tny">No mold linked${E ? " — set one under Details." : "."}</span>`;
-          const m = pm.mold, plan = partPlan(p);
-          const stageMismatch = m.stage && p.moldProgress && !moldStagesAgree(p.moldProgress, m.stage);
-          return `<div class="linkrow">
-              <span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>
-              ${m.stage ? `<span class="pill">${esc(m.stage)}</span>` : ""}
-              ${pm.via === "wo" ? `<span class="muted tny">matched via ${esc(pm.through ? pm.through.id : "a run")}</span>
-                <button class="sm no-print" onclick="confirmMoldLink('${esc(p.id)}','${esc(m.id)}')">Confirm</button>` : ""}
-            </div>
-            ${stageMismatch ? `<div class="tny warn" style="margin-top:4px">This part says “${esc(p.moldProgress)}” but the mold record says “${esc(m.stage)}”. One of them is out of date.</div>` : ""}
-            ${plan ? `<div class="toolbar no-print" style="margin-top:6px">
-              <button class="ib sm" onclick="openRecord('molds','${esc(plan.id)}')">${icon("parts", 14)} Open plan &amp; 3D view</button>
-              <button class="ib sm" onclick="openDrawings('${esc(plan.id)}')">${icon("print", 14)} Drawings</button>
-              <span class="tny muted">${esc(plan.id)} · ${(plan.layers || []).length} layers</span>
-            </div>` : '<div class="muted tny" style="margin-top:4px">No mold file yet — slice the mold STL on the Molds tab to make one.</div>'}`;
-        })()}
-      </div>
+function ptSecMold(p, E) {
+  const pm = partMold(p);
+  if (!pm) return `<span class="muted tny">No mold linked${E ? " — set one under Details." : "."}</span>`;
+  const m = pm.mold, plan = partPlan(p);
+  const stageMismatch = m.stage && p.moldProgress && !moldStagesAgree(p.moldProgress, m.stage);
+  return `<div class="linkrow">
+      <span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>
+      ${m.stage ? `<span class="pill">${esc(m.stage)}</span>` : ""}
+      ${pm.via === "wo" ? `<span class="muted tny">matched via ${esc(pm.through ? pm.through.id : "a run")}</span>
+        <button class="sm no-print" onclick="confirmMoldLink('${esc(p.id)}','${esc(m.id)}')">Confirm</button>` : ""}
+    </div>
+    ${stageMismatch ? `<div class="tny warn" style="margin-top:4px">This part says “${esc(p.moldProgress)}” but the mold record says “${esc(m.stage)}”. One of them is out of date.</div>` : ""}
+    ${plan ? `<div class="toolbar no-print" style="margin-top:6px">
+      <button class="ib sm" onclick="openRecord('molds','${esc(plan.id)}')">${icon("parts", 14)} Open plan &amp; 3D view</button>
+      <button class="ib sm" onclick="openDrawings('${esc(plan.id)}')">${icon("print", 14)} Drawings</button>
+      <span class="tny muted">${esc(plan.id)} · ${(plan.layers || []).length} layers</span>
+    </div>` : '<div class="muted tny" style="margin-top:4px">No mold file yet — slice the mold STL on the Molds tab to make one.</div>'}`;
+}
 
+function ptSecLinks(p, E) {
+  const tickets = partTickets(p);
+  const weeks = partScheduleWeeks(p);
+  return `
       <div class="linkgrid">
         <div><div class="lg-label tny">Tickets</div><div class="linkrow">${
           tickets.map(t => chip("projects", t.id, t.title || t.id)).join("") || '<span class="muted tny">none</span>'}</div></div>
@@ -985,13 +956,24 @@ function renderPartDetail() {
            already has — no rules change. -->
       <div class="pengrow">
         <div class="lg-label tny">Files</div>
-        <div class="filegrid">
-          ${(p.files || []).map(fileItem).join("") || '<span class="muted tny">None yet.</span>'}
-        </div>
+        ${(() => {
+          // Capped at eight behind a real button, the WO Files precedent
+          // (a button, never a details — the tickets postmortem).
+          const files = p.files || [];
+          const capped = files.length > 8 && !view.ptFilesAll;
+          const shown = capped ? files.slice(0, 8) : files;
+          return `<div class="filegrid">
+            ${shown.map(fileItem).join("") || '<span class="muted tny">None yet.</span>'}
+          </div>
+          ${capped ? `<div class="no-print addrow"><button class="sm" onclick="view.ptFilesAll=true;render()">Show all ${files.length}</button></div>` : ""}`;
+        })()}
         <div class="no-print" style="margin-top:6px"><button class="sm" onclick="addRecordFiles('parts','${p.id}','parts')">+ Add files</button></div>
-      </div>
+      </div>`;
+}
 
-      <h3 id="pt-notes">Notes${comments.length ? ` <span class="muted" style="text-transform:none">— ${comments.length} comment${comments.length === 1 ? "" : "s"}</span>` : ""}</h3>
+function ptSecNotes(p, E) {
+  const comments = (p.commentLog || []).slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return `
       <div class="pnote">
         <div class="lg-label tny">Part note <span class="muted" style="text-transform:none">— the free-text field from the tracker</span></div>
         ${richField("parts", p.id, "comments", {
@@ -1013,8 +995,110 @@ function renderPartDetail() {
           oncancel: `closeComposer('pcomment')`,
           postLabel: "Comment as " + signerName(),
         });
-      })()}
+      })()}`;
+}
+
+/* Anchors pt-progress and pt-children are load-bearing (tests pin them, and
+   they predate this table as the old jumpbar's targets). Stage advance stays
+   on the 1/2/3 keys (partsKeydown), so parts deliberately does NOT get the
+   WO tab's digit-jumps. */
+const PART_SECTIONS = [
+  { id: "progress", label: "Progress", anchor: "pt-progress",
+    badge: p => {
+      const done = PART_STAGES.filter(st => {
+        const cur = p[st.key] || st.vals[0];
+        return stageIsNA(cur) || stageClass(cur, st.vals) === "st-done";
+      }).length;
+      return `${done}/${PART_STAGES.length}`;
+    },
+    warn: p => partLate(p), warnWord: () => "late",
+    body: (p, E) => ptSecProgress(p, E) },
+  { id: "stack", label: "Layup stack", anchor: "pt-stack",
+    badge: p => {
+      const own = (p.layupStack || []).length;
+      if (own) return String(own);
+      const b = partWorkOrders(p).find(w => (w.layupStack || []).length);
+      return b ? String((b.layupStack || []).length) : "";
+    },
+    warn: p => partDivergedRuns(p).length > 0,
+    warnWord: p => {
+      const n = partDivergedRuns(p).reduce((a, w) => a + stackDrift(p, w).n, 0);
+      return `${n} differ`;
+    },
+    body: (p, E) => ptSecStack(p, E) },
+  { id: "runs", label: "Runs", anchor: "pt-children",
+    badge: p => String(partRuns(p).length || ""),
+    warn: p => partRuns(p).some(r => woFlags(r.wo).blocked || isWoLate(r.wo)),
+    warnWord: p => partRuns(p).some(r => woFlags(r.wo).blocked) ? "blocked" : "late",
+    body: (p, E) => ptSecRuns(p, E) },
+  { id: "details", label: "Details", anchor: "pt-details",
+    badge: () => "",
+    warn: p => {
+      const t = parseFloat(p.weightG), a = parseFloat(p.weightActualG);
+      return !isNaN(t) && !isNaN(a) && a > t;
+    },
+    warnWord: () => "over mass",
+    foldWhen: () => true,
+    body: (p, E) => ptSecDetails(p, E) },
+  { id: "mold", label: "Mold", anchor: "pt-mold",
+    badge: p => { const plan = partPlan(p); return plan ? String((plan.layers || []).length || "") : ""; },
+    warn: p => {
+      const pm = partMold(p);
+      return !!(pm && pm.mold.stage && p.moldProgress && !moldStagesAgree(p.moldProgress, pm.mold.stage));
+    },
+    warnWord: () => "stale stage",
+    foldWhen: () => true,
+    body: (p, E) => ptSecMold(p, E) },
+  { id: "links", label: "Links & files", anchor: "pt-links",
+    badge: p => String((partTickets(p).length + partScheduleWeeks(p).length + (p.docs || []).length + (p.files || []).length) || ""),
+    foldWhen: () => true,
+    body: (p, E) => ptSecLinks(p, E) },
+  { id: "notes", label: "Notes", anchor: "pt-notes",
+    badge: p => String((p.commentLog || []).length || ""),
+    foldWhen: () => true,
+    body: (p, E) => ptSecNotes(p, E) },
+];
+
+function ptJump(anchor) {
+  const p = partById(view.id);
+  if (p) secJumpOpen(PART_SECTIONS, p, anchor); else secJump(anchor);
+}
+
+function renderPartDetail() {
+  const p = selectedPart();
+  if (!p) return renderPartOverview();
+  const E = view.edit;
+  const linkedWO = linkedCounterpart("parts", p);
+  const dd = daysUntil(p.layupDeadline);
+  const late = partLate(p);
+  return `
+  <section class="mddetail" aria-label="Part detail" data-lbgroup="parts:${esc(p.id)}">
+    <div class="toolbar no-print">
+      <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
+      <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
+      ${labelBtn("parts", p.id)}
+      ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
+      <span class="mdnav no-print">
+        <button class="sm" title="Previous part (↑)" onclick="movePartSelection(-1)">${icon("chevronLeft", 14)}</button>
+        <button class="sm" title="Next part (↓)" onclick="movePartSelection(1)">${icon("chevronRight", 14)}</button>
+      </span>
     </div>
+    ${lineageBar("parts", p.id)}
+    ${/* Finding 5: the season used to vanish the moment a part was opened, so a
+          lead had to press Esc to see it and Enter to get back. Pinned. */""}
+    ${partStatRow(true)}
+    <div class="card wohead">
+      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
+      <div class="muted">${esc(p.id)}${p.subteam ? " · " + esc(p.subteam) : ""}${p.layupType ? " · " + esc(p.layupType) : ""}${
+        linkedWO ? " · work order " + chip("workOrders", linkedWO.id, linkedWO.id) : ""}${
+        p.updatedAt ? " · saved " + fmtWhen(p.updatedAt) + " by " + esc(p.updatedBy || "?") : ""}</div>
+      ${p.layupDeadline ? `<div class="pdue ${late ? "late" : ""}">${icon(late ? "warning" : "calendar", 15)}
+        <b>Layup deadline ${esc(p.layupDeadline)}</b>
+        <span class="muted">${dd != null ? (dd < 0 ? Math.abs(dd) + " days late" : dd === 0 ? "today" : dd + " days out") : ""}</span></div>` : ""}
+      ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
+    </div>
+    ${secNav("ptsec", PART_SECTIONS, p, "ptJump", "Jump to a section of this part")}
+    ${PART_SECTIONS.map(s => sectionCard(s, p, E)).join("")}
   </section>`;
 }
 

@@ -909,30 +909,70 @@ const WO_SECTIONS = [
     badge: w => { const p = woProgress(w); return p.total ? `${p.done}/${p.total}` : ""; },
     warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
     warnWord: w => (woFlags(w).blocked ? "blocked" : "curing"),
+    // Someone can stow even Steps behind the sticky fold; the folded header
+    // then still says how far along the run is and that a NOW exists.
+    foldHint: w => (!w.retro && (w.steps || []).some(s => stepState(s) !== "done" && stepState(s) !== "failed"))
+      ? '<span class="secnav-dot gold" aria-hidden="true" title="has an up-next step"></span>' : "",
     body: (w, E) => woSecSteps(w, E) },
-  { id: "overview", label: "Details", anchor: "wo-overview", badge: () => "", body: (w, E) => woSecOverview(w, E) },
+  // Pure reference: the facts band above carries status, due, mass and the
+  // engineers, so the field grid folds by default (secFolded opens it in E).
+  { id: "overview", label: "Details", anchor: "wo-overview", badge: () => "",
+    foldWhen: () => true,
+    body: (w, E) => woSecOverview(w, E) },
   { id: "stack", label: "Stack & BOM", anchor: "wo-stack",
     badge: w => String((w.layupStack || []).length || ""),
+    subAnchors: ["wo-bom"],
     body: (w, E) => woSecStack(w, E) },
+  // An aggregation of the step evidence — the steps show their own strips.
   { id: "photos", label: "Photos", anchor: "wo-photos",
     badge: w => String(woAllPhotos(w).length || ""),
+    foldWhen: () => true,
     body: (w, E) => woSecPhotos(w, E) },
   { id: "quality", label: "Quality", anchor: "wo-quality",
     badge: w => String((w.qualityChecks || []).length || ""),
     warn: w => (w.qualityChecks || []).some(q => q.pass === false) || undisposedIssuesForWO(w.id).length > 0,
     warnWord: w => { const nf = (w.qualityChecks || []).filter(q => q.pass === false).length; return nf ? `${nf} failed` : "open issue"; },
     // Reference-shaped when empty: nothing to read, nothing wrong. Edit mode
-    // keeps it open so "+ check" is on screen.
-    foldWhen: (w, E) => !E && !(w.qualityChecks || []).length && !issuesForWO(w.id).length,
+    // keeps it open (secFolded) so "+ check" is on screen.
+    foldWhen: w => !(w.qualityChecks || []).length && !issuesForWO(w.id).length,
     body: (w, E) => woSecQuality(w, E) },
   { id: "files", label: "Files & docs", anchor: "wo-docs",
     badge: w => String(((w.docs || []).length + (w.files || []).length) || ""),
-    foldWhen: (w, E) => !E && !(w.docs || []).length && !(w.files || []).length,
+    subAnchors: ["wo-files"],
+    foldWhen: () => true,
     body: (w, E) => woSecFiles(w, E) },
   { id: "notes", label: "Notes & log", anchor: "wo-log",
     badge: w => String((w.noteLog || []).length || ""),
+    subAnchors: ["wo-eventlog"],
+    // Folded unless somebody wrote a note since you last looked — then it
+    // opens itself and wears the gold dot (gold = new, amber = trouble).
+    foldWhen: w => !woNotesFresh(w),
+    fresh: w => woNotesFresh(w),
     body: (w, E) => woSecNotes(w, E) },
 ];
+
+/* "New since you last looked", for the Notes & log fold. Session map + a
+   localStorage stamp: the stamp advances the moment the record renders, and
+   the session map is what keeps the dot and the auto-open stable across the
+   constant re-renders while you read — without it, the very stamp that marks
+   the note seen would snap the fold shut mid-scroll. Your own note doesn't
+   count as news. `var` so the node harness reaches it through globalThis. */
+var WO_NOTES_NEW = {};
+function woNotesFresh(w) { return !!WO_NOTES_NEW[w.id]; }
+function woSyncNotesSeen(w) {
+  const log = w.noteLog || [];
+  if (!log.length) return;
+  const last = log[log.length - 1];
+  const ts = String(last.ts || "");
+  if (!ts) return;
+  let seen = {};
+  try { if (typeof localStorage !== "undefined") seen = JSON.parse(localStorage.getItem("feb-wo-notes-seen") || "{}"); } catch (e) { seen = {}; }
+  if ((seen[w.id] || "") < ts) {
+    if (last.email !== myEmail()) WO_NOTES_NEW[w.id] = true;
+    seen[w.id] = ts;
+    try { if (typeof localStorage !== "undefined") localStorage.setItem("feb-wo-notes-seen", JSON.stringify(seen)); } catch (e) { /* storage full/blocked — the dot just shows again next visit */ }
+  }
+}
 
 /* One card per section — the card gap is the zone boundary Simon asked for
    ("distinct zones, quiet inside"). The header replaces the bare h3: same
@@ -942,20 +982,7 @@ const WO_SECTIONS = [
    reference while empty render as a closed <details> whose summary IS the
    header — everything stays one tap away, and woJump() opens it before
    scrolling. The anchor id lives on the header now, not on an h3 inside. */
-function woSectionCard(s, wo, E) {
-  const n = s.badge ? s.badge(wo) : "";
-  const warn = !!(s.warn && s.warn(wo));
-  const word = warn ? (s.warnWord ? s.warnWord(wo) : "attention") : "";
-  const hd = tag => `<${tag} class="wosec-hd${warn ? " warn" : ""}" id="${esc(s.anchor)}">
-      <span>${esc(s.label)}</span>
-      ${n ? `<span class="wosec-n">${esc(n)}</span>` : ""}
-      ${warn ? `<span class="secnav-dot" aria-hidden="true"></span><span class="wosec-w">${esc(word)}</span>` : ""}
-    </${tag}>`;
-  if (s.foldWhen && s.foldWhen(wo, E)) {
-    return `<details class="card wosec wo-fold">${hd("summary")}${s.body(wo, E)}</details>`;
-  }
-  return `<div class="card wosec">${hd("div")}${s.body(wo, E)}</div>`;
-}
+function woSectionCard(s, wo, E) { return sectionCard(s, wo, E); }
 /* Scroll, rather than an <a href="#wo-steps">. The app keeps a deep link in the
    URL hash (syncUrl writes #/WO-SN6-004), and an anchor would overwrite it with
    #wo-steps — so the address bar would stop naming the record you are reading
@@ -965,11 +992,10 @@ function woSectionCard(s, wo, E) {
    scroll-margin-top on #main [id^="wo-"] (index.html) is what keeps the heading
    clear of the topbar and this bar. */
 function woJump(anchor) {
-  // A folded section's header is its <summary>, always visible — but a jump
-  // to it means "show me", so open the fold before scrolling.
-  const el = document.getElementById && document.getElementById(anchor);
-  if (el && el.closest) { const d = el.closest("details"); if (d && !d.open) d.open = true; }
-  secJump(anchor);
+  // A jump to a folded section means "show me": secJumpOpen opens the fold
+  // (and any inner <details> like the BOM) before scrolling.
+  const wo = woById(view.id);
+  if (wo) secJumpOpen(WO_SECTIONS, wo, anchor); else secJump(anchor);
 }
 
 /* The part this run belongs to, for the header chip and for stackDrift().
@@ -991,6 +1017,7 @@ function renderWODetail() {
   const linkedPart = woDetailPart(wo);
   const undisposed = undisposedIssuesForWO(wo.id);
   const fl = woFlags(wo);
+  woSyncNotesSeen(wo); // arms the Notes & log "new" dot + auto-open
   return `
   <section class="mddetail" aria-label="Work order detail" data-lbgroup="workOrders:${esc(wo.id)}">
   <div class="toolbar no-print">
@@ -1045,15 +1072,7 @@ function renderWODetail() {
   ${/* A jump bar, not a switch: every section below is rendered, this scrolls
         to one. Carries the count and the attention dot so you can see there are
         five plies, or that a quality check failed, without going there. */""}
-  <nav class="secnav no-print" aria-label="Jump to a section of this work order">
-    ${WO_SECTIONS.map((s, i) => {
-      const n = s.badge ? s.badge(wo) : "";
-      const warn = s.warn && s.warn(wo);
-      return `<button type="button" class="secnav-btn ${n ? "" : "empty"} ${warn ? "warn" : ""}"
-        id="wosec-${esc(s.id)}" title="${esc(s.label)} (${i + 1})"
-        onclick="woJump('${esc(s.anchor)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
-    }).join("")}
-  </nav>
+  ${secNav("wosec", WO_SECTIONS, wo, "woJump", "Jump to a section of this work order")}
   ${WO_SECTIONS.map(s => woSectionCard(s, wo, E)).join("")}
   ${woThreadCard(wo)}
   </section>`;
@@ -1132,7 +1151,7 @@ function woSecStack(wo, E) {
 
 function woSecSteps(wo, E) {
   return `
-    <div class="tny muted no-print">Shaded steps are blockers: no sign-off, no moving on. A hold waits on the clock instead.</div>
+    <div class="tny muted no-print">The gold node is the step to act on now. An amber-ringed node is a blocker: no sign-off, no moving on. A slate node waits on the clock.</div>
     ${(() => {
       // The first not-done, not-failed step is the one to act on right now —
       // computed from existing state (open/done/failed), not a new status
@@ -1140,7 +1159,21 @@ function woSecSteps(wo, E) {
       // CS-013, and the retro-WO convention, well beyond a styling pass.
       // Retro records are historical, nothing on them is "next".
       const nextIdx = wo.retro ? -1 : (wo.steps || []).findIndex(s => stepState(s) !== "done" && stepState(s) !== "failed");
-      return (wo.steps || []).map((s, i) => {
+      /* Which rows land inside a done-group (a run of ≥4 consecutive signed
+         steps, view mode only). Decided BEFORE rendering: a row inside a
+         group keeps its metas inline instead of its own step-more fold — a
+         fold inside a fold is two taps to the same history, and content
+         behind a hidden summary is exactly what the detailui orphan audit
+         exists to catch. */
+      const groupable = (wo.steps || []).map((s, i) => !view.edit && stepState(s) === "done" && i !== nextIdx);
+      const inGroup = groupable.map(() => false);
+      for (let i = 0; i < groupable.length;) {
+        if (!groupable[i]) { i++; continue; }
+        let j = i; while (j < groupable.length && groupable[j]) j++;
+        if (j - i >= 4) for (let k = i; k < j; k++) inGroup[k] = true;
+        i = j;
+      }
+      const rows = (wo.steps || []).map((s, i) => {
       const blocker = isBlocker(s);
       const state = stepState(s);
       const blocked = blockerOpenBefore(wo, i);
@@ -1155,7 +1188,9 @@ function woSecSteps(wo, E) {
          is a person withholding a signature (amber, in-work-shaped), a hold
          is the clock (slate — the parked color — with a clock glyph). They
          used to share one amber wash. */
-      const rowCls = `step ${blocker ? "is-blocker" : ""} ${held ? "is-held" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${isNow ? "upnext" : ""}`;
+      // "future" drives the dashed spine below NOW — walked vs not walked yet.
+      const future = state !== "done" && state !== "failed" && !isNow && nextIdx >= 0 && i > nextIdx;
+      const rowCls = `step ${blocker ? "is-blocker" : ""} ${held ? "is-held" : ""} ${state === "done" ? "done" : ""} ${state === "failed" ? "failed" : ""} ${isNow ? "upnext" : ""} ${future ? "future" : ""}`;
       const titleLine = `<div class="step-title">${esc(stripCS(s.title))}
         ${isNow ? '<span class="step-badge now">now</span>' : ""}
         ${blocker ? '<span class="step-badge">blocker</span>' : ""}
@@ -1176,15 +1211,19 @@ function woSecSteps(wo, E) {
          their history behind a one-line <details> summary saying what is in
          there — everything stays in the DOM, one tap away. Edit mode keeps
          it all inline: editing is when you need the note input on screen. */
-      const foldDone = state === "done" && !E && hasExtras;
+      const foldDone = state === "done" && !E && hasExtras && !inGroup[i];
       const doneSummary = [
         (s.photoRefs || []).length ? `${(s.photoRefs || []).length} photo${(s.photoRefs || []).length > 1 ? "s" : ""}` : "",
         String(s.notes || "").trim() ? "note" : "",
         startsHold(s) && s.cure ? "cure record" : "",
         (s.trainingOverride || s.evidenceOverride || (hold && hold.overridden)) ? "override" : "",
       ].filter(Boolean).join(" · ");
-      return `<div class="${rowCls}">
-        <div class="num">${s.seq}</div>
+      // The node states the row: ✓ walked, ✗ failed, ◷ parked on the clock,
+      // otherwise the step number. The seq stays in the title attribute so
+      // "which step is this" is never lost.
+      const glyph = state === "done" ? "✓" : state === "failed" ? "✗" : held ? "◷" : s.seq;
+      const html = `<div class="${rowCls}">
+        <div class="num" title="step ${s.seq}">${glyph}</div>
         <div class="body">
           ${titleLine}
           ${/* Said on the row, not only in the modal you get after pressing a
@@ -1230,7 +1269,24 @@ function woSecSteps(wo, E) {
                     `<button ${isNow ? 'class="primary"' : ""} onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
         </div>
       </div>`;
-      }).join("");
+      return { html, grouped: inGroup[i], photos: (s.photoRefs || []).length, seq: s.seq };
+      });
+      /* A signed run reads as one line, not ten: four or more consecutive done
+         rows compress into a <details> group whose summary carries the count
+         and the photo tally. The rows inside are the full markup — nothing
+         leaves the DOM, one tap opens the whole run. Edit mode never groups
+         (inGroup is all-false then): editing is when the note inputs must be
+         on screen. The spine stays solid through the group. */
+      const out = [];
+      for (let i = 0; i < rows.length;) {
+        if (!rows[i].grouped) { out.push(rows[i].html); i++; continue; }
+        let j = i; while (j < rows.length && rows[j].grouped) j++;
+        const run = rows.slice(i, j);
+        const ph = run.reduce((a, r) => a + r.photos, 0);
+        out.push(`<details class="step-group"><summary class="step-disclose"><span class="num done">✓</span>Steps ${run[0].seq}–${run[run.length - 1].seq} · ${run.length} done${ph ? ` · ${ph} photo${ph > 1 ? "s" : ""}` : ""}</summary>${run.map(r => r.html).join("")}</details>`);
+        i = j;
+      }
+      return `<div class="steps">${out.join("")}</div>`;
     })()}`;
 }
 

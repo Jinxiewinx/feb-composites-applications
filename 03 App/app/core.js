@@ -395,6 +395,77 @@ function secJump(anchor) {
   if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
+/* ---- section cards, shared ----
+   Work Orders grew the section-descriptor table (WO_SECTIONS) and Parts now
+   uses the same machinery (PART_SECTIONS). A descriptor is
+   { id, label, anchor, badge(rec), warn(rec), warnWord(rec), foldWhen(rec,E),
+     fresh(rec), subAnchors: [], body(rec,E) } and the jump bar and the cards
+   render from the SAME array, so they cannot disagree.
+
+   Folding is a class, not a <details>: a closed details skips painting its
+   content, so folded sections would vanish from a browser print (Parts has no
+   print.js traveler — it prints through the @media print fallback, which
+   force-opens .wosec-body). The body always renders; .folded only hides it.
+
+   Fold state is sticky per session, the tickets-rail pattern: view.secFold is
+   { id: <record id>, m: { <section id>: true=closed / false=open } },
+   consulted only while its id matches the open record — switching records
+   falls back to each section's default with no plumbing anywhere else. */
+function secFolded(s, rec, E) {
+  if (E) return false; // editing is when every input needs to be on screen
+  const st = view.secFold;
+  if (st && st.id === rec.id && s.id in st.m) return !!st.m[s.id];
+  if (s.warn && s.warn(rec)) return false; // a warned section never hides
+  return !!(s.foldWhen && s.foldWhen(rec, E));
+}
+function toggleSecFold(recId, secId, fold) {
+  const cur = view.secFold && view.secFold.id === recId ? { ...view.secFold.m } : {};
+  cur[secId] = !!fold;
+  view = { ...view, secFold: { id: recId, m: cur } };
+  render();
+}
+function sectionCard(s, rec, E) {
+  const n = s.badge ? s.badge(rec) : "";
+  const warn = !!(s.warn && s.warn(rec));
+  const word = warn ? (s.warnWord ? s.warnWord(rec) : "attention") : "";
+  const fresh = !warn && !!(s.fresh && s.fresh(rec));
+  const folded = secFolded(s, rec, E);
+  return `<div class="card wosec${folded ? " folded" : ""}">
+    <button type="button" class="wosec-hd${warn ? " warn" : ""}" id="${esc(s.anchor)}"
+      aria-expanded="${folded ? "false" : "true"}"
+      onclick="toggleSecFold('${esc(rec.id)}','${esc(s.id)}',${folded ? 0 : 1})">
+      <span>${esc(s.label)}</span>
+      ${n ? `<span class="wosec-n">${esc(n)}</span>` : ""}
+      ${warn ? `<span class="secnav-dot" aria-hidden="true"></span><span class="wosec-w">${esc(word)}</span>` : ""}
+      ${fresh ? `<span class="secnav-dot gold" aria-hidden="true"></span><span class="wosec-new">new</span>` : ""}
+      ${folded && s.foldHint ? s.foldHint(rec) : ""}
+    </button>
+    <div class="wosec-body">${s.body(rec, E)}</div>
+  </div>`;
+}
+function secNav(prefix, sections, rec, jumpFn, label) {
+  return `<nav class="secnav no-print" aria-label="${esc(label || "Jump to a section")}">
+    ${sections.map((s, i) => {
+      const n = s.badge ? s.badge(rec) : "";
+      const warn = s.warn && s.warn(rec);
+      return `<button type="button" class="secnav-btn ${n ? "" : "empty"} ${warn ? "warn" : ""}"
+        id="${esc(prefix)}-${esc(s.id)}" title="${esc(s.label)} (${i + 1})"
+        onclick="${jumpFn}('${esc(s.anchor)}')">${esc(s.label)}${n ? `<span class="secnav-n">${esc(n)}</span>` : ""}${warn ? '<span class="secnav-dot" aria-hidden="true"></span>' : ""}</button>`;
+    }).join("")}
+  </nav>`;
+}
+/* A jump into a folded section means "show me": resolve the anchor to its
+   section (the anchor itself, or a subAnchor like wo-bom that lives inside
+   one), open the fold — toggleSecFold renders synchronously, so the scroll
+   target is visible — then open any inner <details> and scroll. */
+function secJumpOpen(sections, rec, anchor) {
+  const s = sections.find(x => x.anchor === anchor || (x.subAnchors || []).includes(anchor));
+  if (s && secFolded(s, rec, view.edit)) toggleSecFold(rec.id, s.id, 0);
+  const el = document.getElementById && document.getElementById(anchor);
+  if (el && el.closest) { const d = el.closest("details"); if (d && !d.open) d.open = true; }
+  secJump(anchor);
+}
+
 /* The ticket chain. A sub-ticket's genealogy is Ticket › Sub-ticket, with the
    parent node as the button to the top ticket — the detail page used to have
    NO route to the parent at all; the back button only worked if you had
