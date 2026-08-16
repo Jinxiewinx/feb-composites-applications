@@ -36,8 +36,10 @@ __pycache__/
 # upload bundle, and machine-local cache (the staged package, react, verdicts).
 # The durable inputs under .design-sync/ (config.json, NOTES.md,
 # conventions.md, stage-pkg.mjs) ARE tracked.
-.ds-sync/
-ds-bundle/
+# bare (no slash) so a worktree's SYMLINK to them is ignored too,
+# not only the real directories in the main checkout:
+.ds-sync
+ds-bundle
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
