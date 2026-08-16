@@ -507,6 +507,13 @@ function blockerOpenBefore(wo, idx) {
 function issuesForWO(woId) { return (DB.projects || []).filter(p => isIssue(p) && p.workOrderId === woId); }
 // Cancelled issues need no disposition — they turned out not to be real.
 function undisposedIssuesForWO(woId) { return issuesForWO(woId).filter(p => projStatus(p) !== "Cancelled" && !p.resolutionMethod); }
+/* Issues filed from a step carry stepRef {seq, index, title} — seq is the
+   match key (it survives step-array edits better than the index, and the
+   title snapshot survives everything). NOT parentId: a sub-ticket can never
+   be an issue, and stepRef is a pointer, not a parentage. */
+function stepIssues(wo, s) {
+  return issuesForWO(wo.id).filter(t => t.stepRef && t.stepRef.seq === s.seq);
+}
 /* ---------- what the rail says about a run ----------
    Three pure functions, no DOM, so the rail, the overview pane and the tests
    all read the same answer. They sit here beside stepState() rather than down
@@ -1118,7 +1125,7 @@ function renderWODetail() {
       })()}
     </div>
     <div class="muted tny">Rev ${esc(wo.revision)} · ${esc(wo.processType || "")}${linkedPart ? " · part " + chip("parts", linkedPart.id, linkedPart.id) : ""}${wo.updatedAt ? ` · last saved ${fmtWhen(wo.updatedAt)} by ${esc(wo.updatedBy || "?")}` : ""}</div>
-    ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close.</div></div>` : ""}
+    ${undisposed.length ? `<div class="gate blocked"><span class="gi">✕</span><div><b>Can't complete this work order</b> — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => chip("projects", i.id, i.id)).join(", ")}) isn't disposed yet. You don't have to resolve ${undisposed.length > 1 ? "them" : "it"} right now, but ${undisposed.length > 1 ? "they need" : "it needs"} a resolution method before this WO can close. <button class="link no-print" onclick="openWOCloseoutModal('${esc(wo.id)}')">Dispose ${undisposed.length > 1 ? "them" : "it"} now</button></div></div>` : ""}
     ${fl.blocked ? `<p class="gate blocked"><span class="gi">✕</span><span>Blocked by an unsigned blocker: <b>${esc(stripCS(fl.blocked.title))}</b>. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}
     ${fl.curing ? `<p class="gate"><span class="gi">⚠</span><span>Curing until <b>${esc(fl.curing.readyAt)}</b>${fl.curing.resin ? ` · ${esc(fl.curing.resin.label)}` : ""}. <button class="link no-print" onclick="woJump('wo-steps')">Go to steps</button></span></p>` : ""}
     ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
@@ -1258,9 +1265,12 @@ function woSecSteps(wo, E) {
           ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
           ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
+          ${stepIssues(wo, s).map(t =>
+            `<div class="meta">${t.resolutionMethod ? '<span class="ok">✓</span>' : '<span class="warn">⚑</span>'} ${chip("projects", t.id, t.title || t.id)}${t.resolutionMethod ? "" : ' <span class="warn tny">open</span>'}</div>`).join("")}
           ${stepPhotoStrip(wo, i, s)}`;
+      const issueCount = stepIssues(wo, s).length;
       const hasExtras = !!(s.trainingOverride || s.evidenceOverride || (hold && hold.overridden) ||
-        (startsHold(s) && s.cure) || String(s.notes || "").trim() || (s.photoRefs || []).length);
+        (startsHold(s) && s.cure) || String(s.notes || "").trim() || (s.photoRefs || []).length || issueCount);
       /* A signed run of ten steps used to dominate the page. Done rows fold
          their history behind a one-line <details> summary saying what is in
          there — everything stays in the DOM, one tap away. Edit mode keeps
@@ -1271,6 +1281,7 @@ function woSecSteps(wo, E) {
         String(s.notes || "").trim() ? "note" : "",
         startsHold(s) && s.cure ? "cure record" : "",
         (s.trainingOverride || s.evidenceOverride || (hold && hold.overridden)) ? "override" : "",
+        issueCount ? `${issueCount} issue${issueCount > 1 ? "s" : ""}` : "",
       ].filter(Boolean).join(" · ");
       // The node states the row: ✓ walked, ✗ failed, ◷ parked on the clock,
       // otherwise the step number. The seq stays in the title attribute so
@@ -1415,6 +1426,9 @@ function stepPhotoStrip(wo, i, s) {
     }).join("")}
     ${refs.length > 5 ? `<button class="sm no-print" onclick="woJump('wo-photos')">+${refs.length - 5} more</button>` : ""}
     <button class="ib sm no-print" title="Add photos to this step" aria-label="Add photos to step ${s.seq}" onclick="addStepPhotos('${esc(wo.id)}',${i})">${icon("image", 14)}</button>
+    ${/* The quick-capture flag, same quiet weight as the camera: bench
+          utility, never competing with the buyoff column's one primary. */""}
+    <button class="ib sm no-print" title="Report an issue on this step" aria-label="Report an issue on step ${s.seq}" onclick="openStepIssue('${esc(wo.id)}',${i})">⚑</button>
   </div>`;
 }
 
@@ -1515,11 +1529,131 @@ function updWO(key, val) {
   if (key === "status" && val === "Complete") {
     const undisposed = undisposedIssuesForWO(w.id);
     if (undisposed.length) {
+      // Toast first (the harness stub DOM meets the modal second), then the
+      // closeout modal instead of a dead end: the tickets get disposed HERE.
       toast(`Can't complete this work order — ${undisposed.length} linked issue${undisposed.length > 1 ? "s" : ""} (${undisposed.map(i => i.id).join(", ")}) ${undisposed.length > 1 ? "aren't" : "isn't"} disposed yet.`, "error");
+      openWOCloseoutModal(w.id);
       render(); return;
     }
   }
   w[key] = val; saveWO(w, key);
+}
+
+/* ---------- the closeout modal ----------
+   Setting a WO Complete over open issues used to be a refusal toast and a
+   tour: open each ticket, enter Edit, set the disposition, save, set status,
+   come back. Now the refusal opens this modal — one row per undisposed
+   issue, disposition + narrative inline, resolved through the SAME
+   resolveIssue() choke point the ticket page uses (statusGate validates,
+   Slack announces once per issue). Every per-row Resolve commits
+   immediately, so Cancel loses nothing and a browser crash mid-modal loses
+   nothing; the WO completes only when undisposedIssuesForWO is empty, the
+   same single gate as always. */
+var CLOSEOUT = null;
+// Harvest half-typed narratives BEFORE any re-render: with three rows on
+// screen, resolving one must not wipe the text in the other two.
+function coDrafts() {
+  const drafts = {};
+  for (const id of (CLOSEOUT && CLOSEOUT.openIds) || []) {
+    const m = document.getElementById("co-m-" + id);
+    const t = document.getElementById("co-w-" + id);
+    if (m || t) drafts[id] = { method: m ? m.value : undefined, what: t ? t.value : undefined };
+  }
+  return drafts;
+}
+function openWOCloseoutModal(woId, drafts, gates) {
+  const w = woById(woId); if (!w) return;
+  if (!CLOSEOUT || CLOSEOUT.woId !== woId) CLOSEOUT = { woId, resolved: [] };
+  const open = undisposedIssuesForWO(woId);
+  CLOSEOUT.openIds = open.map(p => p.id);
+  drafts = drafts || {}; gates = gates || {};
+  const doneRows = CLOSEOUT.resolved.map(id => {
+    const p = projById(id) || {};
+    return `<div class="corow codone"><span class="ok">✓</span> ${esc(id)} ${esc(p.title || "")} — resolved: ${esc(p.resolutionMethod || "?")}</div>`;
+  }).join("");
+  const rows = open.map(p => {
+    const d = drafts[p.id] || {};
+    const method = d.method !== undefined ? d.method : (p.resolutionMethod || "");
+    const what = d.what !== undefined ? d.what : (p.whatHappened || "");
+    const stepLine = p.stepRef ? ` · on step ${esc(String(p.stepRef.seq))} · ${esc(p.stepRef.title || "")}` : "";
+    const nFiles = (p.files || []).length;
+    return `<div class="corow">
+      <div>${chip("projects", p.id, p.id)} <b>${esc(p.title || "")}</b>
+        <span class="muted tny">${p.updatedAt ? "updated " + esc(fmtWhen(p.updatedAt)) : ""}${stepLine}${nFiles ? ` · ${nFiles} file${nFiles > 1 ? "s" : ""}` : ""}</span></div>
+      <div class="field"><label>Disposition</label>
+        <select id="co-m-${esc(p.id)}">
+          <option value="" ${method ? "" : "selected"}>— not yet disposed —</option>
+          ${RESOLUTION_METHODS.map(m => `<option ${method === m ? "selected" : ""}>${m}</option>`).join("")}
+        </select></div>
+      <div class="field"><label>What happened</label>
+        <textarea id="co-w-${esc(p.id)}" placeholder="Root cause — required before this can close">${esc(what)}</textarea></div>
+      ${gates[p.id] ? `<div class="gate"><span class="gi">⚠</span><div>${esc(gates[p.id])}</div></div>` : ""}
+      <div><button onclick="coResolve('${esc(woId)}','${esc(p.id)}')">Resolve</button>
+        <button class="link" onclick="coCancelTicket('${esc(woId)}','${esc(p.id)}')">Cancel ticket (false alarm)</button></div>
+    </div>`;
+  }).join("");
+  openModal(`
+    <h2>Close out ${esc(woId)} — ${open.length} open issue${open.length > 1 ? "s" : ""} need${open.length > 1 ? "" : "s"} a disposition</h2>
+    <p class="muted tny">Each issue needs a resolution method and a documented "what happened" before this work order can complete. Every Resolve saves immediately.</p>
+    ${doneRows}${rows}
+    <div class="foot">
+      <button onclick="CLOSEOUT=null;closeModal();render()">Not now</button>
+      <button class="primary" onclick="coResolveAll('${esc(woId)}')">Resolve all &amp; complete work order</button>
+    </div>
+  `);
+}
+function coResolve(woId, pid) {
+  const drafts = coDrafts();
+  const d = drafts[pid] || {};
+  const r = resolveIssue(pid, d.method || "", d.what);
+  if (r) { openWOCloseoutModal(woId, drafts, { [pid]: r }); return; }
+  CLOSEOUT = CLOSEOUT || { woId, resolved: [] };
+  CLOSEOUT.resolved.push(pid);
+  delete drafts[pid];
+  if (undisposedIssuesForWO(woId).length) openWOCloseoutModal(woId, drafts);
+  else coComplete(woId);
+}
+// Top to bottom, stopping at the first gate failure with that row's words on
+// it — never a second gate implementation, just resolveIssue in a loop.
+function coResolveAll(woId) {
+  const drafts = coDrafts();
+  for (const pid of ((CLOSEOUT && CLOSEOUT.openIds) || []).slice()) {
+    const d = drafts[pid] || {};
+    const r = resolveIssue(pid, d.method || "", d.what);
+    if (r) { openWOCloseoutModal(woId, drafts, { [pid]: r }); return; }
+    CLOSEOUT.resolved.push(pid);
+    delete drafts[pid];
+  }
+  coComplete(woId);
+}
+/* Cancelled is the "not a real issue" escape hatch, deliberately NOT an
+   option in the disposition select (statusGate exempts it — it is not a
+   disposition). One unconfirmed click would retire a nonconformance record
+   from inside a batch mood, so it confirms, the delProject register. */
+function coCancelTicket(woId, pid) {
+  const drafts = coDrafts();
+  confirmModal(`Cancel ${pid} as not a real issue? It stops holding ${woId} and needs no disposition.`, () => {
+    setTicketStatus(pid, "Cancelled");
+    if (undisposedIssuesForWO(woId).length) openWOCloseoutModal(woId, drafts);
+    else coComplete(woId);
+  });
+}
+function coComplete(woId) {
+  const w = woById(woId);
+  // Paranoia in the right direction: completion re-checks the ONE gate
+  // rather than trusting this modal's bookkeeping.
+  if (!w || undisposedIssuesForWO(woId).length) { if (w) openWOCloseoutModal(woId); return; }
+  const resolved = (CLOSEOUT && CLOSEOUT.resolved || []).slice();
+  CLOSEOUT = null;
+  w.status = "Complete"; saveWO(w, "status");
+  render();
+  openModal(`
+    <h2>✓ ${esc(woId)} complete</h2>
+    <p>${resolved.length
+      ? `${resolved.length} issue${resolved.length > 1 ? "s" : ""} resolved: ${resolved.map(id => { const p = projById(id) || {}; return `${esc(id)} (${esc(p.resolutionMethod || "cancelled")})`; }).join(", ")}. Slack was told about each.`
+      : "No open issues remained."}</p>
+    <div class="foot"><button class="primary" onclick="closeModal()">Close</button></div>
+  `);
 }
 // Reuses the Tickets "new ticket" modal wholesale, pre-selected to Issue and
 // pre-filled with this work order — same modal, same fields, no duplication.
@@ -1528,6 +1662,79 @@ function createIssueFromWO(woId) {
   document.getElementById("np-kind").value = "issue";
   ticketKindChanged();
   document.getElementById("np-wo").value = woId;
+}
+
+/* ---------- quick capture from a step ----------
+   Purpose-built, NOT the tickets modal: that form fronts five fields nobody
+   reporting a defect cares about, its copy is test-pinned, and it navigates
+   away on submit. Here the WO and step are already known, the title starts
+   with the step name (cursor at the end, you append the defect), photos go in
+   AT CREATION, everything else defaults invisibly — and you stay on the WO,
+   because the bench user is mid-run. */
+function openStepIssue(woId, i) {
+  const w = woById(woId); if (!w) return;
+  const s = (w.steps || [])[i]; if (!s) return;
+  openModal(`
+    <h2>Report an issue — ${esc(w.id)}, step ${s.seq} · ${esc(stripCS(s.title))}</h2>
+    <div class="field"><label for="si-title">Title</label><input id="si-title" value="${esc(stripCS(s.title))}: "></div>
+    <div class="field"><label for="si-what">What happened</label>
+      <textarea id="si-what" placeholder="What went wrong, and why. (needed before this can close)"></textarea></div>
+    <div class="row2">
+      ${/* No capture attribute: on iOS it would force the camera and lock out
+            the photo library, and the bag photo you want is usually the one
+            you already took. Same reasoning as the step-photo picker. */""}
+      <div class="field"><label for="si-photos">Photos of the defect</label><input id="si-photos" type="file" accept="image/*" multiple></div>
+      <div class="field"><label for="si-priority">Priority</label><select id="si-priority">${PRIORITY.map(pr => `<option ${pr === "Medium" ? "selected" : ""}>${pr}</option>`).join("")}</select></div>
+    </div>
+    <p class="muted tny">Assigned to you, linked to ${esc(w.id)} — it lands on the Tickets board and holds this work order's completion until it's disposed.</p>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitStepIssue('${esc(woId)}',${i})">File issue</button></div>
+  `);
+  // Caret at the END of the prefill, so typing appends the defect.
+  setTimeout(() => {
+    const el = document.getElementById("si-title");
+    if (el && el.focus) { el.focus(); if (el.setSelectionRange) el.setSelectionRange(el.value.length, el.value.length); }
+  }, 0);
+}
+async function submitStepIssue(woId, i) {
+  const w = woById(woId); if (!w) return;
+  const s = (w.steps || [])[i] || {};
+  // Read the WHOLE form before any await: allocId's offline fallback opens a
+  // confirm modal that replaces this markup (the submitNewProject footgun).
+  const title = ((document.getElementById("si-title") || {}).value || "").trim();
+  const what = ((document.getElementById("si-what") || {}).value || "");
+  const priority = ((document.getElementById("si-priority") || {}).value || "Medium");
+  const filesEl = document.getElementById("si-photos");
+  const files = filesEl && filesEl.files ? Array.from(filesEl.files) : [];
+  if (!title || title === stripCS(s.title) + ":") { toast("Describe the defect after the step name.", "error"); return; }
+  const id = await allocId("projects");
+  if (!id) return;
+  const p = {
+    id, title, kind: "issue",
+    status: "To Do", priority, dueDate: "", subteam: w.subteam || "",
+    description: "", assignees: [myEmail()], watchers: [myEmail()],
+    relatedParts: [], relatedTickets: [], relatedWorkOrders: [],
+    files: [], comments: [],
+    createdBy: myEmail(), retro: false,
+    workOrderId: w.id, resolutionMethod: "", whatHappened: what,
+    stepRef: { seq: s.seq, index: i, title: stripCS(s.title) },
+  };
+  DB.projects.push(p); saveProj(p);
+  // Photos upload after the doc exists; a failed photo is its own toast,
+  // never a lost issue. Same entry shape as addRecordFiles.
+  let uploaded = 0;
+  for (const f of files) {
+    try {
+      const up = await fb.upload(`projects/${id}/${Date.now()}-${f.name}`, f);
+      p.files = (p.files || []).concat([{ id: "F" + Date.now() + Math.random().toString(36).slice(2, 5),
+        name: up.name, url: up.url, type: up.type, size: up.size, by: myEmail(), ts: new Date().toISOString(), path: up.path }]);
+      uploaded++;
+    } catch (e) { toast(`Photo ${f.name} didn't upload: ` + e.message, "error"); }
+  }
+  if (uploaded) saveProj(p, "files");
+  postToSlack(slackIssueCreatedMsg(p));
+  closeModal();
+  toast(`${id} filed on step ${s.seq}${uploaded ? ` with ${uploaded} photo${uploaded > 1 ? "s" : ""}` : ""}. It's on the Tickets board.`);
+  render(); // stay on the WO — the bench user is mid-run
 }
 function mf(wo, label, key) {
   const v = (wo.mold || {})[key] ?? "";

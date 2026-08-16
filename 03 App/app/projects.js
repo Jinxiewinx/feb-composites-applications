@@ -639,6 +639,71 @@ function setTicketStatus(id, val) {
   p.status = val; saveProj(p, "status"); announceIfResolved(p, prevStatus); render();
 }
 
+/* ---- resolving an issue, from any surface ----
+   Three surfaces close issues now — the resolve band on the ticket, the WO
+   closeout modal, and the old statusdrop — and they all funnel through
+   statusGate and announceIfResolved exactly once, from here. Never a second
+   gate implementation. */
+// Disposition without closing is a real state: it is what unlocks
+// undisposedIssuesForWO and lets the WO complete while the ticket stays open.
+function setIssueDisposition(id, val) {
+  const p = projById(id);
+  if (!p || !isIssue(p)) return;
+  p.resolutionMethod = val || "";
+  saveProj(p, "resolutionMethod");
+  render();
+}
+/* Stage the disposition and (optionally) the narrative, then close through the
+   gate. `narrative` undefined means "leave whatHappened alone" — the resolve
+   band's richField already saved it in place, and clobbering it would lose
+   rich content. When a plain narrative IS written (the closeout modal's
+   textarea), the Html sibling is cleared so a stale rich copy can't disagree
+   with the plain truth (the notes/notesHtml rule from workorders.js).
+   Returns the gate's string on refusal — callers render it verbatim — or
+   null on success, with the single Slack announce fired via the choke point. */
+function resolveIssue(id, method, narrative) {
+  const p = projById(id);
+  if (!p || !isIssue(p)) return "Not an issue.";
+  if (method !== undefined && (method || "") !== (p.resolutionMethod || "")) {
+    p.resolutionMethod = method || "";
+    saveProj(p, "resolutionMethod");
+  }
+  if (narrative !== undefined) {
+    const text = String(narrative).trim();
+    if (text && text !== (p.whatHappened || "")) {
+      p.whatHappened = text;
+      p.whatHappenedHtml = "";
+      saveProj(p, "whatHappened");
+      saveProj(p, "whatHappenedHtml");
+    }
+  }
+  const blocked = statusGate(p, "Done");
+  if (blocked) { render(); return blocked; }
+  const prevStatus = projStatus(p);
+  p.status = "Done"; saveProj(p, "status");
+  announceIfResolved(p, prevStatus);
+  render();
+  return null;
+}
+/* Reopen CLEARS the disposition (Simon's pick): reopening means the fix was
+   wrong, so the issue must gate its work order again — undisposedIssuesForWO
+   keys on resolutionMethod, and a reopened issue that kept one would let a WO
+   complete over a problem somebody just said is not fixed. The old method
+   survives as a comment, so history is a read not a memory. */
+function reopenIssue(id) {
+  const p = projById(id);
+  if (!p || !isIssue(p) || projStatus(p) !== "Done") return;
+  const old = p.resolutionMethod;
+  p.status = "In Progress"; saveProj(p, "status");
+  p.resolutionMethod = ""; saveProj(p, "resolutionMethod");
+  const note = `Reopened by ${signerName()}${old ? ` — the “${old}” disposition is withdrawn` : ""}.`;
+  const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), text: note, html: esc(note) };
+  p.comments = (p.comments || []).concat([c]);           // optimistic
+  saveField("projects", p, "comments", arr => (arr || []).concat([c]));
+  toast(`${p.id} reopened — it gates ${p.workOrderId || "its work order"} again.`);
+  render();
+}
+
 /* The back button, and what it should say. It used to be "All tickets" and to
    always mean the board, so following a link from one ticket to another and
    pressing it threw away where you were. Now it goes back one step and NAMES
@@ -814,9 +879,33 @@ function renderProjDetail() {
       empty: "What went wrong, and why. Photos of the defect belong here.",
       upload: name => `projects/${p.id}/${Date.now()}-${name}`,
     })}
-    <h3>Resolution method</h3>
-    <div>${p.resolutionMethod ? esc(p.resolutionMethod) : '<span class="muted">— not yet disposed —</span>'}</div>
-    ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}
+    ${(() => {
+      /* The resolve band: the whole close-out on one screen. The disposition
+         select saves the moment it changes (disposed-but-open is a real state
+         — it is what lets the WO complete), the root cause is the richField
+         right above, and the one button closes through resolveIssue — the
+         same statusGate + single Slack announce as every other path. The
+         band absorbs the old amber banner: failing shows the gate's exact
+         words, passing shows the button. It replaces the Edit-form round
+         trips: disposition used to be editable ONLY in the edit form while
+         the narrative lived ONLY here, so closing one issue was two passes
+         through Edit plus the status dropdown. */
+      const st = projStatus(p);
+      if (st === "Done") return `<h3>Resolution method</h3>
+        <div class="resolveband done"><span class="ok">✅ Resolved — ${esc(p.resolutionMethod || "?")}</span>
+        <button class="link no-print" onclick="reopenIssue('${p.id}')">Reopen</button></div>`;
+      if (st === "Cancelled") return `<h3>Resolution method</h3>
+        <div class="muted tny">Cancelled — turned out not to be a real issue, so it needs no disposition.</div>`;
+      return `<h3>Resolve</h3>
+      <div class="resolveband no-print">
+        <select aria-label="Resolution method" onchange="setIssueDisposition('${p.id}',this.value)">
+          <option value="" ${p.resolutionMethod ? "" : "selected"}>— not yet disposed —</option>
+          ${RESOLUTION_METHODS.map(m => `<option ${p.resolutionMethod === m ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+        ${gateMsg ? "" : `<button class="primary" onclick="const r=resolveIssue('${p.id}');if(r)toast(r,'error')">Resolve issue</button>`}
+      </div>
+      ${gateMsg ? `<div class="gate"><span class="gi">⚠</span><div><b>Can't close yet</b> — ${gateMsg}</div></div>` : ""}`;
+    })()}
     ` : ""}
     <h3 id="tk-desc">Description</h3>
     ${richField("projects", p.id, "description", {

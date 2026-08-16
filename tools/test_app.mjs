@@ -5306,5 +5306,115 @@ await t("four or more consecutive signed steps compress into one counted group",
   view = { ...view, edit: false };
 });
 
+console.log("issue lifecycle:");
+await t("a step files an issue in one modal: stepRef, photos at creation, stays on the WO", async () => {
+  signInAsLead();
+  DB.workOrders = [{ id: "WO-QI-1", partName: "QI", subteam: "AERO", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [
+    { seq: 1, title: "Infuse", status: "open", buyoff: { name: "", date: "" } }] }];
+  DB.projects = [];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-QI-1", edit: false, secFold: undefined };
+  render();
+  assert(main.innerHTML.includes("openStepIssue('WO-QI-1',0)"), "the flag affordance sits on the step, beside the camera");
+  openStepIssue("WO-QI-1", 0);
+  assert(document.getElementById("modal").innerHTML.includes('value="Infuse: "'), "title prefilled with the step name");
+  document.getElementById("si-title").value = "Infuse: bridging in radius";
+  document.getElementById("si-what").value = "resin starved the corner";
+  document.getElementById("si-priority").value = "High";
+  document.getElementById("si-photos").files = [{ name: "bag.jpg", type: "image/jpeg" }];
+  calls.length = 0;
+  await submitStepIssue("WO-QI-1", 0);
+  const p = DB.projects[0];
+  assert(p && p.kind === "issue" && p.workOrderId === "WO-QI-1", "an issue, hard-linked to the run");
+  assert(p.stepRef && p.stepRef.seq === 1 && p.stepRef.title === "Infuse" && p.stepRef.index === 0, JSON.stringify(p.stepRef));
+  assert(!p.parentId, "stepRef is a pointer, never a parentage — sub-tickets can't be issues");
+  assert(p.assignees.length === 1 && p.status === "To Do" && p.priority === "High" && p.resolutionMethod === "", "the rest defaulted invisibly");
+  assert((p.files || []).length === 1 && calls.some(c => c[0] === "upload" && String(c[1]).startsWith("projects/" + p.id + "/")),
+    "the photo landed AT CREATION, in the issue's own storage tree");
+  assert(view.tab === "workorders" && view.id === "WO-QI-1", "you stay on the WO — the bench user is mid-run");
+  render();
+  assert(main.innerHTML.includes(p.id) && main.innerHTML.includes("⚑"), "the step wears the open-issue chip");
+  document.getElementById("si-photos").files = [];
+});
+await t("resolveIssue is the one write path: gate words back on refusal, reopen clears the disposition", () => {
+  DB.projects = [{ id: "TKT-RS-1", title: "void", kind: "issue", status: "In Progress", workOrderId: "WO-QI-1", assignees: [], resolutionMethod: "", whatHappened: "", comments: [] }];
+  let r = resolveIssue("TKT-RS-1", "", "");
+  assert(r && /resolution method/i.test(r), "no method: the gate's words come back verbatim: " + r);
+  r = resolveIssue("TKT-RS-1", "Rework", "");
+  assert(r && /what happened/i.test(r), "no narrative: still refused — but the method stayed staged");
+  const p = projById("TKT-RS-1");
+  assert(p.resolutionMethod === "Rework" && projStatus(p) !== "Done", "disposed-but-open is a real state");
+  assert(undisposedIssuesForWO("WO-QI-1").filter(x => x.id === "TKT-RS-1").length === 0, "and it already stops gating the WO");
+  r = resolveIssue("TKT-RS-1", "Rework", "re-cut the chamfer and re-bonded");
+  assert(r === null && projStatus(p) === "Done", "closes once both halves exist");
+  assert(p.whatHappened === "re-cut the chamfer and re-bonded" && p.whatHappenedHtml === "",
+    "a plain narrative write clears the rich sibling so the two can never disagree");
+  reopenIssue("TKT-RS-1");
+  assert(projStatus(p) === "In Progress" && p.resolutionMethod === "", "reopen CLEARS the disposition");
+  assert(undisposedIssuesForWO("WO-QI-1").some(x => x.id === "TKT-RS-1"), "so the issue gates its WO again");
+  assert((p.comments || []).some(c => /Reopened/.test(c.text || "") && /Rework/.test(c.text || "")), "the withdrawn method survives as a comment");
+});
+await t("the resolve band closes an issue from the read view — no Edit round-trips", () => {
+  DB.projects = [{ id: "TKT-RB-1", title: "band", kind: "issue", status: "In Progress", workOrderId: "WO-QI-1", assignees: [], resolutionMethod: "", whatHappened: "documented root cause", files: [], comments: [] }];
+  view = { ...view, tab: "projects", mode: "detail", id: "TKT-RB-1", edit: false };
+  render();
+  assert(main.innerHTML.includes("setIssueDisposition('TKT-RB-1'"), "the disposition select saves in place, no edit mode");
+  assert(main.innerHTML.includes("Can't close yet"), "the gate's words render in the band while it fails");
+  setIssueDisposition("TKT-RB-1", "Rework");
+  assert(main.innerHTML.includes("resolveIssue('TKT-RB-1')") && !main.innerHTML.includes("Can't close yet"),
+    "gate passing swaps the banner for the one Resolve button");
+  const r = resolveIssue("TKT-RB-1");
+  assert(r === null && projStatus(projById("TKT-RB-1")) === "Done", "one click closes it");
+  assert(main.innerHTML.includes("Resolved — Rework") && main.innerHTML.includes("reopenIssue('TKT-RB-1')"),
+    "done state reads the method and offers the quiet Reopen");
+});
+await t("the WO closeout modal disposes the tickets right there; drafts survive; completion re-checks the one gate", () => {
+  DB.workOrders = [{ id: "WO-CO-1", partName: "CO", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [
+    { seq: 1, title: "Do", status: "done", buyoff: { name: "N", email: "n@b.edu", date: "2026-08-15" } }] }];
+  DB.projects = [
+    { id: "TKT-CO-1", title: "void one", kind: "issue", status: "To Do", workOrderId: "WO-CO-1", assignees: [], resolutionMethod: "", whatHappened: "", stepRef: { seq: 1, index: 0, title: "Do" }, files: [], comments: [] },
+    { id: "TKT-CO-2", title: "void two", kind: "issue", status: "To Do", workOrderId: "WO-CO-1", assignees: [], resolutionMethod: "", whatHappened: "", files: [], comments: [] },
+  ];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-CO-1", edit: false, secFold: undefined };
+  CLOSEOUT = null; lastToast = "";
+  ["co-m-TKT-CO-1", "co-w-TKT-CO-1", "co-m-TKT-CO-2", "co-w-TKT-CO-2"].forEach(id => { document.getElementById(id).value = ""; });
+  render();
+  updWO("status", "Complete");
+  assert(lastToast.includes("linked issue"), "the refusal toast still fires, and FIRST");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Close out WO-CO-1") && m.includes("TKT-CO-1") && m.includes("TKT-CO-2"), "the modal lists exactly the undisposed issues");
+  assert(m.includes("on step 1") && m.includes("— not yet disposed —"), "step context from stepRef, and the empty disposition option");
+  assert(DB.workOrders[0].status !== "Complete", "the WO did not complete");
+  document.getElementById("co-m-TKT-CO-1").value = "Rework";
+  document.getElementById("co-w-TKT-CO-1").value = "trimmed and re-bonded";
+  document.getElementById("co-w-TKT-CO-2").value = "half-typed narrative";
+  coResolve("WO-CO-1", "TKT-CO-1");
+  assert(projStatus(projById("TKT-CO-1")) === "Done", "row one resolved through resolveIssue");
+  const m2 = document.getElementById("modal").innerHTML;
+  assert(m2.includes("resolved: Rework"), "it collapses to a counted green line");
+  assert(m2.includes("half-typed narrative"), "the OTHER row's draft survived the re-render");
+  coResolveAll("WO-CO-1");
+  assert(projStatus(projById("TKT-CO-2")) !== "Done", "Resolve-all stops at the first gate failure");
+  assert(document.getElementById("modal").innerHTML.includes("resolution method"), "with that row wearing the gate's words");
+  assert(DB.workOrders[0].status !== "Complete", "and the WO still hasn't completed");
+  document.getElementById("co-m-TKT-CO-2").value = "Scrap";
+  coResolveAll("WO-CO-1");
+  assert(projStatus(projById("TKT-CO-2")) === "Done", "filled in, the second pass closes it");
+  assert(DB.workOrders[0].status === "Complete", "and the WO completes — through the same undisposedIssuesForWO gate");
+  assert(document.getElementById("modal").innerHTML.includes("complete"), "confirmation pane names what was resolved");
+  closeModal();
+});
+await t("the false-alarm cancel confirms before retiring a nonconformance", () => {
+  DB.projects.push({ id: "TKT-CO-3", title: "not real", kind: "issue", status: "To Do", workOrderId: "WO-CO-1", assignees: [], resolutionMethod: "", whatHappened: "", files: [], comments: [] });
+  DB.workOrders[0].status = "InWork";
+  CLOSEOUT = null;
+  openWOCloseoutModal("WO-CO-1");
+  coCancelTicket("WO-CO-1", "TKT-CO-3");
+  assert(projStatus(projById("TKT-CO-3")) !== "Cancelled", "one click does nothing yet — it asks");
+  confirmProceed();
+  assert(projStatus(projById("TKT-CO-3")) === "Cancelled", "confirmed: cancelled, no disposition needed (statusGate exempts it)");
+  assert(DB.workOrders[0].status === "Complete", "with nothing left undisposed, the closeout completes the WO");
+  closeModal();
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

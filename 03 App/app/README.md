@@ -302,6 +302,29 @@ discussion come before the metadata instead of five screens after it.
 
 ![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260807.png)
 
+Issues close from the page you read them on. An open issue carries a resolve
+band: the disposition select saves the moment it changes (disposed-but-open
+is a real state — it is what lets the work order complete while the ticket
+stays open for follow-up), the root cause is the field right above, and one
+Resolve button closes through the same gate and single Slack announcement as
+every other path. It used to take two passes through the Edit form. A closed
+issue reads "Resolved" with a quiet Reopen; reopening clears the disposition,
+so a work order can never complete over an issue somebody just said is not
+actually fixed — the withdrawn method survives as a comment.
+
+Filing got cheap at the bench too. Every work-order step carries a small flag
+button beside its camera: one modal with the title prefilled from the step,
+the defect photos attached at creation, priority, and nothing else — the work
+order, assignee, subteam and watchers are already known. The issue remembers
+which step it came from, shows as a chip on that step (amber while open, a
+check once disposed), and you stay on the work order. And when someone sets a
+work order to Complete while issues are still open, the refusal now opens a
+closeout modal instead of a dead end: one row per issue with its step context,
+disposition and root cause inline, per-row Resolve or "Resolve all & complete
+work order", and a confirmed "Cancel ticket (false alarm)" for the ones that
+turned out not to be real. Every resolve saves immediately, so backing out
+mid-way loses nothing.
+
 Back goes back. Records cross-link constantly, and following a chip from one
 ticket to another used to dump you at the board when you pressed the button,
 because it always meant "the list". It now returns one step along the trail you

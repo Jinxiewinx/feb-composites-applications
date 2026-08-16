@@ -10,7 +10,36 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-15 (round: folds/trainings/issues)
-Newest: **Training catalog went lead-editable + People matrix (2026-08-15,
+Newest: **Issue lifecycle streamlined (2026-08-15, chunk 3 of 3 — round
+complete).** One write path in projects.js beside setTicketStatus:
+setIssueDisposition (field-scoped, disposed-but-open is a real state — it's
+what undisposedIssuesForWO checks), resolveIssue(id, method, narrative?) —
+narrative undefined = leave whatHappened alone; a plain write CLEARS
+whatHappenedHtml so the siblings can't disagree; returns statusGate's string
+verbatim or closes via the one choke point (single announceIfResolved) —
+and reopenIssue, which CLEARS resolutionMethod (Simon's fork) so a reopened
+issue gates its WO again, old method preserved as a comment. Ticket detail:
+resolve band replaces the read-only resolution line (select saves onchange,
+gate words in the band, one Resolve button; Done state = "Resolved — X" +
+quiet Reopen). Step capture: ⚑ button in stepPhotoStrip beside the camera →
+openStepIssue purpose-built modal (title prefilled "step: ", photos AT
+creation via fb.upload after allocId — form read fully BEFORE the await,
+the offline-confirm footgun), writes p.stepRef {seq,index,title} (NEVER
+parentId — sub-tickets can't be issues), stays on the WO; stepIssues(wo,s)
+chips on the step (⚑ open / ✓ disposed) + counted into done-row folds.
+WO close: updWO's refusal toast (test-pinned, fires FIRST) now opens
+openWOCloseoutModal — per-row disposition select + prefilled plain textarea
++ Resolve through resolveIssue, coDrafts() harvests half-typed narratives
+before every re-render, "Resolve all & complete work order" stops at the
+first gate failure, "Cancel ticket (false alarm)" behind confirmModal,
+completion re-checks undisposedIssuesForWO (never trusts the modal's
+bookkeeping), confirmation pane lists what was resolved; the standing red
+banner gained a "Dispose it now" link to the same modal. CSS: .resolveband
++ .corow. Suites: app 445 (+5), designsystem 23, detailui 885, appui 1242,
+print_mobile 14, route 38, all green. README Tickets section rewritten.
+NOT yet deployed — that's the next step, then mockup regen if wanted.
+
+Previous newest: **Training catalog went lead-editable + People matrix (2026-08-15,
 chunk 2 of 3).** config/trainings folds over the TRAININGS/TRAINING_CODES
 consts through trainingById()/allTrainings() in workorders.js — the resin-
 override pattern verbatim (window.TRAINING_OVERRIDES, fetch-once

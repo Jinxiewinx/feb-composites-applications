@@ -367,6 +367,13 @@
   .mtxro { font-size: 14px; }
   .mtxcol-hi { background: var(--accent-soft); }
   .mtxcol-arch { opacity: .55; }
+  /* ---- issue resolve band (ticket detail) + WO closeout rows ---- */
+  .resolveband { display: flex; align-items: center; gap: 10px; margin: 6px 0; flex-wrap: wrap; }
+  .resolveband select { max-width: 260px; }
+  .corow { border-top: 1px solid var(--line); padding: 10px 0; }
+  .corow:first-of-type { border-top: 0; }
+  .corow.codone { color: var(--muted); font-size: 13px; }
+  .corow textarea { min-height: 56px; }
 
   /* ---- tickets: kind badge, colored status, gates, sub-tickets ---- */
   .kindfilter { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
