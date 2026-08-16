@@ -47,7 +47,7 @@ with an email allowlist for the roster. It updates live for everyone and works
 on phones and tablets as well as desktop. The full manual, setup and
 architecture live in `03 App/app/README.md`; this is the short tour.
 
-![Dashboard: the mission-control board on the app's white surfaces, alert strip leading](03%20App/design/dashboard-mockup-20260808.png)
+![Dashboard: the mission-control board on the app's white surfaces, alert strip leading](03%20App/design/dashboard-mockup-20260816.png)
 
 Eleven tabs, grouped in the sidebar by who is asking (Dashboard and Tickets
 up top, then Build, Planning, and Team):
@@ -64,11 +64,11 @@ up top, then Build, Planning, and Team):
 - **Reports:** CSV exports, the Monday status board as a grid of linked cards that prints clean, and the bulk label builder.
 - **People:** the roster with roles, each person's live assignments, and their trainings (mold design, ShopSabre CNC, wet layup, resin infusion, foam core, forged CF) shown as capsule pills. Leads certify a whole training session in one modal, correct or revoke per person, and filter the roster by "qualified for". Trainings gate work: a work-order step tagged with a training refuses an untrained signer (a lead can override with a written reason that lands in the event log), and the mold / manufacturing engineer fields suggest qualified people and warn, without blocking, when the assignee isn't trained for the process.
 
-![Inventory: the storage map, one card per shelf with contents and warnings](03%20App/design/inventory-mockup-20260804.png)
+![Inventory: the storage map, one card per shelf with contents and warnings](03%20App/design/inventory-mockup-20260816.png)
 
-![Parts: the index of every part beside the selected one, each stage a row of steps](03%20App/design/parts-mockup-20260803.png)
+![Parts: the index of every part beside the selected one, each stage a row of steps](03%20App/design/parts-mockup-20260816.png)
 
-![Molds: molds, stack plans and tooling boards on one screen](03%20App/design/molds-mockup-20260804.png)
+![Molds: molds, stack plans and tooling boards on one screen](03%20App/design/molds-mockup-20260816.png)
 
 Cross-links are everywhere; click a chip to jump to the related record. ⌘K
 searches everything. Light and dark themes follow the system setting, and
@@ -85,7 +85,7 @@ prints onto Avery sheets with a start-cell picker and a 100 mm calibration bar,
 because browsers silently apply "fit to page" and polyester sheets cost real
 money.
 
-![Labels: a printed Avery sheet with IDs, key facts and QR codes](03%20App/design/labels-mockup-20260803.png)
+![Labels: a printed Avery sheet with IDs, key facts and QR codes](03%20App/design/labels-mockup-20260816.png)
 
 Pointing a plain phone camera at a label opens a public nameplate that says
 what the object is, what stage it is at and where it lives, with no account
@@ -96,7 +96,7 @@ also captures which fabric roll and which resin and hardener lots went in, and
 "I don't know" is a recorded answer, because a confident wrong lot is worse
 than an honest gap.
 
-![Scanning: the public nameplate a phone camera opens, no sign-in](03%20App/design/scan-mockup-20260803.png)
+![Scanning: the public nameplate a phone camera opens, no sign-in](03%20App/design/scan-mockup-20260816.png)
 
 The old single-file `03 App/work-orders.html` stays as an offline backup and
 archive viewer. It opens any exported JSON with no server at all. Don't delete

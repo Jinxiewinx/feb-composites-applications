@@ -22,7 +22,7 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
-![Dashboard: the mission-control board](../design/dashboard-mockup-20260808.png)
+![Dashboard: the mission-control board](../design/dashboard-mockup-20260816.png)
 
 The landing page is the board. It shares the app's ordinary white-card
 surfaces (Simon's call: the mission-control layout, not the navy panel it
@@ -102,7 +102,7 @@ when they disagree rather than quietly overwriting one.
 
 ### Work Orders
 
-![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260807.png)
+![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260816.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, enforced cure holds, and a
@@ -179,7 +179,7 @@ laser. Hue is never the only thing carrying the meaning.
 
 ### Parts
 
-![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260803.png)
+![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260816.png)
 
 Parts is last season's Part Tracker reborn, and it leads the Build group
 because the part is where the work starts. Each part carries three parallel
@@ -233,7 +233,7 @@ array.
 
 ### Molds
 
-![Molds: molds, plans and boards on one screen](../design/molds-mockup-20260804.png)
+![Molds: molds, plans and boards on one screen](../design/molds-mockup-20260816.png)
 
 Molds holds the whole physical inventory of mold-making, merged from what
 used to be two tabs (Stock and Molds) into one Parts-style split: a
@@ -266,7 +266,7 @@ design instead of being back-filled after machining. Three sample molds ship
 with the app, so the planner can be tried without exporting anything from
 Fusion.
 
-![Molds: the season view when nothing is selected](../design/molds-overview-mockup-20260804.png)
+![Molds: the season view when nothing is selected](../design/molds-overview-mockup-20260816.png)
 
 With nothing selected, the right pane is the season: where the live molds
 sit across the stages, the board on hand by thickness and density, and
@@ -286,7 +286,7 @@ and dragging a card between columns still changes its status. There is no
 separate list view any more; the rail is the list, with open/late/mine/done
 chips, a kind filter, search, and the arrow keys.
 
-![Tickets: the rail and the board](../design/tickets-mockup-20260807.png)
+![Tickets: the rail and the board](../design/tickets-mockup-20260816.png)
 
 Each ticket's page opens with a lineage bar: a sub-ticket names its parent,
 hyperlinked (that is the route to the top ticket from anywhere, including a
@@ -300,7 +300,7 @@ date defaults to the parent's and is capped there. The comment thread reads
 newest-first with the composer at the top, and on a phone the description and
 discussion come before the metadata instead of five screens after it.
 
-![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260807.png)
+![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260816.png)
 
 Issues close from the page you read them on. An open issue carries a resolve
 band: the disposition select saves the moment it changes (disposed-but-open
@@ -339,7 +339,7 @@ season by station, and the week by person. They were separate Timeline and
 Weekly Plan tabs until 2026-08; they always rendered the same schedule
 records, and old links to either still land in the right view.
 
-![Schedule: the season by station](../design/schedule-mockup-20260804.png)
+![Schedule: the season by station](../design/schedule-mockup-20260816.png)
 
 The season view is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
@@ -382,7 +382,7 @@ printables. Anyone can upload a doc.
 
 ### Inventory
 
-![Inventory: the storage map](../design/inventory-mockup-20260804.png)
+![Inventory: the storage map](../design/inventory-mockup-20260816.png)
 
 Inventory is the storage map, and it absorbed the Items and Materials tabs.
 The default view is one card per storage location (shelf, rack, cabinet,
@@ -393,7 +393,7 @@ flagged running low, and how long since anyone confirmed the shelf. A dashed
 "No location" card collects everything unhoused, with parts carrying legacy
 free-text locations counted honestly.
 
-![A shelf's contents page](../design/inventory-contents-mockup-20260804.png)
+![A shelf's contents page](../design/inventory-contents-mockup-20260816.png)
 
 Tap a card, or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
@@ -430,7 +430,7 @@ edge that `sn5-parts.json` never had, on exact one-to-one name matches only; and
 
 ## Labels
 
-![The label sheet: IDs, key facts, QR codes, and the calibration bar](../design/labels-mockup-20260803.png)
+![The label sheet: IDs, key facts, QR codes, and the calibration bar](../design/labels-mockup-20260816.png)
 
 Every physical thing gets a 4 x 1 inch label carrying its ID, its name, the fact
 that actually identifies it, and a QR code that resolves to the record. On a part
@@ -462,7 +462,7 @@ hold even a version 1 code with its quiet zone.
 
 ## Scanning
 
-![The public nameplate: what a phone camera opens, signed out](../design/scan-mockup-20260803.png)
+![The public nameplate: what a phone camera opens, signed out](../design/scan-mockup-20260816.png)
 
 Scanning a label with a plain phone camera goes to `/Q/<ID>`, which Firebase
 Hosting rewrites to `q.html`. That page works **with no account and no signal**.
