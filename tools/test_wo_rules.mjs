@@ -112,6 +112,12 @@ await expect(200, "member", "GET", "/config/slack"); // any roster member reads 
 await expect(403, "rando", "GET", "/config/slack");
 await expect(403, "none", "GET", "/config/slack");
 
+console.log("config/trainings (the lead-editable catalog rides the same config rule):");
+const trCat = { trimming: { mapValue: { fields: { name: S("Trimming and finishing"), code: S("TRIM") } } } };
+await expect(403, "member", "PATCH", "/config/trainings", trCat);
+await expect(200, "lead", "PATCH", "/config/trainings", trCat);
+await expect(200, "member", "GET", "/config/trainings"); // every client folds it over the const catalog
+
 console.log("per-collection counters (increment-only):");
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(2) });      // create
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(3) });      // increment ok

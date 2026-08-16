@@ -35,6 +35,60 @@ const MFG_ENG_TRAINING = {
   MoldWetLay: "wetLayup", FoamWrapped: "wetLayup", Other: null,
 };
 
+/* ---------- lead-editable catalog (config/trainings) ----------
+   The resin-override pattern verbatim: a config doc folds over the code
+   consts through ONE accessor. { [id]: { name, code, cs, archived, addedBy,
+   addedAt } } — a partial entry on a built-in id renames it, a full entry is
+   a lead-added training, null is the revert marker (setConfig merges, and a
+   merge cannot delete). Ids are slugs minted once at creation and never
+   editable: grants on roster docs, step rules and trainingOverride records
+   all reference them forever, which is also why nothing is ever deleted —
+   customs ARCHIVE instead, and trainingById still resolves an archived id so
+   old grants and override lines keep their names. Built-ins are renameable
+   but not archivable: STD_STEPS and MFG_ENG_TRAINING reference them in code.
+   A new training gates nothing until a step rule names it — stepTraining()
+   still reads only rule.training, so gating stays a deliberate act.
+   window.*, not a lexical binding, so fixtures and tests can reach it. */
+window.TRAINING_OVERRIDES = null;
+let trainingCatalogFetched = false;
+function loadTrainingCatalog() {
+  if (trainingCatalogFetched || !window.fb || fb.state !== "ready" || !fb.getConfig) return;
+  trainingCatalogFetched = true;
+  fb.getConfig("trainings").then(d => { if (d) { window.TRAINING_OVERRIDES = d; render(); } }).catch(() => {});
+}
+/* The single choke point: every renderer asks this, never TRAININGS[id] or
+   TRAINING_CODES[id] directly, so a rename shows the same name in a pill, a
+   matrix header and a gate modal. Validated at read time like resinById: an
+   override with no usable name is ignored; archived never sticks to a
+   built-in. An id nobody has heard of returns a stub rather than blank —
+   an old grant must render SOMETHING. */
+function trainingById(id) {
+  const builtin = Object.prototype.hasOwnProperty.call(TRAININGS, id);
+  const base = builtin
+    ? { id, name: TRAININGS[id], code: TRAINING_CODES[id] || String(id).slice(0, 4).toUpperCase(), cs: null, archived: false, builtin: true, unknown: false }
+    : { id, name: String(id), code: String(id).slice(0, 4).toUpperCase(), cs: null, archived: false, builtin: false, unknown: true };
+  const o = window.TRAINING_OVERRIDES && window.TRAINING_OVERRIDES[id];
+  if (!o || typeof o !== "object") return base;
+  if (!builtin && !(typeof o.name === "string" && o.name.trim())) return base;
+  const out = { ...base, unknown: false };
+  if (typeof o.name === "string" && o.name.trim()) out.name = o.name.trim();
+  if (typeof o.code === "string" && o.code.trim()) out.code = o.code.trim().toUpperCase().slice(0, 4);
+  if (typeof o.cs === "string" && o.cs.trim()) out.cs = o.cs.trim();
+  if (!builtin && o.archived === true) out.archived = true;
+  return out;
+}
+/* Built-ins first (their template order is curriculum order), then customs by
+   name. Archived entries only when asked for. */
+function allTrainings(includeArchived) {
+  const customs = Object.keys(window.TRAINING_OVERRIDES || {})
+    .filter(id => !Object.prototype.hasOwnProperty.call(TRAININGS, id))
+    .map(trainingById)
+    .filter(t => !t.unknown)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const out = Object.keys(TRAININGS).map(trainingById).concat(customs);
+  return includeArchived ? out : out.filter(t => !t.archived);
+}
+
 /* ---------- engineer fields ----------
    One field renderer for both parts and work orders. The name string stays
    authoritative (20+ read sites, travellers, reports — none change); the input
@@ -57,7 +111,7 @@ function engWarnHtml(rec, key) {
   if (!tr) return "";
   const email = partEngineerEmail(rec, key);
   if (!email) return ` <span class="tny muted">not matched to the roster</span>`;
-  if (!hasTraining(email, tr)) return ` <span class="warn tny">not ${esc(TRAININGS[tr] || tr)}-trained</span>`;
+  if (!hasTraining(email, tr)) return ` <span class="warn tny">not ${esc(trainingById(tr).name)}-trained</span>`;
   return "";
 }
 function engFld(coll, rec, label, key) {
@@ -1199,7 +1253,7 @@ function woSecSteps(wo, E) {
       // What a signed row can tuck away: everything historical. Open rows
       // keep it all inline — that is what you act on.
       const metas = `
-          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(TRAININGS[s.trainingOverride.training] || s.trainingOverride.training)} training by ${esc(s.trainingOverride.by)}. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
+          ${s.trainingOverride ? `<div class="meta">Signed without ${esc(trainingById(s.trainingOverride.training).name)} training by ${esc(s.trainingOverride.by)}. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
           ${s.evidenceOverride ? `<div class="meta">Signed without ${esc(evidenceLabels(s.evidenceOverride.missing || []).join(" and "))} by ${esc(s.evidenceOverride.by)}. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
           ${hold && hold.overridden ? `<div class="meta">Hold overridden by ${esc(hold.override.by)}, ${esc(String(hold.override.hoursShort))} h short. <button class="link no-print" onclick="woJump('wo-eventlog')">See the event log</button></div>` : ""}
           ${startsHold(s) && s.cure ? `<div class="meta">${esc(cureSummary(s.cure))}</div>` : ""}
@@ -1236,7 +1290,7 @@ function woSecSteps(wo, E) {
                 never as a disabled button. */
             const tr = stepTraining(s);
             return tr && state !== "done" && state !== "failed" && !wo.retro && !s.trainingOverride && !hasTraining(myEmail(), tr)
-              ? `<div class="meta no-print">Needs ${esc(TRAININGS[tr] || tr)} training to sign.</div>` : ""; })()}
+              ? `<div class="meta no-print">Needs ${esc(trainingById(tr).name)} training to sign.</div>` : ""; })()}
           ${held ? holdBanner(hold, i) : ""}
           ${foldDone
             ? `<details class="step-more"><summary class="step-disclose">${esc(doneSummary)}</summary>${metas}</details>`
@@ -1815,9 +1869,9 @@ function openTrainingGate(i, tr) {
        <div class="trwrap">${q.map(u => `<span class="chip">${avatar(u, 20)} ${esc(u.name || u.email)}</span>`).join("")}</div>`
     : `<p class="muted">Nobody on the roster holds this training yet — a lead can grant it on the People tab.</p>`;
   openModal(`
-    <h2>Not yet — this step needs ${esc(TRAININGS[tr] || tr)} training</h2>
+    <h2>Not yet — this step needs ${esc(trainingById(tr).name)} training</h2>
     <p class="muted">${esc(stripCS(s.title))} — step ${s.seq} of ${esc(w.id)}.</p>
-    <p class="gate blocked"><span class="gi">✕</span><span><b>You're not recorded as ${esc(TRAININGS[tr] || tr)}-trained.</b>
+    <p class="gate blocked"><span class="gi">✕</span><span><b>You're not recorded as ${esc(trainingById(tr).name)}-trained.</b>
       Trainings are granted by a lead on the People tab.</span></p>
     ${who}
     <div class="foot">
@@ -1828,7 +1882,7 @@ function openTrainingGate(i, tr) {
 }
 function openTrainingOverride(i, tr) {
   openModal(`
-    <h2>Sign without ${esc(TRAININGS[tr] || tr)} training?</h2>
+    <h2>Sign without ${esc(trainingById(tr).name)} training?</h2>
     <p class="gate"><span class="gi">⚠</span><span>This goes in the event log with your name, the time, and the missing training.</span></p>
     <div class="field"><label for="tr-why">Why is this being signed by someone untrained?</label>
       <textarea id="tr-why" autofocus rows="3" placeholder="Who supervised, or why the training doesn't apply here"></textarea>
@@ -1849,7 +1903,7 @@ function submitTrainingOverride(i, tr) {
   w.timeline = w.timeline || [];
   w.timeline.push({
     date: today(),
-    note: `“${stripCS(w.steps[i].title)}” signed by ${ov.by} without ${TRAININGS[tr] || tr} training. Reason: ${why}`,
+    note: `“${stripCS(w.steps[i].title)}” signed by ${ov.by} without ${trainingById(tr).name} training. Reason: ${why}`,
   });
   saveWO(w, "timeline");
   // Merge the override onto the step, then rejoin the normal pipeline so the

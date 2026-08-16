@@ -4897,10 +4897,45 @@ await t("every training a template step demands exists in the catalog", () => {
   for (const [proc, steps] of Object.entries(STD_STEPS))
     for (const row of steps) {
       const tr = row[1] && row[1].training;
-      if (tr) assert(TRAININGS[tr], `${proc} step "${row[0]}" wants unknown training "${tr}"`);
+      if (tr) assert(!trainingById(tr).unknown, `${proc} step "${row[0]}" wants unknown training "${tr}"`);
     }
-  for (const tr of Object.values(MFG_ENG_TRAINING)) if (tr) assert(TRAININGS[tr], "MFG_ENG_TRAINING refers to a real training");
-  for (const id of Object.keys(TRAININGS)) assert(TRAINING_CODES[id], id + " has a pill code");
+  for (const tr of Object.values(MFG_ENG_TRAINING)) if (tr) assert(!trainingById(tr).unknown, "MFG_ENG_TRAINING refers to a real training");
+  for (const id of Object.keys(TRAININGS)) assert(trainingById(id).code, id + " has a pill code");
+});
+await t("trainingById folds config over the consts and validates at read time", () => {
+  const saved = window.TRAINING_OVERRIDES;
+  window.TRAINING_OVERRIDES = null;
+  assert(trainingById("cnc").name === "ShopSabre CNC" && trainingById("cnc").builtin, "no config: the const stands");
+  const stub = trainingById("ghost-training");
+  assert(stub.unknown && stub.name === "ghost-training" && stub.code === "GHOS", "an unknown id renders a stub, never blank");
+  window.TRAINING_OVERRIDES = {
+    cnc: { name: "ShopSabre CNC router", archived: true },      // rename wins; archived must NOT stick to a built-in
+    trimming: { name: "Trimming and finishing", code: "trim", cs: "CS-009", archived: false },
+    badcustom: { code: "BAD" },                                  // custom with no name = invalid, ignored
+    reverted: null,                                              // the revert marker
+  };
+  const cnc = trainingById("cnc");
+  assert(cnc.name === "ShopSabre CNC router" && !cnc.archived && cnc.builtin, "rename wins, archive is refused on a built-in: " + JSON.stringify(cnc));
+  const trim = trainingById("trimming");
+  assert(trim.name === "Trimming and finishing" && trim.code === "TRIM" && trim.cs === "CS-009" && !trim.builtin && !trim.unknown, JSON.stringify(trim));
+  assert(trainingById("badcustom").unknown, "a nameless custom is ignored");
+  assert(trainingById("reverted").unknown, "a null override is absent");
+  const all = allTrainings();
+  assert(all.length === Object.keys(TRAININGS).length + 1, "built-ins plus the one valid custom: " + all.map(t => t.id).join(","));
+  assert(all[all.length - 1].id === "trimming", "customs come after the built-ins");
+  window.TRAINING_OVERRIDES = { ...window.TRAINING_OVERRIDES, trimming: { name: "Trimming and finishing", code: "TRIM", archived: true } };
+  assert(!allTrainings().some(t => t.id === "trimming") && allTrainings(true).some(t => t.id === "trimming"),
+    "archived customs leave the default list but stay reachable");
+  window.TRAINING_OVERRIDES = saved;
+});
+await t("the catalog editor refuses a duplicate code and mints stable slug ids", () => {
+  const saved = window.TRAINING_OVERRIDES;
+  window.TRAINING_OVERRIDES = { trimming: { name: "Trimming", code: "TRIM" } };
+  assert(trCodeTaken("trim", null) && trCodeTaken("CNC", null), "case-insensitive across consts and customs");
+  assert(!trCodeTaken("TRIM", "trimming"), "a training may keep its own code");
+  assert(trSlug("Trimming") === "trimming-2", "a colliding name gets a suffix, never a reused id");
+  assert(trSlug("Vacuum Pumps!") === "vacuum-pumps", "slugs are lowercase-dashed");
+  window.TRAINING_OVERRIDES = saved;
 });
 await t("stepTraining reads the rule field and nothing else — untagged means ungated", () => {
   assert(stepTraining({ title: "Infuse", rule: { kind: "startsHold", training: "infusion" } }) === "infusion");
@@ -5056,6 +5091,49 @@ await t("the per-person modal grants and revokes through the roster API", async 
   assert(calls.some(c => c[0] === "rosterGrant" && c[2] === "cnc"));
   assert(calls.some(c => c[0] === "rosterRevoke" && c[2] === "infusion"));
   closeModal();
+});
+await t("the matrix view: full-roster coverage counts, lead cells write, archived behind the checkbox", () => {
+  const saved = window.TRAINING_OVERRIDES;
+  window.TRAINING_OVERRIDES = { retired: { name: "Retired thing", code: "RET", archived: true } };
+  DB.users = [
+    { email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" },
+    { email: "nick@b.edu", name: "Nick Jepsen", role: "member", trainings: { infusion: { by: "simon@berkeley.edu", at: "2026-08-15T00:00:00Z" } } },
+  ];
+  DB.parts = []; DB.projects = []; DB.workOrders = [];
+  view = { ...view, tab: "people", mode: "list", q: "", fTrain: "", pplView: "matrix", pplArch: false }; render();
+  assert(main.innerHTML.includes("mtxwrap"), "the matrix scrolls in its own container, never the page");
+  assert(main.innerHTML.includes("1/2"), "coverage counts over the FULL roster");
+  assert(main.innerHTML.includes('class="mtxcell granted') && main.innerHTML.includes("togglePersonTraining('nick@b.edu','infusion',false)"),
+    "a granted lead cell revokes through the one write path");
+  assert(main.innerHTML.includes("togglePersonTraining('nick@b.edu','cnc',true)"), "an empty cell grants");
+  assert(!main.innerHTML.includes(">RET<"), "archived columns hide by default");
+  view = { ...view, pplArch: true }; render();
+  assert(main.innerHTML.includes(">RET<") && main.innerHTML.includes("mtxcol-arch"), "the checkbox reveals them, dimmed");
+  assert(!main.innerHTML.includes("togglePersonTraining('nick@b.edu','retired',true)"), "no granting into an archived training");
+  // The search filters ROWS but the coverage number stays roster-wide.
+  view = { ...view, q: "simon", pplArch: false }; render();
+  assert(!main.innerHTML.includes("Nick Jepsen") && main.innerHTML.includes("1/2"),
+    "a searchbox cannot falsify the coverage stat");
+  // Members read, they don't write.
+  fb.roster = { name: "Nick", role: "member" }; view = { ...view, q: "" }; render();
+  assert(!main.innerHTML.includes("mtxcell"), "member cells are inert");
+  fb.roster = { name: "Simon", role: "lead" };
+  view = { ...view, pplView: "list" };
+  window.TRAINING_OVERRIDES = saved;
+});
+await t("renames reach the gate copy and the pills through trainingById", () => {
+  const saved = window.TRAINING_OVERRIDES;
+  window.TRAINING_OVERRIDES = { infusion: { name: "Vacuum infusion" } };
+  DB.users = [
+    { email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" },
+    { email: "nick@b.edu", name: "Nick Jepsen", role: "member", trainings: { infusion: { by: "simon@berkeley.edu", at: "2026-08-15T00:00:00Z" } } },
+  ];
+  view = { ...view, tab: "people", mode: "list", q: "", fTrain: "" }; render();
+  assert(main.innerHTML.includes("Vacuum infusion"), "the qualified-for filter shows the renamed training");
+  openPersonTrainings("nick@b.edu");
+  assert(document.getElementById("modal").innerHTML.includes("Vacuum infusion"), "so does the per-person modal");
+  closeModal();
+  window.TRAINING_OVERRIDES = saved;
 });
 
 /* ---- work-order photos --------------------------------------------------

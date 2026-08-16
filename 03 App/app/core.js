@@ -37,6 +37,7 @@ function loadSeason() {
 window.onFbChange = function () {
   loadSeason();
   if (typeof loadResinOverrides === "function") loadResinOverrides();
+  if (typeof loadTrainingCatalog === "function") loadTrainingCatalog();
   render();
 };
 window.onFbData = function (coll, arr) {

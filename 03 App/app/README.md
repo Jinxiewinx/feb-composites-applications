@@ -337,7 +337,20 @@ Budget runs purchase requests through Submitted, Ordered and Reimbursed, with th
 season total, an open-orders subtotal, and a flag on anything over $50.
 
 People is the team roster with photos, roles, and each person's live assignments
-across parts, projects and work orders. Leads can set roles.
+across parts, projects and work orders. Leads can set roles, and trainings are
+granted here: capsule pills on the list, a bulk "Record training session" modal
+for the night a group gets certified, and a per-person checklist for
+corrections. A Matrix toggle flips the tab into the planning read — rows are
+people, columns are trainings with a coverage count over the full roster, and a
+lead clicks a cell to certify or revoke on the spot (members see the same grid
+read-only, provenance in the tooltip). The catalog itself is lead-editable
+under the Catalog button: the six built-ins ship in code next to the step
+templates that gate on them and can be renamed but never removed, while new
+trainings (a name, a ≤4-character code, optionally the CS standard that is its
+curriculum) live in `config/trainings` and archive instead of deleting, so
+every historic grant keeps rendering its name. A new training gates nothing
+until a step template references it — adding to the catalog is bookkeeping,
+gating stays a deliberate act.
 
 Documents bundles in every reference doc. The 25 manufacturer datasheets and our
 CS standards and pain-points all open as PDFs in-app, with the standards rendered

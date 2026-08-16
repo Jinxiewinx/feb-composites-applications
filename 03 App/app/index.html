@@ -349,6 +349,24 @@
   .trrow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px; min-height: 40px; border-bottom: 1px solid var(--line); cursor: pointer; }
   .trrow:last-of-type { border-bottom: 0; }
   .trrow input[type="checkbox"] { margin-top: 3px; width: 16px; height: 16px; }
+  /* ---- the training matrix (People) ----
+     Rows = people, columns = the catalog. The WRAPPER owns the horizontal
+     scroll (a growing catalog must never make the page scroll sideways) and
+     the person column is sticky with an opaque background so names survive
+     the scroll. Lead cells are buttons; a granted cell hints revoke on hover
+     (check dims toward --bad), an empty grantable one hints ＋. Gold/amber
+     rules don't apply here: the check is --ok because granted IS a state. */
+  .mtxwrap { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.mtx th, table.mtx td { text-align: center; }
+  table.mtx .mtxperson { text-align: left; position: sticky; left: 0; background: var(--card); z-index: 1; min-width: 150px; }
+  .mtxcell { display: inline-flex; align-items: center; justify-content: center; width: 100%;
+    min-height: 32px; background: none; border: 0; cursor: pointer; font-size: 14px; color: var(--faint); }
+  .mtxcell.granted { color: var(--ok); }
+  .mtxcell:hover { color: var(--muted); background: var(--hover); border-radius: var(--radius); }
+  .mtxcell.granted:hover { color: var(--bad); }
+  .mtxro { font-size: 14px; }
+  .mtxcol-hi { background: var(--accent-soft); }
+  .mtxcol-arch { opacity: .55; }
 
   /* ---- tickets: kind badge, colored status, gates, sub-tickets ---- */
   .kindfilter { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
@@ -2382,6 +2400,7 @@
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
     button, .icon-btn, .hamburger { min-height: 40px; }
+    .mtxcell { min-height: 40px; min-width: 40px; }
     /* A rail row is a div[onclick]. A short work-order name over one meta line
        measured 35px at 393 in the phone mini-rail; found when fixtures first
        carried a LIVE run. */

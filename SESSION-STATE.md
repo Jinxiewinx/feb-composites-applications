@@ -10,7 +10,30 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-15 (round: folds/trainings/issues)
-Newest: **Detail-page folds + traveler spine (2026-08-15, chunk 1 of 3).**
+Newest: **Training catalog went lead-editable + People matrix (2026-08-15,
+chunk 2 of 3).** config/trainings folds over the TRAININGS/TRAINING_CODES
+consts through trainingById()/allTrainings() in workorders.js — the resin-
+override pattern verbatim (window.TRAINING_OVERRIDES, fetch-once
+loadTrainingCatalog in the onFbChange hook, read-time validation, null =
+revert marker). Ids are slugs minted once (trSlug suffixes collisions),
+NEVER edited; customs archive instead of deleting so grants/overrides keep
+rendering names; built-ins rename but never archive (STD_STEPS references
+them); unknown ids render a stub, never blank. Codes required, ≤4 chars,
+unique case-insensitive across unarchived entries (trCodeTaken). Every
+TRAININGS[id]/TRAINING_CODES[id] read is rerouted through trainingById —
+no caller-side fallbacks. People tab: view.pplView list|matrix seg toggle
+(list default, falsy-tolerant), matrix = table.mtx in .mtxwrap own-scroll
+container, sticky person column, coverage counts over the FULL roster
+(search can't falsify them), lead cells = .mtxcell buttons straight onto
+togglePersonTraining (instant, Simon's pick), members inert; archived
+columns behind an explicit "show archived" checkbox, dimmed, revoke-only.
+Catalog editor openTrainingCatalog/openTrainingEdit/submitTrainingAdd/
+setTrainingArchived in people.js, lead-only. No rules change (config
+already lead-writable) and no migration. Suites: app 440 (+4), wo_rules 98
+(+3, config/trainings member-403/lead-200/member-read-200), designsystem
+23, appui 1242, detailui 885, all green.
+
+Previous newest: **Detail-page folds + traveler spine (2026-08-15, chunk 1 of 3).**
 Simon's round: (1) more collapsible WO/Parts detail + visually distinct
 steps, (2) training matrix + lead-editable catalog, (3) streamlined issues
 (quick capture from a step w/ photos, in-place resolve, dispo-at-WO-close).
