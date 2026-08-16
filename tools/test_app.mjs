@@ -5416,5 +5416,67 @@ await t("the false-alarm cancel confirms before retiring a nonconformance", () =
   closeModal();
 });
 
+console.log("run carry-over:");
+await t("a part with no runs starts one immediately; with history it gets the choice", async () => {
+  signInAsLead();
+  DB.parts = [{ id: "P-CR-1", partName: "CARRY", subteam: "AERO", layupType: "MOLD INFUSION", layupStack: [], commentLog: [], docs: [], files: [], workOrderId: "" }];
+  DB.workOrders = [];
+  calls.length = 0;
+  startRunForPart("P-CR-1");
+  await new Promise(r => setTimeout(r, 0));
+  assert(DB.workOrders.length === 1, "no history: the run starts immediately, no modal");
+  const first = DB.workOrders[0];
+  assert(first.partId === "P-CR-1" && first.stackSource === "spec", "the fresh path is untouched");
+  startRunForPart("P-CR-1");
+  await new Promise(r => setTimeout(r, 0));
+  assert(DB.workOrders.length === 1, "with a run on record, nothing starts yet — the modal asks");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Start fresh") && m.includes("Use a previous run"), "the two starting points");
+  assert(m.includes(first.id), "the previous run is offered as the source");
+  closeModal();
+});
+await t("carrying keeps the mold, files, as-built stack, BOM and blanked quality — nothing re-uploads", async () => {
+  const src = DB.workOrders[0];
+  src.mold = { moldId: "MOLD-SN6-009", layers: "3", density: "15", sealingType: "XCR", location: "RFS rack B" };
+  src.moldRef = "MOLD-SN6-009";
+  src.files = [{ id: "F-old", name: "mold-cam.f3d", url: "https://x/mold-cam.f3d", type: "application/octet-stream", size: 9, by: "a@b.edu", ts: "2026-08-10T00:00:00Z", path: "projects/x" }];
+  src.docs = [{ id: "D-old", title: "CAM notes", url: "https://docs.google.com/x" }];
+  src.layupStack = [{ id: "ply1", material: "195 twill", orientation: "0/90", coverage: "full", notes: "" }];
+  src.bom = [{ item: "EPX-2", qty: "1", unit: "kit", source: "shelf", estCost: "80" }];
+  src.qualityChecks = [{ criterion: "mass", target: "900", actual: "912", pass: false }];
+  openNewRunModal("P-CR-1");
+  document.getElementById("nr-mode").value = "carry";
+  document.getElementById("nr-from").value = src.id;
+  ["nr-mold", "nr-files", "nr-stack", "nr-bom", "nr-quality"].forEach(id => { document.getElementById(id).checked = true; });
+  calls.length = 0;
+  await submitNewRun("P-CR-1");
+  const wo = DB.workOrders[DB.workOrders.length - 1];
+  assert(wo.id !== src.id && DB.workOrders.length === 2, "a NEW run exists");
+  assert(wo.mold.moldId === "MOLD-SN6-009" && wo.moldRef === "MOLD-SN6-009", "same mold record — its stack plan and CAD come along for free");
+  assert(wo.files.length === 1 && wo.files[0].url === src.files[0].url && wo.files[0].id !== "F-old",
+    "the file is the same blob re-referenced under a fresh attachment id — no upload happened");
+  assert(!calls.some(c => c[0] === "upload"), "and truly no upload call was made");
+  assert(wo.docs.length === 1 && wo.docs[0].url === src.docs[0].url, "doc links carried");
+  assert(wo.layupStack.length === 1 && wo.stackSource === "asbuilt" && wo.stackNote === "carried from " + src.id,
+    "the as-built stack is carried and labelled honestly");
+  assert(wo.bom.length === 1 && wo.bom[0].item === "EPX-2", "BOM rows carried");
+  assert(wo.qualityChecks.length === 1 && wo.qualityChecks[0].target === "900" && wo.qualityChecks[0].actual === "" && wo.qualityChecks[0].pass === null,
+    "quality criteria carried with the actuals blanked — a new run earns its own numbers");
+  assert(lastToast.includes("carried from " + src.id), "the toast names what was carried: " + lastToast);
+  // Mutating the copy must never reach back into the source run.
+  wo.layupStack[0].material = "CHANGED";
+  wo.bom[0].item = "CHANGED";
+  assert(src.layupStack[0].material === "195 twill" && src.bom[0].item === "EPX-2", "deep copies, not shared references");
+});
+await t("Start fresh from the modal produces exactly the plain new run", async () => {
+  document.getElementById("nr-mode").value = "fresh";
+  openNewRunModal("P-CR-1");
+  document.getElementById("nr-mode").value = "fresh";
+  await submitNewRun("P-CR-1");
+  const wo = DB.workOrders[DB.workOrders.length - 1];
+  assert(wo.stackSource === "spec" && !(wo.files || []).length && !(wo.bom || []).length && !wo.moldRef,
+    "no carries leak into a fresh start");
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

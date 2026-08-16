@@ -360,10 +360,15 @@
   table.mtx th, table.mtx td { text-align: center; }
   table.mtx .mtxperson { text-align: left; position: sticky; left: 0; background: var(--card); z-index: 1; min-width: 150px; }
   .mtxcell { display: inline-flex; align-items: center; justify-content: center; width: 100%;
-    min-height: 32px; background: none; border: 0; cursor: pointer; font-size: 14px; color: var(--faint); }
-  .mtxcell.granted { color: var(--ok); }
-  .mtxcell:hover { color: var(--muted); background: var(--hover); border-radius: var(--radius); }
-  .mtxcell.granted:hover { color: var(--bad); }
+    min-height: 32px; background: none; border: 0; cursor: pointer; padding: 2px; }
+  /* The affordance is a pill, not a bare glyph: a dashed ＋ capsule is
+     "somewhere a grant goes", the filled ✓ capsule is the grant. Hover says
+     the intent: the ＋ firms toward ok, the ✓ dims toward revoke. */
+  .mtxcell .tpill { font-size: 12px; min-width: 30px; justify-content: center; }
+  .tpill.mtx-add { border-style: dashed; color: var(--muted); background: none; }
+  .mtxcell:hover .tpill.mtx-add { border-color: var(--ok-border); color: var(--ok); background: var(--ok-bg); }
+  .tpill.mtx-yes { color: var(--ok); border-color: var(--ok-border); background: var(--ok-bg); }
+  .mtxcell:hover .tpill.mtx-yes { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
   .mtxro { font-size: 14px; }
   .mtxcol-hi { background: var(--accent-soft); }
   .mtxcol-arch { opacity: .55; }
@@ -1245,7 +1250,8 @@
      the run has been walked and dashed below the NOW node. A 22-step record
      reads as solid green → one gold node → dashed, from arm's length. */
   .steps { position: relative; }
-  .step { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+  .step { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 6px 0; }
+  .step .step-title { font-size: 15px; }
   .steps .num { position: relative; z-index: 1; width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     font-family: var(--font-display); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -1253,15 +1259,18 @@
   /* Spine segments, per row so solid/dashed can switch: top half above the
      node, bottom half below. Trimmed at the container's ends. */
   .step::before, .step::after { content: ""; position: absolute; left: 13px; width: 2px; background: var(--line); }
-  .step::before { top: 0; height: 10px; }
-  .step::after { top: 38px; bottom: 0; }
+  .step::before { top: 0; height: 6px; }
+  .step::after { top: 34px; bottom: 0; }
   .steps > .step:first-child::before, .steps > :first-child .step:first-child::before { display: none; }
   .steps > .step:last-child::after, .steps > :last-child .step:last-child::after { display: none; }
   /* Not walked yet: dashed. The NOW row's own lower segment is the switch. */
   .step.future::before, .step.future::after, .step.upnext::after {
     background: none; width: 0; border-left: 2px dashed var(--line); }
-  .step .body { flex: 1; min-width: 0; } .step .meta { font-size: 12px; color: var(--muted); }
-  .step .buyoff { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+  .step .body { flex: 1; min-width: 0; } .step .meta { font-size: 13px; color: var(--muted); }
+  /* The right cluster: buy-off (or the signed state) plus the camera and the
+     issue flag — every control on one edge (Simon's call), the body is pure
+     reading. */
+  .step .buyoff { flex: none; display: flex; gap: 6px; align-items: center; font-size: 13px; flex-wrap: wrap; justify-content: flex-end; }
   /* A blocker is a person withholding a signature (amber ring + edge), a hold
      is the clock (slate node wearing the ◷). They stopped sharing a wash long
      ago; now neither is a wash at all. */
@@ -1480,7 +1489,7 @@
   button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; background: none; border: 0;
     padding: 0; font: inherit; text-align: left; cursor: pointer; min-height: 40px; color: inherit; }
   .wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
-    font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+    font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
   .wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
     border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
   .wosec-hd.warn > span:first-child::before { background: var(--bad); }
@@ -1490,11 +1499,23 @@
   /* Gold is "new", amber/red is "trouble" — the dot colors never trade jobs. */
   .secnav-dot.gold { background: var(--gold); }
   .wosec-new { font-size: 11.5px; font-weight: 600; color: var(--muted); }
-  .wosec-hd::after { content: "▾"; font-size: 13px; color: var(--faint); margin-left: auto;
-    transition: transform var(--t-fast) var(--ease); }
+  /* The caret is a 28px chip, not a 13px glyph: Simon reported nobody could
+     tell the sections expand. It reads as the button it is. */
+  .wosec-hd::after { content: "▾"; width: 28px; height: 28px; margin-left: auto; flex: none;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; color: var(--muted);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+  .wosec-hd:hover::after { background: var(--hover); color: var(--ink); }
   .wosec.folded > .wosec-hd::after { content: "▸"; }
   .wosec:not(.folded) > .wosec-hd { margin-bottom: 10px; }
   .wosec.folded > .wosec-body { display: none; }
+  /* The content fills its card (Simon: the text rattled around in the box).
+     Scoped to the detail panes; labels, .tny, .meta and pills keep their own
+     explicit sizes — the hierarchy is the point, only the body reading size
+     moves. */
+  .mddetail .wosec-body { font-size: 15px; }
+  .mddetail .wosec-body table.sub { font-size: 14px; }
+  .mddetail .grid .f .ro { font-size: 15px; }
   /* Row that holds a trailing add-button under a list. */
   .addrow { margin-top: 8px; }
   /* Sub-fold inside a section card (BOM, event log): reference data that
@@ -2347,7 +2368,9 @@
     .step { flex-wrap: wrap; }
     .step .body { flex: 1 1 100%; min-width: 0; }
     .step .buyoff { flex: 1 1 100%; margin-left: 40px; }
-    .step .buyoff button { width: 100%; justify-content: center; }
+    /* The buy-off stretches to a full-width thumb target; the camera and
+       flag icons ride beside it at their own size. */
+    .step .buyoff button:not(.ib) { flex: 1; justify-content: center; }
 
     /* Modals: single-column two-up rows, tighter padding on a small screen. */
     /* Tighter, but never at the cost of the insets — this shorthand used to

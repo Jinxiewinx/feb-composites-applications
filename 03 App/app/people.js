@@ -145,9 +145,12 @@ function renderPeopleMatrix(rows) {
           // Grant affordance is gated on !archived; a granted cell in an
           // archived column stays revocable so archiving can never trap data.
           if (isLead() && (g || !t.archived)) {
+            // The affordance is a pill, not a bare glyph: a dashed ＋ capsule
+            // reads as "somewhere a grant goes", the filled ✓ capsule as the
+            // grant itself (Simon: the bare ＋ was too subtle).
             return `<td class="${view.fTrain === t.id ? "mtxcol-hi" : ""} ${t.archived ? "mtxcol-arch" : ""}"><button type="button" class="${cls}" title="${tip}"
               aria-label="${esc(u.name || u.email)} — ${esc(t.name)}"
-              onclick="togglePersonTraining('${esc(u.email)}','${esc(t.id)}',${g ? "false" : "true"})">${g ? "✓" : "＋"}</button></td>`;
+              onclick="togglePersonTraining('${esc(u.email)}','${esc(t.id)}',${g ? "false" : "true"})">${g ? '<span class="tpill mtx-yes">✓</span>' : '<span class="tpill mtx-add">＋</span>'}</button></td>`;
           }
           return `<td class="mtxro ${view.fTrain === t.id ? "mtxcol-hi" : ""} ${t.archived ? "mtxcol-arch" : ""}" title="${tip}">${g ? '<span class="ok">✓</span>' : '<span class="muted">·</span>'}</td>`;
         }).join("")}

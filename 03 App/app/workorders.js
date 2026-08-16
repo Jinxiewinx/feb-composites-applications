@@ -1267,7 +1267,7 @@ function woSecSteps(wo, E) {
           ${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}
           ${stepIssues(wo, s).map(t =>
             `<div class="meta">${t.resolutionMethod ? '<span class="ok">✓</span>' : '<span class="warn">⚑</span>'} ${chip("projects", t.id, t.title || t.id)}${t.resolutionMethod ? "" : ' <span class="warn tny">open</span>'}</div>`).join("")}
-          ${stepPhotoStrip(wo, i, s)}`;
+          ${stepThumbs(wo, i, s)}`;
       const issueCount = stepIssues(wo, s).length;
       const hasExtras = !!(s.trainingOverride || s.evidenceOverride || (hold && hold.overridden) ||
         (startsHold(s) && s.cure) || String(s.notes || "").trim() || (s.photoRefs || []).length || issueCount);
@@ -1332,6 +1332,7 @@ function woSecSteps(wo, E) {
                        phone can hover is the version of this that fails. The
                        up-next row's button is the section's one primary. */
                     `<button ${isNow ? 'class="primary"' : ""} onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
+          ${stepActions(wo, i, s)}
         </div>
       </div>`;
       return { html, grouped: inGroup[i], photos: (s.photoRefs || []).length, seq: s.seq };
@@ -1412,10 +1413,14 @@ function woSecPhotos(wo, E) {
       <div class="photogrid">${bySteps.get(k).map(p => phTile(p, wo, E)).join("")}</div>`).join("")}
     <div class="no-print addrow"><button onclick="addWOPhotos('${wo.id}')">+ Add photos</button></div>`;
 }
-/* The per-step strip: the photos live where the work happened. View mode and
-   edit mode both get the camera — the bench is not in edit mode, and a photo
-   is documentation, not editing. */
-function stepPhotoStrip(wo, i, s) {
+/* The per-step photos live where the work happened, split in two since the
+   controls moved right (Simon: all controls to the right of the bar): the
+   THUMBS stay under the step body, the buttons live in the right cluster.
+   View mode and edit mode both get the camera — the bench is not in edit
+   mode, and a photo is documentation, not editing. The data-photo-slot
+   attribute stays on the thumbs div: addStepPhotos parks its "uploading…"
+   ghost there. */
+function stepThumbs(wo, i, s) {
   const refs = s.photoRefs || [];
   const shown = refs.slice(0, 5);
   return `<div class="step-photos" data-photo-slot="step" data-wo="${esc(wo.id)}" data-step="${i}">
@@ -1425,11 +1430,13 @@ function stepPhotoStrip(wo, i, s) {
       return url ? `<img class="phmini" loading="lazy" src="${esc(url)}" data-lb-src="${esc(url)}" data-lb-name="${esc(name)}" alt="${esc(name)}">` : "";
     }).join("")}
     ${refs.length > 5 ? `<button class="sm no-print" onclick="woJump('wo-photos')">+${refs.length - 5} more</button>` : ""}
-    <button class="ib sm no-print" title="Add photos to this step" aria-label="Add photos to step ${s.seq}" onclick="addStepPhotos('${esc(wo.id)}',${i})">${icon("image", 14)}</button>
-    ${/* The quick-capture flag, same quiet weight as the camera: bench
-          utility, never competing with the buyoff column's one primary. */""}
-    <button class="ib sm no-print" title="Report an issue on this step" aria-label="Report an issue on step ${s.seq}" onclick="openStepIssue('${esc(wo.id)}',${i})">⚑</button>
   </div>`;
+}
+/* The camera and the quick-capture flag, quiet siblings of the buy-off in
+   the right cluster — bench utilities, never competing with the one primary. */
+function stepActions(wo, i, s) {
+  return `<button class="ib sm no-print" title="Add photos to this step" aria-label="Add photos to step ${s.seq}" onclick="addStepPhotos('${esc(wo.id)}',${i})">${icon("image", 14)}</button>
+    <button class="ib sm no-print" title="Report an issue on this step" aria-label="Report an issue on step ${s.seq}" onclick="openStepIssue('${esc(wo.id)}',${i})">⚑</button>`;
 }
 
 /* Documents and Files are one section because EVIDENCE.file.has() accepts

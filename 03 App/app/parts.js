@@ -733,8 +733,67 @@ function confirmMoldLink(partId, moldId) {
 }
 /* A remake is a second run, not a rewritten first one. Prefilled with the
    part's identity and its layup plan, so the new traveler starts where the
-   part says it should. */
-async function newRunForPart(partId) {
+   part says it should — or, when the user asks, with pieces of a previous
+   run carried over (Simon's case: mold machining failed, the new run wants
+   the same mold record and its CAD without re-uploading anything).
+
+   startRunForPart is the button's entry: a part with no runs starts one
+   immediately, exactly the old behavior; a part with history gets the
+   choice. */
+function startRunForPart(partId) {
+  const p = partById(partId);
+  if (!p) return;
+  if (!partRuns(p).length) { newRunForPart(partId); return; }
+  openNewRunModal(partId);
+}
+function openNewRunModal(partId) {
+  const p = partById(partId);
+  if (!p) return;
+  // Newest first; the part's current run preselected — it is usually the one
+  // that just went wrong.
+  const runs = partRuns(p).map(r => r.wo)
+    .sort((a, b) => String(b.createdDate || "").localeCompare(String(a.createdDate || "")) || b.id.localeCompare(a.id));
+  const preselect = p.workOrderId && runs.some(w => w.id === p.workOrderId) ? p.workOrderId : (runs[0] || {}).id;
+  const box = (id, label, hint) => `<label class="trrow">
+      <input type="checkbox" id="${id}" checked>
+      <span><b>${label}</b><br><span class="muted tny">${hint}</span></span>
+    </label>`;
+  openModal(`
+    <h2>Start a new run of ${esc(p.partName || p.id)}</h2>
+    <div class="field"><label>Starting point</label>
+      <select id="nr-mode" onchange="document.getElementById('nr-carry').style.display = this.value === 'carry' ? '' : 'none'">
+        <option value="fresh">Start fresh — from the part's own plan</option>
+        <option value="carry">Use a previous run — pick what to keep</option>
+      </select></div>
+    <div id="nr-carry" style="display:none">
+      <div class="field"><label>Copy from</label>
+        <select id="nr-from">${runs.map(w => `<option value="${esc(w.id)}" ${w.id === preselect ? "selected" : ""}>${esc(w.id)} — ${esc(w.status || "")}${w.createdDate ? " · " + esc(w.createdDate) : ""}</option>`).join("")}</select></div>
+      ${box("nr-mold", "Mold &amp; mold file", "the mold block and its record link — the CAD and stack plan are already there, nothing re-uploads")}
+      ${box("nr-files", "Files &amp; documents", "the run's uploads and linked docs, referenced onto the new traveler")}
+      ${box("nr-stack", "Layup stack as laid", "start from what that run actually laid instead of the part's plan")}
+      ${box("nr-bom", "BOM", "the bill of materials rows")}
+      ${box("nr-quality", "Quality criteria", "criteria and targets; actuals start blank")}
+    </div>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitNewRun('${esc(partId)}')">Start run</button>
+    </div>
+  `);
+}
+async function submitNewRun(partId) {
+  // Read the WHOLE form before newRunForPart's await — allocId's offline
+  // fallback opens a confirm modal that replaces this markup.
+  const mode = ((document.getElementById("nr-mode") || {}).value || "fresh");
+  const v = id => !!((document.getElementById(id) || {}).checked);
+  const opts = mode === "carry" ? {
+    fromId: ((document.getElementById("nr-from") || {}).value || ""),
+    mold: v("nr-mold"), files: v("nr-files"), stack: v("nr-stack"),
+    bom: v("nr-bom"), quality: v("nr-quality"),
+  } : null;
+  closeModal();
+  await newRunForPart(partId, opts && opts.fromId ? opts : null);
+}
+async function newRunForPart(partId, opts) {
   const p = partById(partId);
   if (!p) return;
   const id = await allocId("workOrders");
@@ -754,10 +813,45 @@ async function newRunForPart(partId) {
     weightTargetG: p.weightG || null, weightActualG: null, timeline: [], notes: "", retro: false,
     createdBy: myEmail(),
   };
+  // The carries, applied over the fresh defaults. Everything here is a copy
+  // of records/URLs that already exist — nothing re-uploads. Files get fresh
+  // F… ids because the id names the ATTACHMENT (this run's reference to the
+  // blob), not the blob itself.
+  const carried = [];
+  const src = opts && opts.fromId ? recById("workOrders", opts.fromId) : null;
+  if (src) {
+    if (opts.mold) {
+      wo.mold = { ...(src.mold || wo.mold) };
+      if (src.moldRef) wo.moldRef = src.moldRef;
+      carried.push("mold");
+    }
+    if (opts.files) {
+      wo.files = (src.files || []).map(f => ({ ...f, id: "F" + Date.now() + Math.random().toString(36).slice(2, 5) }));
+      wo.docs = (src.docs || []).map(d => ({ ...d }));
+      if (wo.files.length || wo.docs.length) carried.push("files");
+    }
+    if (opts.stack && (src.layupStack || []).length) {
+      // As-built honesty: if the copied stack matches the part's plan the
+      // drift is zero and nothing warns; if it differs, the divergence
+      // banner tells the truth instead of claiming it follows the plan.
+      wo.layupStack = JSON.parse(JSON.stringify(src.layupStack));
+      wo.stackSource = "asbuilt";
+      wo.stackNote = `carried from ${src.id}`;
+      carried.push("stack");
+    }
+    if (opts.bom && (src.bom || []).length) {
+      wo.bom = JSON.parse(JSON.stringify(src.bom));
+      carried.push("BOM");
+    }
+    if (opts.quality && (src.qualityChecks || []).length) {
+      wo.qualityChecks = (src.qualityChecks || []).map(q => ({ criterion: q.criterion, target: q.target, actual: "", pass: null }));
+      carried.push("quality criteria");
+    }
+  }
   DB.workOrders.push(wo); save("workOrders", wo);
   // The newest run becomes the one the part is on.
   p.workOrderId = id; savePart(p, "workOrderId");
-  toast(`${id} started from ${p.partName || p.id}.`);
+  toast(`${id} started from ${p.partName || p.id}${src && carried.length ? ` — ${carried.join(", ")} carried from ${src.id}` : ""}.`);
   openRecord("workorders", id);
 }
 /* The part's moldProgress and the mold record's stage are two different enums
@@ -910,7 +1004,7 @@ function ptSecRuns(p, E) {
           </tr>`;
         }).join("")}</tbody></table>`
         : '<div class="muted tny">No runs yet — nothing has been made from this part.</div>'}
-      <div class="no-print" style="margin-top:6px"><button class="sm" onclick="newRunForPart('${esc(p.id)}')">+ New run</button></div>`;
+      <div class="no-print" style="margin-top:6px"><button class="sm" onclick="startRunForPart('${esc(p.id)}')">+ New run</button></div>`;
 }
 
 function ptSecMold(p, E) {

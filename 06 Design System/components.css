@@ -183,27 +183,33 @@ table.list.dash td { cursor: default; }
 .wf-eng { display: inline-flex; }
 .wf-eng + .wf-eng { margin-left: -6px; }
 
-/* ---- WO section header + folds ----
-   One card per section on a work order; this header replaces the bare h3.
-   Same recipe as the dashboard module header (gold speed-slash + Saira
-   uppercase), plus a count pill and, when something needs attention, a red
-   slash and a word beside the dot — hue is never the only carrier. As a
-   <summary> it is the always-visible face of a folded section. */
-.wosec-hd { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; list-style: none; }
+/* ---- section header + folds (WO and Parts detail) ----
+   One card per section; this header replaces the bare h3. Same recipe as
+   the dashboard module header (gold speed-slash + Saira uppercase), plus a
+   count pill and, when something needs attention, a red slash and a word
+   beside the dot — hue is never the only carrier. The header is a <button>
+   that toggles a CLASS fold (.wosec.folded hides .wosec-body; a closed
+   <details> skips painting and vanished from browser print). The caret is
+   a 28px chip so the fold reads as the button it is. */
+.wosec-hd { display: flex; align-items: center; gap: 8px; margin: 0; list-style: none; }
+button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; background: none; border: 0;
+  padding: 0; font: inherit; text-align: left; cursor: pointer; min-height: 40px; color: inherit; }
 .wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
-  font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
   border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
 .wosec-hd.warn > span:first-child::before { background: var(--bad); }
 .wosec-n { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2);
   border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
 .wosec-w { font-size: 11.5px; font-weight: 600; color: var(--bad); }
-summary.wosec-hd { cursor: pointer; margin: 0; min-height: 40px; align-items: center; }
-summary.wosec-hd::-webkit-details-marker { display: none; }
-summary.wosec-hd::after { content: "▸"; font-size: 13px; color: var(--faint); margin-left: auto;
-  transition: transform var(--t-fast) var(--ease); }
-.wo-fold[open] > summary.wosec-hd::after { content: "▾"; }
-.wo-fold[open] > summary.wosec-hd { margin-bottom: 10px; }
+.wosec-hd::after { content: "▾"; width: 28px; height: 28px; margin-left: auto; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; color: var(--muted);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.wosec-hd:hover::after { background: var(--hover); color: var(--ink); }
+.wosec.folded > .wosec-hd::after { content: "▸"; }
+.wosec:not(.folded) > .wosec-hd { margin-bottom: 10px; }
+.wosec.folded > .wosec-body { display: none; }
 .addrow { margin-top: 8px; }
 /* Sub-fold inside a section card (BOM, event log): folds even when
    populated; the summary wears the h3 register plus a count. */

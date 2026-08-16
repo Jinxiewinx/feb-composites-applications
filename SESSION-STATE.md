@@ -9,8 +9,36 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-15 (round: folds/trainings/issues)
-Newest: **Issue lifecycle streamlined (2026-08-15, chunk 3 of 3 — round
+Last updated: 2026-08-15 (round: folds/trainings/issues + polish)
+Newest: **Polish round after Simon's live review (2026-08-15, night).** His
+five asks, all shipped: (1) matrix grant affordance is now a PILL — dashed
+＋ .tpill.mtx-add capsule (hover firms to ok) / filled ✓ .tpill.mtx-yes
+(hover dims toward revoke red); (2) the fold caret is a 28px circular chip
+(.wosec-hd::after with surface-2 bg + hairline), label 12.5→13.5px —
+components.css MIRRORS the .wosec-hd recipe and the designsystem parity
+test catches drift, so the shared copy was rewritten too (it was still the
+details-era version); (3) detail text fills the cards: .mddetail
+.wosec-body 15px, its table.sub 14px, .grid .f .ro 15px — scoped, labels/
+tny/meta keep their explicit sizes; (4) steps denser: padding 10→6px,
+title 15px, meta 13px, spine trims to 6/34, and ALL controls moved to the
+right cluster — stepPhotoStrip split into stepThumbs (imgs + "+N more",
+keeps data-photo-slot for the upload ghost) in the body and stepActions
+(camera + ⚑) appended inside .buyoff for every state; mobile: buy-off
+stretches via .buyoff button:not(.ib){flex:1}, icons ride beside; (5) run
+carry-over: + New run → startRunForPart (no runs = instant, unchanged;
+else openNewRunModal: "Start fresh" / "Use a previous run" select +
+checkboxes mold/files/stack/BOM/quality, all default-ticked), submitNewRun
+reads the form BEFORE the allocId await, newRunForPart(partId, opts)
+applies carries — mold block + moldRef, files re-referenced under fresh
+F… ids (same blobs, zero uploads — test asserts no upload call), stack
+deep-copied as stackSource "asbuilt" + "carried from <id>" note (honest
+drift), BOM deep copy, quality criteria with actuals blanked; toast names
+what was carried. The WO rail's "+ Start run" buttons stay direct
+newRunForPart on purpose (they only render for zero-run parts, and a test
+pins the onclick string). Suites: app 448 (+3), designsystem 23 (after the
+components.css sync), detailui 885, appui 1242, print_mobile 14, green.
+
+Previous newest: **Issue lifecycle streamlined (2026-08-15, chunk 3 of 3 — round
 complete).** One write path in projects.js beside setTicketStatus:
 setIssueDisposition (field-scoped, disposed-but-open is a real state — it's
 what undisposedIssuesForWO checks), resolveIssue(id, method, narrative?) —

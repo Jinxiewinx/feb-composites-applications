@@ -91,7 +91,15 @@ there is no way to know whose run an unlabelled work order was. Duplicate part
 names are a real pattern here, so this matters.
 
 **+ New run** on a part starts another work order against it, carrying the
-part's name, subteam, deadline, mass target, process and layup plan.
+part's name, subteam, deadline, mass target, process and layup plan. A part
+that already has runs asks first: **Start fresh** from the part's own plan, or
+**Use a previous run** — pick the source run and tick what to keep (the mold
+and its mold file, the uploaded files and doc links, the as-built layup stack,
+the BOM, the quality criteria with actuals blanked). Everything carried is a
+reference to records and uploads that already exist, so a botched mold
+machining gets a second run with the same mold CAD without re-uploading a
+thing. A carried stack is labelled as-built, so if it differs from the part's
+plan the divergence banner says so instead of pretending it follows the plan.
 
 The mold works the same way: `p.mold` is the committed link, and until somebody
 sets it the mold is derived through the part's runs and shown as *via WO-…*. Set
