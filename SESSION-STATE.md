@@ -2846,8 +2846,23 @@ dropped them would not be a mirror. Simon also made the spreadsheet itself
 link-viewable on 2026-08-15, so the same data is already world-readable. **If
 the sheet is ever locked back down, revisit the feed in the same breath.**
 
-Rollout state: `TARGET_SHEET` in `Sync.gs` is `'Part Tracker (App)'`, a trial
-duplicate. Going live is that one string. Not yet installed in the spreadsheet.
+Rollout state: hosting and `firestore:rules` both deployed 2026-08-15 and
+verified live — anonymous `GET tracker/<anything>` now answers 404 (allowed,
+nothing published yet) where it answered 403 before the rules went out, while
+`parts`, `config`, `roster` and `tracker` list all still answer 403. Rules were
+deployed as their own step, on their own, because they are the thing that can
+lock the team out.
+
+`TARGET_SHEET` in `Sync.gs` is `'Part Tracker (App)'`, a trial duplicate; going
+live is that one string. Still waiting on the two manual steps nobody but a
+human can do: a lead pressing **Tracker feed** on the Reports tab to mint the
+token and publish the first snapshot, and pasting `Sync.gs` into the
+spreadsheet's Apps Script. Until the button is pressed there is no token and no
+document, which is why the URL 404s rather than erroring.
+
+The spreadsheet was made link-viewable on 2026-08-15 only so the live column
+headers could be read. The sync does NOT need it: the Apps Script runs inside
+the document under an editor's own account. It can be set back to restricted.
 
 The trigger runs under whoever installs it. When the program passes to Nick, he
 has to re-run `installTrigger` under his own account or the sync dies with
