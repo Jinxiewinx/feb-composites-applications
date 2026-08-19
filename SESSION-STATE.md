@@ -2868,6 +2868,29 @@ The trigger runs under whoever installs it. When the program passes to Nick, he
 has to re-run `installTrigger` under his own account or the sync dies with
 Simon's access.
 
+## Datasheets and standards unlisted from the app (2026-08-18)
+
+Simon asked for the reference docs and the standards off the app. They are
+**unlisted, not deleted** — the 25 datasheet PDFs and 48 standards files are
+still in `03 App/app/docs/` and still served live (verified with curl after the
+deploy). Only the manifest entry went: 42 entries down to 1 (Shop Printables).
+
+Do not "finish the job" by deleting the files. Two things depend on them:
+`resins.js` hardcodes six `docs/datasheets/*.pdf` paths for the TDS citation
+behind every cure hold, and those resolve by path, not through the manifest; and
+CS-000 requires an issued standard to stay retrievable, so deleting them is a
+process violation rather than a cleanup.
+
+The switch is one `UNLISTED` set at the top of `tools/gen_docs_manifest.py`.
+The generator still copies every file and `add()` decides what gets listed.
+Empty the set to put everything back; nothing else needs changing.
+
+`documents.js` hardcodes no category whitelist — the leading names are an order
+only — so an older Firestore upload filed under Datasheets or Standards still
+renders under its own heading. `dashboard.js` lost the two launchpad tiles that
+counted them (and the manifest preload they triggered) in favour of one
+Documents tile.
+
 ## Next up (not started)
 
 - Port the traveler to the offline single-file `work-orders.html`, which still
