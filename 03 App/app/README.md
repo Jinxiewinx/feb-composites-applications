@@ -54,8 +54,9 @@ layups banked, sign-offs); a lead sets the season (name, date, milestones)
 in one modal writing `config/season`, readable by the roster and writable
 by leads only. **Money** is the unreimbursed sum plus the $50 approval
 rule. **Launchpad** is filtered jumps (my tickets, late WOs, the reorder
-list, the week plan), the datasheet and standards shelves with live counts,
-and the pinned Google links. **Shop knowledge** rotates a fact a day, most
+list, the week plan), a jump to Documents, and the pinned Google links. It
+carried datasheet and standards tiles with live counts until those categories
+were unlisted on 2026-08-18. **Shop knowledge** rotates a fact a day, most
 of them mined from the team's own SN5 documentation, deterministic so the
 whole team sees the same one; on the configured competition date the board
 wears gold and the module tells you to go run the car.
@@ -383,10 +384,21 @@ every historic grant keeps rendering its name. A new training gates nothing
 until a step template references it — adding to the catalog is bookkeeping,
 gating stays a deliberate act.
 
-Documents bundles in every reference doc. The 25 manufacturer datasheets and our
-CS standards and pain-points all open as PDFs in-app, with the standards rendered
-from markdown by pandoc and the .docx still downloadable, plus the shop
-printables. Anyone can upload a doc.
+Documents is the team shelf (pinned links to the things people keep asking
+for), member uploads, and the shop printables. Anyone can upload a doc.
+
+It used to bundle the reference library too: 25 manufacturer datasheets and the
+CS standards and pain-points, rendered to PDF by pandoc with the .docx still
+downloadable. Simon asked for those off the app on 2026-08-18, and they are
+**unlisted rather than deleted** — the files are still in `docs/` and still
+served, because `resins.js` deep-links six datasheet PDFs by path for its TDS
+citations and CS-000 requires an issued standard to stay retrievable. What went
+was the manifest entry. The switch is `UNLISTED` in
+`tools/gen_docs_manifest.py`; empty that set to put them back.
+
+Nothing in `documents.js` hardcodes which categories may exist, so a document
+carrying any category still renders under its own heading. That is what keeps
+older uploads working and makes re-listing a one-line change.
 
 ### Inventory
 
@@ -944,7 +956,9 @@ Regenerate bundled data when the sources change:
 - `node tools/gen_sample_molds.mjs` rebuilds the three sample molds in `samples/`.
 - `python3 tools/gen_docs_manifest.py` copies the datasheets, standards and
   printables into `app/docs/` and rebuilds `docs/manifest.json` for the Documents
-  tab. Re-run it whenever a datasheet or CS standard changes.
+  tab. Re-run it whenever a datasheet or CS standard changes. It still copies
+  every file; the `UNLISTED` set at the top decides which categories get a
+  manifest entry, and Datasheets and Standards are in it as of 2026-08-18.
 
 ## Files
 

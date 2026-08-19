@@ -2226,7 +2226,12 @@ await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf 
   // switch; invFlag is not wiped, so the inventory jump may lead with it.
   assert(html.includes("setTab('workorders');view.woLate=true;render()"), "late-WO jump survives setTab's flag clearing");
   assert(html.includes("view.invFlag='reorder';setTab('inventory')"), "reorder jump uses the surviving flag");
-  assert(html.includes("25 PDFs") || html.includes("TDS + SDS"), "datasheet shelf carries its count once the manifest loads");
+  // The Datasheets and Standards tiles were removed on 2026-08-18 when those
+  // categories were unlisted. Assert they are GONE, so re-adding a tile that
+  // jumps to a section nobody can browse to fails here first.
+  assert(!html.includes("TDS + SDS") && !html.includes("the CS series"),
+    "no launchpad tile for the unlisted categories");
+  assert(html.includes("shelf + uploads"), "the Documents tile replaced them");
   assert(/<a class="b-tile" href="https:\/\/docs\.google\.com\/x"/.test(html), "a pinned Google doc is an anchor, not a button");
   DB.documents = [];
 });
@@ -2471,6 +2476,18 @@ await t("markdown renderer: headings, tables, lists, bold", () => {
   assert(html.includes("<li>one</li>"), "list");
   assert(html.includes("<strong>bold</strong>") && html.includes("<code>code</code>"), "inline");
 });
+await t("the shipped manifest lists no datasheets and no standards", async () => {
+  /* The unlisting is a data change, not a code change, so this reads the real
+     docs/manifest.json rather than a fixture. The FILES stay on disk on
+     purpose (resins.js deep-links six datasheet PDFs by path); what must be
+     absent is the advertisement. */
+  const real = JSON.parse(readFileSync(join(root, "docs/manifest.json"), "utf8"));
+  const bad = real.filter(d => d.category === "Datasheets" || d.category === "Standards");
+  assert(!bad.length, "unlisted categories are back in the manifest: " +
+    bad.map(d => d.category + "/" + d.title).join(", "));
+  assert(real.some(d => d.category === "Guides"), "the printables guide is still listed");
+});
+
 await t("documents tab loads manifest + lists categories", async () => {
   fetchMap["docs/manifest.json"] = [
     { category: "Datasheets", title: "XCR TDS", kind: "pdf", src: "docs/datasheets/xcr.pdf", size: 2000 },
