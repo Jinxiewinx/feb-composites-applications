@@ -1204,7 +1204,10 @@ function woSecStack(wo, E) {
     <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
       ${(wo.bom || []).map((b, i) => E
         ? `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`
-        : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${esc(b.estCost)}</td></tr>`).join("")}
+        : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${
+            // A line copied from the part's plan prices itself off its
+            // inventory ref; hand-typed estCost still shows verbatim.
+            esc(b.estCost) || (bomLineCost(b) != null ? esc(fmtMoney(bomLineCost(b))) : "")}</td></tr>`).join("")}
     </tbody></table>
     ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
     </details>`;

@@ -201,6 +201,16 @@ files, Notes) folded until asked for — same sticky fold state, same
 print-safe class fold. The old anchor jump bar is gone with them; anchors
 would have overwritten the record deep link in the URL hash.
 
+**Materials (plan)** sits between the stack and the runs: the part's
+expected bill of materials. A line is either free text or picked from
+inventory, and a picked line prices itself live from that record's unit
+cost (qty × $/unit), so the section header can say what the part should
+cost to make. The rollup always carries its coverage ("≈ $66.50 · 1
+unpriced") — a sum over gaps never pretends to be complete, and an empty
+plan says nothing rather than $0.00. Starting a run copies the plan onto
+the work order as its as-built BOM, stamped with where and when the copy
+came from; edits on the run never flow back to the plan.
+
 Its **Runs** section is the rest of the picture: every run against the part
 with status, due date and ply count. The **Mold** section holds the mold and
 its **mold file**, with buttons straight to the 3D view and the drawings;

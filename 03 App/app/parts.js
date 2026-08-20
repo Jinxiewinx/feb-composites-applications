@@ -807,7 +807,12 @@ async function newRunForPart(partId, opts) {
     createdDate: today(), dueDate: p.layupDeadline || "", partId: p.id,
     mold: { moldId: p.mold || "", layers: "", density: "", sealingType: "XCR", location: p.moldLocation || "" },
     layupStack: JSON.parse(JSON.stringify(p.layupStack || [])), stackSource: "spec",
-    stackNote: "", bom: [], standardsRefs: [],
+    // A fresh run starts from the part's plan, and that includes its BOM —
+    // the copy is the as-built record from here on; editing it never touches
+    // the plan. bomFrom says where the copy came from (and when), because a
+    // frozen copy with no provenance is a number nobody trusts later.
+    stackNote: "", bom: JSON.parse(JSON.stringify(p.bom || [])), standardsRefs: [],
+    bomFrom: (p.bom || []).length ? p.id : "", bomCopiedOn: (p.bom || []).length ? today() : "",
     steps: (STD_STEPS[proc] || STD_STEPS.Other).map(stepFromTemplate),
     qualityChecks: [{ criterion: "mass", target: p.weightG || "", actual: "", pass: null }],
     weightTargetG: p.weightG || null, weightActualG: null, timeline: [], notes: "", retro: false,
@@ -841,6 +846,7 @@ async function newRunForPart(partId, opts) {
     }
     if (opts.bom && (src.bom || []).length) {
       wo.bom = JSON.parse(JSON.stringify(src.bom));
+      wo.bomFrom = src.id; wo.bomCopiedOn = today();
       carried.push("BOM");
     }
     if (opts.quality && (src.qualityChecks || []).length) {
@@ -1120,6 +1126,13 @@ const PART_SECTIONS = [
       return `${n} differ`;
     },
     body: (p, E) => ptSecStack(p, E) },
+  { id: "bom", label: "Materials (plan)", anchor: "pt-bom",
+    badge: p => String((p.bom || []).length || ""),
+    foldWhen: p => !(p.bom || []).length,
+    // The money stays readable on the folded card — the rollup is the reason
+    // the section exists, so it never hides behind a click.
+    foldHint: p => { const t = bomRollupText(p.bom); return t ? `<span class="tny muted nocaps">${esc(t)}</span>` : ""; },
+    body: (p, E) => ptSecBom(p, E) },
   { id: "runs", label: "Runs", anchor: "pt-children",
     badge: p => String(partRuns(p).length || ""),
     warn: p => partRuns(p).some(r => woFlags(r.wo).blocked || isWoLate(r.wo)),
@@ -1152,6 +1165,119 @@ const PART_SECTIONS = [
     foldWhen: () => true,
     body: (p, E) => ptSecNotes(p, E) },
 ];
+
+/* ---------- Materials (plan): the part's BOM ----------
+ *
+ * The part carries the EXPECTED bill of materials; each run copies it at
+ * creation and records what actually went in (the same plan-vs-asbuilt bargain
+ * the layup stack already struck). Lines are keyed by `lineId`, never array
+ * index — refs and provenance survive a deletion that way. A line prices
+ * itself from an inventory ref (qty × the record's unitCost) or a hand-typed
+ * estCost; bomRollup in core.js says the total WITH its coverage. */
+
+function bomLineId() {
+  return "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function partBomAdd() {
+  const p = partById(view.id);
+  if (!p) return;
+  const line = { lineId: bomLineId(), item: "", qty: "", unit: "", source: "", estCost: "", ref: "" };
+  (p.bom = p.bom || []).push(line);
+  saveField("parts", p, "bom", arr => [...(arr || []), line]);
+  render();
+}
+
+function partBomUpd(lid, k, v) {
+  const p = partById(view.id);
+  const l = p && (p.bom || []).find(x => x.lineId === lid);
+  if (!l) return;
+  l[k] = v;
+  saveField("parts", p, "bom", arr => (arr || []).map(x => x.lineId === lid ? { ...x, [k]: v } : x));
+  // qty and estCost move the rollup; item/unit/source don't need a repaint.
+  if (k === "qty" || k === "estCost") render();
+}
+
+/* Picking an inventory record fills the blanks the record already knows —
+   name, unit, supplier — and leaves anything the user typed alone. */
+function partBomPick(lid, refId) {
+  const p = partById(view.id);
+  const l = p && (p.bom || []).find(x => x.lineId === lid);
+  if (!l) return;
+  const rec = bomRefRec(refId);
+  const patch = { ref: refId };
+  if (rec) {
+    if (!String(l.item || "").trim()) patch.item = rec.name || rec.label || rec.id;
+    if (!String(l.unit || "").trim() && rec.costUnit) patch.unit = rec.costUnit;
+    if (!String(l.source || "").trim() && rec.supplier) patch.source = rec.supplier;
+  }
+  Object.assign(l, patch);
+  saveField("parts", p, "bom", arr => (arr || []).map(x => x.lineId === lid ? { ...x, ...patch } : x));
+  render();
+}
+
+function partBomDel(lid) {
+  const p = partById(view.id);
+  if (!p) return;
+  p.bom = (p.bom || []).filter(x => x.lineId !== lid);
+  saveField("parts", p, "bom", arr => (arr || []).filter(x => x.lineId !== lid));
+  render();
+}
+
+/* Everything a plan line can point at, grouped, with prices where known. A
+   current ref that fell out of the lists (an emptied lot) stays selectable so
+   rendering the picker can't silently drop it. */
+function partBomRefOptions(cur) {
+  const seen = new Set();
+  const opt = o => {
+    seen.add(o.id);
+    const price = typeof o.unitCost === "number" ? " · " + shopMoneyText(o, "unitCost") : "";
+    return `<option value="${esc(o.id)}" ${o.id === cur ? "selected" : ""}>${esc(o.name || o.label || o.id)}${esc(price)}</option>`;
+  };
+  const g = (label, recs) => recs.length ? `<optgroup label="${esc(label)}">${recs.map(opt).join("")}</optgroup>` : "";
+  const live = (DB.lots || []).filter(o => o.stage !== "Empty" && o.stage !== "Expired");
+  let out = g("Fabric", live.filter(o => o.cls === "FAB"))
+    + g("Resin / hardener", live.filter(o => o.cls === "RSN"))
+    + g("Consumables", live.filter(o => o.cls === "CON"))
+    + g("Tooling boards", DB.stock || [])
+    + g("Jigs", (DB.items || []).filter(o => o.cls === "JIG"));
+  if (cur && !seen.has(cur)) out += `<option value="${esc(cur)}" selected>${esc(cur)}</option>`;
+  return out;
+}
+
+function ptSecBom(p, E) {
+  const bom = p.bom || [];
+  const roll = bomRollupText(bom);
+  const costCell = l => {
+    const c = bomLineCost(l);
+    if (c == null) return '<span class="muted" title="No price yet — pick an inventory item or type an estimate">—</span>';
+    const rec = bomRefRec(l.ref);
+    return `${esc(fmtMoney(c))}${rec && typeof rec.unitCost === "number" ? ` <span class="tny muted nocaps">(${esc(l.qty)} × ${esc(shopMoneyText(rec, "unitCost"))})</span>` : ""}`;
+  };
+  const rows = bom.map(l => {
+    const lid = esc(l.lineId || "");
+    if (!E) {
+      return `<tr><td>${esc(l.item)}${l.ref ? ` ${shopRefChip(String(l.ref))}` : ""}</td><td>${esc(l.qty)}</td><td>${esc(l.unit)}</td><td>${esc(l.source)}</td><td>${costCell(l)}</td></tr>`;
+    }
+    return `<tr>
+      <td><input value="${esc(l.item)}" onchange="partBomUpd('${lid}','item',this.value)"></td>
+      <td><input value="${esc(l.qty)}" onchange="partBomUpd('${lid}','qty',this.value)" style="max-width:70px"></td>
+      <td><input value="${esc(l.unit)}" onchange="partBomUpd('${lid}','unit',this.value)" style="max-width:70px"></td>
+      <td><input value="${esc(l.source)}" onchange="partBomUpd('${lid}','source',this.value)"></td>
+      <td>${bomRefRec(l.ref) && typeof bomRefRec(l.ref).unitCost === "number"
+        ? costCell(l)
+        : `<input value="${esc(l.estCost)}" placeholder="$" onchange="partBomUpd('${lid}','estCost',this.value)" style="max-width:80px">`}</td>
+      <td><select onchange="partBomPick('${lid}',this.value)">
+        <option value="">free text</option>${partBomRefOptions(String(l.ref || ""))}
+      </select></td>
+      <td><button class="danger ib sm" title="Remove line" onclick="partBomDel('${lid}')">${icon("trash", 13)}</button></td>
+    </tr>`;
+  }).join("");
+  return `
+    ${roll ? `<div class="muted" style="margin-bottom:6px">Planned materials cost: ${esc(roll)}</div>` : ""}
+    ${bom.length || E ? `<table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th>${E ? "<th>From inventory</th><th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="muted">What this part is expected to consume — fabric, resin, consumables. New runs copy this list, and priced lines sum into a cost estimate.</p>`}
+    ${E ? `<button onclick="partBomAdd()">+ Material line</button>` : ""}`;
+}
 
 function ptJump(anchor) {
   const p = partById(view.id);

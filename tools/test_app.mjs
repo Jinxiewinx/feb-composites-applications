@@ -5458,6 +5458,95 @@ await t("the false-alarm cancel confirms before retiring a nonconformance", () =
   closeModal();
 });
 
+console.log("part BOM (materials plan):");
+
+function seedBomPart() {
+  DB.parts = [{ id: "P-BOM-1", partName: "DIFFUSER", subteam: "AERO", layupType: "MOLD INFUSION",
+    layupStack: [], commentLog: [], docs: [], files: [], workOrderId: "", bom: [] }];
+  DB.workOrders = [];
+  DB.lots = [
+    { id: "FAB-SN6-001", cls: "FAB", name: "195 twill", stage: "Open", unitCost: 18, costUnit: "yd", supplier: "Composite Envisions" },
+    { id: "CON-SN6-001", cls: "CON", name: "chip brushes", stage: "Sealed", unitCost: 5, costUnit: "ea", supplier: "McMaster" },
+    { id: "RSN-SN6-001", cls: "RSN", name: "IN2 resin", stage: "Open" },   // no price on purpose
+  ];
+  DB.stock = []; DB.items = [];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-BOM-1", edit: true };
+}
+
+await t("a plan line prices itself from its inventory ref, and the rollup owns up to gaps", () => {
+  seedBomPart();
+  partBomAdd(); partBomAdd(); partBomAdd();
+  const [a, b, c] = DB.parts[0].bom;
+  assert(a.lineId && b.lineId && a.lineId !== b.lineId, "lines are keyed by lineId, never index");
+  partBomPick(a.lineId, "FAB-SN6-001");
+  partBomUpd(a.lineId, "qty", "3");
+  partBomPick(b.lineId, "RSN-SN6-001");   // ref with no unitCost
+  partBomUpd(b.lineId, "qty", "0.8");
+  partBomUpd(c.lineId, "item", "breather"); partBomUpd(c.lineId, "estCost", "$12.50");
+  const roll = bomRollup(DB.parts[0].bom);
+  assert(roll.total === 66.5, "3yd x $18 + $12.50 = $66.50, got " + roll.total);
+  assert(roll.unpriced === 1, "the un-costed resin ref is counted, not zeroed");
+  assert(bomRollupText(DB.parts[0].bom).includes("$66.50") && bomRollupText(DB.parts[0].bom).includes("1 unpriced"),
+    "the text carries its coverage: " + bomRollupText(DB.parts[0].bom));
+});
+
+await t("picking a ref fills the blanks the record knows; typed values are never overwritten", () => {
+  seedBomPart();
+  partBomAdd();
+  const l = DB.parts[0].bom[0];
+  partBomUpd(l.lineId, "item", "my own name");
+  partBomPick(l.lineId, "CON-SN6-001");
+  assert(l.item === "my own name", "a typed item survives the pick");
+  assert(l.unit === "ea" && l.source === "McMaster", "unit and supplier ride in from the record");
+});
+
+await t("money that doesn't parse is unpriced, never silently a number", () => {
+  assert(parseLooseMoney("$1O0") === null, "the letter-O typo is refused, not read as 1 or 100");
+  assert(parseLooseMoney("") === null && parseLooseMoney(undefined) === null, "blank is unknown");
+  assert(parseLooseMoney("$1,200.50") === 1200.5, "plain dollar text still reads");
+  assert(bomRollupText([]) === "", "an empty plan says nothing rather than $0.00");
+  assert(bomRollupText([{ estCost: "call for quote" }]).includes("none priced"), "all-unpriced says so");
+});
+
+await t("deleting a plan line by id leaves its siblings intact", () => {
+  seedBomPart();
+  partBomAdd(); partBomAdd();
+  const keep = DB.parts[0].bom[1];
+  partBomUpd(keep.lineId, "item", "survivor");
+  partBomDel(DB.parts[0].bom[0].lineId);
+  assert(DB.parts[0].bom.length === 1 && DB.parts[0].bom[0].item === "survivor", "the right line went");
+});
+
+await t("the Materials (plan) section renders with its rollup, and the anchor exists", () => {
+  seedBomPart();
+  partBomAdd();
+  partBomPick(DB.parts[0].bom[0].lineId, "FAB-SN6-001");
+  partBomUpd(DB.parts[0].bom[0].lineId, "qty", "2");
+  view.edit = false;
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Materials (plan)") && h.includes("pt-bom"), "section and anchor");
+  assert(h.includes("$36.00"), "the rollup shows on the page");
+  assert(h.includes("195 twill"), "the ref renders as a followable chip");
+});
+
+await t("a fresh run copies the part's plan as its as-built BOM, with provenance, and edits never flow back", async () => {
+  seedBomPart();
+  partBomAdd();
+  partBomPick(DB.parts[0].bom[0].lineId, "FAB-SN6-001");
+  partBomUpd(DB.parts[0].bom[0].lineId, "qty", "3");
+  await newRunForPart("P-BOM-1");
+  const wo = DB.workOrders[0];
+  assert(wo.bom.length === 1 && wo.bom[0].ref === "FAB-SN6-001", "the plan rode onto the run");
+  assert(wo.bomFrom === "P-BOM-1" && wo.bomCopiedOn, "the copy says where and when it came from");
+  wo.bom[0].qty = "4";
+  assert(DB.parts[0].bom[0].qty === "3", "the run's as-built edit never mutates the plan");
+  // and the WO read table prices the copied ref line instead of a blank cell
+  view = { ...view, tab: "workorders", mode: "detail", id: wo.id, edit: false };
+  render();
+  assert(main.innerHTML.includes("$72.00"), "4yd x $18 shows in the run's BOM");
+});
+
 console.log("run carry-over:");
 await t("a part with no runs starts one immediately; with history it gets the choice", async () => {
   signInAsLead();

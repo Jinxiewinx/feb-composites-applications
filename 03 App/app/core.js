@@ -274,6 +274,61 @@ function fmtMoney(n) {
   return typeof n === "number" && Number.isFinite(n) ? "$" + n.toFixed(2) : "";
 }
 
+/* ---------- BOM line costing ----------
+   Shared by the part's Materials (plan) section and the work order's as-built
+   BOM. A line prices itself one of two ways: a `ref` to an inventory record
+   whose numeric unitCost × the line qty, or a hand-typed estCost. Anything
+   unparseable is UNPRICED — counted and said out loud, never $0. That rule is
+   what keeps a rollup honest over free-text history. */
+
+function parseLooseMoney(s) {
+  if (typeof s === "number") return Number.isFinite(s) ? s : null;
+  const t = String(s ?? "").trim().replace(/^\$/, "").replace(/,/g, "");
+  if (!t) return null;
+  const n = Number(t);          // "1O0" is NaN here, not 100 — that's the point
+  return Number.isFinite(n) ? n : null;
+}
+
+/* The inventory record a BOM line points at, whatever collection it lives in. */
+function bomRefRec(id) {
+  if (!id) return null;
+  for (const coll of ["lots", "stock", "items", "molds"]) {
+    const r = (DB[coll] || []).find(o => o.id === id);
+    if (r) return r;
+  }
+  return null;
+}
+
+function bomLineCost(l) {
+  if (!l) return null;
+  const rec = bomRefRec(l.ref);
+  if (rec && typeof rec.unitCost === "number") {
+    const q = parseLooseMoney(l.qty);
+    return q == null ? null : Math.round(rec.unitCost * q * 100) / 100;
+  }
+  return parseLooseMoney(l.estCost);
+}
+
+function bomRollup(lines) {
+  let total = 0, priced = 0;
+  for (const l of lines || []) {
+    const c = bomLineCost(l);
+    if (c == null) continue;
+    total += c; priced++;
+  }
+  const count = (lines || []).length;
+  return { total: Math.round(total * 100) / 100, priced, unpriced: count - priced, count };
+}
+
+/* "≈ $214.50 · 1 unpriced" — the coverage rides with the number so a partial
+   sum can't be mistaken for a complete one. */
+function bomRollupText(lines) {
+  const r = bomRollup(lines);
+  if (!r.count) return "";
+  if (!r.priced) return `${r.count} line${r.count === 1 ? "" : "s"}, none priced yet`;
+  return `≈ ${fmtMoney(r.total)}${r.unpriced ? ` · ${r.unpriced} unpriced` : ""}`;
+}
+
 /* ---------- sub-day time ----------
    daysUntil() rounds to whole days and midnight-anchors, so it answers 0 for a
    six-hour cure and 1 for a cure that finishes at 00:30 tonight. A cure hold

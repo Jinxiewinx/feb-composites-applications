@@ -24,7 +24,11 @@ against current workorders.js/budget.js before touching them — the plan's
 file-level details for those two files are suspect, its decisions stand.
 Six chunks, each shippable alone:
   1. unitCost/costUnit/buyRef on lots/stock/items  <- DONE this session
-  2. part.bom[] section + ref picker + coverage rollup
+  2. part.bom[] section + ref picker + coverage rollup  <- DONE this session
+     (bomLineId-keyed lines; bomRollup/bomLineCost/parseLooseMoney in
+     core.js; PART_SECTIONS gains "bom" between stack and runs with a
+     foldHint rollup; fresh runs seed wo.bom from p.bom with bomFrom/
+     bomCopiedOn provenance; WO read table prices ref lines)
   3. WO copy-on-create + consume (buy-off prompt + per-line button) + print
      cost column + dashboard consumed tile + push-back-to-plan w/ provenance
   4. budget lines[] (desc/total/xcount, live "each" cell, explicit = cost
