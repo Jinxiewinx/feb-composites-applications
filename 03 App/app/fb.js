@@ -295,6 +295,17 @@ const fb = {
   },
   async deleteFile(path) { try { await deleteObject(sRef(storage, path)); } catch (e) { /* already gone */ } },
 
+  /* ---- callable functions ----
+     The functions SDK loads lazily on first use: exactly one feature calls a
+     function (receipt parsing), so its ~30 KB never rides in the boot path.
+     Throws to the caller — the UI's job is to degrade to the manual editor,
+     not this file's job to pretend it worked. */
+  async call(name, data) {
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js");
+    const res = await httpsCallable(getFunctions(app, "us-central1"), name)(data);
+    return res.data;
+  },
+
   /* ---- roster ---- */
   async rosterAll() {
     const snap = await getDocs(collection(db, "roster"));

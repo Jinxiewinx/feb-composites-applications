@@ -2042,6 +2042,29 @@ await t("the budget CSV exports cost AND the line sum, so a mismatch survives in
   assert(get.lineSum({ id: "x" }) === "", "legacy rows export an empty lineSum, not $0");
 });
 
+await t("receipt parsing prefills the same editable grid, and a dead function degrades to typing", async () => {
+  DB.budget = [{ id: "BUY-RC-1", item: "order", purchaser: "P", purpose: "Other", status: "Submitted",
+    cost: "", dateOrdered: "2026-08-19", source: "", receiptUrl: "", receiptPath: "", lines: [] }];
+  view = { ...view, tab: "budget", mode: "detail", id: "BUY-RC-1", edit: true };
+  await fillLinesFromReceipt("BUY-RC-1");
+  assert(/receipt photo first/.test(lastToast), "no photo, no parse: " + lastToast);
+  DB.budget[0].receiptPath = "budget/BUY-RC-1/123-r.jpg";
+  await fillLinesFromReceipt("BUY-RC-1");   // fake fb has no .call
+  assert(/manual grid still works/.test(lastToast), "a missing function degrades, never blocks: " + lastToast);
+  assert(DB.budget[0].lines.length === 0, "and nothing was written");
+  fb.call = async (name, data) => {
+    assert(name === "parseReceipt" && data.path === "budget/BUY-RC-1/123-r.jpg", "called with the storage path");
+    return { lines: [{ desc: "chip brushes", qty: "4", total: "20.00" }, { desc: "acetone", qty: "1", total: "12.99" }], vendor: "McMaster" };
+  };
+  await fillLinesFromReceipt("BUY-RC-1");
+  const b = DB.budget[0];
+  assert(b.lines.length === 2 && b.lines.every(l => l.lineId), "proposed lines land as ordinary lineId'd lines");
+  assert(buyLineEach(b.lines[0]) === 5, "and price like any typed line");
+  assert(b.source === "McMaster", "an empty vendor field takes the receipt's word");
+  assert(b.cost === "", "cost is still untouched — the explicit button remains the only path");
+  delete fb.call;
+});
+
 console.log("google documents:");
 await t("every Google surface is recognised from its URL alone", () => {
   // No API, no key, no auth — the URL string is the entire input, so this is

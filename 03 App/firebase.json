@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "//": "The repo's one backend: parseReceipt (receipt photo -> proposed budget line items). Deployed SEPARATELY from hosting — `firebase deploy --only functions` — and never as a rider on a hosting deploy; the hosting-only standing authorization does not cover it. Needs the ANTHROPIC_API_KEY secret set once via `firebase functions:secrets:set ANTHROPIC_API_KEY`.",
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
   "hosting": {
     "public": "app",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"],

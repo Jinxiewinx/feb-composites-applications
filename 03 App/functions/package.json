@@ -1,0 +1,11 @@
+{
+  "name": "feb-composites-functions",
+  "description": "Cloud Functions for the FEB composites app. One function: parseReceipt.",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  },
+  "private": true
+}

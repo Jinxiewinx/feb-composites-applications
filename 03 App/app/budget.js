@@ -297,7 +297,44 @@ function buyLinesHtml(b, E) {
     <h3>Line items ${s.count ? `<span class="muted nocaps">· sum ${esc(fmtMoney(s.sum))}${s.priced < s.count ? ` (${s.count - s.priced} unpriced)` : ""}</span> ${buyLineSumChip(b)}` : ""}</h3>
     ${lines.length ? `<table class="sub"><thead><tr><th>Item</th><th>Total $</th><th>Count</th><th>Each</th>${E ? "<th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`
       : `<p class="muted">What was actually in the order — one line per thing, total and count, the unit price works itself out.</p>`}
-    ${E ? `<button onclick="buyLineAdd()">+ Line</button>` : ""}`;
+    ${E ? `<button onclick="buyLineAdd()">+ Line</button>
+    ${b.receiptPath ? `<button class="no-print" onclick="fillLinesFromReceipt('${esc(b.id)}')" title="Read the receipt photo into editable line items">✨ Fill from receipt</button>` : ""}` : ""}`;
+}
+
+/* ---------- receipt -> proposed lines ----------
+ * The ✨ button calls the parseReceipt Cloud Function and drops the answer
+ * into the SAME editable grid — parsing is a prefill, never a separate mode,
+ * so a wrong read is fixed by typing in a normal cell and a dead function
+ * degrades to the manual editor. Existing lines are never touched without a
+ * confirm. */
+let RECEIPT_PARSING = false;
+async function fillLinesFromReceipt(id) {
+  const b = buyById(id);
+  if (!b || RECEIPT_PARSING) return;
+  if (!b.receiptPath) { toast("Add a receipt photo first — the ✨ reads that.", "error"); return; }
+  if (buyLines(b).length) {
+    const go = await confirmAsync("This purchase already has line items. Add what the receipt says underneath them?", { ok: "Add lines", danger: false });
+    if (!go) return;
+  }
+  RECEIPT_PARSING = true;
+  toast("Reading the receipt…");
+  try {
+    const out = await fb.call("parseReceipt", { path: b.receiptPath });
+    const lines = (out && out.lines || []).map(l => ({
+      lineId: bomLineId(), desc: l.desc || "", qty: l.qty || "1", total: l.total || "", lotRefs: [], receivedOn: "",
+    }));
+    if (!lines.length) { toast("Couldn't find line items on that photo — type them in, it's five cells.", "error"); return; }
+    b.lines = [...buyLines(b), ...lines];
+    saveField("budget", b, "lines", arr => [...(arr || []), ...lines]);
+    if (out.vendor && !String(b.source || "").trim()) { b.source = out.vendor; saveBuy(b, "source"); }
+    toast(`${lines.length} line${lines.length === 1 ? "" : "s"} read from the receipt — every cell is editable.`);
+    view.edit = true;
+    render();
+  } catch (e) {
+    toast("Receipt parsing isn't available (" + (e && e.message || "no function") + ") — the manual grid still works.", "error");
+  } finally {
+    RECEIPT_PARSING = false;
+  }
 }
 
 function renderBudget() {

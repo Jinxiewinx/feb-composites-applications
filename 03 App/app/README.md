@@ -400,10 +400,25 @@ $50 approval threshold would move the gate as a typing side effect. Instead
 the section shows the line sum with a quiet "matches cost" chip when the
 two agree, and a warning plus an explicit **= set cost from lines** button
 when they don't. Status stays what it always was, a reimbursement
-lifecycle; whether a line's contents ever reached a shelf is chunk 5's
-receiving flow, tracked on the line itself. The budget CSV exports both
-cost and the line sum so a mismatch survives into the spreadsheet, and old
-purchases without lines behave exactly as before.
+lifecycle; whether a line's contents ever reached a shelf shows in
+Inventory's Incoming strip, tracked on the line itself. The budget CSV
+exports both cost and the line sum so a mismatch survives into the
+spreadsheet, and old purchases without lines behave exactly as before.
+
+With a receipt photo attached, **✨ Fill from receipt** reads it into
+proposed lines. The reading happens in the app's one Cloud Function
+(`functions/index.js`, `parseReceipt`): the client sends the storage path,
+the function checks the caller against the roster, downloads the image,
+asks a Haiku-class Claude model for the line items, and returns them. The
+Anthropic API key lives in a Functions secret, server-side only — a key
+readable by the roster would be an open spend faucet, which is why the
+client-side option lost. Parsing only ever prefills the same editable
+grid: every cell stays fixable, existing lines are never touched without a
+confirm, and if the function is missing or down the button says so and the
+manual editor carries on. Functions deploy separately
+(`firebase deploy --only functions`, after
+`firebase functions:secrets:set ANTHROPIC_API_KEY`) and never ride along
+on a hosting deploy.
 
 People is the team roster with photos, roles, and each person's live assignments
 across parts, projects and work orders. Leads can set roles, and trainings are

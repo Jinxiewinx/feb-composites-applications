@@ -53,7 +53,18 @@ Six chunks, each shippable alone:
      invReceive(bin, from) prefilled single-row modal; graduation
      stamps buyRef/unitCost/costUnit/qty on the lot FIRST, then
      back-links lotRefs+receivedOn on the line; walk-ins un-costed)
-  6. Cloud Function receipt parsing (FIRST backend; confirm deploy w/ Simon)
+  6. Cloud Function receipt parsing  <- CODE DONE, NOT DEPLOYED
+     (functions/index.js parseReceipt onCall: roster check mirrors
+     firestore.rules onRoster, path shape budget/{id}/{file} enforced,
+     image<=10MiB, Haiku via REST fetch, returns {lines,vendor,
+     receiptTotal}; firebase.json functions block; fb.call() lazy-loads
+     the functions SDK; budget.js fillLinesFromReceipt prefills the
+     grid, confirm before appending to existing lines, degrades to
+     manual on any failure. TWO THINGS ONLY SIMON CAN DO:
+       cd "03 App" && firebase functions:secrets:set ANTHROPIC_API_KEY
+       firebase deploy --only functions
+     — first backend deploy ever; hosting authorization does NOT cover
+     it. The ✨ button ships and fails politely until then.)
 Chunk 1 specifics: new `money` field type in shop.js (stored number or "",
 refuses garbage with a toast — no num() free-text money for NEW fields),
 `fmtMoney()` in core.js (non-number -> "", never $0.00), `shopMoneyText()`
