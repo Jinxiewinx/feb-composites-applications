@@ -105,7 +105,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -1988,6 +1988,58 @@ await t("deleting a purchase with a receipt cleans up its file (regression: noth
   delBuy("B-R2"); confirmProceed();
   assert(calls.some(c => c[0] === "deleteFile" && c[1] === "budget/B-R2/r2.jpg"), "receipt file deleted: " + JSON.stringify(calls));
   assert(!DB.budget.some(b => b.id === "B-R2"), "purchase removed");
+});
+
+await t("line items: total and count typed, the unit price works itself out", () => {
+  DB.budget = [{ id: "BUY-LN-1", item: "McMaster order", purchaser: "P", purpose: "Manufacturing",
+    status: "Submitted", cost: "", dateOrdered: "2026-08-19", source: "McMaster", notes: "", lines: [] }];
+  view = { ...view, tab: "budget", mode: "detail", id: "BUY-LN-1", edit: true };
+  buyLineAdd(); buyLineAdd(); buyLineAdd();
+  const [a, b, c] = DB.budget[0].lines;
+  assert(a.lineId && a.lineId !== b.lineId, "lines are lineId-keyed");
+  buyLineUpd(a.lineId, "desc", "chip brushes"); buyLineUpd(a.lineId, "total", "$20"); buyLineUpd(a.lineId, "qty", "4");
+  buyLineUpd(b.lineId, "desc", "acetone"); buyLineUpd(b.lineId, "total", "12.99");   // count untouched = 1
+  buyLineUpd(c.lineId, "desc", "shipping TBD"); buyLineUpd(c.lineId, "total", "call");
+  assert(buyLineEach(a) === 5, "$20 x4 = $5.00 each");
+  assert(buyLineEach(b) === 12.99, "no count typed means one of it");
+  assert(buyLineEach(c) === null, "unparseable money has no unit price");
+  const s = buyLineSum(DB.budget[0]);
+  assert(s.sum === 32.99 && s.priced === 2 && s.count === 3, "the sum owns up to the unpriced line");
+  render();
+  assert(main.innerHTML.includes("$5.00 ea") && main.innerHTML.includes("sum $32.99"), "each and sum on the page");
+});
+
+await t("lines NEVER write cost by themselves — the $50 gate only moves on the explicit button", () => {
+  const b = DB.budget[0];
+  assert(b.cost === "" && !needsApproval(b), "three lines summing $32.99 changed nothing");
+  buyLineUpd(b.lines[0].lineId, "total", "$80");
+  assert(b.cost === "" && !needsApproval(b), "even a line edit that crosses $50 doesn't flip the gate");
+  render();
+  assert(main.innerHTML.includes("cost field says"), "the mismatch is shown, not silently fixed");
+  setCostFromLines("BUY-LN-1");
+  assert(b.cost === "92.99", "the button is the one path from lines to cost");
+  assert(needsApproval(b), "and NOW the approval gate fires, on a deliberate action");
+  render();
+  assert(main.innerHTML.includes("matches cost"), "agreement wears the quiet chip");
+});
+
+await t("a legacy purchase with no lines renders exactly as before", () => {
+  DB.budget = [{ id: "BUY-LN-2", item: "old one", purchaser: "P", purpose: "Testing",
+    status: "Ordered", cost: "40", dateOrdered: "2026-08-01", source: "", notes: "" }];
+  view = { ...view, tab: "budget", mode: "detail", id: "BUY-LN-2", edit: false };
+  render();
+  assert(!main.innerHTML.includes("Line items"), "no lines, no section, no behavior change");
+});
+
+await t("the budget CSV exports cost AND the line sum, so a mismatch survives into the spreadsheet", () => {
+  DB.budget = [{ id: "BUY-LN-3", item: "x", purchaser: "P", purpose: "Other", status: "Submitted",
+    cost: "18", dateOrdered: "2026-08-19", lines: [{ lineId: "l1", desc: "a", qty: "4", total: "20" }] }];
+  const spec = CSV_SPECS.budget;
+  const labels = spec.cols.map(c => c[0]);
+  assert(labels.includes("lineSum") && labels.includes("cost"), "both money columns present: " + labels.join(","));
+  const get = Object.fromEntries(spec.cols.map(([l, g]) => [l, g]));
+  assert(get.lineSum(DB.budget[0]) === "20.00" && get.cost(DB.budget[0]) === "18", "the disagreement is visible in the export");
+  assert(get.lineSum({ id: "x" }) === "", "legacy rows export an empty lineSum, not $0");
 });
 
 console.log("google documents:");

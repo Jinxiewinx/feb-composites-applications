@@ -16,7 +16,13 @@ const CSV_SPECS = {
   parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline]] },
   workOrders: { file: "work-orders", rows: () => DB.workOrders, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["process", r => r.processType], ["status", r => r.status], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["due", r => r.dueDate]] },
   projects: { file: "tickets", rows: () => DB.projects, cols: [["id", r => r.id], ["kind", r => ticketKind(r)], ["title", r => r.title], ["status", r => projStatus(r)], ["priority", r => r.priority], ["due", r => r.dueDate], ["assignees", r => (r.assignees || []).join("; ")]] },
-  budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose], ["status", r => r.status], ["cost", r => r.cost], ["dateOrdered", r => r.dateOrdered]] },
+  budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose], ["status", r => r.status], ["cost", r => r.cost],
+    // Both money columns on purpose: cost is the hand-set number the app
+    // sums, lineSum is what the line items add to. Exporting only one would
+    // hide a mismatch from the advisor spreadsheet.
+    ["lineSum", r => { const s = typeof buyLineSum === "function" ? buyLineSum(r) : { count: 0 }; return s.count ? s.sum.toFixed(2) : ""; }],
+    ["lineCount", r => (r.lines || []).length || ""],
+    ["dateOrdered", r => r.dateOrdered]] },
 };
 function exportCSV(which) {
   const s = CSV_SPECS[which]; if (!s) return;

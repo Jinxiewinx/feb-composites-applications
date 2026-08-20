@@ -392,6 +392,19 @@ rollup pulled from ticket due dates and manual assignments.
 Budget runs purchase requests through Submitted, Ordered and Reimbursed, with the
 season total, an open-orders subtotal, and a flag on anything over $50.
 
+A purchase can carry **line items**: one row per thing, typed the way a
+receipt reads (total and count) with the unit price deriving live as you
+type — $20 across 4 shows $5.00 ea before you leave the cell. Lines never
+change the cost field on their own; a line edit that silently crossed the
+$50 approval threshold would move the gate as a typing side effect. Instead
+the section shows the line sum with a quiet "matches cost" chip when the
+two agree, and a warning plus an explicit **= set cost from lines** button
+when they don't. Status stays what it always was, a reimbursement
+lifecycle; whether a line's contents ever reached a shelf is chunk 5's
+receiving flow, tracked on the line itself. The budget CSV exports both
+cost and the line sum so a mismatch survives into the spreadsheet, and old
+purchases without lines behave exactly as before.
+
 People is the team roster with photos, roles, and each person's live assignments
 across parts, projects and work orders. Leads can set roles, and trainings are
 granted here: capsule pills on the list, a bulk "Record training session" modal

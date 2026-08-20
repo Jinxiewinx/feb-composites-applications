@@ -185,6 +185,121 @@ function attachReceipt(id) {
   inp.click();
 }
 
+/* ---------- line items ----------
+ *
+ * A purchase can carry what was actually in it: one line per thing, with the
+ * TOTAL and the COUNT typed (that's what a receipt says) and the unit price
+ * derived live — $20 × 4 shows $5.00 ea while you type. Lines never write
+ * `cost` by themselves: a line edit silently flipping the $50 approval gate
+ * is a correctness bug (the integrity critic's veto), so the sum is offered
+ * through an explicit "= set cost" button plus a visible mismatch chip.
+ * Legacy purchases with no lines behave exactly as before. lineId keys every
+ * mutation; chunk 5's receiving stamps lotRefs/receivedOn onto a line. */
+
+function buyLines(b) { return b && Array.isArray(b.lines) ? b.lines : []; }
+
+function buyLineEach(l) {
+  const t = parseLooseMoney(l.total);
+  const q = parseLooseMoney(l.qty);
+  const n = q == null ? 1 : q;                 // no count typed = one of it
+  if (t == null || !(n > 0)) return null;
+  return Math.round(t / n * 100) / 100;
+}
+
+function buyLineSum(b) {
+  let sum = 0, priced = 0;
+  for (const l of buyLines(b)) {
+    const t = parseLooseMoney(l.total);
+    if (t != null) { sum += t; priced++; }
+  }
+  return { sum: Math.round(sum * 100) / 100, priced, count: buyLines(b).length };
+}
+
+function buyLineAdd() {
+  const b = buyById(view.id);
+  if (!b) return;
+  const line = { lineId: bomLineId(), desc: "", qty: "1", total: "", lotRefs: [], receivedOn: "" };
+  (b.lines = b.lines || []).push(line);
+  saveField("budget", b, "lines", arr => [...(arr || []), line]);
+  render();
+}
+function buyLineUpd(lid, k, v) {
+  const b = buyById(view.id);
+  const l = b && buyLines(b).find(x => x.lineId === lid);
+  if (!l) return;
+  l[k] = v;
+  saveField("budget", b, "lines", arr => (arr || []).map(x => x.lineId === lid ? { ...x, [k]: v } : x));
+  render();
+}
+function buyLineDel(lid) {
+  const b = buyById(view.id);
+  if (!b) return;
+  b.lines = buyLines(b).filter(x => x.lineId !== lid);
+  saveField("budget", b, "lines", arr => (arr || []).filter(x => x.lineId !== lid));
+  render();
+}
+/* The live half: while total or count is being typed, only the "each" cell
+   moves — no render, no save, just the aha of the unit price materializing. */
+function buyLineLive(lid) {
+  const ea = document.getElementById("ea-" + lid);
+  if (!ea) return;
+  const each = buyLineEach({
+    total: (document.getElementById("bt-" + lid) || {}).value,
+    qty: (document.getElementById("bq-" + lid) || {}).value,
+  });
+  ea.textContent = each == null ? "" : fmtMoney(each) + " ea";
+}
+
+function setCostFromLines(id) {
+  const b = buyById(id);
+  const s = buyLineSum(b);
+  if (!s.count) return;
+  b.cost = s.sum.toFixed(2);
+  saveBuy(b, "cost");
+  toast(`Cost set to ${fmtMoney(s.sum)} from ${s.count} line${s.count === 1 ? "" : "s"}.`);
+  render();
+}
+
+/* "⚖ matches cost" or "⚠ cost says $18.00" beside the sum. Disagreement is
+   shown, never silently fixed. */
+function buyLineSumChip(b) {
+  const s = buyLineSum(b);
+  if (!s.count) return "";
+  const cost = num(b.cost);
+  const agree = Math.abs(cost - s.sum) < 0.005;
+  return agree
+    ? `<span class="tny muted nocaps">⚖ matches cost</span>`
+    : `<span class="tny nocaps">⚠ cost field says ${fmtMoney(Math.round(cost * 100) / 100) || "$0.00"}</span>
+       <button class="sm no-print" onclick="setCostFromLines('${esc(b.id)}')">= set cost from lines</button>`;
+}
+
+function buyLinesHtml(b, E) {
+  const lines = buyLines(b);
+  if (!lines.length && !E) return "";
+  const s = buyLineSum(b);
+  const rows = lines.map(l => {
+    const lid = esc(l.lineId || "");
+    const each = buyLineEach(l);
+    if (!E) {
+      return `<tr><td>${esc(l.desc)}${(l.lotRefs || []).length ? ` ${l.lotRefs.map(id => shopRefChip(String(id))).join("")}` : ""}</td>
+        <td>${esc(l.total)}</td><td>${esc(l.qty) || "1"}</td>
+        <td>${each == null ? '<span class="muted">—</span>' : esc(fmtMoney(each)) + " ea"}</td></tr>`;
+    }
+    return `<tr>
+      <td><input value="${esc(l.desc)}" placeholder="what it is" onchange="buyLineUpd('${lid}','desc',this.value)"></td>
+      <td><input id="bt-${lid}" value="${esc(l.total)}" placeholder="total $" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','total',this.value)" style="max-width:90px"></td>
+      <td><input id="bq-${lid}" value="${esc(l.qty)}" placeholder="×1" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','qty',this.value)" style="max-width:60px"></td>
+      <td><span id="ea-${lid}">${each == null ? "" : esc(fmtMoney(each)) + " ea"}</span></td>
+      <td><button class="danger ib sm" title="Remove line" onclick="buyLineDel('${lid}')">${icon("trash", 13)}</button></td>
+    </tr>`;
+  }).join("");
+  return `
+    <h3>Line items ${s.count ? `<span class="muted nocaps">· sum ${esc(fmtMoney(s.sum))}${s.priced < s.count ? ` (${s.count - s.priced} unpriced)` : ""}</span> ${buyLineSumChip(b)}` : ""}</h3>
+    ${lines.length ? `<table class="sub"><thead><tr><th>Item</th><th>Total $</th><th>Count</th><th>Each</th>${E ? "<th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`
+      : `<p class="muted">What was actually in the order — one line per thing, total and count, the unit price works itself out.</p>`}
+    ${E ? `<button onclick="buyLineAdd()">+ Line</button>` : ""}`;
+}
+
 function renderBudget() {
   return view.mode === "detail" ? renderBuyDetail() : renderBuyList();
 }
@@ -285,6 +400,7 @@ function renderBuyDetail() {
       ${buyFld(b, "Status", "status", BUY_STATUS)}${buyFld(b, "Cost ($)", "cost")}${buyFld(b, "Date ordered", "dateOrdered")}
       ${buyFld(b, "Source / vendor", "source")}
     </div>
+    ${buyLinesHtml(b, E)}
     <h3>Receipt</h3>
     ${/* Through the shared tile, so a receipt opens in the viewer like every
           other photo instead of being a thumbnail you can only download. A

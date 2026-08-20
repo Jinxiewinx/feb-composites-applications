@@ -38,8 +38,14 @@ Six chunks, each shippable alone:
      w/ deltas + money summary + bomFrom provenance line; pushBomToPlan
      stamps updatedFrom{woId,at,by}; traveler prints costs + total hint;
      dashboard Money notes consumed sum)
-  4. budget lines[] (desc/total/xcount, live "each" cell, explicit = cost
-     button, NEVER auto-write cost — the $50 gate), reports lineSum column
+  4. budget lines[]  <- DONE this session
+     ({lineId,desc,qty,total,lotRefs,receivedOn}; buyLineEach derives
+     unit price, blank count = 1; buyLineLive updates only the ea- span
+     oninput; cost NEVER auto-written — mismatch chip + explicit
+     setCostFromLines is the only path, so the $50 gate moves only on a
+     deliberate act; CSV exports cost AND lineSum + lineCount; legacy
+     no-lines docs byte-identical; CSV_SPECS added to the harness const
+     whitelist)
   5. Inventory Incoming strip (derived from budget lines, reconciled via
      lot.buyRef, lot-first write order), prefilled receive modal
   6. Cloud Function receipt parsing (FIRST backend; confirm deploy w/ Simon)
