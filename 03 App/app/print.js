@@ -171,7 +171,16 @@ function woSheetHtml(wo, opts) {
 
   const bomRows = (blank ? [] : bom).map(b => `<tr>
       <td>${esc(strip(pv(b.item)))}</td><td class="num">${esc(pv(b.qty))}</td><td>${esc(pv(b.unit))}</td>
-      <td>${esc(strip(pv(b.source)))}</td><td>${esc(pv(b.estCost))}</td></tr>`).join("");
+      <td>${esc(strip(pv(b.source)))}</td><td>${
+        // Ref-priced lines (copied from the part's plan) print their computed
+        // cost; hand-typed estCost prints verbatim. Money on the paper at the
+        // bench is a cost-visibility surface Simon picked on purpose.
+        esc(pv(b.estCost)) || (typeof bomLineCost === "function" && bomLineCost(b) != null ? esc(fmtMoney(bomLineCost(b))) : "")}</td></tr>`).join("");
+  const bomTotalHint = (() => {
+    if (blank || typeof bomRollupText !== "function") return "";
+    const t = bomRollupText(bom);
+    return t ? `Materials in this part: ${t}` : "";
+  })();
 
   const qcRows = (blank ? [] : qc).map(q => `<tr>
       <td>${esc(strip(pv(q.criterion)))}</td><td>${esc(strip(pv(q.target)))}</td><td>${esc(strip(pv(q.actual)))}</td>
@@ -237,7 +246,7 @@ function woSheetHtml(wo, opts) {
     <tbody>${stepRows}${blankRows(R.steps, '<td class="num seq"></td><td></td><td class="initial"></td><td class="datec empty"></td>')}</tbody>
   </table>
 
-  <div class="ws-h">Bill of materials</div>
+  <div class="ws-h">Bill of materials${bomTotalHint ? ` <span class="hint">${esc(bomTotalHint)}</span>` : ""}</div>
   <table class="ws-t rows">
     <thead><tr><th>Item</th><th class="num">Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead>
     <tbody>${bomRows}${blankRows(R.bom, "<td></td><td></td><td></td><td></td><td></td>")}</tbody>

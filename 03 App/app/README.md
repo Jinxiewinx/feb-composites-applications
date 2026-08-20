@@ -138,6 +138,21 @@ see there are five plies or that a check failed without scrolling to find out.
 It is buttons rather than anchors on purpose: an `href="#wo-stack"` would
 overwrite the deep link the app keeps in the URL hash.
 
+The BOM inside Stack & BOM is the run's **plan vs as-built** record. A run
+copies its part's Materials (plan) at creation (stamped with where and when
+the copy came from), and the read view shows Plan, Used, and Cost per line
+with a money summary beside the count ("planned ≈ $41.20 · used $63.00").
+**Consume** on a line logs what actually went in: the cost freezes at that
+moment's unit price, a board ref decrements the shelf count, and a lot ref
+asks the only honest stock question free-text quantities allow — still
+fine, running low, or now empty. The cure buy-off asks the same question
+for every open line at once, prefilled from the plan, so the common case
+is one confirm and zero typing; a consumed line never logs twice, and the
+undo bar covers the whole batch. When a run's actuals differ from the
+plan, an **↩ plan** button pushes reality back onto the part with the run
+id stamped on the line, so the next run starts from what the last one
+learned. The printed traveler carries the costs and a materials total.
+
 Every section header is also a fold. Steps and Stack & BOM open by default
 (you read the stack while signing "Stack frozen"); the reference sections
 (Details, Photos, Files, Notes & log) start closed, a warned section never

@@ -5547,6 +5547,93 @@ await t("a fresh run copies the part's plan as its as-built BOM, with provenance
   assert(main.innerHTML.includes("$72.00"), "4yd x $18 shows in the run's BOM");
 });
 
+console.log("materials consumed:");
+
+async function seedConsume() {
+  seedBomPart();
+  DB.stock = [{ id: "BRD-SN6-001", label: "board", qty: 5, density: 30, unitCost: 120,
+    len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" } }];
+  partBomAdd(); partBomAdd(); partBomAdd();
+  const [a, b, c] = DB.parts[0].bom;
+  partBomPick(a.lineId, "FAB-SN6-001"); partBomUpd(a.lineId, "qty", "3");   // $18/yd
+  partBomPick(b.lineId, "BRD-SN6-001"); partBomUpd(b.lineId, "qty", "2");   // numeric stock
+  partBomUpd(c.lineId, "item", "tape"); partBomUpd(c.lineId, "qty", "1");   // free text, no price
+  await newRunForPart("P-BOM-1");
+  const wo = DB.workOrders[0];
+  view = { ...view, tab: "workorders", mode: "detail", id: wo.id, edit: false };
+  render();
+  return wo;
+}
+
+await t("consuming a line freezes its cost, says the dollar amount, and refuses to double-log", async () => {
+  const wo = await seedConsume();
+  const lid = wo.bom[0].lineId;
+  openConsumeLine(lid);
+  const inp = document.getElementById("cn-one");
+  // The harness DOM doesn't map value= attributes onto .value, so the
+  // prefill is asserted on the markup and the edit set as a property.
+  assert(document.getElementById("modal").innerHTML.includes('value="3"'), "prefilled with the plan quantity");
+  inp.value = "3.5";
+  submitConsumeLine(lid);
+  const l = wo.bom[0];
+  assert(l.consumed && l.usedQty === "3.5" && l.costAtConsumption === 63, "3.5yd x $18 frozen at consumption: " + l.costAtConsumption);
+  assert(/\$63\.00/.test(lastToast), "the toast teaches the price: " + lastToast);
+  const before = JSON.stringify(l);
+  consumeBomLines(wo, [{ lineId: lid, usedQty: "99" }]);
+  assert(JSON.stringify(wo.bom[0]) === before, "a consumed line cannot log again");
+  assert(main.innerHTML.includes("undobar"), "forward action gets the undo bar, not a confirm");
+});
+
+await t("consuming a board line decrements the numeric stock count; undo puts it back", async () => {
+  const wo = await seedConsume();
+  const lid = wo.bom[1].lineId;
+  consumeBomLines(wo, [{ lineId: lid, usedQty: "2" }]);
+  assert(recById("stock", "BRD-SN6-001").qty === 3, "5 boards - 2 used = 3");
+  woConsumeUndo();
+  assert(recById("stock", "BRD-SN6-001").qty === 5, "undo restores the shelf count");
+  assert(!wo.bom[1].consumed, "and the line is unconsumed again");
+});
+
+await t("a lot line's after-state writes the honest stock signal — stage and lowFlag, never fake math", async () => {
+  const wo = await seedConsume();
+  const lid = wo.bom[0].lineId;
+  consumeBomLines(wo, [{ lineId: lid, usedQty: "3", lotAfter: "empty" }]);
+  assert(recById("lots", "FAB-SN6-001").stage === "Empty", "the roll is spent");
+  woConsumeUndo();
+  assert(recById("lots", "FAB-SN6-001").stage === "Open", "undo restores the lot");
+  consumeBomLines(wo, [{ lineId: lid, usedQty: "3", lotAfter: "low" }]);
+  assert(/reorder/.test(recById("lots", "FAB-SN6-001").lowFlag), "running low flags the reorder");
+});
+
+await t("the cure buy-off carries the materials question, prefilled, and consumes on sign", async () => {
+  const wo = await seedConsume();
+  openModal(bomConsumeFieldsHtml(wo));
+  const inp = document.getElementById("cn-" + wo.bom[0].lineId);
+  assert(inp && document.getElementById("modal").innerHTML.includes('value="3"'), "the buy-off block prefills the plan");
+  inp.value = "4";
+  const entries = readBomConsumeFields(wo);
+  closeModal();
+  consumeBomLines(wo, entries);
+  assert(wo.bom.every(l => l.consumed), "one confirm logs every open line");
+  assert(wo.bom[0].usedQty === "4" && wo.bom[0].costAtConsumption === 72, "the corrected qty priced at the lot rate");
+  assert(wo.bom[2].costAtConsumption === "", "the unpriced line stays honestly uncosted");
+  assert(bomConsumeFieldsHtml(wo) === "", "consumed lines leave the buy-off block — no second door");
+});
+
+await t("plan vs actual reads off the run: header money, deltas, and push-back to the plan", async () => {
+  const wo = await seedConsume();
+  consumeBomLines(wo, [{ lineId: wo.bom[0].lineId, usedQty: "3.5" }]);
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("planned ≈") && h.includes("used $63.00"), "both halves of the money line show");
+  assert(h.includes("▲"), "over-plan wears the delta mark");
+  assert(h.includes("Copied from P-BOM-1"), "the as-built provenance line shows");
+  pushBomToPlan(wo.bom[0].lineId);
+  const pl = DB.parts[0].bom[0];
+  assert(pl.qty === "3.5", "the plan now says what reality said");
+  assert(pl.updatedFrom && pl.updatedFrom.woId === wo.id && pl.updatedFrom.by, "with provenance stamped on the line");
+});
+
 console.log("run carry-over:");
 await t("a part with no runs starts one immediately; with history it gets the choice", async () => {
   signInAsLead();

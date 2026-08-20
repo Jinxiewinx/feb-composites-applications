@@ -1200,17 +1200,64 @@ function woSecStack(wo, E) {
           folds even when populated, with the count on the always-visible
           summary. Edit mode opens it: that is when the rows get typed. */""}
     <details class="wo-subfold" ${E ? "open" : ""}>
-    <summary id="wo-bom" class="wo-subhd">BOM${(wo.bom || []).length ? ` <span class="wosec-n">${(wo.bom || []).length}</span>` : ' <span class="tny muted nocaps">empty</span>'}</summary>
-    <table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
-      ${(wo.bom || []).map((b, i) => E
-        ? `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`
-        : `<tr><td>${esc(b.item)}</td><td>${esc(b.qty)}</td><td>${esc(b.unit)}</td><td>${esc(b.source)}</td><td>${
-            // A line copied from the part's plan prices itself off its
-            // inventory ref; hand-typed estCost still shows verbatim.
-            esc(b.estCost) || (bomLineCost(b) != null ? esc(fmtMoney(bomLineCost(b))) : "")}</td></tr>`).join("")}
+    <summary id="wo-bom" class="wo-subhd">BOM${(wo.bom || []).length ? ` <span class="wosec-n">${(wo.bom || []).length}</span>` : ' <span class="tny muted nocaps">empty</span>'}${woBomMoneyLine(wo)}</summary>
+    ${wo.bomFrom ? `<div class="tny muted">Copied from ${esc(wo.bomFrom)}${wo.bomCopiedOn ? " on " + esc(wo.bomCopiedOn) : ""} — edits here are the as-built record, never the plan.</div>` : ""}
+    ${woConsumeUndoBar(wo.id)}
+    ${E ? `<table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th></tr></thead><tbody>
+      ${(wo.bom || []).map((b, i) =>
+        `<tr><td><input value="${esc(b.item)}" onchange="ub(${i},'item',this.value)"></td><td><input value="${esc(b.qty)}" onchange="ub(${i},'qty',this.value)"></td><td><input value="${esc(b.unit)}" onchange="ub(${i},'unit',this.value)"></td><td><input value="${esc(b.source)}" onchange="ub(${i},'source',this.value)"></td><td><input value="${esc(b.estCost)}" onchange="ub(${i},'estCost',this.value)"></td></tr>`).join("")}
     </tbody></table>
-    ${E ? `<button onclick="woById('${wo.id}').bom.push({item:'',qty:'',unit:'',source:'',estCost:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>` : ""}
+    <button onclick="woById('${wo.id}').bom.push({lineId:bomLineId(),item:'',qty:'',unit:'',source:'',estCost:'',ref:''});saveWO(woById('${wo.id}'),'bom');render()">+ BOM line</button>`
+    : `<table class="sub"><thead><tr><th>Item</th><th>Plan</th><th>Used</th><th>Unit</th><th>Cost</th><th class="no-print"></th></tr></thead><tbody>
+      ${(wo.bom || []).map(b => `<tr>
+        <td>${esc(b.item)}${b.ref ? ` ${shopRefChip(String(b.ref))}` : ""}${b.source ? ` <span class="tny muted nocaps">· ${esc(b.source)}</span>` : ""}</td>
+        <td>${esc(b.qty)}</td>
+        <td>${b.consumed
+          ? `${esc(b.usedQty) || '<span class="muted" title="quantity unknown">?</span>'}${woBomDelta(b)}`
+          : '<span class="muted">—</span>'}</td>
+        <td>${esc(b.unit)}</td>
+        <td>${b.consumed
+          ? (typeof b.costAtConsumption === "number" ? esc(fmtMoney(b.costAtConsumption)) : '<span class="muted" title="No price on record when this was consumed">—</span>')
+          : (esc(b.estCost) || (bomLineCost(b) != null ? esc(fmtMoney(bomLineCost(b))) : '<span class="muted">—</span>'))}</td>
+        <td class="no-print">${b.lineId && !b.consumed
+          ? `<button class="sm" onclick="openConsumeLine('${esc(b.lineId)}')">Consume</button>`
+          : woBomPushBtn(wo, b)}</td>
+      </tr>`).join("")}
+    </tbody></table>`}
     </details>`;
+}
+
+/* "planned $41.20 · used $38.75" beside the BOM count — the plan-vs-actual
+   read in one glance, each half honest about coverage via bomRollup rules. */
+function woBomMoneyLine(wo) {
+  const bom = wo.bom || [];
+  if (!bom.length) return "";
+  const plan = bomRollup(bom);
+  const used = bom.reduce((s, l) => s + (typeof l.costAtConsumption === "number" ? l.costAtConsumption : 0), 0);
+  const consumed = bom.filter(l => l.consumed).length;
+  const bits = [];
+  if (plan.priced) bits.push(`planned ≈ ${fmtMoney(plan.total)}${plan.unpriced ? ` (+${plan.unpriced} unpriced)` : ""}`);
+  if (consumed) bits.push(`used ${fmtMoney(Math.round(used * 100) / 100) || "$?"}${consumed < bom.length ? ` (${consumed}/${bom.length} logged)` : ""}`);
+  return bits.length ? ` <span class="tny muted nocaps">· ${esc(bits.join(" · "))}</span>` : "";
+}
+
+/* ▲ over plan, ▼ under, = on the nose — only when both sides parse. */
+function woBomDelta(b) {
+  const plan = parseLooseMoney(b.qty), used = parseLooseMoney(b.usedQty);
+  if (plan == null || used == null) return "";
+  if (used > plan) return ' <span title="more than planned">▲</span>';
+  if (used < plan) return ' <span title="less than planned">▼</span>';
+  return ' <span class="muted" title="exactly as planned">=</span>';
+}
+
+/* The push-back button renders only when it can actually land: consumed line,
+   a resolvable part, a matching plan line, and a real difference to push. */
+function woBomPushBtn(wo, b) {
+  if (!b.consumed || !b.lineId) return "";
+  const p = woDetailPart(wo);
+  const pl = p && (p.bom || []).find(x => x.lineId === b.lineId);
+  if (!pl || String(pl.qty) === String(b.usedQty || "")) return "";
+  return `<button class="sm" title="Update the plan on ${esc(p.id)} to what this run actually used" onclick="pushBomToPlan('${esc(b.lineId)}')">↩ plan</button>`;
 }
 
 function woSecSteps(wo, E) {
@@ -1784,6 +1831,7 @@ function openCureModal(i) {
       <input id="cure-temp" type="number" inputmode="numeric" placeholder="e.g. 18" value="${prior.tempC ?? ""}" onchange="cureModalPreview()">
     </div>
     ${lotFieldsHtml(prior)}
+    ${bomConsumeFieldsHtml(w)}
     <div id="cure-preview"></div>
     <div class="foot">
       <button onclick="closeModal()">Cancel</button>
@@ -1815,15 +1863,202 @@ function cureModalPreview() {
     </span></p>`;
 }
 function submitCure(i) {
+  const w = woById(view.id);
   const id = (document.getElementById("cure-resin") || {}).value || "";
   const date = (document.getElementById("cure-date") || {}).value || today();
   const time = (document.getElementById("cure-time") || {}).value || "00:00";
   const tempRaw = (document.getElementById("cure-temp") || {}).value;
   const startedAt = new Date(date + "T" + time).toISOString();
   const cure = { resin: id, startedAt, ...readLotFields() };
+  // Materials read here too — everything before closeModal, same footgun.
+  const materials = w ? readBomConsumeFields(w) : [];
   if (tempRaw !== "" && tempRaw != null && !isNaN(Number(tempRaw))) cure.tempC = Number(tempRaw);
   closeModal();
   signStep(i, { cure });
+  if (materials.length) consumeBomLines(w, materials);
+}
+
+/* ---------- materials consumed ----------
+ *
+ * The BOM rows a run copied from its part are the PLAN; consuming records
+ * what actually went in, per line: usedQty, who, when, and the cost at that
+ * moment (usedQty × the ref record's unitCost, frozen — prices drift, history
+ * shouldn't). Consumption is always one explicit action — a per-line button,
+ * or one confirm inside the cure buy-off where people already stand with the
+ * empty pot — never a silent side effect, and a consumed line refuses to log
+ * again, so the two doors can't double-count. Forward action, undo bar after,
+ * per the house pattern.
+ *
+ * Stock effects, split by what a number honestly means (Simon's ruling):
+ * boards have a numeric count, so consuming decrements it; lots' qty is free
+ * text by design, so a lot line instead offers "still fine / running low /
+ * now empty", which writes lowFlag or stage — the stage transitions ARE the
+ * stock signal for materials. */
+
+let WO_CONSUME_UNDO = null;
+
+function woBomLine(w, lid) { return lid ? (w && w.bom || []).find(l => l.lineId === lid) : null; }
+
+function bomConsumeCost(l, usedQty) {
+  const rec = bomRefRec(l.ref);
+  if (rec && typeof rec.unitCost === "number") {
+    const q = parseLooseMoney(usedQty);
+    return q == null ? null : Math.round(rec.unitCost * q * 100) / 100;
+  }
+  return parseLooseMoney(l.estCost);
+}
+
+/* Where a ref lives, by prefix — same trust the scan router puts in ids. */
+function bomRefColl(id) {
+  const s = String(id || "");
+  if (/^(FAB|RSN|CON)-/.test(s)) return "lots";
+  if (/^BRD-/.test(s)) return "stock";
+  if (/^(JIG|PNL)-/.test(s)) return "items";
+  return "";
+}
+
+function consumeBomLines(w, entries) {
+  if (!w || !(entries || []).length) return;
+  const undo = { woId: w.id, lines: [], stock: [], lots: [] };
+  const patches = new Map();
+  for (const e of entries) {
+    const l = woBomLine(w, e.lineId);
+    if (!l || l.consumed) continue;                    // no double-logging, ever
+    undo.lines.push({ lineId: l.lineId, prev: {
+      usedQty: l.usedQty || "", consumed: !!l.consumed, consumedAt: l.consumedAt || "",
+      consumedBy: l.consumedBy || "", costAtConsumption: l.costAtConsumption ?? "" } });
+    const patch = { usedQty: String(e.usedQty ?? ""), consumed: true, consumedAt: today(), consumedBy: signerName() };
+    const c = bomConsumeCost(l, e.usedQty);
+    patch.costAtConsumption = c == null ? "" : c;
+    Object.assign(l, patch);
+    patches.set(l.lineId, patch);
+
+    const coll = bomRefColl(l.ref);
+    if (coll === "stock") {
+      const rec = recById("stock", l.ref);
+      const dec = Math.round(Number(String(e.usedQty || "").trim()));
+      if (rec && typeof rec.qty === "number" && Number.isFinite(dec) && dec > 0) {
+        undo.stock.push({ id: rec.id, prev: rec.qty });
+        rec.qty = Math.max(0, rec.qty - dec);
+        saveField("stock", rec, "qty", q => Math.max(0, (Number(q) || 0) - dec));
+      }
+    }
+    if (coll === "lots" && e.lotAfter) {
+      const rec = recById("lots", l.ref);
+      if (rec) {
+        undo.lots.push({ id: rec.id, prevLow: rec.lowFlag || "", prevStage: rec.stage || "" });
+        if (e.lotAfter === "low") { rec.lowFlag = "Yes — reorder"; save("lots", rec, "lowFlag"); }
+        if (e.lotAfter === "empty") { rec.stage = "Empty"; save("lots", rec, "stage"); }
+      }
+    }
+  }
+  if (!patches.size) return;
+  saveField("workOrders", w, "bom", arr => (arr || []).map(x => patches.has(x.lineId) ? { ...x, ...patches.get(x.lineId) } : x));
+  const spent = [...patches.values()].reduce((s, p) => s + (typeof p.costAtConsumption === "number" ? p.costAtConsumption : 0), 0);
+  const n = patches.size;
+  WO_CONSUME_UNDO = undo;
+  toast(spent > 0
+    ? `Logged ${fmtMoney(Math.round(spent * 100) / 100)} of materials into ${w.id}.`
+    : `${n} material line${n === 1 ? "" : "s"} logged into ${w.id}.`);
+  render();
+}
+
+function woConsumeUndo() {
+  const u = WO_CONSUME_UNDO;
+  if (!u) return;
+  const w = recById("workOrders", u.woId);
+  const prevBy = new Map(u.lines.map(x => [x.lineId, x.prev]));
+  if (w) {
+    (w.bom || []).forEach(l => { const p = prevBy.get(l.lineId); if (p) Object.assign(l, p); });
+    saveField("workOrders", w, "bom", arr => (arr || []).map(x => prevBy.has(x.lineId) ? { ...x, ...prevBy.get(x.lineId) } : x));
+  }
+  for (const s of u.stock) { const r = recById("stock", s.id); if (r) { r.qty = s.prev; save("stock", r, "qty"); } }
+  for (const lt of u.lots) { const r = recById("lots", lt.id); if (r) { r.lowFlag = lt.prevLow; r.stage = lt.prevStage; save("lots", r, "lowFlag"); save("lots", r, "stage"); } }
+  WO_CONSUME_UNDO = null;
+  toast("Materials log undone.");
+  render();
+}
+function dismissConsumeUndo() { WO_CONSUME_UNDO = null; render(); }
+function woConsumeUndoBar(woId) {
+  const u = WO_CONSUME_UNDO;
+  if (!u || u.woId !== woId) return "";
+  const n = u.lines.length;
+  return `<div class="undobar no-print">
+    <span class="ub-i">${icon("check", 15)}</span>
+    <span class="ub-t"><b>${n} material line${n === 1 ? "" : "s"}</b> logged as used — saved for everyone.</span>
+    <button class="sm" onclick="woConsumeUndo()">Undo</button>
+    <button class="sm" title="Dismiss" aria-label="Dismiss" onclick="dismissConsumeUndo()">${icon("x", 14)}</button>
+  </div>`;
+}
+
+/* One line, from the bench: prefilled with the plan, one tap to log. */
+function openConsumeLine(lid) {
+  const w = woById(view.id);
+  const l = woBomLine(w, lid);
+  if (!l || l.consumed) return;
+  const isLot = bomRefColl(l.ref) === "lots";
+  openModal(`
+    <h2>Log material used</h2>
+    <p class="muted">${esc(l.item || "This line")} — planned ${esc(l.qty || "?")} ${esc(l.unit || "")}.</p>
+    <div class="field"><label for="cn-one">Actually used${l.unit ? ` (${esc(l.unit)})` : ""}</label>
+      <input id="cn-one" value="${esc(l.usedQty || l.qty || "")}" autofocus placeholder="blank = unknown"></div>
+    ${isLot ? `<div class="field"><label for="cnlot-one">The lot afterwards</label>
+      <select id="cnlot-one"><option value="">still fine</option><option value="low">running low — flag a reorder</option><option value="empty">now empty</option></select></div>` : ""}
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitConsumeLine('${esc(lid)}')">Log it</button>
+    </div>`);
+}
+function submitConsumeLine(lid) {
+  const w = woById(view.id);
+  const usedQty = (document.getElementById("cn-one") || {}).value || "";
+  const lotAfter = (document.getElementById("cnlot-one") || {}).value || "";
+  closeModal();
+  consumeBomLines(w, [{ lineId: lid, usedQty, lotAfter }]);
+}
+
+/* The buy-off door: the cure modal already asks "what went in"; this is the
+   same question with quantities, prefilled from the plan so the common case
+   is zero extra typing. Only unconsumed lines appear. */
+function bomConsumeFieldsHtml(w) {
+  const open = (w && w.bom || []).filter(l => l.lineId && !l.consumed);
+  if (!open.length) return "";
+  return `<div class="field"><label>Materials used — prefilled from the plan, fix any that differ</label>
+    ${open.map(l => {
+      const isLot = bomRefColl(l.ref) === "lots";
+      return `<div class="grid" style="grid-template-columns: 2fr 1fr${isLot ? " 1fr" : ""}; gap: 6px">
+        <span class="ro tny">${esc(l.item || l.lineId)} <span class="muted">plan ${esc(l.qty || "?")} ${esc(l.unit || "")}</span></span>
+        <input id="cn-${esc(l.lineId)}" value="${esc(l.qty || "")}" title="actually used — blank means unknown">
+        ${isLot ? `<select id="cnlot-${esc(l.lineId)}"><option value="">lot: still fine</option><option value="low">running low</option><option value="empty">now empty</option></select>` : ""}
+      </div>`;
+    }).join("")}
+    <div class="tny muted">Blank means "didn't measure" — that stays honest in the record.</div>
+  </div>`;
+}
+function readBomConsumeFields(w) {
+  return (w && w.bom || []).filter(l => l.lineId && !l.consumed).map(l => {
+    const el = document.getElementById("cn-" + l.lineId);
+    if (!el) return null;
+    return { lineId: l.lineId, usedQty: el.value || "", lotAfter: (document.getElementById("cnlot-" + l.lineId) || {}).value || "" };
+  }).filter(Boolean);
+}
+
+/* Actuals over the plan, one tap: the third layup's plan should be the second
+   layup's reality (the anti-tribal-knowledge loop). Last write wins, with the
+   provenance stamped on the line so "where did this number come from" always
+   has an answer. Never fires automatically. */
+function pushBomToPlan(lid) {
+  const w = woById(view.id);
+  const l = woBomLine(w, lid);
+  if (!w || !l || !l.consumed) return;
+  const p = woDetailPart(w);
+  const pl = p && (p.bom || []).find(x => x.lineId === lid);
+  if (!pl) { toast("The part's plan has no matching line — edit the plan on the part directly.", "error"); return; }
+  const patch = { qty: l.usedQty || pl.qty, updatedFrom: { woId: w.id, at: today(), by: signerName() } };
+  Object.assign(pl, patch);
+  saveField("parts", p, "bom", arr => (arr || []).map(x => x.lineId === lid ? { ...x, ...patch } : x));
+  toast(`Plan on ${p.id} updated from ${w.id} — the next run starts from reality.`);
+  render();
 }
 
 /* ---------- which lots went in ----------

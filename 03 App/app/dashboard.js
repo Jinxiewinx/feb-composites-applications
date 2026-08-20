@@ -458,6 +458,14 @@ function dashBudget() {
     </button>
     ${approvals.length ? `<div class="srow"><span class="sr-main">
       <button class="chip" onclick="setTab('budget')">${approvals.length} over $50 awaiting sign-off</button></span></div>` : ""}
+    ${(() => {
+      // Bought vs actually used: the consumed sum comes from WO BOM lines
+      // logged at the bench, so this number only exists where someone told
+      // the truth at a buy-off. Absent until then, never $0.
+      const consumed = (DB.workOrders || []).reduce((s, w) =>
+        s + (w.bom || []).reduce((a, l) => a + (typeof l.costAtConsumption === "number" ? l.costAtConsumption : 0), 0), 0);
+      return consumed > 0 ? `<div class="srow"><span class="sr-main muted">$${consumed.toFixed(0)} of materials consumed across runs</span></div>` : "";
+    })()}
   </div>`;
 }
 

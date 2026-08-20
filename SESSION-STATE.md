@@ -29,8 +29,15 @@ Six chunks, each shippable alone:
      core.js; PART_SECTIONS gains "bom" between stack and runs with a
      foldHint rollup; fresh runs seed wo.bom from p.bom with bomFrom/
      bomCopiedOn provenance; WO read table prices ref lines)
-  3. WO copy-on-create + consume (buy-off prompt + per-line button) + print
-     cost column + dashboard consumed tile + push-back-to-plan w/ provenance
+  3. WO consume flow  <- DONE this session
+     (consumeBomLines: usedQty/consumed/consumedAt/By/costAtConsumption
+     frozen per line, board refs decrement stock.qty, lot refs offer
+     fine/low/empty, undo bar reverts the batch incl. stock+lots, no
+     double-log; cure modal gains the prefilled materials block read
+     BEFORE closeModal; per-line Consume modal; plan/actual read table
+     w/ deltas + money summary + bomFrom provenance line; pushBomToPlan
+     stamps updatedFrom{woId,at,by}; traveler prints costs + total hint;
+     dashboard Money notes consumed sum)
   4. budget lines[] (desc/total/xcount, live "each" cell, explicit = cost
      button, NEVER auto-write cost — the $50 gate), reports lineSum column
   5. Inventory Incoming strip (derived from budget lines, reconciled via
