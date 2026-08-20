@@ -274,6 +274,28 @@ function fmtMoney(n) {
   return typeof n === "number" && Number.isFinite(n) ? "$" + n.toFixed(2) : "";
 }
 
+/* Repaint without eating the keyboard. An onchange fires exactly while Tab
+   is carrying focus to the next field; a synchronous render() replaces that
+   field before focus arrives, so the user falls out of the form after every
+   edit. This waits a tick for focus to settle, repaints, then hands focus
+   (and the caret) back to whichever field holds it — which is why editable
+   fields in the tabbed grids carry stable ids. */
+function renderSoonKeepFocus() {
+  setTimeout(() => {
+    const ae = document.activeElement;
+    const id = ae && ae.id;
+    let s0 = null, s1 = null;
+    try { s0 = ae.selectionStart; s1 = ae.selectionEnd; } catch (e) { /* selects have no caret */ }
+    render();
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el && el.focus) {
+      el.focus();
+      try { if (s0 != null) el.setSelectionRange(s0, s1); } catch (e) { /* not a text input */ }
+    }
+  }, 0);
+}
+
 /* ---------- BOM line costing ----------
    Shared by the part's Materials (plan) section and the work order's as-built
    BOM. A line prices itself one of two ways: a `ref` to an inventory record

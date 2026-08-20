@@ -1186,6 +1186,8 @@ function partBomAdd() {
   (p.bom = p.bom || []).push(line);
   saveField("parts", p, "bom", arr => [...(arr || []), line]);
   render();
+  const el = document.getElementById("pbi-" + line.lineId);
+  if (el && el.focus) el.focus();
 }
 
 function partBomUpd(lid, k, v) {
@@ -1194,8 +1196,15 @@ function partBomUpd(lid, k, v) {
   if (!l) return;
   l[k] = v;
   saveField("parts", p, "bom", arr => (arr || []).map(x => x.lineId === lid ? { ...x, [k]: v } : x));
-  // qty and estCost move the rollup; item/unit/source don't need a repaint.
-  if (k === "qty" || k === "estCost") render();
+  /* No render() — it would eat the field Tab is moving onto (the budget
+     grid's lesson). The two things a qty/estCost edit changes update in
+     place: the line's cost cell and the rollup. */
+  if (k === "qty" || k === "estCost") {
+    const cell = document.getElementById("pbc-" + lid);
+    if (cell && bomRefRec(l.ref) && typeof bomRefRec(l.ref).unitCost === "number") cell.innerHTML = partBomCostCell(l);
+    const roll = document.getElementById("pb-roll");
+    if (roll) roll.textContent = bomRollupText(p.bom) || "—";
+  }
 }
 
 /* Picking an inventory record fills the blanks the record already knows —
@@ -1213,7 +1222,10 @@ function partBomPick(lid, refId) {
   }
   Object.assign(l, patch);
   saveField("parts", p, "bom", arr => (arr || []).map(x => x.lineId === lid ? { ...x, ...patch } : x));
-  render();
+  // A pick changes several cells (name, unit, source, the cost column), so
+  // it does repaint — but a beat later, handing focus back, so Tab-ing off
+  // the picker into the next row still lands.
+  renderSoonKeepFocus();
 }
 
 function partBomDel(lid) {
@@ -1245,36 +1257,43 @@ function partBomRefOptions(cur) {
   return out;
 }
 
+function partBomCostCell(l) {
+  const c = bomLineCost(l);
+  if (c == null) return '<span class="muted" title="No price yet — pick an inventory item or type an estimate">—</span>';
+  const rec = bomRefRec(l.ref);
+  return `${esc(fmtMoney(c))}${rec && typeof rec.unitCost === "number" ? ` <span class="tny muted nocaps">(${esc(l.qty)} × ${esc(shopMoneyText(rec, "unitCost"))})</span>` : ""}`;
+}
+
 function ptSecBom(p, E) {
   const bom = p.bom || [];
   const roll = bomRollupText(bom);
-  const costCell = l => {
-    const c = bomLineCost(l);
-    if (c == null) return '<span class="muted" title="No price yet — pick an inventory item or type an estimate">—</span>';
-    const rec = bomRefRec(l.ref);
-    return `${esc(fmtMoney(c))}${rec && typeof rec.unitCost === "number" ? ` <span class="tny muted nocaps">(${esc(l.qty)} × ${esc(shopMoneyText(rec, "unitCost"))})</span>` : ""}`;
-  };
   const rows = bom.map(l => {
     const lid = esc(l.lineId || "");
     if (!E) {
-      return `<tr><td>${esc(l.item)}${l.ref ? ` ${shopRefChip(String(l.ref))}` : ""}</td><td>${esc(l.qty)}</td><td>${esc(l.unit)}</td><td>${esc(l.source)}</td><td>${costCell(l)}</td></tr>`;
+      return `<tr><td>${esc(l.item)}${l.ref ? ` ${shopRefChip(String(l.ref))}` : ""}</td><td>${esc(l.qty)}</td><td>${esc(l.unit)}</td><td>${esc(l.source)}</td><td>${partBomCostCell(l)}</td></tr>`;
     }
+    /* Same dress as the budget line grid: money cells in .buy-cost, narrow
+       numeric cells in .bl-n, derived values muted and never inputs, the
+       trash button outside the Tab order so Tab walks cell to cell. The
+       cost cell keeps a stable span id so a qty edit updates it in place
+       instead of re-rendering the page out from under a mid-flight Tab. */
+    const priced = bomRefRec(l.ref) && typeof bomRefRec(l.ref).unitCost === "number";
     return `<tr>
-      <td><input value="${esc(l.item)}" onchange="partBomUpd('${lid}','item',this.value)"></td>
-      <td><input value="${esc(l.qty)}" onchange="partBomUpd('${lid}','qty',this.value)" style="max-width:70px"></td>
-      <td><input value="${esc(l.unit)}" onchange="partBomUpd('${lid}','unit',this.value)" style="max-width:70px"></td>
-      <td><input value="${esc(l.source)}" onchange="partBomUpd('${lid}','source',this.value)"></td>
-      <td>${bomRefRec(l.ref) && typeof bomRefRec(l.ref).unitCost === "number"
-        ? costCell(l)
-        : `<input value="${esc(l.estCost)}" placeholder="$" onchange="partBomUpd('${lid}','estCost',this.value)" style="max-width:80px">`}</td>
-      <td><select onchange="partBomPick('${lid}',this.value)">
+      <td><input id="pbi-${lid}" value="${esc(l.item)}" placeholder="what it is" aria-label="Material" onchange="partBomUpd('${lid}','item',this.value)"></td>
+      <td class="buy-cost"><input class="bl-n" value="${esc(l.qty)}" inputmode="decimal" aria-label="Quantity" onchange="partBomUpd('${lid}','qty',this.value)"></td>
+      <td class="buy-cost"><input class="bl-n" value="${esc(l.unit)}" placeholder="yd" aria-label="Unit" onchange="partBomUpd('${lid}','unit',this.value)"></td>
+      <td><input value="${esc(l.source)}" placeholder="where from" aria-label="Source" onchange="partBomUpd('${lid}','source',this.value)"></td>
+      <td class="buy-cost"><span id="pbc-${lid}">${priced
+        ? partBomCostCell(l)
+        : `$<input value="${esc(l.estCost)}" inputmode="decimal" aria-label="Estimated cost in dollars" onchange="partBomUpd('${lid}','estCost',this.value)">`}</span></td>
+      <td><select id="pbr-${lid}" onchange="partBomPick('${lid}',this.value)">
         <option value="">free text</option>${partBomRefOptions(String(l.ref || ""))}
       </select></td>
-      <td><button class="danger ib sm" title="Remove line" onclick="partBomDel('${lid}')">${icon("trash", 13)}</button></td>
+      <td><button class="danger ib sm" tabindex="-1" title="Remove line" onclick="partBomDel('${lid}')">${icon("trash", 13)}</button></td>
     </tr>`;
   }).join("");
   return `
-    ${roll ? `<div class="muted" style="margin-bottom:6px">Planned materials cost: ${esc(roll)}</div>` : ""}
+    ${E || roll ? `<div class="muted" style="margin-bottom:6px">Planned materials cost: <span id="pb-roll">${esc(roll) || "—"}</span></div>` : ""}
     ${bom.length || E ? `<table class="sub"><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Source</th><th>Est. cost</th>${E ? "<th>From inventory</th><th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="muted">What this part is expected to consume — fabric, resin, consumables. New runs copy this list, and priced lines sum into a cost estimate.</p>`}
     ${E ? `<button onclick="partBomAdd()">+ Material line</button>` : ""}`;
 }

@@ -2042,6 +2042,57 @@ await t("the budget CSV exports cost AND the line sum, so a mismatch survives in
   assert(get.lineSum({ id: "x" }) === "", "legacy rows export an empty lineSum, not $0");
 });
 
+await t("line edits repaint nothing — Tab survives — while the sum, chip and each update in place", () => {
+  DB.budget = [{ id: "BUY-TB-1", item: "order", purchaser: "P", purpose: "Other", status: "Submitted",
+    cost: "", dateOrdered: "2026-08-19", source: "", lines: [] }];
+  view = { ...view, tab: "budget", mode: "detail", id: "BUY-TB-1", edit: true };
+  buyLineAdd();
+  const lid = DB.budget[0].lines[0].lineId;
+  render();
+  const snapshot = main.innerHTML;
+  buyLineUpd(lid, "desc", "brushes");
+  buyLineUpd(lid, "total", "20");
+  buyLineUpd(lid, "qty", "4");
+  assert(main.innerHTML === snapshot, "no repaint on a field change — a repaint is what ate the Tab");
+  assert(document.getElementById("ea-" + lid).textContent === "$5.00 ea", "the each cell moved in place");
+  assert(document.getElementById("bl-sum").textContent.includes("sum $20.00"), "so did the sum");
+  assert(document.getElementById("bl-chip").innerHTML.includes("cost field says"), "and the match chip");
+});
+
+await t("the line grid wears the tab's own dress, and Tab walks fields, not trash cans", () => {
+  render();
+  const h = main.innerHTML;
+  assert((h.match(/class="buy-cost"/g) || []).length >= 2, "money and count cells use the list's .buy-cost cell");
+  assert(h.includes('class="bl-n"'), "the count input is the narrow variant");
+  assert(/tabindex="-1"[^>]*title="Remove line"/.test(h), "the trash button is out of the Tab order");
+  assert(h.includes('id="bds-') && h.includes('id="bt-') && h.includes('id="bq-'), "every cell has a stable id for focus restore");
+});
+
+await t("a Details-grid change repaints a beat later, so Tab lands before the page moves", async () => {
+  DB.budget = [{ id: "BUY-TB-2", item: "x", purchaser: "P", purpose: "Other", status: "Submitted",
+    cost: "10", dateOrdered: "2026-08-19", source: "" }];
+  view = { ...view, tab: "budget", mode: "detail", id: "BUY-TB-2", edit: true };
+  render();
+  updBuy("cost", "80");
+  assert(!main.innerHTML.includes("Over $50"), "no synchronous repaint on the change event");
+  await new Promise(r => setTimeout(r, 1));
+  assert(main.innerHTML.includes("Over $50"), "the approval warning arrives one tick later, after focus settled");
+});
+
+await t("part plan qty edits also update in place instead of repainting", () => {
+  seedBomPart();
+  partBomAdd();
+  const lid = DB.parts[0].bom[0].lineId;
+  partBomPick(lid, "FAB-SN6-001");
+  partBomUpd(lid, "qty", "2");
+  render();
+  const snapshot = main.innerHTML;
+  partBomUpd(lid, "qty", "3");
+  assert(main.innerHTML === snapshot, "no repaint mid-Tab in the materials plan either");
+  assert(document.getElementById("pbc-" + lid).innerHTML.includes("$54.00"), "the cost cell moved in place");
+  assert(document.getElementById("pb-roll").textContent.includes("$54.00"), "and the rollup line");
+});
+
 await t("receipt parsing prefills the same editable grid, and a dead function degrades to typing", async () => {
   DB.budget = [{ id: "BUY-RC-1", item: "order", purchaser: "P", purpose: "Other", status: "Submitted",
     cost: "", dateOrdered: "2026-08-19", source: "", receiptUrl: "", receiptPath: "", lines: [] }];

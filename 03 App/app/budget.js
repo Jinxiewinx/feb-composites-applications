@@ -222,6 +222,9 @@ function buyLineAdd() {
   (b.lines = b.lines || []).push(line);
   saveField("budget", b, "lines", arr => [...(arr || []), line]);
   render();
+  // The pen lands on the new row's first cell; from there it's Tab, Tab, Tab.
+  const el = document.getElementById("bds-" + line.lineId);
+  if (el && el.focus) el.focus();
 }
 function buyLineUpd(lid, k, v) {
   const b = buyById(view.id);
@@ -229,7 +232,28 @@ function buyLineUpd(lid, k, v) {
   if (!l) return;
   l[k] = v;
   saveField("budget", b, "lines", arr => (arr || []).map(x => x.lineId === lid ? { ...x, [k]: v } : x));
-  render();
+  /* NO render() here, on purpose: onchange fires while Tab is moving focus
+     to the next field, and a whole-page repaint destroys that field mid-hop
+     — the grid became untabbable. The three things a line edit can change
+     (its "each" cell, the sum, the match chip) update in place instead. */
+  buyLinesRefresh(lid);
+}
+function buyLinesRefresh(lid) {
+  const b = buyById(view.id);
+  if (!b) return;
+  if (lid) {
+    const l = buyLines(b).find(x => x.lineId === lid);
+    const ea = document.getElementById("ea-" + lid);
+    if (l && ea) { const each = buyLineEach(l); ea.textContent = each == null ? "" : fmtMoney(each) + " ea"; }
+  }
+  const s = buyLineSum(b);
+  const sumEl = document.getElementById("bl-sum");
+  if (sumEl) sumEl.textContent = buyLineSumText(s);
+  const chipEl = document.getElementById("bl-chip");
+  if (chipEl) chipEl.innerHTML = buyLineSumChip(b);
+}
+function buyLineSumText(s) {
+  return s.count ? `· sum ${fmtMoney(s.sum)}${s.priced < s.count ? ` (${s.count - s.priced} unpriced)` : ""}` : "";
 }
 function buyLineDel(lid) {
   const b = buyById(view.id);
@@ -285,16 +309,21 @@ function buyLinesHtml(b, E) {
         <td>${esc(l.total)}</td><td>${esc(l.qty) || "1"}</td>
         <td>${each == null ? '<span class="muted">—</span>' : esc(fmtMoney(each)) + " ea"}</td></tr>`;
     }
+    /* The money cells wear the list's own .buy-cost dress ($-prefixed,
+       right-aligned, fixed width) so the grid reads like the rest of the
+       tab; the derived "each" cell is output, muted, never an input. The
+       trash button sits outside the Tab order — Tab is for filling cells,
+       and the next stop after a row's count is the next row's item. */
     return `<tr>
-      <td><input value="${esc(l.desc)}" placeholder="what it is" onchange="buyLineUpd('${lid}','desc',this.value)"></td>
-      <td><input id="bt-${lid}" value="${esc(l.total)}" placeholder="total $" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','total',this.value)" style="max-width:90px"></td>
-      <td><input id="bq-${lid}" value="${esc(l.qty)}" placeholder="×1" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','qty',this.value)" style="max-width:60px"></td>
-      <td><span id="ea-${lid}">${each == null ? "" : esc(fmtMoney(each)) + " ea"}</span></td>
-      <td><button class="danger ib sm" title="Remove line" onclick="buyLineDel('${lid}')">${icon("trash", 13)}</button></td>
+      <td><input id="bds-${lid}" value="${esc(l.desc)}" placeholder="what it is" aria-label="Line item" onchange="buyLineUpd('${lid}','desc',this.value)"></td>
+      <td class="buy-cost">$<input id="bt-${lid}" value="${esc(l.total)}" inputmode="decimal" aria-label="Line total in dollars" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','total',this.value)"></td>
+      <td class="buy-cost">×<input id="bq-${lid}" class="bl-n" value="${esc(l.qty)}" inputmode="numeric" aria-label="How many" oninput="buyLineLive('${lid}')" onchange="buyLineUpd('${lid}','qty',this.value)"></td>
+      <td class="muted"><span id="ea-${lid}">${each == null ? "" : esc(fmtMoney(each)) + " ea"}</span></td>
+      <td><button class="danger ib sm" tabindex="-1" title="Remove line" onclick="buyLineDel('${lid}')">${icon("trash", 13)}</button></td>
     </tr>`;
   }).join("");
   return `
-    <h3>Line items ${s.count ? `<span class="muted nocaps">· sum ${esc(fmtMoney(s.sum))}${s.priced < s.count ? ` (${s.count - s.priced} unpriced)` : ""}</span> ${buyLineSumChip(b)}` : ""}</h3>
+    <h3>Line items <span id="bl-sum" class="muted nocaps">${esc(buyLineSumText(s))}</span> <span id="bl-chip">${s.count ? buyLineSumChip(b) : ""}</span></h3>
     ${lines.length ? `<table class="sub"><thead><tr><th>Item</th><th>Total $</th><th>Count</th><th>Each</th>${E ? "<th></th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`
       : `<p class="muted">What was actually in the order — one line per thing, total and count, the unit price works itself out.</p>`}
     ${E ? `<button onclick="buyLineAdd()">+ Line</button>
@@ -412,9 +441,11 @@ function setBuyField(id, key, val) {
 function buyFld(b, label, key, opts) {
   const v = b[key] ?? "";
   if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(v) || "—"}</div></div>`;
-  if (opts) return `<div class="f"><label>${label}</label><select onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
-  return `<div class="f"><label>${label}</label><input value="${esc(v)}" onchange="updBuy('${key}',this.value)"></div>`;
+  // Stable ids so budgetRenderSoon() can hand focus back after a repaint.
+  if (opts) return `<div class="f"><label>${label}</label><select id="bf-${key}" onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
+  return `<div class="f"><label>${label}</label><input id="bf-${key}" value="${esc(v)}" onchange="updBuy('${key}',this.value)"></div>`;
 }
+
 
 function renderBuyDetail() {
   const b = buyById(view.id);
@@ -456,4 +487,4 @@ function renderBuyDetail() {
   </div>`;
 }
 
-function updBuy(key, val) { const b = buyById(view.id); b[key] = val; saveBuy(b, key); if (key === "status" || key === "cost" || key === "purpose") render(); }
+function updBuy(key, val) { const b = buyById(view.id); b[key] = val; saveBuy(b, key); if (key === "status" || key === "cost" || key === "purpose") renderSoonKeepFocus(); }

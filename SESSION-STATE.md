@@ -9,6 +9,25 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-19 (later)
+Newest: **Line-grid polish after Simon's review.** His two asks: purchasing
+fill-in fields in the 06 design language, and Tab moving field to field.
+Root cause of the Tab complaint: onchange handlers called render(), which
+repaints the page WHILE Tab is carrying focus to the next field — the
+destination element is destroyed and focus falls to body. Fixes: budget
+line edits (buyLineUpd) and part-plan qty/estCost edits (partBomUpd) no
+longer render at all — the dependent cells update in place via stable ids
+(#ea-/#bl-sum/#bl-chip, #pbc-/#pb-roll); Details-grid changes and the part
+ref picker use core.js renderSoonKeepFocus() (setTimeout 0 -> render ->
+refocus by id + caret restore; buyFld fields carry id="bf-<key>"). Design
+language: money/count cells reuse the budget list's .buy-cost dress ($ and
+x prefixes, right-aligned) with a narrow .bl-n variant (new rule next to
+.buy-cost in index.html), derived "each" cells are muted output, trash
+buttons tabindex=-1 so Tab walks cells, + Line / + Material line focus the
+new row's first field. Tests 471 -> 475; designsystem 23; detailui 885.
+
+Previous status follows.
+
 Last updated: 2026-08-19
 Status: **BOM costing pipeline, chunk 1 of 6 lands: unit costs on inventory.**
 Simon's feature: close the money loop (inventory unit costs -> part BOM
