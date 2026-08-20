@@ -124,6 +124,7 @@ function boardModal(b) {
         `<option value="${esc(b2.id)}" ${e.location === b2.id ? "selected" : ""}>${esc(b2.name || b2.id)}</option>`).join("")}
     </select></div>
     <div class="field"><label>Where it came from</label><input id="bd-origin" value="${esc(e.origin || "")}" placeholder="work order or mold it came off, if it is a leftover"></div>
+    <div class="field"><label>Unit cost ($, per sheet)</label><input id="bd-unitcost" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(e.unitCost ?? "")}" placeholder="leave blank if unknown"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitBoard(${b ? `'${esc(b.id)}'` : "null"})">${b ? "Save" : "Add"}</button></div>
   `);
 }
@@ -142,8 +143,12 @@ function readBoardForm() {
   }
   const qty = Number(String(val("bd-qty")).trim() || "1");
   if (!Number.isFinite(qty) || qty < 1 || Math.floor(qty) !== qty) { toast("Quantity must be a whole number, 1 or more.", "error"); return null; }
+  // Optional. Blank stays blank — a board with no cost is un-costed, not free.
+  const rawCost = String(val("bd-unitcost")).trim();
+  const unitCost = rawCost === "" ? "" : Math.round(Number(rawCost) * 100) / 100;
+  if (rawCost !== "" && (!Number.isFinite(unitCost) || unitCost < 0)) { toast("Unit cost needs to be a plain number of dollars.", "error"); return null; }
   return {
-    ...out, qty,
+    ...out, qty, unitCost,
     label: String(val("bd-label")).trim(),
     density: Number(val("bd-density")) || 30,
     origin: String(val("bd-origin")).trim(),

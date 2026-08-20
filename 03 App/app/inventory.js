@@ -192,6 +192,9 @@ function invRow(coll, o, pill) {
   return `<div class="pmini invrow" onclick="openRecord('${esc(tab)}','${esc(o.id)}')">
     <span class="pm-name">${esc(o.name || o.partName || o.label || o.id)}</span>
     <span class="tny muted">${esc(o.id)}</span>
+    ${/* Prices ride along on the shelf view so browsing the map teaches what
+          things cost — the anti-tribal-knowledge surface Simon picked. */""}
+    ${typeof o.unitCost === "number" ? `<span class="tny muted">${esc(shopMoneyText(o, "unitCost"))}</span>` : ""}
     ${pill || ""}
     <button class="sm no-print" onclick="event.stopPropagation();quickMove('${esc(coll)}','${esc(o.id)}')">Move</button>
   </div>`;

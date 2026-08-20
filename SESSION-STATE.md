@@ -9,6 +9,41 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-19
+Status: **BOM costing pipeline, chunk 1 of 6 lands: unit costs on inventory.**
+Simon's feature: close the money loop (inventory unit costs -> part BOM
+rollups -> WO consume -> budget line items -> receipt autofill -> Incoming
+strip). Design ran as three competing proposals + two critic agents; Simon
+ruled on every contested point. The approved plan lives at
+`~/.claude/plans/i-want-to-increase-generic-cookie.md` — read it before
+continuing; its "Decisions made" section is settled, don't re-litigate.
+NOTE: the plan was written against a STALE local main (2026-08-04); remote
+main had 20+ newer commits (WO redesign with folds/runs/carry-over, budget
+categories + season cap + in-place edits). Chunks 2-5 must re-verify
+against current workorders.js/budget.js before touching them — the plan's
+file-level details for those two files are suspect, its decisions stand.
+Six chunks, each shippable alone:
+  1. unitCost/costUnit/buyRef on lots/stock/items  <- DONE this session
+  2. part.bom[] section + ref picker + coverage rollup
+  3. WO copy-on-create + consume (buy-off prompt + per-line button) + print
+     cost column + dashboard consumed tile + push-back-to-plan w/ provenance
+  4. budget lines[] (desc/total/xcount, live "each" cell, explicit = cost
+     button, NEVER auto-write cost — the $50 gate), reports lineSum column
+  5. Inventory Incoming strip (derived from budget lines, reconciled via
+     lot.buyRef, lot-first write order), prefilled receive modal
+  6. Cloud Function receipt parsing (FIRST backend; confirm deploy w/ Simon)
+Chunk 1 specifics: new `money` field type in shop.js (stored number or "",
+refuses garbage with a toast — no num() free-text money for NEW fields),
+`fmtMoney()` in core.js (non-number -> "", never $0.00), `shopMoneyText()`
+("$18.00/yd"), unitCost+costUnit on FAB/RSN/CON + JIG cost + board form
+unit cost, price inline on inv rows + lots list column, read-only "From
+purchase" chip when o.buyRef={buyId,lineId}. Rebased over the remote's WO/
+budget redesign; boards lost their kind field upstream, cost survived.
+Work is in worktree `.claude/worktrees/bom-costing`, branch bom-costing,
+pushed to origin main per repo authorization.
+
+Previous status follows.
+
 Last updated: 2026-08-15 (round: folds/trainings/issues + polish)
 Newest: **Polish round after Simon's live review (2026-08-15, night).** His
 five asks, all shipped: (1) matrix grant affordance is now a PILL — dashed

@@ -266,6 +266,14 @@ function daysUntil(iso) {
 }
 function fmtWhen(iso) { return iso ? esc(String(iso).slice(0, 16).replace("T", " ")) : ""; }
 
+/* The app's one money formatter. Takes a NUMBER (unitCost and friends are
+   stored numeric, unlike budget's legacy free-text cost) and returns "" for
+   anything that isn't one, so a missing cost renders as absent rather than
+   as $0.00 — a zero that was never entered is not a price. */
+function fmtMoney(n) {
+  return typeof n === "number" && Number.isFinite(n) ? "$" + n.toFixed(2) : "";
+}
+
 /* ---------- sub-day time ----------
    daysUntil() rounds to whole days and midnight-anchors, so it answers 0 for a
    six-hour cure and 1 for a cure that finishes at 00:30 tonight. A cure hold

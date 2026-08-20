@@ -92,6 +92,9 @@ const SHOP = {
       ["laidOn", "Laid up on", "date"],
       ["thicknessMm", "Thickness (mm)", "num"],
       ["coupons", "Coupon range", "text"],        // e.g. C01-C12
+      // JIG-only: what the jig cost to buy or build, for the same reason lots
+      // carry unitCost — cost knowledge should be readable off the record.
+      ["unitCost", "Cost ($)", "money"],
       ["wo", "Work order", "rec:workOrders"],
       ["fabricLots", "Fabric lot(s)", "rec:FAB"],
       ["resinLot", "Resin lot", "rec:RSN"],
@@ -111,7 +114,7 @@ const SHOP = {
       { cls: "CON", label: "Consumable", stage: LOT_STATE },
     ],
     stage: { key: "stage", vals: null },
-    list: ["name", "cls", "stage", "vendorLot", "location"],
+    list: ["name", "cls", "stage", "vendorLot", "unitCost", "location"],
     f: [
       ["name", "Material", "text"],
       ["stage", "State", "select", null],
@@ -125,6 +128,13 @@ const SHOP = {
       ["location", "Home location", "rec:BIN"],
       ["parentId", "Cut from roll", "rec:FAB"],   // an offcut is a roll with a parent
       ["qty", "Quantity left", "text"],
+      /* What one unit of this cost, stamped at receipt (or typed later).
+         Stored as a NUMBER — this feeds BOM cost rollups, and free-text money
+         parsed by regex is how "$1O0" silently becomes 1. `costUnit` is free
+         text ("ea", "yd", "kg") because the shop's units are not a schema's
+         business. Browsing the shelf teaching prices is the point. */
+      ["unitCost", "Unit cost ($)", "money"],
+      ["costUnit", "Cost unit", "text"],
       /* `hazard` drives the §6 chemical chips on the storage map; `lowFlag`
          is an honest manual "running low" toggle — qty is free text, so a
          numeric min-stock would be pretending precision we don't have. */
@@ -195,6 +205,15 @@ function updShop(tab, key, val) {
     toast("A storage location's id is what its scan label points at — make a new record instead of converting this one.", "error");
     render();
     return;
+  }
+  /* Money fields store a number or nothing. Coerced here rather than trusted
+     from the input because type="number" still delivers a string, and because
+     an unparseable value must become "absent", never NaN in Firestore. */
+  const fType = (spec.f.find(f => f[0] === key) || [])[2];
+  if (fType === "money") {
+    const n = String(val).trim() === "" ? null : Number(val);
+    if (n != null && (!Number.isFinite(n) || n < 0)) { toast("Cost needs to be a plain number of dollars.", "error"); render(); return; }
+    val = n == null ? "" : Math.round(n * 100) / 100;
   }
   o[key] = val;
   save(spec.coll, o, key);
@@ -293,7 +312,18 @@ function shopCell(spec, o, key) {
   // app cross-links.
   const f = spec.f.find(f => f[0] === key);
   if (f && String(f[2]).startsWith("rec:")) return shopRefChip(String(v));
+  if (f && f[2] === "money") return esc(shopMoneyText(o, key));
   return esc(String(v));
+}
+
+/* "$18.00/yd" — a money field with its unit riding along. Read by the list
+   cell, the detail field and the inventory rows, so a price reads the same
+   everywhere someone might absorb it. */
+function shopMoneyText(o, key) {
+  const m = fmtMoney(o[key]);
+  if (!m) return "";
+  const u = key === "unitCost" ? String(o.costUnit || "").trim() : "";
+  return u && u !== "ea" ? `${m}/${u}` : m;
 }
 
 /* A reference to another record. Uses the same tab-from-prefix map the scan
@@ -360,6 +390,11 @@ function renderShopDetail(tab, opts) {
     <div class="muted">${esc(o.id)} · <span class="pill ${shopStageClass(spec, o)}">${esc(o.stage || "—")}</span>${
       spec.classes ? " · " + esc(c.label) : ""}${
       o.updatedAt ? " · saved " + fmtWhen(o.updatedAt) + " by " + esc(o.updatedBy || "?") : ""}</div>
+    ${/* Where this came from and what it cost, when receiving stamped it.
+          buyRef is written by the receive flow, never hand-edited, so it is
+          a read-only chip here rather than a schema field. */""}
+    ${o.buyRef && o.buyRef.buyId ? `<div class="muted tny">From purchase
+      <span class="chip" onclick="openRecord('budget','${esc(o.buyRef.buyId)}')">${esc(o.buyRef.buyId)}</span></div>` : ""}
     ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
 
     ${spec.classes && E ? `<h3>Kind</h3><div class="grid"><div class="f"><label>Kind</label>
@@ -416,6 +451,7 @@ function shopFld(spec, tab, o, f, c) {
   if (!view.edit) {
     const shown = key === "stage" ? `<span class="pill ${shopStageClass(spec, o)}">${esc(o.stage || "—")}</span>`
       : String(type).startsWith("rec:") && v ? shopRefChip(String(v))
+      : type === "money" ? (esc(shopMoneyText(o, key)) || "—")
       : esc(v) || "—";
     return `<div class="f"><label>${esc(label)}</label><div class="ro">${shown}</div></div>`;
   }
@@ -433,6 +469,10 @@ function shopFld(spec, tab, o, f, c) {
         <option value="">—</option>
         ${shopRefOptions(String(type).slice(4), String(v)).join("")}
       </select></div>`;
+  }
+  if (type === "money") {
+    return `<div class="f"><label>${esc(label)}</label>
+      <input type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)"></div>`;
   }
   const inputType = type === "date" ? "date" : type === "num" ? "number" : "text";
   return `<div class="f"><label>${esc(label)}</label>
@@ -458,11 +498,11 @@ function shopRefOptions(what, cur) {
    conditionals so the answer to "why is this field missing" is in one place. */
 const SHOP_FIELDS_BY_CLASS = {
   PNL: ["name", "stage", "location", "stack", "session", "laidOn", "thicknessMm", "coupons", "wo", "fabricLots", "resinLot", "hardenerLot", "lotSource"],
-  JIG: ["name", "stage", "location", "wo"],
+  JIG: ["name", "stage", "location", "unitCost", "wo"],
   BIN: ["name", "stage", "site", "locKind", "flam", "walkedAt", "walkedBy"],
-  FAB: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "lowFlag"],
-  RSN: ["name", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "location", "qty", "hazard", "lowFlag"],
-  CON: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "qty", "hazard", "lowFlag"],
+  FAB: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "unitCost", "costUnit", "lowFlag"],
+  RSN: ["name", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "location", "qty", "unitCost", "costUnit", "hazard", "lowFlag"],
+  CON: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "qty", "unitCost", "costUnit", "hazard", "lowFlag"],
 };
 function shopFieldApplies(spec, cls, key) {
   const allowed = SHOP_FIELDS_BY_CLASS[cls];

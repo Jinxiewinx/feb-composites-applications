@@ -420,6 +420,15 @@ offcuts, resin and hardener lots, and consumables, which is what makes
 identity was a filename), jigs, and the storage locations. All of it runs on
 the same schema engine as the mold record (`app/shop.js`).
 
+Buyable things (fabric, resin, consumables, jigs, tooling boards) also carry
+a **unit cost**: a real number of dollars, with a free-text cost unit ("ea",
+"yd", "kg") beside it on lots. Prices show inline on shelf rows and in the
+Materials list, so browsing the map teaches what things cost instead of that
+knowledge living in whoever placed the order. A record created by receiving
+a purchase carries a read-only "From purchase" chip back to the budget entry
+that bought it (`buyRef`). Quantity on lots stays free text on purpose; a
+missing cost renders as absent, never as $0.00.
+
 ### Reports
 
 Reports does per-dataset CSV export for parts, work orders, projects and budget,

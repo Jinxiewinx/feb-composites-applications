@@ -3672,6 +3672,48 @@ await t("BIN records carry the storage-map fields; lots carry hazard and low", (
   assert(lotSrc.includes("partial"), "the lotSource select finally offers the value workorders.js writes");
 });
 
+await t("unit cost is stored as a number, and garbage money is refused", () => {
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", name: "chip brushes", stage: "Sealed" }];
+  view = { ...view, tab: "lots", mode: "detail", id: "CON-SN6-001", edit: true };
+  updShop("lots", "unitCost", "5.499");
+  assert(DB.lots[0].unitCost === 5.5, "typed string becomes a rounded number: " + DB.lots[0].unitCost);
+  updShop("lots", "unitCost", "$1O0");
+  assert(DB.lots[0].unitCost === 5.5, "a typo'd price is refused, never silently mangled");
+  assert(/plain number/.test(lastToast), "and the refusal says why: " + lastToast);
+  updShop("lots", "unitCost", "");
+  assert(DB.lots[0].unitCost === "", "clearing the field means 'unknown', not zero");
+  view.edit = false;
+});
+
+await t("money renders with its unit, and absence is a dash, never $0.00", () => {
+  assert(fmtMoney(18) === "$18.00" && fmtMoney(5.5) === "$5.50", "numbers format");
+  assert(fmtMoney("") === "" && fmtMoney(null) === "" && fmtMoney("18") === "", "non-numbers are absent");
+  assert(shopMoneyText({ unitCost: 18, costUnit: "yd" }, "unitCost") === "$18.00/yd", "per-unit price");
+  assert(shopMoneyText({ unitCost: 5, costUnit: "ea" }, "unitCost") === "$5.00", "'each' needs no suffix");
+  assert(shopMoneyText({ unitCost: "", costUnit: "yd" }, "unitCost") === "", "no price, no text");
+});
+
+await t("cost fields belong to buyable classes, not shelves or panels", () => {
+  const items = shopSpec("items"), lots = shopSpec("lots");
+  for (const c of ["FAB", "RSN", "CON"]) assert(shopFieldApplies(lots, c, "unitCost"), c + " has unitCost");
+  assert(shopFieldApplies(items, "JIG", "unitCost"), "a jig has a cost");
+  assert(!shopFieldApplies(items, "BIN", "unitCost"), "a shelf does not");
+  assert(!shopFieldApplies(items, "PNL", "unitCost"), "a made panel is not a bought thing");
+});
+
+await t("shelf contents show prices, and a purchase-stamped record links back", () => {
+  seedInventory();
+  DB.lots.find(o => o.id === "CON-SN6-001").unitCost = 4.5;
+  DB.lots.find(o => o.id === "CON-SN6-001").buyRef = { buyId: "BUY-SN6-031", lineId: "ln1" };
+  view = { ...view, tab: "inventory", mode: "detail", id: "BIN-SN6-001", edit: false };
+  render();
+  assert(main.innerHTML.includes("$4.50"), "the price rides on the shelf row");
+  view = { ...view, tab: "inventory", mode: "detail", id: "CON-SN6-001", edit: false };
+  render();
+  assert(main.innerHTML.includes("From purchase") && main.innerHTML.includes("BUY-SN6-031"),
+    "the record says which purchase it came from");
+});
+
 await t("a board can say where it is stored", async () => {
   DB.items = [{ id: "BIN-SN6-001", cls: "BIN", name: "Rack A", stage: "Active" }];
   DB.stock = []; fillBoard();
