@@ -458,6 +458,19 @@ offcuts, resin and hardener lots, and consumables, which is what makes
 identity was a filename), jigs, and the storage locations. All of it runs on
 the same schema engine as the mold record (`app/shop.js`).
 
+Above the map sits **Incoming** — everything bought but not yet on a
+shelf. It is a query over the Budget tab's purchase lines, never a second
+copy of the fact: a line shows here until a received record points back at
+it, and the reconciliation trusts the record's `buyRef` (the lot exists)
+rather than the purchase's own back-link, so a half-landed save heals
+itself at the next render. Rows show the thing, its unit price, the
+purchase chip, the vendor, and the order age (⚠ past 14 days). **Arrived**
+opens the Receive-a-delivery modal prefilled; saving creates the lot
+already priced, dated, located, and linked back to the purchase, and the
+row leaves the strip. Walk-in deliveries (donations, legacy stock) still
+go through the plain Receive button and stay honestly un-costed. The strip
+renders nothing when nothing is in the mail.
+
 Buyable things (fabric, resin, consumables, jigs, tooling boards) also carry
 a **unit cost**: a real number of dollars, with a free-text cost unit ("ea",
 "yd", "kg") beside it on lots. Prices show inline on shelf rows and in the

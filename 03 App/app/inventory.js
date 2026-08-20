@@ -166,6 +166,7 @@ function renderInvMap() {
   return `
   ${invToolbar("map")}
   ${invSummaryChips(idx)}
+  ${invIncomingHtml()}
   ${bins.length ? siteOrder.map(s => `
     <div class="inv-site"><div class="pgrouphd"><span class="pg-name">${esc(s)}</span><span class="pg-n">${bySite.get(s).length} location${bySite.get(s).length === 1 ? "" : "s"}</span></div>
       <div class="locgrid">${bySite.get(s).map(b => invCard(b, idx.by.get(b.id) || invEmptyBucket())).join("")}${s === siteOrder[siteOrder.length - 1] ? invNowhereCard(idx) : ""}</div>
@@ -318,6 +319,71 @@ function invKeydown(e) {
 }
 document.addEventListener("keydown", invKeydown);
 
+/* ---------- incoming: bought, not yet on a shelf ----------
+ *
+ * Simon's ruling: a purchase means BOUGHT, not received, and it says nothing
+ * about where things went. The on-order record is the budget line itself, so
+ * Incoming is a QUERY over DB.budget, never a second copy of the fact — and
+ * the reconciliation runs from the created records' buyRef (the truth: the
+ * lot exists), not from the line's best-effort lotRefs back-link, so a save
+ * that half-landed self-heals at render instead of ghosting forever. */
+
+const INV_STALE_ORDER_DAYS = 14;
+
+function invReceivedKeys() {
+  const set = new Set();
+  for (const coll of ["lots", "stock", "items"]) {
+    for (const r of DB[coll] || []) {
+      const br = r.buyRef;
+      if (br && br.buyId && br.lineId) set.add(br.buyId + "|" + br.lineId);
+    }
+  }
+  return set;
+}
+
+function invIncoming() {
+  const recd = invReceivedKeys();
+  const out = [];
+  for (const b of DB.budget || []) {
+    for (const l of b.lines || []) {
+      if (!l.lineId || !String(l.desc || "").trim()) continue;
+      if (recd.has(b.id + "|" + l.lineId)) continue;
+      const age = b.dateOrdered ? invDaysSince(b.dateOrdered) : null;
+      out.push({ buy: b, line: l, age, stale: age != null && age > INV_STALE_ORDER_DAYS });
+    }
+  }
+  return out.sort((a, b2) => (b2.age || 0) - (a.age || 0));
+}
+
+/* The strip earns its place only when something is actually in the mail —
+   empty states shrink the page, they don't pad it. */
+function invIncomingHtml() {
+  const inc = invIncoming();
+  if (!inc.length) return "";
+  return `<div class="card">
+    <h3>Incoming <span class="muted nocaps tny">bought, not yet on a shelf · ${inc.length}</span></h3>
+    ${inc.map(({ buy, line, age, stale }) => {
+      const each = buyLineEach(line);
+      const n = parseLooseMoney(line.qty);
+      return `<div class="pmini invrow">
+        <span class="pm-name">${esc(line.desc)}${n != null && n !== 1 ? ` ×${esc(line.qty)}` : ""}</span>
+        ${each != null ? `<span class="tny muted">${esc(fmtMoney(each))} ea</span>` : ""}
+        <span class="chip" onclick="openRecord('budget','${esc(buy.id)}')">${esc(buy.id)}</span>
+        ${buy.source ? `<span class="tny muted">${esc(buy.source)}</span>` : ""}
+        <span class="tny muted">${age == null ? "" : `ordered ${age}d ago${stale ? " ⚠" : ""}`}</span>
+        <button class="sm no-print" onclick="invReceiveLine('${esc(buy.id)}','${esc(line.lineId)}')">Arrived ▸</button>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function invReceiveLine(buyId, lineId) {
+  const b = recById("budget", buyId);
+  const l = b && (b.lines || []).find(x => x.lineId === lineId);
+  if (!l) return;
+  invReceive("", { buyId, lineId, name: l.desc || "", unitCost: buyLineEach(l), qty: l.qty || "" });
+}
+
 /* ---------- receive a delivery ----------
  * An Easy Composites order lands as rolls + jugs + consumables at once, and
  * stocking it used to be N trips through the class picker. Pick the shelf
@@ -325,28 +391,32 @@ document.addEventListener("keydown", invKeydown);
  * batch then offers its labels in one sheet. Ids are allocated serially on
  * purpose — the shared counter is the whole point of allocId. */
 let INV_RX_N = 0;
-function invRxRow() {
+let INV_RX_FROM = null;   // {buyId, lineId, unitCost, qty} when receiving a purchase line
+function invRxRow(preset) {
   const i = INV_RX_N++;
+  const p = preset || {};
   return `<div class="grid" data-rx-row style="grid-template-columns: 1fr 2fr 1fr; gap: 6px">
     <select id="rx-cls-${i}">
-      <option value="FAB">Fabric</option><option value="RSN">Resin / hardener</option><option value="CON" selected>Consumable</option>
+      <option value="FAB" ${p.cls === "FAB" ? "selected" : ""}>Fabric</option><option value="RSN" ${p.cls === "RSN" ? "selected" : ""}>Resin / hardener</option><option value="CON" ${p.cls !== "FAB" && p.cls !== "RSN" ? "selected" : ""}>Consumable</option>
     </select>
-    <input id="rx-name-${i}" placeholder="what is it">
+    <input id="rx-name-${i}" placeholder="what is it" value="${esc(p.name || "")}">
     <input id="rx-lot-${i}" placeholder="vendor lot #">
   </div>`;
 }
-function invReceive(binId) {
+function invReceive(binId, from) {
   INV_RX_N = 0;
+  INV_RX_FROM = from || null;
   const bins = invActiveBins();
   openModal(`
     <h2>Receive a delivery</h2>
     <p class="muted tny">One line per thing in the box. Everything lands on the shelf you pick, dated today, sealed.</p>
+    ${from ? `<p class="muted tny">Receiving <b>${esc(from.name)}</b> from ${esc(from.buyId)} — the record lands${typeof from.unitCost === "number" ? ` priced at ${esc(fmtMoney(from.unitCost))} each` : ""} and linked back to the purchase.</p>` : ""}
     <div class="field"><label>Onto</label><select id="rx-bin">
       <option value="">—</option>
       ${bins.map(b => `<option value="${esc(b.id)}" ${binId === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}
     </select></div>
-    <div id="rx-rows">${invRxRow()}${invRxRow()}${invRxRow()}</div>
-    <div class="no-print" style="margin: 6px 0"><button class="sm" onclick="document.getElementById('rx-rows').insertAdjacentHTML('beforeend', invRxRow())">+ another line</button></div>
+    <div id="rx-rows">${from ? invRxRow({ name: from.name, cls: "CON" }) : invRxRow() + invRxRow() + invRxRow()}</div>
+    ${from ? "" : `<div class="no-print" style="margin: 6px 0"><button class="sm" onclick="document.getElementById('rx-rows').insertAdjacentHTML('beforeend', invRxRow())">+ another line</button></div>`}
     <div class="foot">
       <button onclick="closeModal()">Cancel</button>
       <button class="primary" onclick="invReceiveSubmit()">Add them</button>
@@ -363,6 +433,8 @@ async function invReceiveSubmit() {
     rows.push({ cls: val("rx-cls-" + i) || "CON", name, vendorLot: String(val("rx-lot-" + i)).trim() });
   }
   if (!rows.length) { toast("Nothing to add — name at least one thing.", "error"); return; }
+  const from = INV_RX_FROM;
+  INV_RX_FROM = null;
   const today = new Date().toISOString().slice(0, 10);
   const made = [];
   for (const r of rows) {
@@ -370,9 +442,28 @@ async function invReceiveSubmit() {
     if (!id) break;
     const o = { id, cls: r.cls, name: r.name, vendorLot: r.vendorLot, stage: "Sealed",
       receivedOn: today, location: loc, createdBy: myEmail() };
+    if (from) {
+      /* The graduation: the record is born knowing what it cost and which
+         purchase bought it. Lot first, back-link second — a lot whose buyRef
+         points at a line is recoverable by the Incoming reconciler even if
+         the line update below never lands; the reverse is fiction. */
+      o.buyRef = { buyId: from.buyId, lineId: from.lineId };
+      if (typeof from.unitCost === "number") { o.unitCost = from.unitCost; o.costUnit = "ea"; }
+      if (from.qty) o.qty = String(from.qty);
+    }
     (DB.lots = DB.lots || []).push(o);
     save("lots", o);
     made.push(o);
+  }
+  if (from && made.length) {
+    const bb = recById("budget", from.buyId);
+    if (bb) {
+      const ids = made.map(o => o.id);
+      const bl = (bb.lines || []).find(x => x.lineId === from.lineId);
+      if (bl) { bl.lotRefs = [...(bl.lotRefs || []), ...ids]; bl.receivedOn = today; }
+      saveField("budget", bb, "lines", arr => (arr || []).map(x =>
+        x.lineId === from.lineId ? { ...x, lotRefs: [...(x.lotRefs || []), ...ids], receivedOn: today } : x));
+    }
   }
   closeModal();
   toast(`${made.length} record${made.length === 1 ? "" : "s"} received onto ${(shopById("items", loc) || {}).name || loc}.`);

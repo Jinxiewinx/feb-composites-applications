@@ -46,8 +46,13 @@ Six chunks, each shippable alone:
      deliberate act; CSV exports cost AND lineSum + lineCount; legacy
      no-lines docs byte-identical; CSV_SPECS added to the harness const
      whitelist)
-  5. Inventory Incoming strip (derived from budget lines, reconciled via
-     lot.buyRef, lot-first write order), prefilled receive modal
+  5. Inventory Incoming strip  <- DONE this session
+     (invIncoming(): query over DB.budget lines, received iff a record
+     with matching buyRef exists — lotRefs is best-effort only, so a
+     failed back-link self-heals; 14d stale flag; invReceiveLine ->
+     invReceive(bin, from) prefilled single-row modal; graduation
+     stamps buyRef/unitCost/costUnit/qty on the lot FIRST, then
+     back-links lotRefs+receivedOn on the line; walk-ins un-costed)
   6. Cloud Function receipt parsing (FIRST backend; confirm deploy w/ Simon)
 Chunk 1 specifics: new `money` field type in shop.js (stored number or "",
 refuses garbage with a toast — no num() free-text money for NEW fields),

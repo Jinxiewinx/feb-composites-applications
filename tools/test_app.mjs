@@ -3875,6 +3875,68 @@ await t("receive a delivery: one shelf, several records, all located and dated",
   assert(made.some(o => o.id.startsWith("CON-")) && made.some(o => o.id.startsWith("RSN-")), "per-class ids");
 });
 
+await t("Incoming is a query over purchase lines, reconciled from the records that exist", () => {
+  seedInventory();
+  DB.budget = [
+    { id: "BUY-SN6-031", item: "McMaster order", source: "McMaster", status: "Ordered", cost: "34", dateOrdered: "2026-08-01",
+      lines: [
+        { lineId: "lnA", desc: "chip brushes", qty: "4", total: "20", lotRefs: [] },
+        { lineId: "lnB", desc: "vac bag film", qty: "1", total: "89", lotRefs: [] },
+      ] },
+    { id: "BUY-SN6-032", item: "legacy, no lines", status: "Submitted", cost: "10", dateOrdered: "2026-08-18" },
+  ];
+  // lnB was received but the back-link write never landed: only the lot's
+  // buyRef says so. The truth is the record that exists.
+  DB.lots.push({ id: "CON-SN6-090", cls: "CON", name: "vac bag film", stage: "Sealed",
+    buyRef: { buyId: "BUY-SN6-031", lineId: "lnB" } });
+  const inc = invIncoming();
+  assert(inc.length === 1 && inc[0].line.lineId === "lnA", "only the truly unreceived line shows");
+  assert(inc[0].stale === true, "ordered 2026-08-01 wears the stale flag");
+  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "map" };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Incoming") && h.includes("chip brushes") && h.includes("$5.00 ea"), "the strip shows the line at its unit price");
+  assert(h.includes("Arrived ▸"), "with its one-tap receive");
+  assert(!h.includes("vac bag film ×"), "the reconciled line is gone");
+});
+
+await t("Arrived graduates the line: lot born priced and linked, line back-linked, Incoming drops it", async () => {
+  seedInventory();
+  DB.budget = [{ id: "BUY-SN6-031", item: "order", source: "McMaster", status: "Ordered", cost: "20", dateOrdered: "2026-08-10",
+    lines: [{ lineId: "lnA", desc: "chip brushes", qty: "4", total: "20", lotRefs: [] }] }];
+  invReceiveLine("BUY-SN6-031", "lnA");
+  assert(document.getElementById("modal").innerHTML.includes("chip brushes"), "the modal arrives prefilled");
+  const bin = document.getElementById("rx-bin");
+  if (bin) bin.value = "BIN-SN6-001";
+  const n0 = document.getElementById("rx-name-0");
+  if (n0) n0.value = "chip brushes";
+  const before = DB.lots.length;
+  await invReceiveSubmit();
+  const made = DB.lots.slice(before);
+  assert(made.length === 1, "one record made");
+  const o = made[0];
+  assert(o.unitCost === 5 && o.costUnit === "ea", "born priced at $5 each (20/4)");
+  assert(o.buyRef && o.buyRef.buyId === "BUY-SN6-031" && o.buyRef.lineId === "lnA", "born knowing which purchase bought it");
+  assert(o.qty === "4", "the count rides into the free-text qty");
+  const bl = DB.budget[0].lines[0];
+  assert(bl.lotRefs.includes(o.id) && bl.receivedOn, "the line is back-linked and dated");
+  assert(invIncoming().length === 0, "and Incoming is empty again");
+});
+
+await t("a walk-in delivery stays a walk-in: no buyRef, no price pretended", async () => {
+  seedInventory();
+  DB.budget = [];
+  invReceive("BIN-SN6-001");
+  const bin = document.getElementById("rx-bin");
+  if (bin) bin.value = "BIN-SN6-001";
+  const n0 = document.getElementById("rx-name-0");
+  if (n0) n0.value = "donated fabric roll";
+  const before = DB.lots.length;
+  await invReceiveSubmit();
+  const o = DB.lots[before];
+  assert(o && !o.buyRef && o.unitCost === undefined, "honestly un-costed, not guessed");
+});
+
 await t("a shelf label says what it is; a scanned mold's nameplate names the shelf", () => {
   seedInventory();
   const bin = shopById("items", "BIN-SN6-001");
