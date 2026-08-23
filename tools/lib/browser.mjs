@@ -8,7 +8,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 
@@ -76,7 +76,13 @@ export async function loadChromium() {
     "node_modules", "playwright", "index.js"));
   for (const p of tries) {
     try {
-      const m = await import(p.startsWith("/") ? "file://" + p : p);
+      /* pathToFileURL, not a "file://" + p concatenation: on Windows an
+         absolute path is C:\Users\..., which does not start with "/", so
+         the old code handed it to import() bare and Node rejected it as an
+         unknown "c:" URL scheme. That throw landed in the catch below, which
+         means "not installed" — so every browser suite here reported SKIPPED
+         and exited 0 on a machine with Playwright installed. */
+      const m = await import(pathToFileURL(p).href);
       /* A global install resolves to index.mjs and exposes `chromium` as a
          named export. A local one resolves to the CJS index.js, where the
          named export is absent and everything hangs off `default` — reading

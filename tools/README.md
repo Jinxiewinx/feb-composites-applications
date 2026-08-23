@@ -9,8 +9,8 @@ the website can be verified before it lands. Run everything from the repo root
 
 - **Node** (any recent version) for every `.mjs` script.
 - **Python 3** for the document pipeline. `build_docx.py` needs the virtualenv
-  at `tools/.venv`, which already exists in the working copy. Invoke it as
-  `tools/.venv/bin/python tools/build_docx.py`.
+  at `tools/.venv`. It is gitignored, so a fresh clone has to build it first.
+  Invoke it as `tools/.venv/bin/python tools/build_docx.py`.
 - **Playwright + Chromium** for the browser tests and the cameras:
   `npm i -g playwright && npx playwright install chromium`. Tests that need it
   skip loudly when it is missing, with a green exit code, so read the output.
@@ -18,6 +18,28 @@ the website can be verified before it lands. Run everything from the repo root
   version matched to the cached Chromium build or it launches and reports a
   missing executable.
 - **Firebase CLI** for the three rules suites, which run against the emulator.
+
+**On Windows.** Everything above works, with three things that bite once each:
+
+- **Line endings must be LF.** `.gitattributes` pins them, so a fresh clone is
+  already right. If you cloned before that file existed, `git config
+  core.autocrlf false` then `git rm --cached -r . && git reset --hard`. The
+  symptom of getting this wrong is `test_app.mjs` dying immediately on
+  `ReferenceError: DB is not defined`, because its strict-mode strip is
+  anchored on `;\n` and CRLF slips past it.
+- **`tools/.venv` is gitignored**, so it does not exist in a fresh clone on any
+  platform, and on Windows the layout is `.venv\Scripts\python.exe` rather than
+  `.venv/bin/python`. Build it with `python -m venv tools/.venv` and install
+  what `build_docx.py` imports.
+- **The emulator suites need a JDK** on PATH, which Windows has no reason to
+  have already.
+
+Node paths that reach `import()` must be `file://` URLs, not bare paths —
+`pathToFileURL()`, never `"file://" + p`. A Windows absolute path starts `C:\`,
+so the concatenation produces an unknown `c:` scheme, and the throw usually
+lands in a `catch` that reports the dependency as missing. That is exactly how
+every browser suite here once skipped GREEN on a machine with Playwright
+installed.
 
 ## The tests
 

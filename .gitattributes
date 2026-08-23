@@ -1,0 +1,24 @@
+# Line endings, pinned to LF on every platform, because this repo is now
+# developed on both macOS and Windows and the tooling assumes LF.
+#
+# The failure this exists to prevent: tools/test_app.mjs loads the app's
+# classic scripts by concatenating them and stripping strict mode with
+# `src.replace(/"use strict";\n/g, "")` before an indirect eval. That regex
+# does not match ";\r\n". On a Windows checkout under git's default
+# core.autocrlf=true, strict mode therefore survived the strip, core.js's
+# implicit globals became assignments to undeclared names, and the whole suite
+# died on its first line with "ReferenceError: DB is not defined". Several
+# other regexes in tools/ are anchored the same way.
+#
+# Normalising the working tree is the cheap fix; making every such regex
+# CRLF-tolerant is the expensive one. macOS is unaffected either way — it
+# already checked out LF, and the blobs in the index are unchanged.
+
+* text=auto eol=lf
+
+# Binaries: no eol translation, no attempt to diff them as text.
+*.png   binary
+*.pdf   binary
+*.docx  binary
+*.woff2 binary
+*.stl   binary

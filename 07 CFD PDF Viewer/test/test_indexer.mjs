@@ -8,14 +8,17 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { indexDocument, withContentSpace, matchPanels } from "../app/indexer.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SAMPLE = join(root, "DP_22.pdf");
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-pdfjs.GlobalWorkerOptions.workerSrc = join(root, "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
+/* A file URL, not a bare path: pdf.mjs import()s this string, and on Windows an
+   absolute path is C:\Users\... , which Node rejects as an unknown "c:" scheme. */
+const WORKER = join(root, "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(WORKER).href;
 
 let pass = 0, fail = 0;
 function t(name, fn) {

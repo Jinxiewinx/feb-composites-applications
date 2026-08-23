@@ -9,6 +9,41 @@ questions. Not a transcript.
 
 ---
 
+Last updated: 2026-08-23
+Newest: **The repo now builds and tests on Windows.** Simon is developing on
+both machines from here on. Three portability bugs, all the same shape, all
+found by actually running the suite on a bare Windows box:
+  1. CRLF. Git's Windows default core.autocrlf=true checked everything out
+     with CRLF, and test_app.mjs strips strict mode with a regex anchored on
+     `;\n`. Strict mode survived, core.js's implicit globals became
+     assignments to undeclared names, and the suite died on line one with
+     "ReferenceError: DB is not defined". Fixed durably by .gitattributes
+     (`* text=auto eol=lf`, binaries marked). `git add --renormalize .` after
+     adding it produced ZERO churn, so the blobs are unchanged and macOS
+     sees no difference.
+  2. tools/lib/browser.mjs loadChromium() built its candidate URL as
+     `p.startsWith("/") ? "file://" + p : p`. A Windows path is C:\..., so it
+     took the bare branch, Node rejected the "c:" scheme, and the throw landed
+     in the catch that means "not installed". Every one of the 11 browser
+     suites printed SKIPPED and exited 0 with Playwright installed — the exact
+     false-green this repo's README warns about, arriving by a new route. Now
+     pathToFileURL(p).href, which is identical on macOS except that it also
+     percent-encodes the space in "SN6 Resources".
+  3. Same bug in "07 CFD PDF Viewer"/test/test_indexer.mjs: GlobalWorkerOptions
+     .workerSrc was a bare path. pdf.mjs import()s it. Now a file:// URL.
+Full run on Windows, all green: app 475, appui 1242, detailui 885, website 88,
+qr 69, sanitize 55, scan 47, route 38, slicer 38, labels 36, q_landing 32,
+safearea 30, packer 24, designsystem 23, print_mobile 14, drawings 9, plus CFD
+indexer 23. Not run: the three Firebase rules suites — they need the CLI and a
+JDK, neither installed on the Windows box yet. Nothing about them is known to
+be broken; they are simply unverified there.
+Note for whoever sets up the next machine: tools/README.md's Prerequisites now
+has an "On Windows" section, and the .venv line no longer claims the virtualenv
+"already exists in the working copy" — it is gitignored, so it never does in a
+fresh clone on any platform.
+
+Previous status follows.
+
 Last updated: 2026-08-19 (later)
 Newest: **Line-grid polish after Simon's review.** His two asks: purchasing
 fill-in fields in the 06 design language, and Tab moving field to field.
