@@ -34,9 +34,11 @@ found by actually running the suite on a bare Windows box:
 Full run on Windows, all green: app 475, appui 1242, detailui 885, website 88,
 qr 69, sanitize 55, scan 47, route 38, slicer 38, labels 36, q_landing 32,
 safearea 30, packer 24, designsystem 23, print_mobile 14, drawings 9, plus CFD
-indexer 23. Not run: the three Firebase rules suites — they need the CLI and a
-JDK, neither installed on the Windows box yet. Nothing about them is known to
-be broken; they are simply unverified there.
+indexer 23. Firebase CLI 15.28.1 and Microsoft OpenJDK 21 went on afterwards,
+so the three rules suites ran too and are also green: wo_rules 98, pub_rules
+29, storage_rules 13. They target the DEMO project, so they need Java and the
+CLI but neither a login nor a network — worth knowing, because it means CI or
+a fresh machine can run them without touching the real feb-composites project.
 Note for whoever sets up the next machine: tools/README.md's Prerequisites now
 has an "On Windows" section, and the .venv line no longer claims the virtualenv
 "already exists in the working copy" — it is gitignored, so it never does in a

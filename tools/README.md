@@ -32,7 +32,8 @@ the website can be verified before it lands. Run everything from the repo root
   `.venv/bin/python`. Build it with `python -m venv tools/.venv` and install
   what `build_docx.py` imports.
 - **The emulator suites need a JDK** on PATH, which Windows has no reason to
-  have already.
+  have already. `winget install Microsoft.OpenJDK.21` is enough; the CLI itself
+  is `npm i -g firebase-tools`.
 
 Node paths that reach `import()` must be `file://` URLs, not bare paths —
 `pathToFileURL()`, never `"file://" + p`. A Windows absolute path starts `C:\`,
@@ -74,15 +75,23 @@ Against the Firebase emulator:
 | Test | What it checks |
 |---|---|
 | `test_wo_rules.mjs` | Firestore security rules for the team collections. |
-| `test_storage_rules.mjs` | Storage rules: who can upload what, where. One failing case is a documented emulator limitation, not a regression; the test header explains. |
+| `test_storage_rules.mjs` | Storage rules: who can upload what, where. Deny-side only — the emulator's upload endpoint does not set request.resource.contentType, so the *allow* cases cannot be asserted here at all; the test header explains. |
 | `test_pub_rules.mjs` | The `pub` scan-mirror rules: anonymous read of one document, nothing else. |
 
-The emulator suites run like this:
+The emulator suites run like this. They target the DEMO project, so they need
+Java and the CLI but no `firebase login` and no network:
 
 ```bash
 cd "03 App" && firebase emulators:exec --only firestore --project demo-feb-work-orders \
-  "node '../tools/test_wo_rules.mjs'"
+  "node ../tools/test_wo_rules.mjs"
 ```
+
+`test_pub_rules.mjs` the same way; `test_storage_rules.mjs` wants
+`--only auth,storage`.
+
+Do not quote the inner path. The single-quoted form this file used to carry
+works in a POSIX shell and fails on Windows, where `emulators:exec` hands the
+string to `cmd.exe` and the quotes arrive as part of the filename.
 
 ## Generators and the document pipeline
 
