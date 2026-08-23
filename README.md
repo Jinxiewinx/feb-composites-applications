@@ -24,12 +24,14 @@ for everything in here.
 
 ## Getting started
 
-You need Node for the app tooling, Python 3 for the document pipeline (the
-virtualenv at `tools/.venv` already exists), the Firebase CLI for deploys and
-the rules tests, and Playwright for the browser tests
-(`npm i -g playwright && npx playwright install chromium`).
+[SETUP.md](SETUP.md) is the full walkthrough for a new machine, macOS or
+Windows: what to install, how to verify it, how to run the suite, how to
+deploy, and the platform traps that cost a day each if you meet them cold.
 
-Three commands cover most days, all run from this folder:
+The short version. You need Node for the app tooling, Playwright for the
+browser tests, the Firebase CLI and a JDK for the rules tests and deploys, and
+Python 3 only if you are editing the standards. Three commands cover most days,
+all run from this folder:
 
 ```bash
 node tools/serve_populated.mjs --port 8791   # the app locally, seeded, no Firebase

@@ -44,6 +44,24 @@ has an "On Windows" section, and the .venv line no longer claims the virtualenv
 "already exists in the working copy" — it is gitignored, so it never does in a
 fresh clone on any platform.
 
+Later the same day: deployed hosting from Windows (firebase deploy --only
+hosting, from "03 App"), verified by SHA-256 of core.js / workorders.js /
+index.html fetched off the live host against the local tree — all three match.
+NOTE: that deploy uploaded 42 of 129 files, i.e. it was NOT a no-op. Nothing in
+this session touched "03 App", so those 42 were 9fffc9e's line-grid work,
+committed earlier and never deployed. The line grids are live now.
+New SETUP.md at the repo root: the full new-machine walkthrough for macOS and
+Windows, with the platform traps (CRLF, PATH-after-install, PowerShell
+execution policy, emulators:exec quoting, pathToFileURL). README's Getting
+started now points at it instead of carrying a stale four-line summary.
+OPEN, needs a human: the Tab-moves-field-to-field behaviour from 9fffc9e is
+UNVERIFIED. Browser automation could not measure it — a synthetic Tab does no
+focus traversal in that harness, and the control case (click a cost cell, press
+Tab, change nothing) also lands on document.body, so a real regression and a
+harness artifact are indistinguishable there. What IS confirmed: the in-place
+update works — editing a Budget cost cell moved the season total without a full
+re-render. Someone should Tab through the Budget grid by hand.
+
 Previous status follows.
 
 Last updated: 2026-08-19 (later)
