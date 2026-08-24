@@ -1723,6 +1723,21 @@
     margin: 10px 0 4px; border-radius: var(--r-md); border: 1px dashed var(--warn-border);
     background: var(--warn-bg); color: var(--ink); }
   .inv-nowhere-bar b { font-weight: 700; }
+
+  /* ---- getting the data back out ---- */
+  .xgroup { padding: 12px 0; border-top: 1px solid var(--line); }
+  .xgroup:first-of-type { border-top: 0; }
+  .xg-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 3px; }
+  .xg-name { font-weight: 700; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); }
+  /* The last-resort copy box, for when the browser refuses the clipboard AND
+     a download silently does nothing — which is iOS Safari, which is the phone
+     in the shop. It has to stay monospace to keep its columns legible, so it
+     opts out of the 16px iOS zoom guard: a readonly field cannot be typed in,
+     so there is nothing to zoom for. */
+  .copyout { width: 100%; height: 34vh; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; white-space: pre; overflow: auto; border: 1px solid var(--line);
+    border-radius: var(--radius); background: var(--surface-2); color: var(--ink); padding: 8px; }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
 
@@ -2437,6 +2452,9 @@
     .pfilters > input { grid-column: auto; }
   }
   @media (max-width: 640px) {
+    .xgroup .linkrow { flex-direction: column; align-items: stretch; }
+    .xg-hd { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .copyout { height: 40vh; font-size: 12px; }
     .inv-nowhere-bar { flex-direction: column; align-items: stretch; }
     .gsr { grid-template-columns: 1fr; }
     .gsr-where { justify-self: stretch; text-align: left; }

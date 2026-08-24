@@ -36,6 +36,9 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Navigation | `.sidebar` > `.sb-brand`/`.sb-brand-txt`, `.sb-nav` > `.sb-item` (+ `.active`, `.ic`); `.topbar` > `h1`, `.icon-btn` (+ `.badge`). |
 | Avatars | `.avatar`, grouped in `.avatar-stack`. |
 | Receiving | `.rxhead` (the once-per-delivery fields), `table.sub.rxgrid` (the entry sheet — the budget line grid one size up, fixed layout, sticky header, one card per line on a phone), `.rx-fan` (+ `.many`) for the live "3 records" readout, `.rx-na` for a column a class does not have, `.rxfoot`, `.rxbusy` (someone else is receiving right now), `.rxline`. Column widths hang off `.rxc-<field>` on each cell. |
+| Export | `.xgroup` > `.xg-hd` > `.xg-name` for one offered dataset; `.copyout` is the last-resort textarea for a browser that refuses the clipboard. |
+| Storage map | `.loccard` (+ `.alert`) with `.lc-open` as a stretched-link button on the name and `.lc-act` as a sibling above it; `.locempty` collapses empty, recently walked shelves to one line; `.inv-nowhere-bar` sits above the shelves. |
+| Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
 | Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip). |
 
 For your own layout glue, use the tokens rather than literal values: `var(--canvas)`, `var(--card)`, `var(--surface-2)`, `var(--line)`, `var(--ink)`, `var(--muted)`, `var(--accent)`, `var(--blue)`, `var(--gold)`, spacing via `var(--radius)`/`var(--r-md)`/`var(--r-lg)`, and motion via `var(--t)`/`var(--t-fast)`/`var(--ease)`. Status colors come as triads: `--ok`/`--ok-bg`/`--ok-border`, and the same shape for `--bad`, `--retro`, `--purple`. The warning triad is the one asymmetric case: the text color is `--amber`, but the surfaces are `--warn-bg` and `--warn-border`.

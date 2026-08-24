@@ -37,6 +37,8 @@ globalThis.document = {
   execCommand() {},
 };
 globalThis.window = globalThis;
+if (!globalThis.navigator) globalThis.navigator = {};
+globalThis.isSecureContext = false;
 let lastAlert = "", lastConfirm = "", confirmAnswer = true;
 globalThis.alert = (m) => { lastAlert = String(m); };
 globalThis.confirm = (m) => { lastConfirm = String(m); return confirmAnswer; };
@@ -4399,6 +4401,133 @@ await t("a walk-in stays a walk-in: no purchase, no price pretended", async () =
   await rxCommitAll();
   const o = DB.lots[0];
   assert(o && !o.buyRef && o.unitCost === undefined, "honestly un-costed, not guessed");
+});
+
+console.log("the way back out (in case we ever want the spreadsheet again):");
+
+function seedExport() {
+  seedInventory();
+  DB.items = [
+    { id: "BIN-SN6-001", cls: "BIN", name: "Container Shelf A", stage: "Active", site: "RFS container",
+      locKind: "shelf", walkedAt: "2026-08-01", walkedBy: "Simon" },
+    { id: "BIN-SN6-002", cls: "BIN", name: "Flammables Cabinet", stage: "Active", site: "Flammables cabinet",
+      locKind: "cabinet", flam: "Yes" },
+    { id: "JIG-SN6-001", cls: "JIG", name: "trim jig", stage: "Stored", location: "BIN-SN6-001" },
+  ];
+  DB.lots = [
+    { id: "FAB-SN6-001", cls: "FAB", name: "195 Twill Sigmatex", matKey: "195-TWILL", vendorLot: "SG24-1180",
+      supplier: "Sigmatex", stage: "Open", location: "BIN-SN6-001", unitCost: 61.4, costUnit: "ea" },
+    { id: "CON-SN6-001", cls: "CON", name: "Acetone", hazard: "flammable", stage: "Sealed",
+      location: "BIN-SN6-001", count: 2 },
+    { id: "CON-SN6-002", cls: "CON", name: "spent tape", stage: "Empty", location: "BIN-SN6-001" },
+  ];
+  DB.molds = [];
+  DB.stock = [];
+  DB.parts = [];
+  DB.budget = [];
+}
+
+await t("a row says where a thing is by NAME — a sheet of BIN-SN6-001 helps nobody", () => {
+  seedExport();
+  const rows = invExportRows({ includeEmpty: true, includeRetired: true });
+  const twill = rows.find(r => r.id === "FAB-SN6-001");
+  assert(twill.location === "Container Shelf A", "the shelf name: " + twill.location);
+  assert(twill.locationId === "BIN-SN6-001", "and the id too, so the sheet can round-trip back in");
+  assert(twill.site === "RFS container" && twill.locKind === "shelf", "with the site it sits in");
+  assert(twill.url.includes("FAB-SN6-001"), "and a link back, so the hatch is not one-way");
+  assert(twill.kind === "Fabric", "kind is the class word a person uses");
+});
+
+await t("an unhoused thing says so rather than showing a blank", () => {
+  seedExport();
+  DB.lots.push({ id: "CON-SN6-003", cls: "CON", name: "homeless gloves", stage: "Sealed", location: "" });
+  const r = invExportRows({}).find(x => x.id === "CON-SN6-003");
+  assert(r.location === "(no location)", "said out loud: " + r.location);
+});
+
+await t("the export is a physical count, not the map — it does not inherit the map's filters", () => {
+  /* invIndex hides Empty lots and Retired molds because they are not news.
+     Something you still own is a row in a count. */
+  seedExport();
+  const all = invExportRows({ includeEmpty: true, includeRetired: true });
+  assert(all.some(r => r.id === "CON-SN6-002"), "the empty roll is still a thing we own");
+  assert(all.find(r => r.id === "CON-SN6-002").state === "Empty", "and its state says what it is");
+  const fewer = invExportRows({ includeEmpty: false, includeRetired: false });
+  assert(!fewer.some(r => r.id === "CON-SN6-002"), "and it can be left out on purpose");
+});
+
+await t("warnings ride along, so the sheet can be sorted by what is wrong", () => {
+  seedExport();
+  const r = invExportRows({}).find(x => x.id === "CON-SN6-001");
+  assert(/flammable, not a rated location/.test(r.warnings),
+    "acetone on an unrated shelf: " + r.warnings);
+});
+
+await t("the locations sheet is the stock-walk checklist", () => {
+  seedExport();
+  const rows = invExportLocations();
+  const a = rows.find(r => r.id === "BIN-SN6-001");
+  /* Counted through invIndex, the same join the storage map uses — this sheet
+     IS the map on paper, which is why an empty roll is not on it. The flat
+     sheet is the other question (what do we own) and does list it. */
+  assert(a.total === 3 && a.fabric === 1 && a.jigs === 1 && a.consumables === 1,
+    "counts per kind: " + JSON.stringify(a));
+  assert(a.walkedAt === "2026-08-01" && a.walkedBy === "Simon", "and who last confirmed it");
+  assert(/flammable/.test(a.warnings), "and what is wrong with it, so the sheet can be sorted by trouble");
+});
+
+await t("CSV and TSV come out of one row builder, so they cannot disagree", () => {
+  seedExport();
+  const rows = invExportRows({});
+  const cols = invExportCols("flat", rows);
+  const csv = toCSV(rows, cols), tsv = toTSV(rows, cols);
+  assert(csv.split("\n").length === tsv.split("\n").length, "same number of rows");
+  assert(csv.split("\n")[0].split(",").length === tsv.split("\n")[0].split("\t").length, "same columns");
+});
+
+await t("TSV is stripped, never quoted — Sheets does not reliably unquote on paste", () => {
+  seedExport();
+  DB.lots[0].name = 'a name with a "quote", a\ttab and a\nnewline';
+  const rows = invExportRows({});
+  const cols = invExportCols("flat", rows);
+  const tsv = toTSV(rows, cols);
+  const line = tsv.split("\n").find(l => l.includes("a name with"));
+  assert(line, "the row survived as ONE line — a newline inside a value must not split it");
+  assert(!line.includes('"a name'), "and it is not quoted: a quoted value arrives wearing its quotes");
+  assert(line.split("\t").length === cols.length, "the tab inside the value became a space, so columns still line up");
+  // CSV, by contrast, quotes — which is correct for CSV.
+  const csv = toCSV(rows, cols);
+  assert(csv.includes('"'), "CSV still quotes, because a CSV reader expects it");
+});
+
+await t("both datasets are offered, with their row counts, and a way to include the quiet ones", () => {
+  seedExport();
+  invExportModal();
+  const h = document.getElementById("modal").innerHTML;
+  assert(h.includes("Everything on every shelf") && h.includes("Locations"), "both sheets");
+  assert(h.includes("Copy for Sheets") && h.includes("Download .csv"), "both ways out");
+  assert(h.includes("x-all"), "and the include-the-quiet-ones toggle");
+  closeModal();
+});
+
+await t("the copy path degrades all the way down to showing you the text", async () => {
+  /* The tier everyone skips is the one that matters: downloadBlob revokes its
+     object URL on the next line with the anchor never attached, which iOS
+     Safari frequently turns into nothing at all — and that is the phone in the
+     shop. */
+  seedExport();
+  const realClip = navigator.clipboard;
+  try {
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    document.execCommand = () => false;          // and the fallback refuses too
+    await copyText("a\tb\nc\td", "2 rows");
+    const h = document.getElementById("modal").innerHTML;
+    assert(h.includes("copyout"), "it shows you the text to copy by hand rather than failing silently");
+    closeModal();
+  } finally {
+    Object.defineProperty(navigator, "clipboard", { value: realClip, configurable: true });
+    document.execCommand = () => {};
+  }
 });
 
 console.log("finding things (where is the 195 twill?):");

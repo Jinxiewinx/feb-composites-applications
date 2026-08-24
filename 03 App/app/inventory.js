@@ -570,6 +570,7 @@ function invToolbar(active) {
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
+    <button class="ib" onclick="invExportModal()">${icon("download", 15)} Export</button>
   </div>`;
 }
 
@@ -679,6 +680,190 @@ function rxResumeChip() {
   const n = d && d.rows ? d.rows.filter(r => String(r.name || "").trim()).length : 0;
   if (!n) return "";
   return `<button class="ib" onclick="invReceive('')">${icon("edit", 15)} Finish ${n} line${n === 1 ? "" : "s"}</button>`;
+}
+
+/* ---------- the way out ----------
+ *
+ * The escape hatch, and it is deliberately a good one. A team that suspects it
+ * cannot get its data back out keeps a shadow spreadsheet, and a shadow
+ * spreadsheet is the thing this whole tab exists to replace.
+ *
+ * Two sheets, both built from the invIndex() join rather than dumped per
+ * collection. Blank cells in a spreadsheet are free; a cross-sheet formula is
+ * not, and four raw dumps would make "what is this worth" and "what expires
+ * next" into lookups. Location ids resolve to shelf NAMES — a sheet full of
+ * BIN-SN6-001 is useless to a human — and every row carries a URL back, so the
+ * hatch is not a one-way door.
+ *
+ * Both come out of ONE row builder, so the CSV and the clipboard can never
+ * disagree about what an export is. */
+
+function invExportRows(opts) {
+  const o = opts || {};
+  const names = invLocNames();
+  const bins = new Map((DB.items || []).filter(b => b.cls === "BIN").map(b => [b.id, b]));
+  const rows = [];
+  const push = (kind, rec, extra) => {
+    const bin = bins.get(String(rec.location || rec.moldLocation || "")) || null;
+    const where = invWhere(rec, names);
+    rows.push({
+      id: rec.id, kind,
+      name: rec.name || rec.partName || rec.label || "",
+      state: rec.stage || "",
+      site: bin ? (bin.site || "") : "",
+      location: where ? where.name : "(no location)",
+      locationId: bin ? bin.id : "",
+      locKind: bin ? (bin.locKind || "") : "",
+      matKey: rec.matKey || "",
+      vendorLot: rec.vendorLot || "", supplier: rec.supplier || "",
+      howFull: rec.qty || "", count: rec.count == null ? "" : rec.count,
+      receivedOn: rec.receivedOn || "", openedOn: rec.openedOn || "", expiresOn: rec.expiresOn || "",
+      role: rec.role || "", hazard: rec.hazard || "",
+      unitCost: typeof rec.unitCost === "number" ? rec.unitCost : "",
+      costUnit: rec.costUnit || "",
+      dims: extra && extra.dims ? extra.dims : "",
+      warnings: [
+        lotExpired(rec) ? "expired" : "",
+        lotIsLow(rec) ? "running low" : "",
+        (rec.hazard === "flammable" && bin && bin.flam !== "Yes") ? "flammable, not a rated location" : "",
+      ].filter(Boolean).join("; "),
+      shelfWalkedAt: bin ? (bin.walkedAt || "") : "",
+      shelfWalkedBy: bin ? (bin.walkedBy || "") : "",
+      url: SCAN_HOST + SCAN_PATH + rec.id,
+    });
+  };
+
+  /* The map's own filters are display decisions and have no business in a
+     physical count: invIndex skips Empty lots and Retired molds, and an empty
+     jug you still own is a row. They are marked in `state`, not dropped. */
+  for (const m of DB.molds || []) if (o.includeRetired !== false || m.stage !== "Retired") push("Mold", m);
+  for (const b of DB.stock || []) push("Board", b, { dims: [b.len, b.wid, b.thk].every(x => x) ? `${fmtDim(b.len)} x ${fmtDim(b.wid)} x ${fmtDim(b.thk)}` : "" });
+  for (const it of DB.items || []) {
+    if (it.cls === "PNL") push("Test panel", it);
+    if (it.cls === "JIG") push("Jig", it);
+  }
+  for (const l of DB.lots || []) {
+    if (o.includeEmpty === false && l.stage === "Empty") continue;
+    push(l.cls === "FAB" ? "Fabric" : l.cls === "RSN" ? "Resin" : "Consumable", l);
+  }
+  for (const p of DB.parts || []) if (p.moldLocation) push("Part", p);
+  return rows.sort((a, b) => String(a.location).localeCompare(String(b.location)) || cmpId(a.id, b.id));
+}
+
+function invExportLocations() {
+  const idx = invIndex();
+  return invBins().map(b => {
+    const k = idx.by.get(b.id) || invEmptyBucket();
+    const warns = invLocWarnings(b, k);
+    return {
+      id: b.id, name: b.name || b.id, site: b.site || "", locKind: b.locKind || "",
+      flam: b.flam || "", stage: b.stage || "",
+      molds: k.molds.length, boards: k.boards.length, panels: k.panels.length, jigs: k.jigs.length,
+      fabric: k.fabric.length, resin: k.resin.length, consumables: k.consumables.length, parts: k.parts.length,
+      total: invBucketCount(k),
+      walkedAt: b.walkedAt || "", walkedBy: b.walkedBy || "",
+      warnings: warns.map(w => w.text).join("; "),
+      url: SCAN_HOST + SCAN_PATH + b.id,
+    };
+  }).sort((a, b) => String(a.site).localeCompare(String(b.site)) || String(a.name).localeCompare(String(b.name)));
+}
+
+const INV_EXPORTS = {
+  flat: { file: "inventory", label: "Everything on every shelf",
+          blurb: "One row per physical thing, with the shelf it is on.",
+          rows: (o) => invExportRows(o) },
+  locations: { file: "inventory-locations", label: "Locations",
+               blurb: "One row per shelf, rack and bin, with counts and the last stock walk.",
+               rows: () => invExportLocations() },
+};
+function invExportCols(which, rows) {
+  const seen = [];
+  for (const r of rows) for (const k of Object.keys(r)) if (!seen.includes(k)) seen.push(k);
+  return seen.map(k => ({ label: k, get: (r) => r[k] }));
+}
+function invExportOpts() {
+  const el = document.getElementById("x-all");
+  const all = el ? !!el.checked : true;
+  return { includeEmpty: all, includeRetired: all };
+}
+
+/* TSV is STRIPPED, not quoted. Quoted TSV is the classic bug here: Sheets does
+   not reliably unquote on paste, so a quoted shelf name arrives wearing its
+   quotes. A tab or newline inside a value becomes a space. */
+function toTSV(rows, cols) {
+  const cell = v => String(v == null ? "" : v).replace(/[\t\r\n]+/g, " ");
+  return [cols.map(c => cell(c.label)).join("\t")]
+    .concat(rows.map(r => cols.map(c => cell(c.get(r))).join("\t"))).join("\n");
+}
+
+/* Three tiers, and the third is the one that matters.
+   Tier 1 needs a secure context AND a live user gesture. It is feature-detected
+   SYNCHRONOUSLY so that when it is absent we reach tier 2 inside the same
+   gesture turn — awaiting first would burn the gesture and make execCommand
+   fail too. Tier 3 exists because downloadBlob revokes its object URL on the
+   line after click() with the anchor never attached, which iOS Safari
+   frequently turns into nothing at all: the person most likely to need this is
+   standing in a shop with a phone. */
+async function copyText(text, what) {
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(what + " copied — paste into a blank Google Sheet.");
+      return true;
+    } catch (e) { /* denied, or the document was not focused */ }
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    if (ta.setSelectionRange) ta.setSelectionRange(0, text.length);   // iOS ignores select() on readonly
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) { toast(what + " copied — paste into a blank Google Sheet."); return true; }
+  } catch (e) { /* fall through to showing it */ }
+  openModal(`<h2>Copy this</h2>
+    <p class="muted tny">Your browser would not let the app reach the clipboard. Tap the box,
+      select all, copy, and paste it into a blank Google Sheet.</p>
+    <textarea class="copyout" readonly onclick="this.select()">${esc(text)}</textarea>
+    <div class="foot"><button class="primary" onclick="closeModal()">Done</button></div>`);
+  return false;
+}
+
+function invExportCSV(which) {
+  const s = INV_EXPORTS[which]; if (!s) return;
+  const rows = s.rows(invExportOpts());
+  downloadCSV(`feb-${s.file}-${today()}.csv`, toCSV(rows, invExportCols(which, rows)));
+  toast(`${rows.length} row${rows.length === 1 ? "" : "s"} downloaded.`);
+}
+function invExportCopy(which) {
+  const s = INV_EXPORTS[which]; if (!s) return;
+  const rows = s.rows(invExportOpts());
+  copyText(toTSV(rows, invExportCols(which, rows)), `${rows.length} row${rows.length === 1 ? "" : "s"}`);
+}
+
+function invExportModal() {
+  const n = (which) => INV_EXPORTS[which].rows({ includeEmpty: true, includeRetired: true }).length;
+  openModal(`<h2>Export inventory</h2>
+    <p class="muted tny">For a Google Sheet, Copy beats a download — paste it straight into a blank
+      sheet, and it works on a phone, where a browser download often silently does nothing.</p>
+    ${Object.keys(INV_EXPORTS).map(k => `<div class="xgroup">
+      <div class="xg-hd"><span class="xg-name">${esc(INV_EXPORTS[k].label)}</span>
+        <span class="psum-chip"><b>${n(k)}</b> rows</span></div>
+      <div class="muted tny">${esc(INV_EXPORTS[k].blurb)}</div>
+      <div class="linkrow">
+        <button class="primary" onclick="invExportCopy('${k}')">Copy for Sheets</button>
+        <button onclick="invExportCSV('${k}')">Download .csv</button>
+      </div>
+    </div>`).join("")}
+    <div class="field"><label><input type="checkbox" id="x-all" checked>
+      include empty lots and retired molds</label>
+      <span class="muted tny">The map hides them because they are not news. A physical count is
+        not the map: something you still own is a row.</span></div>
+    <div class="foot"><button class="primary" onclick="closeModal()">Done</button></div>`);
 }
 
 /* ---------- the tab ---------- */
