@@ -123,6 +123,12 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
+  /* Berkeley Blue lifted off the dark canvas. --blue is used as a SURFACE
+     (primary button, selected filter chip, goal bar) and had no dark value,
+     so it stayed #003262 against a #0b0f16 canvas and every selected state
+     read as a hole rather than a selection. Still the brand hue, still about
+     6.8:1 under the white text these surfaces carry. */
+  --blue: #1d5aa8;
   --navy-2: #2a6bb5; --sb-bg: #071a30; --brand-ink: #6f9dff;
 
   --canvas: #0b0f16; --card: #141c28; --surface: #141c28;

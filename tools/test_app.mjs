@@ -102,17 +102,29 @@ const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "p
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES) = /gm, "$1 = ");
+src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
 let pass = 0, fail = 0;
 async function t(name, fn) {
+  resetFields();
   try { await fn(); pass++; console.log("  ok  " + name); }
   catch (e) { fail++; console.log("FAIL  " + name + " — " + (e && e.message)); }
+}
+/* Element stubs are created on demand and cached forever, so a value typed by
+   one test was still sitting in the box when the next one read it. That is not
+   theoretical: the walk-in receive test filled rx-name-0 only, and quietly
+   created TWO lots because rx-name-1 still held "IN2 resin 5kg" from the test
+   above it — it passed because it asserted on DB.lots[before] and never
+   counted. Clear the values, not the elements: main/sidebar/topbar are cached
+   references at module scope and deleting them would detach render()'s output
+   from everything that asserts on it. */
+function resetFields() {
+  for (const k in els) { els[k].value = ""; els[k].files = []; }
 }
 function assert(c, m) { if (!c) throw new Error(m || "assertion failed"); }
 const main = el("main"), sidebar = el("sidebar"), topbar = el("topbar");
@@ -3776,6 +3788,99 @@ await t("Schedule is one tab with two views, and #/weekplan still lands on the w
   assert(view.tab === "timeline" && view.schedView === "week", "weekplan normalises to Schedule's week view");
   const row = TABS.find(t => t.id === "weekplan");
   assert(row && row.hidden, "and stays out of the sidebar");
+});
+
+console.log("scanning a pile onto one shelf:");
+
+await t("a sticky scan takes code after code instead of tearing the camera down", () => {
+  const got = [];
+  SCAN.sticky = true; SCAN.count = 0; SCAN.lastId = ""; SCAN.lastAt = 0;
+  SCAN.onCode = (id) => got.push(id);
+  acceptScan("FAB-SN6-001");
+  acceptScan("RSN-SN6-002");
+  acceptScan("CON-SN6-003");
+  assert(got.join(",") === "FAB-SN6-001,RSN-SN6-002,CON-SN6-003", "all three landed: " + got.join(","));
+  assert(SCAN.count === 3, "and it counted them");
+});
+
+await t("the same label held in frame does not fire sixty times a second", () => {
+  /* The detector re-reads the same code every frame while the label is still
+     in view. That was harmless when accepting closed the camera and is a
+     disaster when it does not — one roll would move itself repeatedly. */
+  const got = [];
+  SCAN.sticky = true; SCAN.count = 0; SCAN.lastId = ""; SCAN.lastAt = 0;
+  SCAN.accept = () => true;
+  SCAN.onCode = (id) => got.push(id);
+  const seen = (raw) => {
+    const id = idFromScan(raw);
+    if (id && SCAN.sticky && id === SCAN.lastId && Date.now() - SCAN.lastAt < 2500) return;
+    if (id && SCAN.accept(id)) acceptScan(id);
+  };
+  for (let i = 0; i < 40; i++) seen("FAB-SN6-001");   // one label, forty frames
+  assert(got.length === 1, "one label, one move — got " + got.length);
+  seen("RSN-SN6-002");
+  assert(got.length === 2, "a different label still gets through immediately");
+});
+
+await t("a one-shot scan is unchanged: it closes and reports once", () => {
+  const got = [];
+  SCAN.sticky = false; SCAN.onCode = (id) => got.push(id);
+  acceptScan("MOLD-SN6-004");
+  assert(got.join(",") === "MOLD-SN6-004", "the original callers are untouched");
+});
+
+console.log("restock rules (the reorder threshold lives on the material, not the jug):");
+
+await t("the seed is CS-011 §5, and every rule carries a threshold and a reason", () => {
+  window.RESTOCK_OVERRIDES = null;
+  const rules = restockRules();
+  assert(rules.length === RESTOCK_SEED.length, "seed passes through untouched");
+  assert(rules.every(r => r.matKey && r.label && typeof r.minCount === "number" && r.why),
+    "every row has a key, a label, a numeric minimum and the standard's reasoning");
+  const tape = restockRuleFor("TACKY-TAPE");
+  assert(tape && tape.minCount === 6 && tape.unit === "roll", "tacky tape: 6 rolls, per §5");
+  const in2 = restockRuleFor("IN2");
+  assert(in2.leadDays === 42, "Easy Composites is six weeks, per CS-012 §7.4");
+  assert(in2.hazard === "flammable" && in2.role === "resin",
+    "the rule carries what a received lot should inherit");
+});
+
+await t("a lead override moves one threshold without restating the table", () => {
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: 12 }] };
+  assert(restockRuleFor("TACKY-TAPE").minCount === 12, "the override wins");
+  assert(restockRuleFor("TACKY-TAPE").unit === "roll", "and the rest of the row survives the merge");
+  assert(restockRuleFor("IN2").minCount === 1, "untouched rules are untouched");
+  assert(restockRules().length === RESTOCK_SEED.length, "an override of a known key adds no row");
+});
+
+await t("a rule for something CS-011 never listed is an addition, not an error", () => {
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "KAPTON-TAPE", label: "Kapton tape", minCount: 2, unit: "roll" }] };
+  assert(restockRules().length === RESTOCK_SEED.length + 1, "the shop buys things the standard didn't list");
+  assert(restockRuleFor("KAPTON-TAPE").minCount === 2);
+});
+
+await t("a hand-edited config cannot silently switch a threshold off", () => {
+  /* Validated at READ time, not just at write time, exactly as resinById does:
+     a doc edited in the Firestore console must not be able to weaken a rule. */
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: -5 }] };
+  assert(restockRuleFor("TACKY-TAPE").minCount === 6, "negative falls back to the seed");
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: "lots" }] };
+  assert(restockRuleFor("TACKY-TAPE").minCount === 6, "non-numeric falls back to the seed");
+  window.RESTOCK_OVERRIDES = { rules: "not an array" };
+  assert(restockRules().length === RESTOCK_SEED.length, "a malformed doc leaves the seed standing");
+  window.RESTOCK_OVERRIDES = null;
+});
+
+await t("matKey suggestions offer what is stocked and what is planned for", () => {
+  DB.lots = [{ id: "RSN-SN6-001", cls: "RSN", matKey: "IN2", name: "IN2" },
+             { id: "CON-SN6-001", cls: "CON", matKey: "SHOP-TOWELS", name: "towels" },
+             { id: "CON-SN6-002", cls: "CON", matKey: "IN2", name: "dupe key" },
+             { id: "CON-SN6-003", cls: "CON", name: "no key at all" }];
+  const sug = shopSuggest("lots", "matKey");
+  assert(sug.includes("SHOP-TOWELS"), "a key only the shop has typed is offered");
+  assert(sug.includes("TACKY-TAPE"), "so is one only the restock table knows");
+  assert(sug.filter(x => x === "IN2").length === 1, "deduped across both sources");
+  assert(!sug.includes(""), "blanks dropped");
 });
 
 console.log("inventory plumbing:");

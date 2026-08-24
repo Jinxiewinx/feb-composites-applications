@@ -224,7 +224,7 @@ const AUDIT = `(() => {
     bodyBg: getComputedStyle(document.body).backgroundColor,
     cardBg: opaqueSurface(),
     inkColor: getComputedStyle(document.body).color,
-    tokenBlue: getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(),
+    tokenGold: getComputedStyle(document.documentElement).getPropertyValue("--gold").trim(),
     fontFamily: getComputedStyle(document.body).fontFamily,
     mainText: (main.textContent || "").trim().length,
   };
@@ -292,8 +292,16 @@ for (const vp of widths) {
 
       /* The design system is actually loaded and applied, not merely present.
          Checked per tab because a tab that fails to render its own styles
-         still inherits the shell's. */
-      ok(`${at} tokens applied`, a.tokenBlue === "#003262", `--blue is "${a.tokenBlue}"`);
+         still inherits the shell's.
+
+         The canary has to be a token that is the same in BOTH themes, or this
+         asserts the theme rather than the stylesheet. It used to be --blue,
+         which qualified only by accident: --blue had no dark value at all, so
+         the primary button and every selected chip rendered near-black navy on
+         the dark canvas. Fixing that broke this check, which is the check
+         working. --gold is deliberately theme-invariant — it is the brand
+         accent and carries the same hue on both grounds. */
+      ok(`${at} tokens applied`, a.tokenGold === "#FDB515", `--gold is "${a.tokenGold}"`);
       ok(`${at} brand font`, /Inter/.test(a.fontFamily), a.fontFamily.slice(0, 40));
 
       if (vp.coarse) {

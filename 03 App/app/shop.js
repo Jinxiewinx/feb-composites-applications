@@ -41,6 +41,12 @@ const LOT_STATE = ["Sealed", "Open", "Empty", "Expired"];
    type: text | date | num | select | rec:<coll> | textarea
    `list` names the columns the table shows, in order. `key` is the one field
    that is bold in the list and largest on the label. */
+/* CS-011 §7.3's site vocabulary, in one place. It used to exist twice — here
+   inside the SHOP table and again as INV_SITES in inventory.js, which orders
+   the storage map — so adding a site meant editing two files and finding out
+   you had missed one when a whole site quietly grouped as "Unassigned". */
+const SITES = ["", "RFS container", "Jacobs basement", "Flammables cabinet", "Dry sealed bin", "General Box", "Other"];
+
 const SHOP = {
   molds: {
     tab: "molds", label: "Molds", icon: "layers", coll: "molds", cls: null, prefix: "MOLD",
@@ -82,7 +88,7 @@ const SHOP = {
          is CS-011 §7.3's vocabulary as a dropdown; `locKind` and `flam` feed
          the §6 chemical-storage warnings; walkedAt/By are stamped by the
          Confirm-contents button and editable here so a lead can correct one. */
-      ["site", "Site", "select", ["", "RFS container", "Jacobs basement", "Flammables cabinet", "Dry sealed bin", "General Box", "Other"]],
+      ["site", "Site", "select", SITES],
       ["locKind", "Type", "select", ["", "shelf", "rack", "cabinet", "bin", "box", "fridge"]],
       ["flam", "Rated for flammables", "select", ["", "Yes"]],
       ["walkedAt", "Contents last confirmed", "date"],
@@ -572,6 +578,16 @@ function shopRefOptions(what, cur) {
       recs = recs.concat((DB[coll] || []).filter(o => o.cls === what));
     }
   }
+  /* A retired shelf is not somewhere you can put something. Every hand-built
+     bin list already filtered these out (invActiveBins, quickMove, the board
+     modal) and this one did not, so the schema-driven Location dropdowns were
+     the lone way to file a record onto a dead shelf — where it then rendered
+     NOWHERE: renderInvMap only walks active bins, and invIndex buckets it
+     under the retired id rather than into the unhoused pile, so it did not
+     even show up in the "no location" count. Silently orphaned. The currently
+     stored value stays listed so an existing record can still show its own
+     location and be moved off it. */
+  if (what === "BIN") recs = recs.filter(o => o.stage !== "Retired" || o.id === cur);
   return recs
     .slice().sort((a, b) => cmpId(a.id, b.id))
     .map(o => `<option value="${esc(o.id)}" ${o.id === cur ? "selected" : ""}>${esc(o.name || o.partName || o.label || o.id)} · ${esc(o.id)}</option>`);

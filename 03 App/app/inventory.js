@@ -22,11 +22,100 @@
  * as "legacy" rather than pretended away). The moldUses() idiom, one level
  * up. */
 
-const INV_SITES = ["RFS container", "Jacobs basement", "Flammables cabinet", "Dry sealed bin", "General Box", "Other"];
+// Map order. The blank is a schema affordance for "not set yet", not a site.
+const INV_SITES = SITES.filter(Boolean);
 const INV_WALK_STALE_DAYS = 30;
 
 function invBins() { return (DB.items || []).filter(o => o.cls === "BIN"); }
 function invActiveBins() { return invBins().filter(b => b.stage !== "Retired"); }
+
+/* ---------- restock rules: what we keep on the shelf, and how little is too
+ * little ----------
+ *
+ * WHY THIS IS NOT A FIELD ON A LOT. lowFlag lives on a container. A container
+ * empties, invIndex() drops it from every bucket, invSummaryChips() filters
+ * Empty out before it counts anything, and the flag goes with it: being nearly
+ * out is a chip, being completely out is silence. That is PP-02 — the SN5
+ * sheet where MEKP sat flagged REORDER all season — reproduced exactly. The
+ * thing you reorder is a MATERIAL, so the threshold belongs on the material.
+ *
+ * The seed is CS-011 §5's table, verbatim, including the standard's own
+ * reasoning in `why`. §5 calls these "starting values; tune with usage data",
+ * which is the whole argument for a lead-editable override rather than a
+ * regression over forty data points we will not have until March.
+ *
+ * unit is the noun the count picker says out loud ("How many boxes"), because
+ * "1" meaning one box and "100" meaning a hundred gloves is the ambiguity that
+ * makes a count untrustworthy. leadDays is CS-012 §7.4's supplier lead time,
+ * and it is what turns "you are low" into "order now to have it by the 4th". */
+const RESTOCK_SEED = [
+  { matKey: "IN2", label: "IN2 infusion resin", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+    hazard: "flammable", role: "resin",
+    why: "Every infusion. One unopened kit is about one peak week, so it is the alarm, not the buffer — CS-011 §5." },
+  { matKey: "AT30", label: "AT30 slow hardener", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+    hazard: "flammable", role: "hardener",
+    why: "Pairs with IN2; same 6-week Easy Composites lead." },
+  { matKey: "WEST-105", label: "West 105 resin", minCount: 1, unit: "tank", supplier: "West System", leadDays: 14,
+    hazard: "flammable", role: "resin", why: "Every wet layup. CS-011 §5 wants half a tank plus a can." },
+  { matKey: "WEST-206", label: "West 206 hardener", minCount: 1, unit: "can", supplier: "West System", leadDays: 14,
+    hazard: "flammable", role: "hardener", why: "Every wet layup." },
+  { matKey: "XCR", label: "XCR mold coating", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+    hazard: "flammable", role: "resin",
+    why: "Every mold. One kit seals two or three sections and molds queue two a week in peak." },
+  { matKey: "VB160", label: "VB160 bagging film", minCount: 1, unit: "roll", supplier: "Easy Composites", leadDays: 42,
+    why: "Everything bagged." },
+  { matKey: "PEEL-PLY", label: "Peel ply", minCount: 1, unit: "roll", supplier: "Easy Composites", leadDays: 42,
+    why: "Everything bagged." },
+  { matKey: "FLOW-MESH", label: "Flow mesh", minCount: 1, unit: "roll", supplier: "Easy Composites", leadDays: 42,
+    why: "Everything infused." },
+  { matKey: "TACKY-TAPE", label: "Tacky tape", minCount: 6, unit: "roll", supplier: "Easy Composites", leadDays: 7,
+    why: "Everything bagged, and the team burns it fast: about three rolls a week in peak, one-week lead." },
+  { matKey: "GLOVES-NITRILE", label: "Nitrile gloves", minCount: 2, unit: "box per size", supplier: "McMaster", leadDays: 7,
+    why: "Everything." },
+  { matKey: "MIXING-CUPS", label: "Mixing cups", minCount: 50, unit: "cup", supplier: "McMaster", leadDays: 7, why: "Everything." },
+  { matKey: "MIXING-STICKS", label: "Mixing sticks", minCount: 50, unit: "stick", supplier: "McMaster", leadDays: 7, why: "Everything." },
+  { matKey: "CARTRIDGE-A-P100", label: "Respirator cartridges (A + P100)", minCount: 2, unit: "set", supplier: "McMaster", leadDays: 7,
+    why: "Safety-blocking: no cartridges, no layup." },
+  { matKey: "195-TWILL", label: "195 twill cloth", minCount: 10, unit: "yd", supplier: "Sigmatex (sponsor)", leadDays: 30,
+    why: "Most stacks." },
+];
+
+/* Lead overrides, config/restock. Same trust shape as config/resins: roster
+   reads, lead writes, no rules change needed. A row keyed by an unknown
+   matKey is an ADDITION, not an error — the shop buys things CS-011 never
+   listed. Fetched once per session; a missing doc never clobbers a seed. */
+window.RESTOCK_OVERRIDES = null;
+let restockFetched = false;
+function loadRestockRules() {
+  if (restockFetched || !window.fb || fb.state !== "ready" || !fb.getConfig) return;
+  restockFetched = true;
+  fb.getConfig("restock").then(d => { if (d) { window.RESTOCK_OVERRIDES = d; render(); } }).catch(() => {});
+}
+
+/* The one choke point. Overrides merge per matKey so a lead can move a single
+   threshold without restating the table, and minCount is validated at READ
+   time — a doc hand-edited in the Firestore console cannot set a negative or
+   non-numeric minimum and silently switch a rule off. Same defensive read as
+   resinById(). */
+function restockRules() {
+  const over = window.RESTOCK_OVERRIDES;
+  const rows = Array.isArray(over && over.rules) ? over.rules : [];
+  const byKey = new Map(RESTOCK_SEED.map(r => [r.matKey, r]));
+  for (const o of rows) {
+    if (!o || !o.matKey) continue;
+    const base = byKey.get(o.matKey) || { matKey: o.matKey, label: o.matKey };
+    const n = Number(o.minCount);
+    const clean = { ...base, ...o };
+    if (!Number.isFinite(n) || n < 0) clean.minCount = base.minCount;
+    else clean.minCount = n;
+    byKey.set(o.matKey, clean);
+  }
+  return [...byKey.values()];
+}
+function restockRuleFor(matKey) {
+  if (!matKey) return null;
+  return restockRules().find(r => r.matKey === matKey) || null;
+}
 
 /* ---------- the index: location id -> contents ---------- */
 function invEmptyBucket() {
@@ -259,7 +348,8 @@ function renderInvContents(bin) {
 function invMoveHere(binId) {
   openScan({
     title: "Move things here",
-    hint: "Scan the label on each thing you are putting on this shelf.",
+    hint: "Scan the label on each thing you are putting on this shelf. The camera stays open.",
+    sticky: true,
     accept: id => /^(MOLD|PNL|JIG|FAB|RSN|CON|BRD|P)-/.test(String(id)),
     onCode: id => {
       const tab = tabForId(id);

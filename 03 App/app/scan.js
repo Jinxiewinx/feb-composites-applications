@@ -29,12 +29,23 @@ function scanSupported() {
     typeof navigator.mediaDevices.getUserMedia === "function";
 }
 
-let SCAN = { stream: null, raf: 0, onCode: null, running: false };
+let SCAN = { stream: null, raf: 0, onCode: null, running: false,
+             sticky: false, count: 0, lastId: "", lastAt: 0 };
 
-/* opts: { title, hint, accept(id) -> bool, onCode(id) } */
+/* opts: { title, hint, accept(id) -> bool, onCode(id), sticky } */
 async function openScan(opts) {
   SCAN.onCode = opts.onCode;
   SCAN.accept = opts.accept || (() => true);
+  /* sticky: keep the camera running and take code after code.
+     Every original caller was one-shot — scan a thing, open it — so accepting
+     a code tore the whole modal down. invMoveHere is not one-shot: its hint
+     literally says "scan the label on each thing you are putting on this
+     shelf", and it was paying a fresh getUserMedia and a camera warm-up per
+     item, which is most of a second each, on a phone, with gloves on. */
+  SCAN.sticky = !!opts.sticky;
+  SCAN.count = 0;
+  SCAN.lastId = "";
+  SCAN.lastAt = 0;
   const can = scanSupported();
 
   openModal(`
@@ -82,7 +93,13 @@ async function tickScan(det, video) {
     const hits = await det.detect(video);
     for (const h of hits) {
       const id = idFromScan(h.rawValue);
-      if (id && SCAN.accept(id)) { acceptScan(id); return; }
+      /* The detector re-reads the same code on every frame while the label is
+         still in view, which does not matter when accepting closes the camera
+         and matters enormously when it does not: one label would fire sixty
+         moves a second. Ignore a repeat of the code we just took until it has
+         been out of frame for a moment. */
+      if (id && SCAN.sticky && id === SCAN.lastId && Date.now() - SCAN.lastAt < 2500) continue;
+      if (id && SCAN.accept(id)) { acceptScan(id); if (!SCAN.sticky) return; continue; }
       if (id) setScanState(`${id} isn't the right kind of code for this.`);
     }
   } catch { /* a dropped frame is not an error worth reporting */ }
@@ -103,6 +120,16 @@ function idFromScan(raw) {
 
 function acceptScan(id) {
   const fn = SCAN.onCode;
+  if (SCAN.sticky) {
+    SCAN.lastId = id;
+    SCAN.lastAt = Date.now();
+    SCAN.count++;
+    if (fn) fn(id);
+    // Said after the callback, so a caller that refuses the code can overwrite
+    // this with its own reason rather than being contradicted by it.
+    setScanState(`${id} — ${SCAN.count} scanned. Keep going, or Done.`);
+    return;
+  }
   closeScan();
   if (fn) fn(id);
 }
@@ -110,6 +137,7 @@ function acceptScan(id) {
 function scanManual() {
   const el = document.getElementById("scan-manual");
   const id = idFromScan(el ? el.value : "");
+  if (SCAN.sticky && el) el.value = "";   // ready for the next one
   if (!id) { toast("That doesn't look like a code from a label.", "error"); return; }
   if (!SCAN.accept(id)) { toast(`${id} isn't the right kind of code for this.`, "error"); return; }
   acceptScan(id);
