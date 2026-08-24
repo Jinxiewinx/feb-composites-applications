@@ -266,6 +266,10 @@ function packAll(blanks, boards, opts) {
     }
   }
   pool.sort((a, b) => (a.w * a.h - b.w * b.h)
+    // NOT cmpId(): packer.js is importScripts()'d into slicer.worker.js
+    // without core.js, so core's helpers do not exist here. This comparator is
+    // a determinism tie-break inside cut scoring, never a displayed order, so
+    // plain string order is fine and a ReferenceError would not be.
     || String(a.src.id).localeCompare(String(b.src.id)) || (a.unit - b.unit));
 
   for (const [k, wanted] of buckets) {

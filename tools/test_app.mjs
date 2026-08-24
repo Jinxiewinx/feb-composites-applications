@@ -128,6 +128,27 @@ await t("loading → Connecting", () => { render(); assert(main.innerHTML.includ
 await t("signedout → login", () => { fb.state = "signedout"; onFbChange(); assert(main.innerHTML.includes("Sign in") && main.innerHTML.includes("li-email")); assert(sidebar.innerHTML === "" && topbar.innerHTML === ""); });
 await t("pending → roster-wait", () => { fb.state = "pending"; fb.user = { uid: "u9", email: "new@berkeley.edu", name: "New" }; onFbChange(); assert(main.innerHTML.includes("not on the roster")); });
 
+console.log("ids:");
+
+await t("ids sort by their number, not as text — 999 before 1000", () => {
+  /* allocId pads to three digits, so padding stops at 999 and plain string
+     order puts FAB-SN6-1000 before FAB-SN6-999. Reserving id blocks makes that
+     reachable much sooner than a thousand records would, because a cancelled
+     batch burns its numbers — and the label builder prints in this order. */
+  const ids = ["FAB-SN6-1000", "FAB-SN6-999", "FAB-SN6-002", "FAB-SN6-1001"];
+  const sorted = ids.slice().sort(cmpId);
+  assert(sorted.join(",") === "FAB-SN6-002,FAB-SN6-999,FAB-SN6-1000,FAB-SN6-1001",
+    "numeric order, got " + sorted.join(","));
+  assert(ids.slice().sort((x, y) => String(x).localeCompare(String(y)))[1] === "FAB-SN6-1000",
+    "string order really is wrong, or this test is guarding nothing");
+});
+
+await t("different prefixes still sort by prefix, and non-ids don't throw", () => {
+  assert(cmpId("CON-SN6-004", "FAB-SN6-002") < 0, "prefix wins over number");
+  assert(cmpId("", "") === 0 && cmpId(null, null) === 0, "blank and null are safe");
+  assert(cmpId("no-digits", "no-digits") === 0, "falls back to string order");
+});
+
 console.log("shell + sidebar:");
 signInAsLead();
 await t("ready shows sidebar nav + Documents, dashboard default", () => { render(); assert(view.tab === "dashboard"); assert(sidebar.innerHTML.includes("Work Orders") && sidebar.innerHTML.includes("Parts") && sidebar.innerHTML.includes("Schedule") && sidebar.innerHTML.includes("Budget") && sidebar.innerHTML.includes("Documents")); });

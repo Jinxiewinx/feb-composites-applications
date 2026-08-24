@@ -89,6 +89,34 @@ async function allocId(coll, cls) {
     return localId(coll, cls);
   }
 }
+/* N ids at once. One transaction instead of N, which is the difference between
+   a 200-row stock-take that commits and one that dies half written on shop
+   wifi. Read your whole form before awaiting this, for the same reason as
+   allocId: the fallback opens a modal.
+
+   Falls back to the one-at-a-time path on ANY failure, which covers the window
+   where the client has shipped but the rules deploy has not — an old ruleset
+   refuses every block write, and a delivery that cannot be received is a far
+   worse outcome than a slow one. */
+async function allocIds(coll, cls, n) {
+  if (!(n > 0)) return [];
+  if (n === 1) { const id = await allocId(coll, cls); return id ? [id] : []; }
+  try { return await fb.allocIdBlock(coll, cls, n); }
+  catch (e) {
+    const ok = await confirmAsync(`Couldn't reserve ${n} IDs in one go (offline, or the shared counter is on an older ruleset). Fall back to one at a time? It is slower, and if it stops partway you will be told exactly where.`,
+      { ok: "Go one at a time", danger: false });
+    if (!ok) return [];
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      let id = null;
+      try { id = await fb.allocId(coll, cls); } catch (e2) { id = null; }
+      if (!id) break;               // caller reports the short count; never silently truncate
+      out.push(id);
+    }
+    return out;
+  }
+}
+
 /* Offline fallback only; the normal path is the shared counter in fb.allocId().
  *
  * `cls` and the prefix-scoped scan below are NOT optional detail. This used to
@@ -191,6 +219,28 @@ function febMark(size) {
 
 /* ---------- small helpers ---------- */
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+/* Compare two record ids the way a person reads them.
+   Ids are PREFIX-SNx-NNN and allocId pads the number to three digits, so the
+   padding STOPS at 999 — plain string order therefore puts FAB-SN6-1000 before
+   FAB-SN6-999, and a label sheet prints out of sequence. That was always a
+   latent bug at a thousand records; reserving id blocks makes it reachable much
+   sooner, because a cancelled batch burns its numbers. Compare the head as
+   text and the trailing digits as a number, and fall back to plain string
+   order for anything that is not shaped like an id. */
+function cmpId(a, b) {
+  const A = String(a ?? ""), B = String(b ?? "");
+  // Split a trailing run of digits off the end, without a regex, so this
+  // stays readable and has no escaping to get wrong.
+  const tail = (t) => {
+    let i = t.length;
+    while (i > 0 && t.charCodeAt(i - 1) >= 48 && t.charCodeAt(i - 1) <= 57) i--;
+    return i === t.length ? null : [t.slice(0, i), Number(t.slice(i))];
+  };
+  const pa = tail(A), pb = tail(B);
+  if (pa && pb && pa[0] === pb[0]) return pa[1] - pb[1];
+  return A.localeCompare(B);
+}
+
 function today() { return new Date().toISOString().slice(0, 10); }
 function isLead() { return !!(window.fb && fb.roster && fb.roster.role === "lead"); }
 function signerName() {
@@ -1069,7 +1119,7 @@ function partRuns(p) {
   return out.sort((a, b) =>
     (b.wo.id === p.workOrderId) - (a.wo.id === p.workOrderId) ||
     String(b.wo.createdDate || "").localeCompare(String(a.wo.createdDate || "")) ||
-    String(b.wo.id).localeCompare(String(a.wo.id)));
+    cmpId(b.wo.id, a.wo.id));
 }
 /* The parent of a run. Many-to-one has no ambiguity to guard against, so an
    explicit partId always resolves — unlike the old symmetric lookup, which

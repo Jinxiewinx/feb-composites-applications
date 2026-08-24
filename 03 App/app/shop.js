@@ -117,6 +117,16 @@ const SHOP = {
     list: ["name", "cls", "stage", "vendorLot", "unitCost", "location"],
     f: [
       ["name", "Material", "text"],
+      /* What KIND of thing this is, across every lot of it — "IN2", "AT30-SLOW",
+         "NITRILE-L". Not a reference and not an id: no counter is touched and
+         no label is printed, so it costs nothing against the 14-character QR
+         budget. It exists because the thing you reorder is a material, not a
+         jug: lowFlag lives on a container, and when the last container empties
+         invIndex drops it (inventory.js) and the reorder signal goes with it.
+         That is PP-02 — "MEKP sat flagged REORDER all season" — at the data
+         model level. Grouping by matKey is what makes "we are OUT of x"
+         expressible at all. */
+      ["matKey", "Material type", "sug"],
       ["stage", "State", "select", null],
       ["role", "Role", "select", ["", "resin", "hardener"]],
       ["ratio", "Mix ratio", "text"],
@@ -127,7 +137,19 @@ const SHOP = {
       ["expiresOn", "Expires", "date"],
       ["location", "Home location", "rec:BIN"],
       ["parentId", "Cut from roll", "rec:FAB"],   // an offcut is a roll with a parent
-      ["qty", "Quantity left", "text"],
+      /* How full this container is. A coarse enum, NOT a number and NOT a
+         fourth field: stage, lowFlag and qty already overlapped three ways to
+         say the same thing, so this is the deletion rather than an addition.
+         Words beat a percentage — "37%" is a decision, and a decision at 11pm
+         with gloves on is a field left blank. Legacy free text ("about half",
+         "2 yd left") still displays and stays selectable; nothing is parsed. */
+      ["qty", "How full", "select", ["", "Full", "Half", "Low", "Empty"]],
+      /* CON only: how many units this ONE record stands for. Distinct from qty
+         on purpose — a box of 100 gloves is a count set once at receipt, and
+         how full the shelf is is a different fact that changes weekly.
+         Conflating them is what makes quantity fields rot. */
+      ["count", "How many", "num"],
+      ["countedAt", "Counted on", "date"],
       /* What one unit of this cost, stamped at receipt (or typed later).
          Stored as a NUMBER — this feeds BOM cost rollups, and free-text money
          parsed by regex is how "$1O0" silently becomes 1. `costUnit` is free
@@ -138,8 +160,23 @@ const SHOP = {
       /* `hazard` drives the §6 chemical chips on the storage map; `lowFlag`
          is an honest manual "running low" toggle — qty is free text, so a
          numeric min-stock would be pretending precision we don't have. */
-      ["hazard", "Hazard", "select", ["", "flammable"]],
-      ["lowFlag", "Running low", "select", ["", "Yes — reorder"]],
+      /* Three states, not two. Blank previously read as "not flammable" to the
+         CS-011 §6 check, so a material nobody had classified filed a silent
+         false all-clear. Unknown has to render as unknown — this is a safety
+         check for a team that once kept chemicals in a food fridge (PP-10). */
+      ["hazard", "Hazard", "select", ["", "flammable", "not flammable"]],
+      /* Where the expiry date came from. The vendor's printed date beats our
+         shelf-life table and the person holding the jug is right, so the two
+         are not interchangeable — and stamping the source is what stops a lead
+         editing shelfLifeMonths from silently moving the expiry of every jug
+         in the shop. Same discipline resins.js keeps between the datasheet
+         hold and the team hold. */
+      ["expirySource", "Expiry from", "select", ["", "vendor label", "shelf-life table"]],
+      ["emptiedOn", "Emptied", "date"],
+      /* Demoted to an override. The reorder decision is now derived from qty
+         and the restock rules; this stays for the person who looks at a shelf
+         and knows something the rule does not. */
+      ["lowFlag", "Flag for reorder (override)", "select", ["", "Yes — reorder"]],
     ],
   },
 };
@@ -215,6 +252,19 @@ function updShop(tab, key, val) {
     if (n != null && (!Number.isFinite(n) || n < 0)) { toast("Cost needs to be a plain number of dollars.", "error"); render(); return; }
     val = n == null ? "" : Math.round(n * 100) / 100;
   }
+  /* "num" gets the same treatment, for a sharper reason than money: a count is
+     COMPARED. mold.uses is already mixed-type in live data — a string when
+     typed here, a number when written by runMoldImport — and the moment a
+     consumable count meets a restock threshold, "9" > "10" is true and the
+     reorder silently never fires. Whole numbers or nothing; half a box of
+     gloves is not a thing anyone counts. */
+  if (fType === "num") {
+    const n = String(val).trim() === "" ? null : Number(val);
+    if (n != null && (!Number.isFinite(n) || n < 0 || !Number.isInteger(n))) {
+      toast("That needs to be a whole number, or empty.", "error"); render(); return;
+    }
+    val = n == null ? "" : n;
+  }
   o[key] = val;
   save(spec.coll, o, key);
   // Stage and class drive the pill and the available stages, so both need a
@@ -246,7 +296,7 @@ function renderShopList(tab) {
     .filter(o => !view.fSub || (o.cls || spec.prefix) === view.fSub)
     .filter(o => !view.fStatus || o.stage === view.fStatus)
     .filter(o => !q || JSON.stringify(o).toLowerCase().includes(q))
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    .sort((a, b) => cmpId(a.id, b.id));
 
   const classes = shopClasses(spec);
   const stages = [...new Set(classes.flatMap(c => c.stage || []))];
@@ -458,10 +508,28 @@ function shopFld(spec, tab, o, f, c) {
 
   if (type === "select") {
     const list = key === "stage" ? (c.stage || []) : (opts || []);
+    /* A stored value the list no longer offers stays selectable instead of
+       silently reading as blank and being overwritten by the next edit — the
+       courtesy partBomRefOptions already extends to a stale BOM ref. This is
+       what lets qty carry its legacy free text ("about half", "2 yd left")
+       after becoming an enum, with no migration and nothing parsed. */
+    const shown = v !== "" && !list.some(x => String(x) === String(v)) ? [v, ...list] : list;
     return `<div class="f"><label>${esc(label)}</label>
       <select onchange="updShop('${tab}','${key}',this.value)">
-        ${list.map(x => `<option ${String(v) === String(x) ? "selected" : ""}>${esc(x)}</option>`).join("")}
+        ${shown.map(x => `<option ${String(v) === String(x) ? "selected" : ""}>${esc(x)}</option>`).join("")}
       </select></div>`;
+  }
+  /* "sug" — type freely, with what everyone else already typed offered as
+     suggestions. A native datalist, the idiom engFld already uses: no library,
+     no PICKERS state (that is a multi-select and the wrong shape), and it
+     survives a re-render because it holds none. It exists for matKey, where
+     consistency is the whole value: "IN-2" typed once diverges from "IN2"
+     forever and no machine can merge them back. */
+  if (type === "sug") {
+    const dl = `dl-${spec.coll}-${key}`;
+    return `<div class="f"><label>${esc(label)}</label>
+      <input list="${dl}" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)">
+      <datalist id="${dl}">${shopSuggest(spec.coll, key).map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist></div>`;
   }
   if (String(type).startsWith("rec:")) {
     return `<div class="f"><label>${esc(label)}</label>
@@ -479,6 +547,21 @@ function shopFld(spec, tab, o, f, c) {
     <input type="${inputType}" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)"></div>`;
 }
 
+/* Every distinct value already stored under `key` in `coll`, for a "sug"
+   field's datalist. Sorted, deduped, blanks dropped. Cheap enough to build per
+   render: it is one pass over a collection the client already holds whole. */
+function shopSuggest(coll, key) {
+  const seen = new Set();
+  for (const o of DB[coll] || []) {
+    const v = String(o[key] ?? "").trim();
+    if (v) seen.add(v);
+  }
+  if (key === "matKey" && typeof restockRules === "function") {
+    for (const r of restockRules()) if (r.matKey) seen.add(String(r.matKey));
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
 /* Candidates for a reference field. `what` is either a collection name or a
    class prefix inside a multi-class collection. */
 function shopRefOptions(what, cur) {
@@ -490,7 +573,7 @@ function shopRefOptions(what, cur) {
     }
   }
   return recs
-    .slice().sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    .slice().sort((a, b) => cmpId(a.id, b.id))
     .map(o => `<option value="${esc(o.id)}" ${o.id === cur ? "selected" : ""}>${esc(o.name || o.partName || o.label || o.id)} · ${esc(o.id)}</option>`);
 }
 
@@ -500,9 +583,14 @@ const SHOP_FIELDS_BY_CLASS = {
   PNL: ["name", "stage", "location", "stack", "session", "laidOn", "thicknessMm", "coupons", "wo", "fabricLots", "resinLot", "hardenerLot", "lotSource"],
   JIG: ["name", "stage", "location", "unitCost", "wo"],
   BIN: ["name", "stage", "site", "locKind", "flam", "walkedAt", "walkedBy"],
-  FAB: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "unitCost", "costUnit", "lowFlag"],
-  RSN: ["name", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "location", "qty", "unitCost", "costUnit", "hazard", "lowFlag"],
-  CON: ["name", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "qty", "unitCost", "costUnit", "hazard", "lowFlag"],
+  /* FAB deliberately has no expiresOn and no hazard: dry cloth does not expire
+     and is not a solvent, and a column of dashes teaches people the whole
+     section is decorative. Add them the day prepreg arrives, not before.
+     CON gains expiresOn because MEKP and adhesives genuinely do expire — and
+     MEKP is the material PP-02 names by name. */
+  FAB: ["name", "matKey", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "emptiedOn", "unitCost", "costUnit", "lowFlag"],
+  RSN: ["name", "matKey", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
+  CON: ["name", "matKey", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "count", "countedAt", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
 };
 function shopFieldApplies(spec, cls, key) {
   const allowed = SHOP_FIELDS_BY_CLASS[cls];
@@ -638,7 +726,7 @@ async function backfillPartWorkOrderLinks() {
     if ((partsByName[k] || []).length > 1) { refused += hits.length; continue; }
     // Newest first, so the pointer lands on the current run.
     hits.sort((a, b) => String(b.createdDate || "").localeCompare(String(a.createdDate || "")) ||
-      String(b.id).localeCompare(String(a.id)));
+      cmpId(b.id, a.id));
     todo.push([p, hits]);
     if (hits.length > 1) extraRuns += hits.length - 1;
   }

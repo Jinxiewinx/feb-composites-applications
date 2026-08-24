@@ -22,6 +22,21 @@ service cloud.firestore {
     // and write records, only a lead can delete. workOrders (WO-SN5/6-###),
     // parts (P-SN6-###), projects (PROJ-SN6-###), budget (BUY-SN6-###), and
     // schedule (one doc per week). Doc id = record id / week key.
+    /* Deleting your own mistake is not the same act as deleting someone
+       else's work. Every multi-record write in the app offers an Undo, and
+       undo means delete — so a lead-only delete quietly made Undo a lead-only
+       button. Worse, it made it a LYING button: undoCuts() splices the local
+       array before the server refuses, so a member saw the row vanish, got a
+       toast, and then watched the next snapshot put it back with the boards
+       already restored and the offcuts still there. createdBy is stamped at
+       creation by newShopRec and by the receive flow, so this is checkable.
+       Records that predate createdBy stay lead-only, which is correct. */
+    function mine() {
+      return onRoster()
+        && resource.data.keys().hasAny(['createdBy'])
+        && resource.data.createdBy == request.auth.token.email;
+    }
+
     match /workOrders/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     match /parts/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     match /projects/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
@@ -30,7 +45,7 @@ service cloud.firestore {
     // stock (BRD-###) = tooling-board inventory: full sheets and offcuts alike.
     // stackplans (STK-###) = a mold's sliced layer geometry, saved so the CS-003
     // §7.2 reviewer can reopen and initial it without re-slicing the mesh.
-    match /stock/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /stock/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
     match /stackplans/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
     // Documents: any member can upload/edit; only a lead prunes the library.
     match /documents/{id}  { allow read, create, update: if onRoster(); allow delete: if isLead(); }
@@ -47,8 +62,8 @@ service cloud.firestore {
        Both multi-class collections carry a `cls` field; same access shape as
        every other record collection. */
     match /molds/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /items/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /lots/{id}       { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /items/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    match /lots/{id}       { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
 
     // Notifications: any member can create one (for a teammate); you can only
     // read/update/delete notifications addressed to YOU (a lead can prune any).
@@ -82,8 +97,21 @@ service cloud.firestore {
     match /meta/{id} {
       allow read: if onRoster();
       allow create: if onRoster() && request.resource.data.next is int;
+      /* Advance by more than one, so a delivery reserves its whole block of
+         ids in ONE transaction instead of one round trip per record — 200
+         sequential transactions on shop wifi is how a stock-take dies half
+         written. The property this rule actually protects is stated above and
+         is preserved exactly: the counter still cannot go backwards, so an id
+         once minted can never be minted again. "+ 1" was never the safety
+         property, only one way of spelling it. The ceiling is new protection
+         the old rule did not have, and hasOnly() stops anything else riding
+         along on a counter write. Gaps are the price, and gaps are free —
+         cmpId() sorts by the number, so a burnt block is invisible. */
       allow update: if onRoster()
-        && request.resource.data.next == resource.data.next + 1;
+        && request.resource.data.next is int
+        && request.resource.data.next > resource.data.next
+        && request.resource.data.next <= resource.data.next + 50
+        && request.resource.data.keys().hasOnly(['next']);
     }
 
     // config/<key> = small settings docs, e.g. config/slack { webhookUrl }.

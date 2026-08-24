@@ -405,7 +405,7 @@ function sortedPartRows(rows) {
     const av = get(a), bv = get(b);
     if (av < bv) return -mul;
     if (av > bv) return mul;
-    return (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id);
+    return (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || cmpId(a.id, b.id);
   });
 }
 
@@ -427,7 +427,7 @@ function partIndexRows() {
   const sel = selectedPart();
   if (sel && !rows.includes(sel)) rows = rows.concat([sel]);
   return view.sortKey ? sortedPartRows(rows)
-    : rows.slice().sort((a, b) => (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || a.id.localeCompare(b.id));
+    : rows.slice().sort((a, b) => (a.layupDeadline || "9999").localeCompare(b.layupDeadline || "9999") || cmpId(a.id, b.id));
 }
 
 const PART_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -642,7 +642,7 @@ function pfld(p, label, key, opts, type) {
   // list, same sort, one call.
   if (type === "wo") return `<div class="f"><label>${label}</label><select onchange="updPart('${key}',this.value)">
     <option value="" ${v ? "" : "selected"}>— no work order —</option>
-    ${DB.workOrders.slice().sort((a, b) => a.id.localeCompare(b.id)).map(w =>
+    ${DB.workOrders.slice().sort((a, b) => cmpId(a.id, b.id)).map(w =>
       `<option value="${esc(w.id)}" ${w.id === v ? "selected" : ""}>${esc(w.id)} — ${esc(w.partName || "")}</option>`).join("")}
     ${v && !recById("workOrders", v) ? `<option value="${esc(v)}" selected>${esc(v)} (not found)</option>` : ""}
   </select></div>`;
@@ -752,7 +752,7 @@ function openNewRunModal(partId) {
   // Newest first; the part's current run preselected — it is usually the one
   // that just went wrong.
   const runs = partRuns(p).map(r => r.wo)
-    .sort((a, b) => String(b.createdDate || "").localeCompare(String(a.createdDate || "")) || b.id.localeCompare(a.id));
+    .sort((a, b) => String(b.createdDate || "").localeCompare(String(a.createdDate || "")) || cmpId(b.id, a.id));
   const preselect = p.workOrderId && runs.some(w => w.id === p.workOrderId) ? p.workOrderId : (runs[0] || {}).id;
   const box = (id, label, hint) => `<label class="trrow">
       <input type="checkbox" id="${id}" checked>

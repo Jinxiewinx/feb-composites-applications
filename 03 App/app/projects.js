@@ -133,9 +133,9 @@ function unreadWatched() { return (DB.projects || []).filter(projUnread).length;
 function assigneeItems() { return usersSorted().map(u => ({ value: u.email, label: u.name || u.email, sublabel: u.role, avatarEmail: u.email })); }
 function partItems() { return DB.parts.slice().sort((a, b) => (a.partName || a.id).localeCompare(b.partName || b.id)).map(p => ({ value: p.id, label: p.partName || p.id, sublabel: p.id })); }
 function ticketItems(excludeId) { return DB.projects.filter(t => t.id !== excludeId).sort((a, b) => (a.title || a.id).localeCompare(b.title || b.id)).map(t => ({ value: t.id, label: t.title || t.id, sublabel: isIssue(t) ? "Issue" : "Project" })); }
-function workOrderItems() { return DB.workOrders.slice().sort((a, b) => a.id.localeCompare(b.id)).map(w => ({ value: w.id, label: w.partName || w.id, sublabel: w.id })); }
+function workOrderItems() { return DB.workOrders.slice().sort((a, b) => cmpId(a.id, b.id)).map(w => ({ value: w.id, label: w.partName || w.id, sublabel: w.id })); }
 function woSelectOptions(selected) {
-  const sorted = DB.workOrders.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const sorted = DB.workOrders.slice().sort((a, b) => cmpId(a.id, b.id));
   return `<option value="" ${selected ? "" : "selected"} disabled>— choose a work order —</option>` +
     sorted.map(w => `<option value="${esc(w.id)}" ${w.id === selected ? "selected" : ""}>${esc(w.id)} — ${esc(w.partName || "")}</option>`).join("");
 }
@@ -362,7 +362,7 @@ function isTkLate(p) { const dd = daysUntil(p.dueDate); return dd != null && dd 
 function tkCmp(a, b) {
   return (TK_STATUS_ORDER[projStatus(a)] - TK_STATUS_ORDER[projStatus(b)])
     || (a.dueDate || "9999").localeCompare(b.dueDate || "9999")
-    || a.id.localeCompare(b.id);
+    || cmpId(a.id, b.id);
 }
 /* One plan for rail body AND keyboard rows, built once, so they cannot
    disagree about order. Entries are {head} labels or {row, child} tickets. */
@@ -397,7 +397,7 @@ function tkRailPlan() {
   });
   const tops = rows.filter(p => !isIssue(p) && !p.parentId).sort(tkCmp);
   const issues = rows.filter(p => isIssue(p) && !p.parentId).sort(tkCmp);
-  const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || a.id.localeCompare(b.id);
+  const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || cmpId(a.id, b.id);
 
   const entries = [];
   if (tops.length || loose.length) entries.push({ head: "Projects", rows: tops.concat(loose) });

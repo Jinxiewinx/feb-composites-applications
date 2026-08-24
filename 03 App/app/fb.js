@@ -258,6 +258,36 @@ const fb = {
     });
   },
 
+  /* N ids from ONE transaction, for a batch create.
+
+     Same counter, same prefix, same padding as allocId — and the same trap
+     from the comment above: counterKey stays `cls || coll`, byte-identical,
+     because re-keying resets a live counter to 1 and starts minting duplicate
+     ids over real records.
+
+     The rules cap this at 50 per write. Asking for more is a caller bug, not a
+     retry case, so it throws here rather than letting the rules refuse it with
+     a PERMISSION_DENIED nobody can interpret.
+
+     A reserved block that is never written leaves a gap in the sequence. That
+     is fine and deliberate: ids are opaque handles, nothing counts or sums
+     them, and cmpId() sorts by the number so a gap is invisible. */
+  async allocIdBlock(coll, cls, n) {
+    if (!(n > 0)) return [];
+    if (n > 50) throw new Error("id block too large: " + n);
+    const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
+    const counterKey = cls || coll;
+    return runTransaction(db, async (tx) => {
+      const ref = doc(db, "meta", counterKey);
+      const snap = await tx.get(ref);
+      const first = (snap.exists() && snap.data().next) || 1;
+      tx.set(ref, { next: first + n }, { merge: true });
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(`${prefix}-SN6-${String(first + i).padStart(3, "0")}`);
+      return out;
+    });
+  },
+
   // Republish every public scan nameplate. See pubPublish() above for why this
   // is not importMany().
   async publishPub(recs) { await pubPublish(recs); },

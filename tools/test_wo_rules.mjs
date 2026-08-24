@@ -118,12 +118,49 @@ await expect(403, "member", "PATCH", "/config/trainings", trCat);
 await expect(200, "lead", "PATCH", "/config/trainings", trCat);
 await expect(200, "member", "GET", "/config/trainings"); // every client folds it over the const catalog
 
-console.log("per-collection counters (increment-only):");
+console.log("per-collection counters (forward-only, block reservation capped):");
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(2) });      // create
 await expect(200, "member", "PATCH", "/meta/parts", { next: N(3) });      // increment ok
-await expect(403, "member", "PATCH", "/meta/parts", { next: N(99) });     // jump blocked
 await expect(403, "member", "PATCH", "/meta/parts", { next: N(1) });      // rewind blocked
+await expect(403, "member", "PATCH", "/meta/parts", { next: N(3) });      // standing still blocked
 await expect(200, "member", "PATCH", "/meta/workOrders", { next: N(2) }); // independent counter
+/* Reserving a block for a batch receive. The counter may now jump forward,
+   which is what turns 200 sequential transactions into one — but only within
+   the cap, and only forwards. Uniqueness never depended on the step size,
+   only on the direction. */
+await expect(200, "member", "PATCH", "/meta/lots", { next: N(51) });      // fresh counter, one block
+await expect(200, "member", "PATCH", "/meta/lots", { next: N(101) });     // +50 exactly: the ceiling
+await expect(403, "member", "PATCH", "/meta/lots", { next: N(152) });     // +51: over the ceiling
+await expect(403, "member", "PATCH", "/meta/lots", { next: N(100) });     // still cannot rewind
+/* A counter write carries a counter and nothing else. */
+await expect(403, "member", "PATCH", "/meta/lots", { next: N(102), note: S("hi") });
+/* And it is an integer. A float compares equal to its int in rules, so
+   without the "is int" clause the counter could silently drift to 101.5. */
+await expect(403, "member", "PATCH", "/meta/lots", { next: { doubleValue: 105.5 } });
+
+console.log("deleting your own mistake (undo), but never someone else's:");
+/* Undo means delete, so a lead-only delete made every Undo bar in the app a
+   lead-only button — and a lying one: the client splices its local array
+   before the server refuses. createdBy is stamped at creation, so a member
+   can take back what they just made and nothing else. */
+await expect(200, "owner", "PATCH", "/lots/FAB-SN6-900", { id: S("FAB-SN6-900"), cls: S("FAB"), createdBy: S("member@feb.test") });
+await expect(200, "owner", "PATCH", "/lots/FAB-SN6-901", { id: S("FAB-SN6-901"), cls: S("FAB"), createdBy: S("lead@feb.test") });
+await expect(200, "owner", "PATCH", "/lots/FAB-SN6-902", { id: S("FAB-SN6-902"), cls: S("FAB") }); // predates createdBy
+await expect(403, "member", "DELETE", "/lots/FAB-SN6-901");   // someone else's: refused
+await expect(403, "member", "DELETE", "/lots/FAB-SN6-902");   // no createdBy: stays lead-only
+await expect(200, "member", "DELETE", "/lots/FAB-SN6-900");   // my own: allowed
+await expect(200, "lead",   "DELETE", "/lots/FAB-SN6-901");   // a lead still deletes anything
+await expect(200, "lead",   "DELETE", "/lots/FAB-SN6-902");
+/* The same shape on the other two collections an undo can touch. stock is the
+   one that was already broken in the field: undoCuts() deletes the offcuts it
+   created, and a member could never actually do it. */
+await expect(200, "owner", "PATCH", "/stock/BRD-SN6-900", { id: S("BRD-SN6-900"), createdBy: S("member@feb.test") });
+await expect(200, "member", "DELETE", "/stock/BRD-SN6-900");
+await expect(200, "owner", "PATCH", "/items/JIG-SN6-900", { id: S("JIG-SN6-900"), cls: S("JIG"), createdBy: S("member@feb.test") });
+await expect(200, "member", "DELETE", "/items/JIG-SN6-900");
+/* Collections that have no undo keep the old rule. */
+await expect(200, "owner", "PATCH", "/parts/P-SN6-900", { id: S("P-SN6-900"), createdBy: S("member@feb.test") });
+await expect(403, "member", "DELETE", "/parts/P-SN6-900");
 
 console.log("roster self-edit (avatar/name only, never role):");
 await expect(200, "member", "PATCH", "/roster/member@feb.test", { avatar: S("http://x/a.jpg") }, ["avatar"]); // own avatar ok

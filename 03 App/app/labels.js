@@ -477,7 +477,7 @@ function labelBuilderHtml() {
   if (!avail.some(([c]) => c === LB.coll)) LB.coll = avail[0][0];
 
   const rows = (DB[LB.coll] || []).slice()
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    .sort((a, b) => cmpId(a.id, b.id));
   const n = Object.values(LB.picked).filter(Boolean).length;
   const per = LABEL_GRIDS[LB.grid].cols * LABEL_GRIDS[LB.grid].rows;
   const used = n + LB.skip + (LB.cal ? 1 : 0);
@@ -527,7 +527,7 @@ function lbAll(on) {
 function lbPrint() {
   const recs = (DB[LB.coll] || [])
     .filter(o => LB.picked[o.id])
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    .sort((a, b) => cmpId(a.id, b.id))
     .map(o => ({ coll: LB.coll, o }));
   if (!recs.length) return;
   closeModal();
