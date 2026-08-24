@@ -9,9 +9,22 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-23
-Newest: **The inventory system, rebuilt around getting a shop typed in.**
-Five commits, landed on main, NOT deployed. The season's first job is a full
+Last updated: 2026-08-24
+Newest: **mold-drawing-revamp merged to main, and everything deployed.**
+The branch (tracker feed + datasheet unlisting, already live since Aug 15/18)
+is merged into main as `1b227b9`; the only conflicts were additive lists in
+`tools/test_app.mjs` and `tools/README.md`. The inventory work's OPEN item
+below is CLOSED: this machine now has a JDK (21) and the firebase CLI
+(15.28.1), the emulator gate ran — `test_wo_rules.mjs` 118 pass,
+`test_pub_rules.mjs` 46 pass, 0 failures — and rules then hosting deployed
+in that order on 2026-08-24. Verified live off the host, not the CLI:
+`receiving.js` and `tracker.js` serve the new code, `docs/manifest.json`
+has 1 entry, and the two TDS PDFs `resins.js` cites still answer 200.
+Live now matches main at `1b227b9` exactly; rollback is redeploying an
+earlier commit.
+
+Previous: **The inventory system, rebuilt around getting a shop typed in.**
+Five commits, landed on main. The season's first job is a full
 physical inventory, and the bar is being faster than a Google Sheet.
 
   - **Receiving is a page, not a modal.** The old one took ONE shelf for a
@@ -50,10 +63,12 @@ physical inventory, and the bar is being faster than a Google Sheet.
   values between tests, so the walk-in receive test was quietly creating two
   lots and passing anyway.
 
-  **OPEN — needs Simon. Two firestore.rules changes are written but NOT
-  verified and NOT deployed**, because this machine has no JDK and no
-  firebase CLI, so the emulator suites could not run. Cases for both are
-  written in `test_wo_rules.mjs`. Do not deploy rules until:
+  **CLOSED 2026-08-24 — see the newest entry above.** The emulator gate ran
+  (118 pass) and rules deployed first, then hosting. Original note kept for
+  the reasoning: two firestore.rules changes were written but not verified
+  and not deployed, because this machine had no JDK and no firebase CLI, so
+  the emulator suites could not run. Cases for both are written in
+  `test_wo_rules.mjs`. The gate was:
 
       cd "03 App" && firebase emulators:exec --only firestore \
         --project demo-feb-work-orders "node ../tools/test_wo_rules.mjs"
