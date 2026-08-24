@@ -301,7 +301,7 @@ function renderShopList(tab) {
   const rows = D
     .filter(o => !view.fSub || (o.cls || spec.prefix) === view.fSub)
     .filter(o => !view.fStatus || o.stage === view.fStatus)
-    .filter(o => !q || JSON.stringify(o).toLowerCase().includes(q))
+    .filter(o => !q || shopHay(spec, o).includes(q))
     .sort((a, b) => cmpId(a.id, b.id));
 
   const classes = shopClasses(spec);
@@ -591,6 +591,20 @@ function shopRefOptions(what, cur) {
   return recs
     .slice().sort((a, b) => cmpId(a.id, b.id))
     .map(o => `<option value="${esc(o.id)}" ${o.id === cur ? "selected" : ""}>${esc(o.name || o.partName || o.label || o.id)} · ${esc(o.id)}</option>`);
+}
+
+/* The haystack a list search actually looks in: the values the schema declares,
+   never the record's JSON. JSON.stringify matched KEY names too, so "open"
+   found every lot with an openedOn field, "location" found everything, and "no"
+   found every vendorLot — and it re-serialised the whole collection on every
+   keystroke. Cached against updatedAt, which Firestore already stamps. */
+function shopHay(spec, o) {
+  if (o.__hay != null && o.__hayV === o.updatedAt) return o.__hay;
+  const parts = [o.id];
+  for (const f of spec.f) { const v = o[f[0]]; if (v != null && typeof v !== "object") parts.push(v); }
+  o.__hayV = o.updatedAt;
+  o.__hay = parts.join(" ").toLowerCase();
+  return o.__hay;
 }
 
 /* Which fields belong to which class. Kept as one table rather than scattered

@@ -1991,40 +1991,105 @@ function toggleRail() {
 }
 
 /* ---------- global search (⌘K command palette) ---------- */
+/* Shelf ids to shelf names, built once per call rather than a linear find per
+   record. pubProjection resolves the same thing one record at a time, which is
+   O(n·m) over the whole mirror rebuild. */
+function invLocNames() {
+  const m = new Map();
+  for (const o of DB.items || []) if (o.cls === "BIN") m.set(o.id, o.name || o.id);
+  return m;
+}
+/* Where a record physically is. Parts say it in a different field, and a
+   free-text location from before BIN records existed is reported honestly
+   rather than resolved into a lie. */
+function invWhere(o, names) {
+  const v = String((o && (o.location || o.moldLocation)) || "");
+  if (!v) return null;
+  if (!v.startsWith("BIN-")) return { id: "", name: v, legacy: true };
+  return { id: v, name: (names || invLocNames()).get(v) || v };
+}
+
+/* Search, scored.
+ *
+ * Two things were wrong. Results were pushed in COLLECTION order and then
+ * sliced at 40, so an exact name match on a lot could be shoved off the end by
+ * forty id-substring matches from DB.workOrders — and typing "SN6" matched
+ * every record in the database, silently truncated.
+ *
+ * And no result said WHERE the thing was, which is the one fact you are
+ * standing in the shop to obtain. It was one function call away the whole time.
+ */
+const SEARCH_LIMIT = 40;
+function searchScore(q, id, name, extra) {
+  const n = String(name || "").toLowerCase();
+  const i = String(id || "").toLowerCase();
+  if (i === q) return 100;
+  if (n === q) return 90;
+  if (n.startsWith(q)) return 60;
+  if (n.includes(q)) return 40;
+  if (i.includes(q)) return 20;
+  if (String(extra || "").toLowerCase().includes(q)) return 10;
+  return 0;
+}
 function searchAll(q) {
   q = (q || "").toLowerCase().trim();
   if (!q) return [];
   const out = [];
-  const add = (tab, id, label, sub) => out.push({ tab, id, label, sub });
-  DB.workOrders.forEach(w => { if ((w.id + " " + (w.partName || "")).toLowerCase().includes(q)) add("workorders", w.id, w.partName || w.id, "Work order " + w.id); });
-  DB.parts.forEach(p => { if ((p.id + " " + (p.partName || "")).toLowerCase().includes(q)) add("parts", p.id, p.partName || p.id, "Part " + p.id); });
-  // (p.title || "" + p.id) was a precedence bug: "" + p.id runs first, so the
-  // id branch was unreachable whenever a title existed — search never matched
-  // by ticket id. Matches the id+label pattern already used for work orders/parts.
-  DB.projects.forEach(p => { if ((p.id + " " + (p.title || "")).toLowerCase().includes(q)) add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Ticket"); });
-  DB.budget.forEach(b => { if ((b.item || "").toLowerCase().includes(q)) add("budget", b.id, b.item || b.id, "Purchase"); });
-  (DB.molds || []).forEach(m => { if ((m.id + " " + (m.name || "")).toLowerCase().includes(q)) add("molds", m.id, m.name || m.id, "Mold " + m.id); });
-  (DB.stock || []).forEach(b => { if ((b.id + " " + (b.label || "") + " " + (b.origin || "")).toLowerCase().includes(q)) add("stock", b.id, b.label || b.id, "Tooling board " + b.id); });
-  (DB.stackplans || []).forEach(p => { if ((p.id + " " + (p.name || "")).toLowerCase().includes(q)) add("stock", p.id, p.name || p.id, "Stack plan " + p.id); });
-  (DB.items || []).forEach(o => { if ((o.id + " " + (o.name || "")).toLowerCase().includes(q)) add("items", o.id, o.name || o.id, "Item " + o.id); });
-  (DB.lots || []).forEach(o => { if ((o.id + " " + (o.name || "") + " " + (o.vendorLot || "")).toLowerCase().includes(q)) add("lots", o.id, o.name || o.id, "Material lot " + o.id); });
-  DB.users.forEach(u => { if (((u.name || "") + " " + u.email).toLowerCase().includes(q)) add("people", u.email, u.name || u.email, "Person"); });
-  (typeof allDocs === "function" ? allDocs() : []).forEach(d => { if ((d.title || "").toLowerCase().includes(q)) out.push({ tab: "documents", docSrc: d.src, uploaded: d.uploaded, label: d.title, sub: "Document · " + d.category }); });
-  return out.slice(0, 40);
+  const names = invLocNames();
+  /* `where` is resolved once here rather than at render time so the ranking and
+     the row agree about what a result is. */
+  const add = (tab, id, label, sub, extra, rec) => {
+    const s = searchScore(q, id, label, extra);
+    if (!s) return;
+    out.push({ tab, id, label, sub, score: s, where: rec ? invWhere(rec, names) : null });
+  };
+  DB.workOrders.forEach(w => add("workorders", w.id, w.partName || w.id, "Work order " + w.id));
+  DB.parts.forEach(p => add("parts", p.id, p.partName || p.id, "Part " + p.id, "", p));
+  DB.projects.forEach(p => add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Ticket"));
+  DB.budget.forEach(b => add("budget", b.id, b.item || b.id, "Purchase", b.source));
+  (DB.molds || []).forEach(m => add("molds", m.id, m.name || m.id, "Mold " + m.id, "", m));
+  (DB.stock || []).forEach(b => add("stock", b.id, b.label || b.id, "Tooling board " + b.id, b.origin, b));
+  (DB.stackplans || []).forEach(p => add("stock", p.id, p.name || p.id, "Stack plan " + p.id));
+  (DB.items || []).forEach(o => add("items", o.id, o.name || o.id,
+    (o.cls === "BIN" ? "Storage location " : "Item ") + o.id,
+    [o.site, o.locKind].filter(Boolean).join(" "), o.cls === "BIN" ? null : o));
+  (DB.lots || []).forEach(o => add("lots", o.id, o.name || o.id, "Material lot " + o.id,
+    [o.vendorLot, o.supplier, o.matKey].filter(Boolean).join(" "), o));
+  DB.users.forEach(u => add("people", u.email, u.name || u.email, "Person", u.email));
+  (typeof allDocs === "function" ? allDocs() : []).forEach(d => {
+    const s = searchScore(q, "", d.title, d.category);
+    if (s) out.push({ tab: "documents", docSrc: d.src, uploaded: d.uploaded, label: d.title,
+                      sub: "Document · " + d.category, score: s, where: null });
+  });
+  out.sort((a, b) => b.score - a.score || String(a.label).localeCompare(String(b.label)));
+  const total = out.length;
+  const res = out.slice(0, SEARCH_LIMIT);
+  res.total = total;
+  return res;
 }
-function openSearch() {
-  openModal(`
-    <input id="gsearch" class="gsearch" placeholder="Search parts, work orders, projects, people, docs…" oninput="renderSearchResults(this.value)" onkeydown="if(event.key==='Escape')closeModal()">
-    <div id="gsearch-results" class="gsearch-results"></div>`);
-}
+
 function renderSearchResults(q) {
   const box = document.getElementById("gsearch-results"); if (!box) return;
   const res = searchAll(q);
   box.innerHTML = !q.trim() ? `<div class="muted" style="padding:10px">Type to search across every tab.</div>`
-    : res.length ? res.map((r, i) => `<div class="gsr" onclick="gotoResult(${i})">
-        <span>${esc(r.label)}</span><span class="muted tny">${esc(r.sub)}</span></div>`).join("")
+    : res.length ? res.map((r, i) => `<div class="gsr">
+        <button class="gsr-go" onclick="gotoResult(${i})">
+          <span class="gsr-name">${esc(r.label)}</span>
+          <span class="muted tny">${esc(r.sub)}</span>
+        </button>
+        ${r.where ? `<button class="chip gsr-where" title="What else is on it"
+            onclick="${r.where.id ? `openRecord('inventory','${esc(r.where.id)}')` : "void 0"}"
+          >${esc(r.where.name)}${r.where.legacy ? " (free text)" : ""}</button>` : ""}
+      </div>`).join("")
+      + (res.total > res.length ? `<div class="muted tny" style="padding:8px 10px">showing ${res.length} of ${res.total}</div>` : "")
       : `<div class="muted" style="padding:10px">No matches.</div>`;
   window.__searchRes = res;
+}
+
+function openSearch() {
+  openModal(`
+    <input id="gsearch" class="gsearch" placeholder="Search parts, work orders, projects, people, docs…" oninput="renderSearchResults(this.value)" onkeydown="if(event.key==='Escape')closeModal()">
+    <div id="gsearch-results" class="gsearch-results"></div>`);
 }
 function gotoResult(i) {
   const r = (window.__searchRes || [])[i]; if (!r) return;

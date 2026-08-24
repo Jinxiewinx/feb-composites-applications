@@ -3856,7 +3856,7 @@ await t("a lead override moves one threshold without restating the table", () =>
   window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: 12 }] };
   assert(restockRuleFor("TACKY-TAPE").minCount === 12, "the override wins");
   assert(restockRuleFor("TACKY-TAPE").unit === "roll", "and the rest of the row survives the merge");
-  assert(restockRuleFor("IN2").minCount === 1, "untouched rules are untouched");
+  assert(restockRuleFor("IN2").minCount === 2, "untouched rules are untouched — §5 triggers at opened + one unopened");
   assert(restockRules().length === RESTOCK_SEED.length, "an override of a known key adds no row");
 });
 
@@ -4401,6 +4401,140 @@ await t("a walk-in stays a walk-in: no purchase, no price pretended", async () =
   assert(o && !o.buyRef && o.unitCost === undefined, "honestly un-costed, not guessed");
 });
 
+console.log("finding things (where is the 195 twill?):");
+
+function seedFind() {
+  seedInventory();
+  DB.items = [
+    { id: "BIN-SN6-001", cls: "BIN", name: "Container Shelf A", stage: "Active", site: "RFS container", locKind: "shelf" },
+    { id: "BIN-SN6-002", cls: "BIN", name: "Flammables Cabinet", stage: "Active", site: "Flammables cabinet", locKind: "cabinet", flam: "Yes" },
+    { id: "BIN-SN6-003", cls: "BIN", name: "Basement Shelf B3", stage: "Active", site: "Jacobs basement", locKind: "shelf", walkedAt: today() },
+  ];
+  DB.lots = [
+    { id: "FAB-SN6-001", cls: "FAB", name: "195 Twill Sigmatex", vendorLot: "SG24-1180", supplier: "Sigmatex",
+      matKey: "195-TWILL", stage: "Open", location: "BIN-SN6-001", openedOn: "2026-08-01" },
+    { id: "RSN-SN6-001", cls: "RSN", name: "IN2 Infusion Resin", role: "resin", stage: "Sealed", location: "BIN-SN6-002" },
+  ];
+  DB.budget = [];
+  view = { ...view, tab: "inventory", invView: "map", mode: "list", id: null, q: "", invFlag: "" };
+}
+
+await t("a search result says WHERE the thing is — the one fact you came for", () => {
+  seedFind();
+  const res = searchAll("195 twill");
+  const hit = res.find(r => r.id === "FAB-SN6-001");
+  assert(hit, "found it");
+  assert(hit.where && hit.where.name === "Container Shelf A",
+    "and the shelf NAME, not BIN-SN6-001: " + JSON.stringify(hit.where));
+  renderSearchResults("195 twill");
+  const h = document.getElementById("gsearch-results").innerHTML;
+  assert(h.includes("Container Shelf A"), "on the result line itself, before you click anything");
+  assert(h.includes("openRecord('inventory','BIN-SN6-001')"), "and it opens the shelf, which is the next question half the time");
+});
+
+await t("results rank by how well they match, not by which collection was scanned first", () => {
+  seedFind();
+  // Forty work orders whose ids all contain the query, ahead of an exact name.
+  DB.workOrders = Array.from({ length: 40 }, (_, i) => ({ id: "WO-SN6-" + (100 + i), partName: "something else" }));
+  DB.lots.push({ id: "CON-SN6-050", cls: "CON", name: "SN6", location: "BIN-SN6-001" });
+  const res = searchAll("sn6");
+  assert(res[0].label === "SN6", "the exact name comes first, not the fortieth id substring");
+  assert(res.total > res.length, "and the truncation is reported rather than silent: " + res.total);
+  renderSearchResults("sn6");
+  assert(document.getElementById("gsearch-results").innerHTML.includes("showing 40 of"),
+    "so nobody thinks 40 is the answer");
+});
+
+await t("a list search matches values, not the record's JSON keys", () => {
+  /* The old filter was JSON.stringify(o).includes(q), which matched KEY names:
+     "open" hit every lot with an openedOn field, "location" hit everything,
+     "no" hit every vendorLot. */
+  seedFind();
+  const spec = shopSpec("lots");
+  const twill = DB.lots[0];
+  assert(shopHay(spec, twill).includes("195 twill sigmatex"), "values are in the haystack");
+  assert(!shopHay(spec, twill).includes("openedon"), "key names are not");
+  assert(!shopHay(spec, twill).includes("vendorlot"), "nor are they for a field that IS set");
+  assert(shopHay(spec, twill).includes("sg24-1180"), "but its value is");
+});
+
+await t("the map has a search box at last, so / actually goes somewhere", () => {
+  /* invKeydown has always bound / to focus #searchbox, and the map has never
+     rendered one — the shortcut did nothing on the tab's default view. */
+  seedFind();
+  render();
+  assert(main.innerHTML.includes('id="searchbox"'), "the box exists");
+  const el = document.getElementById("searchbox");
+  activeEl = null;
+  assert(invKeydown({ key: "/", target: {}, preventDefault() {} }) === "search", "and / reaches for it");
+});
+
+await t("typing a material leaves the shelves that actually have some", () => {
+  seedFind();
+  view.q = "195 twill";
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Container Shelf A"), "the shelf holding it survives");
+  assert(!h.includes("Flammables Cabinet"), "the one that does not, does not");
+  view.q = "sigmatex";
+  render();
+  assert(main.innerHTML.includes("Container Shelf A"), "matches on a supplier too");
+  view.q = "cabinet";
+  render();
+  assert(main.innerHTML.includes("Flammables Cabinet"), "and on the shelf's own words");
+  view.q = "";
+});
+
+await t("the chips are real filters now, not decoration", () => {
+  /* low/expired set view.invFlag and lit up while invCard never read it, so the
+     map did not change. chemical warnings was onclick="void 0". */
+  seedFind();
+  DB.lots.push({ id: "RSN-SN6-002", cls: "RSN", name: "AT30", role: "hardener", stage: "Sealed", location: "BIN-SN6-002" });
+  view.invFlag = "chem";
+  render();
+  let h = main.innerHTML;
+  assert(h.includes("Flammables Cabinet"), "resin + hardener together, so that shelf shows");
+  assert(!h.includes("Basement Shelf B3"), "and the clean ones are filtered out");
+  DB.lots[0].qty = "Low";
+  view.invFlag = "reorder";
+  render();
+  h = main.innerHTML;
+  assert(h.includes("Container Shelf A") && !h.includes("Flammables Cabinet"),
+    "and low/expired narrows to the shelf holding the low thing");
+  view.invFlag = "";
+});
+
+await t("a card is two real buttons, not a button full of divs", () => {
+  seedFind();
+  render();
+  const h = main.innerHTML;
+  assert(h.includes('class="lc-open lc-name"'), "the name is a real button");
+  assert(h.includes("invConfirmContents("), "and the monthly walk is one click from the map, as a sibling");
+  assert(!/<button class="loccard"/.test(h), "no button wrapping block content");
+  assert(!h.includes("stopPropagation"), "and nothing held off with stopPropagation");
+});
+
+await t("nothing-has-a-home is a bar above the shelves, not a card inside the last site", () => {
+  /* It used to be appended to whichever site group sorted LAST, so the most
+     important thing on the page was positioned by an accident of ordering. */
+  seedFind();
+  DB.lots.push({ id: "CON-SN6-009", cls: "CON", name: "homeless tape", stage: "Sealed", location: "" });
+  render();
+  const h = main.innerHTML;
+  const bar = h.indexOf("inv-nowhere-bar");
+  const firstSite = h.indexOf("inv-site");
+  assert(bar > 0 && firstSite > 0 && bar < firstSite, "above the shelves, always in the same place");
+  assert(h.includes("Put them away"));
+});
+
+await t("an empty, recently walked shelf costs one line rather than a grid cell", () => {
+  seedFind();
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("locempty"), "the quiet tier exists");
+  assert(h.includes("Basement Shelf B3"), "and the shelf is still reachable from it");
+});
+
 console.log("running out (PP-02: the flag nobody actioned):");
 
 function seedRestock() {
@@ -4435,13 +4569,22 @@ await t("a consumable's count is what is on hand; sealed jugs are what CS-011 §
   assert(onlyTape().onHand === 4, "4 rolls, and the empty box adds nothing");
   DB.lots.push({ id: "CON-SN6-003", cls: "CON", matKey: "TACKY-TAPE", stage: "Sealed", count: 3 });
   assert(onlyTape() === undefined || onlyTape().onHand === 7, "7 is above the minimum of 6, so it drops off the list");
-  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "IN2", minCount: 1 }] };
+  window.RESTOCK_OVERRIDES = null;   // use the seed, which is §5 verbatim
   DB.lots = [
     { id: "RSN-SN6-001", cls: "RSN", matKey: "IN2", stage: "Open" },
     { id: "RSN-SN6-002", cls: "RSN", matKey: "IN2", stage: "Sealed" },
   ];
+  assert(restockOnHand("IN2").n === 2, "an opened kit is still material: both containers count");
   const in2 = restockLow().find(x => x.rule.matKey === "IN2");
-  assert(!in2 || in2.onHand === 1, "the OPENED kit is not the buffer — §5 triggers on opened + one unopened");
+  assert(in2 && in2.min === 2, "§5 wants the opened one PLUS an unopened, restated in containers");
+  assert(in2.onHand === 2, "so at exactly two it is AT the trigger, and says so");
+  DB.lots.push({ id: "RSN-SN6-003", cls: "RSN", matKey: "IN2", stage: "Sealed" });
+  assert(!restockLow().some(x => x.rule.matKey === "IN2"), "a third kit clears it");
+  /* And the case that made this wrong the first time: one OPEN roll is not
+     "none left". Counting only sealed containers put a false alarm on the map
+     while the material sat on the rack. */
+  DB.lots = [{ id: "FAB-SN6-001", cls: "FAB", matKey: "195-TWILL", stage: "Open" }];
+  assert(restockOnHand("195-TWILL").n === 1, "an open roll is a roll");
 });
 
 await t("an order in flight says 'on order', not 'reorder' — the nag that killed SN5", () => {

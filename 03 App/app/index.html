@@ -792,8 +792,17 @@
   .icon-btn .badge { position: absolute; top: 0; right: 0; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 0 4px; min-width: 15px; text-align: center; line-height: 15px; }
   .gsearch { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
   .gsearch-results { margin-top: 8px; max-height: 55vh; overflow-y: auto; }
-  .gsr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; }
-  .gsr:hover { background: var(--accent-soft); }
+  /* Two sibling buttons, not a div pretending to be one with a button inside
+     it. The name opens the record; the shelf opens the shelf, which is the
+     actual next question about half the time ("what else is on it"). Both are
+     tab-reachable and both are announced, which a div[onclick] never was. */
+  .gsr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 2px; }
+  .gsr:hover { background: var(--accent-soft); border-radius: var(--radius); }
+  .gsr-go { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 8px 10px; border-radius: var(--radius); min-width: 0; }
+  .gsr-go:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .gsr-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gsr-where { justify-self: end; }
   .notif { padding: 9px 10px; border-radius: var(--radius); cursor: pointer; border-left: 3px solid transparent; }
   .notif:hover { background: var(--fill); }
   .notif.unread { border-left-color: var(--gold); background: var(--gold-bg); }
@@ -1693,7 +1702,27 @@
   .loccard .lc-warn.bad { color: var(--bad); }
   .loccard .lc-warn.warn { color: var(--amber); }
   .loccard .lc-foot { margin-top: auto; }
-  .loccard.lc-nowhere { border-style: dashed; border-color: var(--warn-border); background: var(--warn-bg); }
+  /* The stretched link: one real button on the name, its ::after covering the
+     whole card, and Confirm as a sibling above it on the z-axis. Replaces a
+     <button> that contained <div>s and had no room for a second control. */
+  .loccard { position: relative; }
+  .lc-open { all: unset; cursor: pointer; font: inherit; color: var(--ink); font-weight: 700; }
+  .lc-open::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-md); }
+  .lc-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .loccard .lc-act { position: relative; z-index: 1; margin-top: auto; align-self: flex-start; }
+  /* A shelf with something wrong on it leads with what is wrong, and wears a
+     spine so it is findable in a grid without reading every card. */
+  .loccard.alert { border-left: 3px solid var(--bad); }
+  .locempty { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 2px 2px 14px;
+    font-size: 12.5px; color: var(--muted); }
+  .locempty .le-lab { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+  .locempty .lc-open { font-weight: 500; font-size: 12.5px; color: var(--muted); }
+  .locempty .lc-open::after { position: static; }
+  .locempty .lc-open:hover { color: var(--brand-ink); text-decoration: underline; }
+  .inv-nowhere-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px;
+    margin: 10px 0 4px; border-radius: var(--r-md); border: 1px dashed var(--warn-border);
+    background: var(--warn-bg); color: var(--ink); }
+  .inv-nowhere-bar b { font-weight: 700; }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
 
@@ -2408,6 +2437,10 @@
     .pfilters > input { grid-column: auto; }
   }
   @media (max-width: 640px) {
+    .inv-nowhere-bar { flex-direction: column; align-items: stretch; }
+    .gsr { grid-template-columns: 1fr; }
+    .gsr-where { justify-self: stretch; text-align: left; }
+    .gsr-name { white-space: normal; }
     header.topbar h1 { font-size: 16px; }
 
     /* A document title gets two lines here instead of one with an ellipsis.
@@ -2510,6 +2543,8 @@
 
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
+    .lc-open { min-height: 40px; display: inline-flex; align-items: center; }
+    .locempty .lc-open { min-height: 40px; }
     button, .icon-btn, .hamburger { min-height: 40px; }
     .mtxcell { min-height: 40px; min-width: 40px; }
     /* A rail row is a div[onclick]. A short work-order name over one meta line

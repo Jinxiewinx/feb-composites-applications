@@ -58,7 +58,33 @@ const SHEET = `
   render();
 `;
 
+/* The storage map, with enough shelves and enough wrong with them to be worth
+   looking at: an alert tier, a quiet tier, unhoused things, and a shortage. */
+const MAP = `
+  DB.items = [
+    { id: "BIN-SN6-001", cls: "BIN", name: "RFS Container Shelf A", stage: "Active", site: "RFS container", locKind: "shelf" },
+    { id: "BIN-SN6-002", cls: "BIN", name: "RFS Container Shelf B", stage: "Active", site: "RFS container", locKind: "shelf", walkedAt: today() },
+    { id: "BIN-SN6-003", cls: "BIN", name: "Fabric Rack", stage: "Active", site: "RFS container", locKind: "rack", walkedAt: today() },
+    { id: "BIN-SN6-004", cls: "BIN", name: "Flammables Cabinet", stage: "Active", site: "Flammables cabinet", locKind: "cabinet", flam: "Yes" },
+    { id: "BIN-SN6-005", cls: "BIN", name: "Jacobs Basement Shelf B3", stage: "Active", site: "Jacobs basement", locKind: "shelf" },
+    { id: "BIN-SN6-006", cls: "BIN", name: "Dry Sealed Bin", stage: "Active", site: "Dry sealed bin", locKind: "bin", walkedAt: today() },
+  ];
+  DB.lots = [
+    { id: "FAB-SN6-001", cls: "FAB", name: "195 Twill Sigmatex", matKey: "195-TWILL", vendorLot: "SG24-1180", stage: "Open", location: "BIN-SN6-003" },
+    { id: "FAB-SN6-002", cls: "FAB", name: "450gsm Biax E-Glass", stage: "Sealed", location: "BIN-SN6-003" },
+    { id: "RSN-SN6-001", cls: "RSN", name: "IN2 Infusion Resin", role: "resin", matKey: "IN2", stage: "Open", location: "BIN-SN6-004", expiresOn: "2026-01-01" },
+    { id: "RSN-SN6-002", cls: "RSN", name: "AT30 Slow Hardener", role: "hardener", matKey: "AT30", stage: "Sealed", location: "BIN-SN6-004" },
+    { id: "CON-SN6-001", cls: "CON", name: "Blue tack tape", matKey: "TACKY-TAPE", stage: "Open", count: 1, location: "BIN-SN6-001" },
+    { id: "CON-SN6-002", cls: "CON", name: "Peel ply 80gsm", stage: "Sealed", count: 4, location: "BIN-SN6-001" },
+    { id: "CON-SN6-003", cls: "CON", name: "Nitrile gloves L", stage: "Sealed", count: 2, location: "" },
+  ];
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: 6, label: "Tacky tape", unit: "roll", supplier: "Easy Composites", leadDays: 7 }] };
+  view = { ...view, tab: "inventory", invView: "map", mode: "list", id: null, q: "", invFlag: "" };
+  render();
+`;
+
 const STATES = [
+  { id: "map", js: MAP },
   { id: "sheet", js: SHEET },
   { id: "empty", js: `RX = null; view = { ...view, tab: "inventory", invView: "desk", mode: "list", id: null }; render();` },
   { id: "confirm", js: SHEET + `\nrxConfirm();` },

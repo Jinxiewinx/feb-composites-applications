@@ -49,17 +49,17 @@ function invActiveBins() { return invBins().filter(b => b.stage !== "Retired"); 
  * makes a count untrustworthy. leadDays is CS-012 §7.4's supplier lead time,
  * and it is what turns "you are low" into "order now to have it by the 4th". */
 const RESTOCK_SEED = [
-  { matKey: "IN2", label: "IN2 infusion resin", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+  { matKey: "IN2", label: "IN2 infusion resin", minCount: 2, unit: "kit", supplier: "Easy Composites", leadDays: 42,
     hazard: "flammable", role: "resin",
-    why: "Every infusion. One unopened kit is about one peak week, so it is the alarm, not the buffer — CS-011 §5." },
-  { matKey: "AT30", label: "AT30 slow hardener", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+    why: "Every infusion. §5 triggers at the opened kit plus one unopened — one unopened kit is about one peak week, so it is the alarm, not the buffer." },
+  { matKey: "AT30", label: "AT30 slow hardener", minCount: 2, unit: "kit", supplier: "Easy Composites", leadDays: 42,
     hazard: "flammable", role: "hardener",
     why: "Pairs with IN2; same 6-week Easy Composites lead." },
   { matKey: "WEST-105", label: "West 105 resin", minCount: 1, unit: "tank", supplier: "West System", leadDays: 14,
     hazard: "flammable", role: "resin", why: "Every wet layup. CS-011 §5 wants half a tank plus a can." },
   { matKey: "WEST-206", label: "West 206 hardener", minCount: 1, unit: "can", supplier: "West System", leadDays: 14,
     hazard: "flammable", role: "hardener", why: "Every wet layup." },
-  { matKey: "XCR", label: "XCR mold coating", minCount: 1, unit: "kit", supplier: "Easy Composites", leadDays: 42,
+  { matKey: "XCR", label: "XCR mold coating", minCount: 2, unit: "kit", supplier: "Easy Composites", leadDays: 42,
     hazard: "flammable", role: "resin",
     why: "Every mold. One kit seals two or three sections and molds queue two a week in peak." },
   { matKey: "VB160", label: "VB160 bagging film", minCount: 1, unit: "roll", supplier: "Easy Composites", leadDays: 42,
@@ -76,8 +76,8 @@ const RESTOCK_SEED = [
   { matKey: "MIXING-STICKS", label: "Mixing sticks", minCount: 50, unit: "stick", supplier: "McMaster", leadDays: 7, why: "Everything." },
   { matKey: "CARTRIDGE-A-P100", label: "Respirator cartridges (A + P100)", minCount: 2, unit: "set", supplier: "McMaster", leadDays: 7,
     why: "Safety-blocking: no cartridges, no layup." },
-  { matKey: "195-TWILL", label: "195 twill cloth", minCount: 10, unit: "yd", supplier: "Sigmatex (sponsor)", leadDays: 30,
-    why: "Most stacks." },
+  { matKey: "195-TWILL", label: "195 twill cloth", minCount: 1, unit: "roll", supplier: "Sigmatex (sponsor)", leadDays: 30,
+    why: "Most stacks. §5 states this in yards (10 yd); we can count rolls honestly and yards we cannot, so it is one roll here." },
 ];
 
 /* Lead overrides, config/restock. Same trust shape as config/resins: roster
@@ -143,10 +143,17 @@ function lotIsLow(o) {
 }
 
 /* On-hand for one restock rule.
-   FAB and RSN are counted as RECORDS, which is the unit CS-011 §5 states its
-   own thresholds in ("1 unopened kit", "6 rolls"). CON is summed over count,
-   because you can honestly count boxes. Empty containers count for nothing in
-   either case — an empty jug on a shelf is not stock. */
+
+   FAB and RSN count CONTAINERS — rolls and kits — because that is the unit
+   CS-011 §5 states most of its thresholds in and the only unit the app can
+   count honestly. An opened container counts: it has material in it. Counting
+   only sealed ones read "none left" while an open roll sat on the rack, which
+   is a false alarm, and false alarms are the entire failure mode this feature
+   exists to end. §5's "opened kit + 1 unopened" is expressed as a minimum of
+   two containers instead, which says the same thing in the unit we have.
+
+   CON sums count, because boxes really are countable. Empty counts for nothing
+   in either case — an empty jug on a shelf is not stock. */
 function restockOnHand(matKey) {
   const rule = restockRuleFor(matKey);
   let n = 0, empty = 0, records = 0;
@@ -155,7 +162,7 @@ function restockOnHand(matKey) {
     records++;
     if (o.stage === "Empty" || String(o.qty) === "Empty") { empty++; continue; }
     if (o.cls === "CON") n += Number.isFinite(Number(o.count)) ? Number(o.count) : 1;
-    else if (o.stage === "Sealed") n += 1;           // unopened is the unit §5 counts
+    else n += 1;                                     // a container with material in it
   }
   return { n, empty, records, rule };
 }
@@ -400,22 +407,49 @@ function selectInvRec(id) { view = { ...view, mode: "detail", id, edit: false };
 function clearInvSelection() { view = { ...view, mode: "list", id: null, edit: false }; render(); }
 
 /* ---------- the map ---------- */
+/* Does this shelf match what was typed? Its own name and kind, OR the name,
+   vendor lot or material type of anything on it — so "195 twill" leaves the
+   shelves that actually have some, which is the question the map is for. */
+function invBinMatches(bin, bucket, q) {
+  if (!q) return true;
+  const hay = [bin.name, bin.id, bin.site, bin.locKind];
+  for (const arr of Object.values(bucket)) {
+    for (const o of arr) hay.push(o.name, o.partName, o.label, o.vendorLot, o.matKey, o.id);
+  }
+  return hay.filter(Boolean).join(" ").toLowerCase().includes(q);
+}
+
+/* Chips that actually do something.
+   `low / expired` set view.invFlag and lit up while invCard never read it, so
+   the map did not change and the active state was a lie. `chemical warnings`
+   was onclick="void 0" — a button that is not one. And the walk chip was a
+   <span> dressed like its neighbours. All three now filter, and the fourth
+   tells the truth about being a count rather than a control. */
 function invSummaryChips(idx) {
   const allLots = (DB.lots || []).filter(o => o.stage !== "Empty");
   const lowExpired = allLots.filter(o => lotIsLow(o) || lotExpired(o)).length;
   const unhoused = invBucketCount(idx.un);
   let chem = 0;
   invActiveBins().forEach(b => { chem += invLocWarnings(b, idx.by.get(b.id) || invEmptyBucket()).filter(w => w.cls === "bad").length; });
-  const ages = invActiveBins().map(b => invDaysSince(b.walkedAt)).filter(d => d != null);
-  const oldest = invActiveBins().some(b => !b.walkedAt) ? null : (ages.length ? Math.max(...ages) : null);
+  const stale = invActiveBins().filter(b => { const d = invDaysSince(b.walkedAt); return d == null || d > INV_WALK_STALE_DAYS; }).length;
+  const flip = f => `view.invFlag = view.invFlag === '${f}' ? '' : '${f}'; render()`;
   const chip = (n, label, cls, on, js) =>
     `<button class="psum-chip ${cls || ""} ${on ? "on" : ""}" onclick="${js}"><b>${n}</b> ${esc(label)}</button>`;
   return `<div class="psum no-print">
-    ${chip(lowExpired, "low / expired", lowExpired ? "bad" : "", view.invFlag === "reorder", "view.invFlag=view.invFlag==='reorder'?'':'reorder';render()")}
+    ${chip(lowExpired, "low / expired", lowExpired ? "bad" : "", view.invFlag === "reorder", flip("reorder"))}
     ${chip(unhoused, "unhoused", unhoused ? "bad" : "", false, "selectInvRec('NOWHERE')")}
-    ${chip(chem, "chemical warnings", chem ? "bad" : "", false, "void 0")}
-    ${oldest == null ? `<span class="psum-chip">walk overdue</span>` : `<span class="psum-chip">walked ${oldest}d ago</span>`}
+    ${chip(chem, "chemical warnings", chem ? "bad" : "", view.invFlag === "chem", flip("chem"))}
+    ${chip(stale, "need a walk", stale ? "warn" : "", view.invFlag === "walk", flip("walk"))}
   </div>`;
+}
+
+/* Does this shelf survive the active chip? */
+function invBinFlagged(bin, bucket, flag) {
+  if (!flag) return true;
+  if (flag === "reorder") return [...bucket.resin, ...bucket.fabric, ...bucket.consumables].some(o => lotIsLow(o) || lotExpired(o));
+  if (flag === "chem") return invLocWarnings(bin, bucket).some(w => w.cls === "bad");
+  if (flag === "walk") { const d = invDaysSince(bin.walkedAt); return d == null || d > INV_WALK_STALE_DAYS; }
+  return true;
 }
 
 function invCard(bin, bucket) {
@@ -428,32 +462,35 @@ function invCard(bin, bucket) {
     [bucket.consumables.length, "consumables"], [bucket.parts.length, "parts"],
   ].filter(([c]) => c);
   const age = invDaysSince(bin.walkedAt);
-  return `<button class="loccard" onclick="selectInvRec('${esc(bin.id)}')" title="${esc(bin.id)}">
-    <div class="lc-hd"><span class="lc-name">${esc(bin.name || bin.id)}</span>
+  const alert = warns.some(w => w.cls === "bad");
+  /* A <button> containing <div>s is not a content model any browser is obliged
+     to honour, and it structurally forbids a second control on the card — which
+     is exactly what the monthly walk needs. So: one real button on the name,
+     stretched over the whole card by its ::after, and Confirm as a SIBLING
+     sitting above it on the z-axis. Two real buttons, both tab-reachable, both
+     announced, and no stopPropagation anywhere. */
+  return `<div class="loccard ${alert ? "alert" : ""}" title="${esc(bin.id)}">
+    ${warns.map(w => `<div class="lc-warn ${w.cls}">${icon("warning", 12)} ${esc(w.text)}</div>`).join("")}
+    <div class="lc-hd">
+      <button class="lc-open lc-name" onclick="selectInvRec('${esc(bin.id)}')">${esc(bin.name || bin.id)}</button>
       ${bin.locKind ? `<span class="kind">${esc(bin.locKind)}</span>` : ""}
       ${bin.flam === "Yes" ? `<span class="kind lc-flam" title="Rated for flammables">◆ flam</span>` : ""}</div>
     <div class="lc-body">${n ? parts.map(([c, l]) => `<span>${c} ${l}</span>`).join(" · ") : '<span class="muted">empty</span>'}</div>
-    ${warns.map(w => `<div class="lc-warn ${w.cls}">${icon("warning", 12)} ${esc(w.text)}</div>`).join("")}
-    <div class="lc-foot tny muted">${age == null ? "contents never confirmed" : `walked ${age}d ago${age > INV_WALK_STALE_DAYS ? " ⚠" : ""}`}</div>
-  </button>`;
-}
-
-function invNowhereCard(idx) {
-  const n = invBucketCount(idx.un);
-  const legacy = idx.legacyParts.length;
-  if (!n && !legacy) return "";
-  const bits = Object.entries(idx.un).filter(([, arr]) => arr.length).map(([k, arr]) => `${arr.length} ${k}`);
-  return `<button class="loccard lc-nowhere" onclick="selectInvRec('NOWHERE')">
-    <div class="lc-hd"><span class="lc-name">${icon("warning", 14)} No location</span></div>
-    <div class="lc-body">${bits.join(" · ") || '<span class="muted">nothing</span>'}</div>
-    ${legacy ? `<div class="lc-foot tny muted">+ ${legacy} part${legacy === 1 ? "" : "s"} with free-text locations</div>` : ""}
-    <div class="lc-foot tny muted">house these</div>
-  </button>`;
+    ${age != null && age <= INV_WALK_STALE_DAYS ? "" :
+      `<div class="lc-foot tny muted">${age == null ? "contents never confirmed" : `walked ${age}d ago ⚠`}</div>`}
+    <button class="sm lc-act no-print" onclick="invConfirmContents('${esc(bin.id)}')">${icon("check", 13)} Confirm</button>
+  </div>`;
 }
 
 function renderInvMap() {
   const idx = invIndex();
-  const bins = invActiveBins();
+  const q = String(view.q || "").toLowerCase().trim();
+  const flag = view.invFlag || "";
+  const all = invActiveBins();
+  const bins = all.filter(b => {
+    const bucket = idx.by.get(b.id) || invEmptyBucket();
+    return invBinMatches(b, bucket, q) && invBinFlagged(b, bucket, flag);
+  });
   const bySite = new Map();
   bins.forEach(b => {
     const s = b.site || "Unassigned";
@@ -461,19 +498,67 @@ function renderInvMap() {
     bySite.get(s).push(b);
   });
   const siteOrder = [...INV_SITES.filter(s => bySite.has(s)), ...[...bySite.keys()].filter(s => !INV_SITES.includes(s))];
+  /* Alerts first, then never-walked, then stale, then by name. Fixed, not
+     configurable: the map's job is to put what is wrong in front of you, and
+     Firestore arrival order — which is what it used before — is not an order. */
+  const rank = (b) => {
+    const bucket = idx.by.get(b.id) || invEmptyBucket();
+    if (invLocWarnings(b, bucket).some(w => w.cls === "bad")) return 0;
+    const d = invDaysSince(b.walkedAt);
+    if (d == null) return 1;
+    if (d > INV_WALK_STALE_DAYS) return 2;
+    return 3;
+  };
+  for (const arr of bySite.values()) {
+    arr.sort((a, b) => rank(a) - rank(b) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+  }
+  /* An empty, recently walked shelf is a fact, not a card. In a real shop this
+     is over half the list, and it costs one line instead of a grid cell each. */
+  const quiet = (s) => bySite.get(s).filter(b => {
+    const d = invDaysSince(b.walkedAt);
+    return invBucketCount(idx.by.get(b.id) || invEmptyBucket()) === 0 && d != null && d <= INV_WALK_STALE_DAYS;
+  });
 
+  const filtering = !!(q || flag);
   return `
   ${invToolbar("map")}
   ${invSummaryChips(idx)}
+  <div class="filters no-print">
+    <input id="searchbox" placeholder="shelf, site, or what is on it…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+    ${filtering ? `<button class="sm" onclick="view.q='';view.invFlag='';render()">Clear</button>` : ""}
+  </div>
+  ${invNowhereBar(idx)}
   ${invRestockHtml()}
   ${invIncomingHtml()}
-  ${bins.length ? siteOrder.map(s => `
-    <div class="inv-site"><div class="pgrouphd"><span class="pg-name">${esc(s)}</span><span class="pg-n">${bySite.get(s).length} location${bySite.get(s).length === 1 ? "" : "s"}</span></div>
-      <div class="locgrid">${bySite.get(s).map(b => invCard(b, idx.by.get(b.id) || invEmptyBucket())).join("")}${s === siteOrder[siteOrder.length - 1] ? invNowhereCard(idx) : ""}</div>
-    </div>`).join("")
-    : `<div class="card">No storage locations yet. <b>+ Location</b> for each shelf, rack and bin (CS-011 §7.3 names them),
-       print its label from the record, and stick it on the front edge. Then everything else in the shop can say where it lives.
-       ${invNowhereCard(idx) ? "" : ""}</div>${invNowhereCard(idx) ? `<div class="locgrid">${invNowhereCard(idx)}</div>` : ""}`}`;
+  ${!all.length
+    ? `<div class="card">No storage locations yet. <b>+ Location</b> for each shelf, rack and bin (CS-011 §7.3 names them),
+       print its label from the record, and stick it on the front edge. Then everything else in the shop can say where it lives.</div>`
+    : !bins.length
+    ? `<div class="card">Nothing matches${q ? ` “${esc(view.q)}”` : ""}${flag ? " and that filter" : ""}. <b>${all.length}</b> locations in total.</div>`
+    : siteOrder.map(s => {
+        const shown = bySite.get(s).filter(b => !quiet(s).includes(b));
+        return `<div class="inv-site">
+          <div class="pgrouphd"><span class="pg-name">${esc(s)}</span><span class="pg-n">${bySite.get(s).length} location${bySite.get(s).length === 1 ? "" : "s"}</span></div>
+          <div class="locgrid">${shown.map(b => invCard(b, idx.by.get(b.id) || invEmptyBucket())).join("")}</div>
+          ${quiet(s).length ? `<div class="locempty"><span class="le-lab">empty</span>${quiet(s).map(b =>
+            `<button class="lc-open" onclick="selectInvRec('${esc(b.id)}')">${esc(b.name || b.id)}</button>`).join("")}</div>` : ""}
+        </div>`;
+      }).join("")}`;
+}
+
+/* Unhoused things used to render as a dashed card appended to whichever site
+   group happened to sort LAST, so "nothing has a home" was positioned by an
+   accident of site ordering. It is not a shelf and does not belong in a grid of
+   shelves; it is a bar, above them, where the counts are. */
+function invNowhereBar(idx) {
+  const n = invBucketCount(idx.un);
+  const legacy = idx.legacyParts.length;
+  if (!n && !legacy) return "";
+  const bits = Object.entries(idx.un).filter(([, arr]) => arr.length).map(([k, arr]) => `${arr.length} ${k}`);
+  return `<div class="inv-nowhere-bar no-print">
+    <span>${icon("warning", 14)} <b>No location</b> — ${esc(bits.join(" · ") || "nothing")}${legacy ? ` · ${legacy} part${legacy === 1 ? "" : "s"} with free-text locations` : ""}</span>
+    <button class="sm" onclick="selectInvRec('NOWHERE')">Put them away ▸</button>
+  </div>`;
 }
 
 function invToolbar(active) {
