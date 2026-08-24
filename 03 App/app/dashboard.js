@@ -307,9 +307,6 @@ function dashLaunch() {
     <span class="tl">${label}</span>${meta ? `<span class="tm">${meta}</span>` : ""}</button>`;
   const ext = (url, label, meta) => `<a class="b-tile" href="${esc(url)}" target="_blank" rel="noopener">
     <span class="tl">${esc(label)}</span>${meta ? `<span class="tm">${esc(meta)}</span>` : ""}</a>`;
-  if (typeof loadManifest === "function" && typeof DOCS_MANIFEST !== "undefined" && DOCS_MANIFEST == null) loadManifest();
-  const man = (typeof DOCS_MANIFEST !== "undefined" && DOCS_MANIFEST) || null;
-  const nCat = c => man ? `${man.filter(d => d.category === c).length} PDFs` : "";
   const shelf = (DB.documents || []).filter(d => d.pinned && d.url).slice(0, 4);
   return `<div class="bmod b-launch">
     <div class="bmod-hd"><span>Launchpad</span></div>
@@ -320,8 +317,12 @@ function dashLaunch() {
       ${tile("view.schedView='week';setTab('timeline')", "Week plan", "goals by person")}
       ${tile("setTab('reports')", "Reports", "counts + CSV")}
       ${tile("setTab('people')", "People", "who is on what")}
-      ${tile("setTab('documents')", "Datasheets", nCat("Datasheets") || "TDS + SDS")}
-      ${tile("setTab('documents')", "Standards", nCat("Standards") || "the CS series")}
+      ${/* The Datasheets and Standards tiles lived here until 2026-08-18, when
+            those categories were unlisted from the Documents tab. A launchpad
+            tile counting documents nobody can browse to is worse than no tile.
+            The manifest load they used to trigger went with them; Documents
+            loads it itself when opened. */""}
+      ${tile("setTab('documents')", "Documents", "shelf + uploads")}
       ${shelf.map(d => ext(d.url, d.title || d.id, "pinned · opens in Google")).join("")}
     </div>
   </div>`;

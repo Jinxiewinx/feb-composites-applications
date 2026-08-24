@@ -54,8 +54,9 @@ layups banked, sign-offs); a lead sets the season (name, date, milestones)
 in one modal writing `config/season`, readable by the roster and writable
 by leads only. **Money** is the unreimbursed sum plus the $50 approval
 rule. **Launchpad** is filtered jumps (my tickets, late WOs, the reorder
-list, the week plan), the datasheet and standards shelves with live counts,
-and the pinned Google links. **Shop knowledge** rotates a fact a day, most
+list, the week plan), a jump to Documents, and the pinned Google links. It
+carried datasheet and standards tiles with live counts until those categories
+were unlisted on 2026-08-18. **Shop knowledge** rotates a fact a day, most
 of them mined from the team's own SN5 documentation, deterministic so the
 whole team sees the same one; on the configured competition date the board
 wears gold and the module tells you to go run the car.
@@ -436,10 +437,21 @@ every historic grant keeps rendering its name. A new training gates nothing
 until a step template references it — adding to the catalog is bookkeeping,
 gating stays a deliberate act.
 
-Documents bundles in every reference doc. The 25 manufacturer datasheets and our
-CS standards and pain-points all open as PDFs in-app, with the standards rendered
-from markdown by pandoc and the .docx still downloadable, plus the shop
-printables. Anyone can upload a doc.
+Documents is the team shelf (pinned links to the things people keep asking
+for), member uploads, and the shop printables. Anyone can upload a doc.
+
+It used to bundle the reference library too: 25 manufacturer datasheets and the
+CS standards and pain-points, rendered to PDF by pandoc with the .docx still
+downloadable. Simon asked for those off the app on 2026-08-18, and they are
+**unlisted rather than deleted** — the files are still in `docs/` and still
+served, because `resins.js` deep-links six datasheet PDFs by path for its TDS
+citations and CS-000 requires an issued standard to stay retrievable. What went
+was the manifest entry. The switch is `UNLISTED` in
+`tools/gen_docs_manifest.py`; empty that set to put them back.
+
+Nothing in `documents.js` hardcodes which categories may exist, so a document
+carrying any category still renders under its own heading. That is what keeps
+older uploads working and makes re-listing a one-line change.
 
 ### Inventory
 
@@ -592,7 +604,59 @@ work orders** proposes a mold record per distinct free-text mold name and lets a
 human untick the duplicates (no algorithm should decide that "MOLD-UT-INLET" and
 "UT INLET MOLD" are the same mold); **Link parts to work orders** backfills the
 edge that `sn5-parts.json` never had, on exact one-to-one name matches only; and
-**Rebuild scan mirror** re-publishes the public nameplates.
+**Rebuild scan mirror** re-publishes the public nameplates. **Tracker feed** is
+the fourth, and it is the one described next.
+
+## The Google Sheet mirror
+
+The team runs the season off the Composites Master Tracker in Drive. Until this
+existed, adopting the app meant either abandoning the sheet everyone already
+watches or typing every part twice, which was most of why switching to the app
+felt like a chore. Now the spreadsheet mirrors the app on a fifteen-minute
+timer. One direction: the app is the source of truth, and anything typed into
+the synced columns of the target tab is overwritten on the next run.
+
+The shape of it is forced by what the app is. Hosting is static, there are no
+Cloud Functions and no service account, so there is nowhere here to run a timer;
+and the app must not grow a Google sign-in, for the reason `gdocs.js` gives at
+length. So the timer lives inside the spreadsheet as a bound Apps Script
+(`03 App/sheets/Sync.gs`), and the app's job is to publish something that script
+can fetch with no credential at all. The script pulls; the app does not push.
+
+What it fetches is one Firestore document, `tracker/<token>`, written by
+`tracker.js` and readable over the plain REST API with no auth header, because
+`firestore.rules` allows `get` on it. That is a second deliberate public hole
+alongside `pub/<ID>`, and a wider one: a nameplate is one object, this is the
+whole season's part list plus engineer names and comment text. What protects it
+is that the document id is a 32-character random token, minted once by a lead
+and kept in `config/tracker`, never in source. The URL is the whole capability,
+the same way the Slack webhook next door is. `list` is denied to everyone,
+including leads, so the token cannot be recovered by enumerating the collection.
+
+That token is also what buys the extra columns. A guessable path would have
+forced dropping `Extra Comments` and shortening the engineer names, and then the
+sheet would no longer match the tracker it is supposed to mirror.
+
+The snapshot is a whole-table rewrite rather than a per-record mirror, which
+makes it self-healing in a way `pub` is not: a failed `pub` write is only
+repaired by a later save of that same record, whereas here the next successful
+save of any part republishes everything. It rides on `fb.save()` and `fb.del()`
+behind a four-second debounce, because every field edit in `parts.js` is its own
+`updateDoc` and tabbing through a record would otherwise republish the snapshot
+a dozen times. Deletes matter as much as edits: a part removed in the app only
+leaves the spreadsheet when the snapshot is rewritten without it.
+
+Staleness is not the failure mode it looks like. The app is the only place part
+edits happen, so "nobody has had the app open" means the snapshot is stale and
+correct. What the sheet cannot tell you on its own is whether the sync itself
+died, which is why the script keeps a `Sync Log` tab with a timestamp per run.
+
+Rows in the sheet the app has never heard of are left alone and tinted amber,
+never deleted. Columns are matched by header text rather than position, so
+inserting a column does not shift data into the wrong place, and column A's
+`=INT(N2-NOW())` countdown is never written and is copied down onto appended
+rows. Install steps, the trial-tab rollout and the handover note are in
+`03 App/sheets/README.md`.
 
 ## Labels
 
@@ -1050,7 +1114,9 @@ Regenerate bundled data when the sources change:
 - `node tools/gen_sample_molds.mjs` rebuilds the three sample molds in `samples/`.
 - `python3 tools/gen_docs_manifest.py` copies the datasheets, standards and
   printables into `app/docs/` and rebuilds `docs/manifest.json` for the Documents
-  tab. Re-run it whenever a datasheet or CS standard changes.
+  tab. Re-run it whenever a datasheet or CS standard changes. It still copies
+  every file; the `UNLISTED` set at the top decides which categories get a
+  manifest entry, and Datasheets and Standards are in it as of 2026-08-18.
 
 ## Files
 
@@ -1066,6 +1132,8 @@ Regenerate bundled data when the sources change:
 | `workorders.js` `parts.js` `projects.js` `timeline.js` `budget.js` `dashboard.js` `documents.js` | One tab each; they reach Firebase only through core's `save()` and `del()` and `fb.*` |
 | `print.js` `print.css` | The printed work-order traveler. Styles are deliberately outside `@media print` so the sheet can be previewed and reviewed on screen |
 | `fb.js` | The only file that imports Firebase (auth, per-collection sync, writes, file upload) |
+| `tracker.js` | The Google Sheet mirror feed: builds the whole-table snapshot the Master Tracker's Apps Script pulls, and the lead-only setup that mints its secret token. The field list in it is a security boundary, not a convenience |
+| `../sheets/Sync.gs` `../sheets/README.md` | The other half, which lives inside the spreadsheet rather than here: the timed script that writes the tracker tab, and how to install it |
 | `firebase-config.js` | Project config, as `window.FIREBASE_CONFIG` |
 | `docs/` | Bundled reference docs and the generated `manifest.json` |
 | `sn5-work-orders.json` `sn5-parts.json` `sn5-schedule.json` `sn5-stock.json` | Retro SN5 archives, the seeds for "Load SN5 archive". The stock one is the board rack SN5 left behind; the stack planner picks thicknesses from what you own, so on a fresh project it has nothing to plan against until this is loaded |

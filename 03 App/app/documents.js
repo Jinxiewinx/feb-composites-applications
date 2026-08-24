@@ -1,9 +1,18 @@
 "use strict";
 /* documents.js — the Documents tab.
-   A read-only library of the team's reference docs, bundled into the app by
-   tools/gen_docs_manifest.py (docs/manifest.json). Datasheets (PDF) open in an
-   in-app viewer; our CS standards / pain-points render in-app from markdown;
-   printables open as HTML. */
+   The team shelf (pinned links), member uploads, and whatever
+   tools/gen_docs_manifest.py bundles into docs/manifest.json. PDFs open in an
+   in-app viewer, markdown renders in-app, printables open as HTML.
+
+   The bundled datasheets and CS standards were unlisted on 2026-08-18 at
+   Simon's request. Their FILES are still in docs/ and still served — resins.js
+   deep-links six datasheet PDFs by path, and an issued standard has to stay
+   retrievable under CS-000 — they simply are not advertised here any more. The
+   switch is UNLISTED in tools/gen_docs_manifest.py, not anything in this file.
+
+   Nothing below hardcodes what may exist. A document carrying any category,
+   including one of the unlisted ones, still renders under it; that is what
+   keeps old uploads and a future re-listing working without a code change. */
 
 let DOCS_MANIFEST = null;   // null=unloaded, []=loaded
 let DOCS_LOADING = false;
@@ -65,7 +74,13 @@ function renderDocuments() {
   const docs = all
     .filter(d => !view.fSub || (d.kind || "file") === view.fSub)
     .filter(d => !q || d.title.toLowerCase().includes(q) || d.category.toLowerCase().includes(q));
-  const cats = ["Datasheets", "Standards", "Guides", "Uploads", ...new Set(all.map(d => d.category))]
+  /* The leading names are an ORDER, not a whitelist: they put the familiar
+     sections at the top when they have contents. Every category actually
+     present is appended, so an upload filed under a category nobody listed
+     here still gets its own section rather than vanishing. Empty sections
+     render nothing (see the early return below), so listing a name costs
+     nothing when there is none of it. */
+  const cats = ["Guides", "Uploads", ...new Set(all.map(d => d.category))]
     .filter((c, i, a) => a.indexOf(c) === i);
   return `
   <div class="toolbar no-print">
@@ -91,7 +106,7 @@ function renderDocuments() {
     <input id="searchbox" placeholder="search documents…" value="${esc(view.q || "")}" oninput="searchInput(this)">
     <span class="muted" style="align-self:center">${docs.length} of ${all.length} documents</span>
   </div>
-  ${all.length === 0 ? `<div class="card">No documents yet — <b>Upload document</b>, or run <code>python3 tools/gen_docs_manifest.py</code> to bundle the datasheets/standards.</div>` : ""}
+  ${all.length === 0 ? `<div class="card">No documents yet — <b>Upload document</b>, or <b>+ Pin a link</b> for the ones people keep asking for.</div>` : ""}
   ${cats.map(cat => {
     /* localeCompare, not the manifest's order, which is ASCII: uppercase sorts
        before lowercase, so "WestSystems" landed above "airtac2imp" and three
@@ -126,7 +141,10 @@ function renderDocuments() {
 }
 
 function uploadDocument() {
-  const cats = ["Datasheets", "Standards", "Guides", "Uploads"];
+  // What an uploader may file something under. Deliberately no longer offers
+  // Datasheets or Standards: those are bundled from the repo, not uploaded,
+  // and both are unlisted as of 2026-08-18.
+  const cats = ["Guides", "Uploads"];
   openModal(`
     <h2>Upload document</h2>
     <div class="field"><label>Title</label><input id="ud-title" placeholder="Document name"></div>

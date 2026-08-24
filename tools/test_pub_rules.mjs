@@ -135,5 +135,72 @@ await expect(200, "member", "DELETE", "/pub/P-SN6-007", null, "a member may, unl
 await expect(403, "none", "DELETE", "/pub/MOLD-SN6-004");
 await expect(403, "rando", "DELETE", "/pub/MOLD-SN6-004");
 
+/* ================= tracker/<token> — the Google Sheet mirror feed =========== */
+
+/* The second deliberate hole, and a wider one: pub/<ID> hands out one
+   nameplate, this hands out the entire season's part list plus engineer names
+   and comment text. What protects it is that the document id is a 32-char
+   secret rather than a guessable path, so these tests are mostly about proving
+   the secret cannot be discovered from inside. */
+
+const TOKEN = "3f9c1a7b2e4d6058a1b3c5d7e9f02468";
+const ROWS = {
+  rows: { arrayValue: { values: [
+    { stringValue: JSON.stringify({ id: "P-SN6-001", partName: "UT INLET" }) },
+  ] } },
+  count: { integerValue: "1" },
+  updatedAt: S("2026-08-15T18:00:00.000Z"),
+};
+
+console.log("\nthe tracker feed, which the spreadsheet fetches with no credentials:");
+await expect(200, "member", "PATCH", `/tracker/${TOKEN}`, ROWS, "any member's part edit refreshes it");
+await expect(200, "none", "GET", `/tracker/${TOKEN}`, null, "Apps Script pulls with no auth header at all");
+
+console.log("\nbut the token cannot be discovered by listing:");
+/* `list: if false`, denied to EVERYONE including leads — not because members
+   are untrusted (they can read config/tracker anyway) but so that a stolen
+   session or a future bug widening config still cannot enumerate its way to
+   the URL. This is the assertion that keeps the secret a secret. */
+await expect(403, "none", "GET", "/tracker");
+await expect(403, "rando", "GET", "/tracker");
+await expect(403, "member", "GET", "/tracker", null, "even a roster member may not enumerate");
+await expect(403, "lead", "GET", "/tracker", null, "and neither may a lead");
+
+console.log("\nthe public may read the feed, never write it:");
+await expect(403, "none", "PATCH", `/tracker/${TOKEN}`, ROWS);
+await expect(403, "rando", "PATCH", `/tracker/${TOKEN}`, ROWS, "signed in is not rostered");
+
+console.log("\nhasOnly() behind trackerSnapshot():");
+/* The projection in app/tracker.js builds the row field by field precisely so
+   a whole record cannot be spread into it. These prove the server refuses
+   anyway. `updatedBy` matters most: importMany() would add it automatically,
+   which is why fb.publishTracker() must never use importMany. */
+for (const [field, value, what] of [
+  ["updatedBy", S("simon@berkeley.edu"), "the stamp importMany would have added"],
+  ["commentLog", S("Simon: this is blocked on Nick"), "the threaded comment log"],
+  ["layupStack", S("6X 195 twill + .125 Nomex"), "the team's actual laminate"],
+  ["files", S("https://firebasestorage.googleapis.com/v0/b/x/o/y?token=SECRET"), "a storage bearer token"],
+]) {
+  await expect(403, "member", "PATCH", `/tracker/${TOKEN}`, { ...ROWS, [field]: value }, what);
+}
+
+console.log("\nand the feed cannot grow without bound:");
+/* rows.size() <= 500. A runaway import must not be able to publish a document
+   so large the spreadsheet can never fetch it. */
+await expect(403, "member", "PATCH", `/tracker/${TOKEN}`, {
+  ...ROWS,
+  rows: { arrayValue: { values: Array.from({ length: 501 }, (_, i) => ({ stringValue: `{"id":"P-${i}"}` })) } },
+}, "501 rows is refused");
+
+console.log("\nand nothing else opened up alongside it:");
+/* Same regression check as above, re-run after the tracker block, because the
+   whole risk of adding a second public hole is that it widens the first. */
+await expect(403, "none", "GET", "/parts/P-SN6-007", null, "still closed");
+await expect(403, "none", "GET", "/config/tracker", null, "the token's home is roster-only");
+
+console.log("\ndeleting the feed is a lead's call:");
+await expect(403, "member", "DELETE", `/tracker/${TOKEN}`, null, "unlike pub, this is not member-deletable");
+await expect(200, "lead", "DELETE", `/tracker/${TOKEN}`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

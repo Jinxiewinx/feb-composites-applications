@@ -104,17 +104,19 @@ globalThis.fb = {
   // No webhook configured in tests → postToSlack() no-ops before ever calling fetch().
   async getConfig(key) { calls.push(["getConfig", key]); return null; },
   async setConfig(key, data) { calls.push(["setConfig", key, data]); },
+  async publishPub(recs) { calls.push(["publishPub", recs.length]); },
+  async publishTracker(token, snap) { calls.push(["publishTracker", token, snap]); },
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js", "tracker.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -2392,7 +2394,12 @@ await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf 
   // switch; invFlag is not wiped, so the inventory jump may lead with it.
   assert(html.includes("setTab('workorders');view.woLate=true;render()"), "late-WO jump survives setTab's flag clearing");
   assert(html.includes("view.invFlag='reorder';setTab('inventory')"), "reorder jump uses the surviving flag");
-  assert(html.includes("25 PDFs") || html.includes("TDS + SDS"), "datasheet shelf carries its count once the manifest loads");
+  // The Datasheets and Standards tiles were removed on 2026-08-18 when those
+  // categories were unlisted. Assert they are GONE, so re-adding a tile that
+  // jumps to a section nobody can browse to fails here first.
+  assert(!html.includes("TDS + SDS") && !html.includes("the CS series"),
+    "no launchpad tile for the unlisted categories");
+  assert(html.includes("shelf + uploads"), "the Documents tile replaced them");
   assert(/<a class="b-tile" href="https:\/\/docs\.google\.com\/x"/.test(html), "a pinned Google doc is an anchor, not a button");
   DB.documents = [];
 });
@@ -2637,6 +2644,18 @@ await t("markdown renderer: headings, tables, lists, bold", () => {
   assert(html.includes("<li>one</li>"), "list");
   assert(html.includes("<strong>bold</strong>") && html.includes("<code>code</code>"), "inline");
 });
+await t("the shipped manifest lists no datasheets and no standards", async () => {
+  /* The unlisting is a data change, not a code change, so this reads the real
+     docs/manifest.json rather than a fixture. The FILES stay on disk on
+     purpose (resins.js deep-links six datasheet PDFs by path); what must be
+     absent is the advertisement. */
+  const real = JSON.parse(readFileSync(join(root, "docs/manifest.json"), "utf8"));
+  const bad = real.filter(d => d.category === "Datasheets" || d.category === "Standards");
+  assert(!bad.length, "unlisted categories are back in the manifest: " +
+    bad.map(d => d.category + "/" + d.title).join(", "));
+  assert(real.some(d => d.category === "Guides"), "the printables guide is still listed");
+});
+
 await t("documents tab loads manifest + lists categories", async () => {
   fetchMap["docs/manifest.json"] = [
     { category: "Datasheets", title: "XCR TDS", kind: "pdf", src: "docs/datasheets/xcr.pdf", size: 2000 },
@@ -4864,6 +4883,80 @@ await t("a shelf label says what it is; a scanned mold's nameplate names the she
   assert(lines.mid.includes("RFS CONTAINER"), "site on the label");
   const pub = pubProjection("molds", DB.molds[0]);
   assert(pub.location === "Dry fabric bin", "BIN id resolved to the shelf name: " + pub.location);
+});
+
+console.log("tracker feed (the Google Sheet mirror):");
+
+/* The feed goes to a URL that needs no login, so these tests are the boundary,
+   not a formality. Each one is a leak that shipped once. */
+
+await t("the snapshot carries the tracker columns and nothing else", () => {
+  DB.parts = [{
+    id: "P-SN6-001", partName: "UT DIFFUSER", subteam: "AERO",
+    layupType: "MOLD INFUSION", layupSchedule: "6X 195 + CORE",
+    moldLocation: "RFS", moldEngineer: "Nico", manufacturingEngineer: "Chuning",
+    cadProgress: "Part CAD Done", moldProgress: "Sealed", layupProgress: "Not Started",
+    weightG: "480", layupDeadline: "2027-01-15", comments: "watch the flange",
+    // None of the following may ever reach the feed.
+    commentLog: [{ author: "Simon", email: "s@berkeley.edu", text: "private" }],
+    layupStack: [{ material: "195 2x2", orientation: "0" }],
+    workOrderId: "WO-SN6-004", createdBy: "s@berkeley.edu",
+    updatedBy: "s@berkeley.edu", files: [{ url: "https://firebasestorage.googleapis.com/x" }],
+  }];
+  const row = JSON.parse(trackerSnapshot().rows[0]);
+  assert(row.partName === "UT DIFFUSER" && row.moldProgress === "Sealed", "columns present");
+  const leaked = ["commentLog", "layupStack", "workOrderId", "createdBy", "updatedBy", "files"]
+    .filter(k => k in row);
+  assert(!leaked.length, "leaked into the public feed: " + leaked.join(", "));
+  // TRACKER_FIELDS is the whitelist; the row must be exactly it, no more.
+  const extra = Object.keys(row).filter(k => TRACKER_FIELDS.indexOf(k) < 0);
+  assert(!extra.length, "keys outside TRACKER_FIELDS: " + extra.join(", "));
+});
+
+await t("the SN5 archive never reaches this season's tracker", () => {
+  DB.parts = [
+    { id: "P-SN5-001", partName: "SN5 SEAT", retro: true },
+    { id: "P-SN6-001", partName: "SN6 SEAT" },
+  ];
+  const snap = trackerSnapshot();
+  assert(snap.count === 1, "retro parts excluded: " + snap.count);
+  assert(JSON.parse(snap.rows[0]).partName === "SN6 SEAT", "the live one survives");
+});
+
+await t("the measured weight wins over the target, and rows sort by id", () => {
+  DB.parts = [
+    { id: "P-SN6-002", partName: "B", weightG: "500", weightActualG: "512" },
+    { id: "P-SN6-001", partName: "A", weightG: "300" },
+  ];
+  const rows = trackerSnapshot().rows.map(r => JSON.parse(r));
+  assert(rows[0].id === "P-SN6-001", "sorted by id: " + rows.map(r => r.id).join(","));
+  assert(rows[0].weightG === "300", "falls back to the target: " + rows[0].weightG);
+  assert(rows[1].weightG === "512", "measured wins: " + rows[1].weightG);
+});
+
+await t("a missing field becomes an empty string, never the word null", () => {
+  DB.parts = [{ id: "P-SN6-001", partName: "X", comments: null }];
+  const row = JSON.parse(trackerSnapshot().rows[0]);
+  assert(row.comments === "" && row.subteam === "", "blanks: " + JSON.stringify(row));
+});
+
+await t("rows are JSON strings, so the sheet decodes without a value-typed walk", () => {
+  DB.parts = [{ id: "P-SN6-001", partName: "X" }];
+  const snap = trackerSnapshot();
+  assert(typeof snap.rows[0] === "string", "rows[] must be strings for the index-entry limit");
+  assert(typeof snap.updatedAt === "string" && snap.updatedAt.includes("T"),
+    "updatedAt is a plain ISO string, not a serverTimestamp: " + snap.updatedAt);
+  // firestore.rules hasOnly(['rows','count','updatedAt']) rejects anything else.
+  assert(Object.keys(snap).sort().join(",") === "count,rows,updatedAt",
+    "doc keys must match the rules whitelist: " + Object.keys(snap).join(","));
+});
+
+await t("an unconfigured feed publishes nothing rather than guessing a token", async () => {
+  DB.parts = [{ id: "P-SN6-001", partName: "X" }];
+  calls.length = 0;
+  const n = await trackerPublish();          // fb.getConfig stub returns null
+  assert(n === -1, "should no-op: " + n);
+  assert(!calls.some(c => c[0] === "publishTracker"), "no write without a token");
 });
 
 console.log("molds & stock, one tab:");

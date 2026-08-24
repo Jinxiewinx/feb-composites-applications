@@ -53,6 +53,7 @@ Logic and data, no browser:
 | `test_slicer.mjs` | Mold geometry: STL slicing, islands, containment. |
 | `test_packer.mjs` | Cut lists: guillotine feasibility, kerf, stock policy. |
 | `test_qr.mjs` | QR encoding. Asserts version 3 alphanumeric exactly; see "The QR guard" below. |
+| `test_sheetsync.mjs` | `03 App/sheets/Sync.gs`, the Apps Script that mirrors the app into the Composites Master Tracker, against fake Sheets objects. It is the only code here that writes into somebody else's live spreadsheet, unattended, every 15 minutes — so the cases that matter are the ones where it must NOT write: orphan rows kept and tinted, column A's formula untouched, unmapped columns left alone. |
 
 Rendered in headless Chromium (need Playwright):
 
@@ -77,7 +78,7 @@ Against the Firebase emulator:
 |---|---|
 | `test_wo_rules.mjs` | Firestore security rules for the team collections. |
 | `test_storage_rules.mjs` | Storage rules: who can upload what, where. Deny-side only — the emulator's upload endpoint does not set request.resource.contentType, so the *allow* cases cannot be asserted here at all; the test header explains. |
-| `test_pub_rules.mjs` | The `pub` scan-mirror rules: anonymous read of one document, nothing else. |
+| `test_pub_rules.mjs` | The two public holes: the `pub` scan-mirror (anonymous read of one document, nothing else) and the `tracker` sheet feed (anonymous read of one secret-id document, and no way for anyone to enumerate its way to that id). |
 
 The emulator suites run like this. They target the DEMO project, so they need
 Java and the CLI but no `firebase login` and no network:

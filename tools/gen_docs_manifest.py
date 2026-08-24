@@ -8,6 +8,11 @@ them in-browser. Copies into `03 App/app/docs/` and writes manifest.json.
 - Printables                               -> docs/printables.html    (kind: html)
 
 Re-run any time the source docs change. Safe to re-run (overwrites).
+
+NOTE (2026-08-18): the datasheets and CS standards are still COPIED into
+docs/, but they are no longer listed in the Documents tab — see UNLISTED
+below. The files have to keep existing because other parts of the app deep-link
+them by path.
 """
 import json, re, shutil, subprocess
 from pathlib import Path
@@ -20,6 +25,24 @@ for sub in ("datasheets", "standards"):
     (DOCS / sub).mkdir(parents=True, exist_ok=True)
 
 manifest = []
+
+# Categories that are copied into docs/ but NOT advertised in the app.
+#
+# Simon asked for the reference docs and the standards off the app on
+# 2026-08-18. They are unlisted rather than deleted, and the distinction
+# matters: resins.js hardcodes six `docs/datasheets/*.pdf` paths for its TDS
+# citations, and CS-000 requires a standard to stay retrievable once it has
+# been issued. Removing the files would break the first and violate the second,
+# so the manifest entry is what goes — the bytes stay exactly where they were.
+#
+# Empty the set to put them back; nothing else needs changing.
+UNLISTED = {"Datasheets", "Standards"}
+
+
+def add(entry):
+    """Copy always, list only if the category is not unlisted."""
+    if entry["category"] not in UNLISTED:
+        manifest.append(entry)
 
 
 def title_from_md(md_path):
@@ -61,9 +84,9 @@ ds_dir = RES / "04 Datasheets"
 for pdf in sorted(ds_dir.glob("*.pdf")):
     dst = DOCS / "datasheets" / pdf.name
     shutil.copy2(pdf, dst)
-    manifest.append({"category": "Datasheets", "title": prettify(pdf.name),
-                     "kind": "pdf", "src": f"docs/datasheets/{pdf.name}",
-                     "size": dst.stat().st_size})
+    add({"category": "Datasheets", "title": prettify(pdf.name),
+         "kind": "pdf", "src": f"docs/datasheets/{pdf.name}",
+         "size": dst.stat().st_size})
 
 # 2. CS Standards — render to PDF (open in-app like datasheets), keep md as a
 #    fallback + docx for download.
@@ -83,7 +106,7 @@ for md in sorted(cs_src.glob("CS-*.md")):
     if docx:
         shutil.copy2(docx, DOCS / "standards" / docx.name)
         entry["docx"] = f"docs/standards/{docx.name}"
-    manifest.append(entry)
+    add(entry)
 
 # 3. Pain points
 pp_md = RES / "01 Pain Points and Improvements" / "src" / "pain-points.md"
@@ -99,7 +122,7 @@ if pp_md.exists():
     if pp_docx:
         shutil.copy2(pp_docx, DOCS / "standards" / pp_docx.name)
         entry["docx"] = f"docs/standards/{pp_docx.name}"
-    manifest.append(entry)
+    add(entry)
 
 # 4. Printables (HTML)
 pr = RES / "05 Printables" / "printables.html"
