@@ -66,6 +66,7 @@ Rendered in headless Chromium (need Playwright):
 | `test_labels.mjs` | The label sheets, down to the pixels: each QR is rasterized and its dark-pixel fraction checked, because a blank SVG passes every DOM assertion. |
 | `test_sanitize.mjs` | The comment sanitizer, running the real vendored DOMPurify. Never assert allowlist policy anywhere else; nothing else can see it. |
 | `test_scan.mjs` | In-app scanning and lot capture. |
+| `test_receiving_ui.mjs` | The receiving desk, measured at three widths and both themes with 7 and 40 rows. Needs `serve_populated.mjs` running. An empty grid cannot overflow and cannot be unreadable, so it has to be filled before it is measured; that is what found both of the desk's layout bugs. |
 | `test_q_landing.mjs` | The public `/Q/<ID>` nameplate page, including its offline watchdog. |
 | `test_route.mjs` | Deep links from a scanned code into the signed-in app. |
 | `test_website.mjs` | The public site: design-system usage, reveals, no-JS fallback, phone layout. |
@@ -120,6 +121,7 @@ python3 tools/check_traceability.py
 | `nocache_server.py` | A static server that actually sends no-cache headers. Use it instead of `python3 -m http.server`, which will happily serve a stale script while you debug code that is not running. |
 | `shoot_ui.mjs` | The camera: PNGs of any tab at four widths and two themes, real SN5 data. Asserts nothing. |
 | `make_mockups.mjs` | The camera plus a picture frame: the annotated screenshots embedded in the READMEs. Captions live in its SHOTS table; rerun it after a UI change and the mockups update themselves. |
+| `shoot_receiving.mjs` | The camera pointed at the receiving desk, which `shoot_ui.mjs` cannot reach: it is a surface you drive into, not a tab in a list state. Needs `serve_populated.mjs` running. Asserts nothing, on purpose. |
 | `print-preview.html` | Open in a browser; its Audit all button runs every seed work order through the print layout ladder and reports page counts. |
 
 `tools/lib/` holds the shared plumbing (`browser.mjs` serves directories and

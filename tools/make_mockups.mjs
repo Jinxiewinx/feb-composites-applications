@@ -75,7 +75,30 @@ const SHOTS = [
   { id: "inventory", kind: "app", badge: 7, vh: 1100,
     js: `setTab("inventory");`,
     title: "Inventory · the storage map",
-    note: "One card per shelf, rack and bin, grouped by site, each showing what is on it and what is wrong with it: expired lots, resin and hardener together, flammables outside the rated cabinet, and how long since anyone confirmed the shelf. The dashed card is everything unhoused." },
+    note: "One card per shelf, rack and bin, grouped by site, each showing what is on it and what is wrong with it: expired lots, resin and hardener together, flammables outside the rated cabinet, and how long since anyone confirmed the shelf. Search matches what is ON a shelf, so a material name leaves the shelves that have some; a shelf with something wrong leads with the warning and wears a red spine; the monthly stock walk is the Confirm button on the card. Everything with no home sits in the bar above." },
+  { id: "receiving", kind: "app", badge: 8, vh: 1000,
+    js: `
+      DB.items = [
+        { id: "BIN-SN6-001", cls: "BIN", name: "RFS Container Shelf A", stage: "Active", site: "RFS container", locKind: "shelf" },
+        { id: "BIN-SN6-002", cls: "BIN", name: "Flammables Cabinet", stage: "Active", site: "Flammables cabinet", locKind: "cabinet", flam: "Yes" },
+        { id: "BIN-SN6-003", cls: "BIN", name: "Jacobs Basement Shelf B3", stage: "Active", site: "Jacobs basement", locKind: "shelf" },
+      ];
+      DB.lots = [];
+      RX = { rows: [], supplier: "Easy Composites", receivedOn: "2026-08-23", buyId: "",
+             defBin: "BIN-SN6-001", lockBin: "", index: "" };
+      const add = (o) => RX.rows.push({ ...rxBlankRow({}), ...o });
+      add({ cls: "FAB", name: "195 Twill Sigmatex 2x2 3k", qty: "3", bin: "BIN-SN6-001", vendorLot: "SG24-1180", unitCost: "61.40" });
+      add({ cls: "FAB", name: "450gsm Biax E-Glass", qty: "2", bin: "BIN-SN6-001", vendorLot: "EG-9902", unitCost: "22.00" });
+      add({ cls: "RSN", name: "IN2 Infusion Resin", qty: "4", bin: "BIN-SN6-002", vendorLot: "IN2-44120", unitCost: "78.00", expiresOn: "2027-04-30" });
+      add({ cls: "RSN:hardener", name: "AT30 Slow Hardener", qty: "2", bin: "BIN-SN6-003", vendorLot: "AT30-8871", unitCost: "41.50", expiresOn: "2027-04-30" });
+      add({ cls: "CON", name: "Blue tack tape", qty: "12", bin: "BIN-SN6-001", unitCost: "9.40" });
+      add({ cls: "CON", name: "", qty: "1", bin: "BIN-SN6-001" });
+      RX.rows[2].cls = "RSN:resin";
+      view = { ...view, tab: "inventory", invView: "desk", mode: "list", id: null };
+      render();
+    `,
+    title: "Receiving · many things, many shelves, one pass",
+    note: "One line per thing in the box, each landing wherever it actually goes. The count says what it will become as you type it — three rolls are three labelled records, twelve rolls of tape are one record with a count — so the confirm is a receipt rather than a reveal. Enter starts the next line already carrying the class and the shelf, which is what makes typing a shop in survivable." },
   { id: "inventory-contents", kind: "app", badge: 8, vh: 1150,
     js: `setTab("inventory"); selectInvRec("BIN-SN6-001");`,
     title: "A shelf · what lives here",

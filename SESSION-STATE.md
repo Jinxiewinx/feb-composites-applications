@@ -10,7 +10,77 @@ questions. Not a transcript.
 ---
 
 Last updated: 2026-08-23
-Newest: **The repo now builds and tests on Windows.** Simon is developing on
+Newest: **The inventory system, rebuilt around getting a shop typed in.**
+Five commits, landed on main, NOT deployed. The season's first job is a full
+physical inventory, and the bar is being faster than a Google Sheet.
+
+  - **Receiving is a page, not a modal.** The old one took ONE shelf for a
+    whole delivery and offered three blank rows of class/name/lot. A mixed
+    Easy Composites order is rolls and jugs and consumables on three
+    different shelves, and the second pass to fix that never happened —
+    which is how the map came to claim things were somewhere they never
+    were. `receiving.js`, registered as a fourth `view.invView`. Sibling of
+    the Budget line grid and inherits its no-render-on-cell-edit rule.
+  - **The class cell writes cls AND role**, which is what finally lets the
+    CS-011 §6 resin/hardener check fire at all: the old flow never asked, so
+    every received lot was born unable to trigger any warning. The confirm
+    runs those checks against what each shelf WOULD hold, before the write.
+  - **Partial receipt** via `buyRef.n` — received quantity is a sum over the
+    records that exist, so Incoming stays a query and undo needs nothing
+    rolled back. Records without `n` behave exactly as before; no migration.
+  - **Reorder moved off the jug and onto the material** (`matKey` +
+    lead-owned `config/restock`, seeded from CS-011 §5). This is PP-02: the
+    old model literally could not express "we are completely out", because
+    an Empty container dropped out of every count and took its lowFlag with
+    it. On-order suppression and lead-time framing are the other half.
+  - **Findability**: every search result carries the shelf NAME; the map has
+    a filter box (which makes `/` work there for the first time); the chips
+    are real filters instead of decoration.
+  - **Export**: two joined sheets, CSV or copy-as-TSV, from the map and from
+    Reports. Simon asked for it explicitly — a team that doubts it can get
+    its data out keeps a shadow spreadsheet.
+
+  Bugs found and fixed along the way, all pre-existing: `shopRefOptions`
+  offered RETIRED shelves and a record filed on one rendered nowhere AND was
+  not counted as unhoused; `--blue` had no dark value (six rules); the map's
+  `chemical warnings` chip was `onclick="void 0"` and `low/expired` filtered
+  nothing; `openScan` tore the camera down between codes, defeating
+  `invMoveHere`; a duplicate `renderSearchResults` further down core.js meant
+  the later declaration silently won; and `test_app.mjs` leaked element
+  values between tests, so the walk-in receive test was quietly creating two
+  lots and passing anyway.
+
+  **OPEN — needs Simon. Two firestore.rules changes are written but NOT
+  verified and NOT deployed**, because this machine has no JDK and no
+  firebase CLI, so the emulator suites could not run. Cases for both are
+  written in `test_wo_rules.mjs`. Do not deploy rules until:
+
+      cd "03 App" && firebase emulators:exec --only firestore \
+        --project demo-feb-work-orders "node ../tools/test_wo_rules.mjs"
+
+  passes. The two changes: `meta/{id}` may advance by more than one (capped
+  at +50, still forward-only, `hasOnly(['next'])`) so a delivery reserves its
+  ids in one transaction rather than one round trip per record; and
+  lots/items/stock delete also allows the person whose `createdBy` is on the
+  record, because undo means delete and lead-only delete quietly made every
+  Undo bar a lead-only — and lying — button (`undoCuts` splices locally
+  before the server refuses). **Rules deploy alone and FIRST, then hosting**:
+  an old client under new rules is fine, a new client under old rules fails
+  every allocation. The client keeps a fallback either way, so the hosting
+  half is safe to ship on its own.
+
+  Two new tools: `test_receiving_ui.mjs` (measures the desk at three widths,
+  both themes, 7 and 40 rows — it found both of the desk's layout bugs) and
+  `shoot_receiving.mjs` (the camera for states a tab sweep cannot reach).
+  Both need `serve_populated.mjs` running.
+
+  Not built, deliberately deferred: the per-record history/audit trail
+  (Phase 5 of the plan). Nothing depends on it and an empty array is a valid
+  start, so it can land any time.
+
+---
+
+Previous: **The repo now builds and tests on Windows.** Simon is developing on
 both machines from here on. Three portability bugs, all the same shape, all
 found by actually running the suite on a bare Windows box:
   1. CRLF. Git's Windows default core.autocrlf=true checked everything out

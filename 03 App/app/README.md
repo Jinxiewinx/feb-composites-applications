@@ -450,9 +450,18 @@ The default view is one card per storage location (shelf, rack, cabinet,
 bin), grouped by CS-011 site, each showing a live summary of its contents
 and its problems: expired lots, resin and hardener sharing a shelf, a
 flammable lot outside the rated cabinet (§6 as warning chips), things
-flagged running low, and how long since anyone confirmed the shelf. A dashed
-"No location" card collects everything unhoused, with parts carrying legacy
-free-text locations counted honestly.
+flagged running low, and how long since anyone confirmed the shelf.
+
+The map is filtered, not a wall. A search box matches a shelf on its own
+name, site or kind **or** on the name, vendor lot or material type of
+anything on it, so "195 twill" leaves the shelves that actually have some;
+the four summary chips are real filters. Cards sort alerts first, then
+never-walked, then stale, then by name — a fixed order, because the map's
+job is to put what is wrong in front of you. A shelf with a bad warning
+leads with the warning and wears a red spine; an empty, recently walked
+shelf drops to a one-line strip, which in a real shop is most of the list.
+**Confirm contents** is on the card, so CS-011 §7.1's monthly walk is one
+click from the map. Everything unhoused sits in a bar above the shelves.
 
 ![A shelf's contents page](../design/inventory-contents-mockup-20260816.png)
 
@@ -460,11 +469,85 @@ Tap a card, or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
 each with a Move button. **Add here** creates a record already located.
 **Move here** scans the label on each thing you are putting down, the
-inverse of the Move flow. **Receive a delivery** stocks a whole order in one
-pass (pick the shelf once, one line per thing, batch labels at the end).
-**Confirm contents** stamps who walked the shelf and when, which is CS-011
-§7.1's monthly stock walk as one tap per location. The Items-list and
-Materials-list toggles keep the old flat tables.
+inverse of the Move flow — and the camera now stays open between codes, so a
+pile is one scan each rather than one modal each. **Confirm contents** stamps
+who walked the shelf and when. The Items-list and Materials-list toggles keep
+the old flat tables.
+
+#### Receiving
+
+![Receiving: many things, many shelves, one pass](../design/receiving-mockup-20260816.png)
+
+**Receive a delivery** is a page, not a dialog: a working sheet with an index
+above it, reached from the map's toolbar, from an Incoming line, or from a
+shelf. It replaced a modal that took ONE destination shelf for a whole
+delivery and offered three blank rows of class / name / vendor lot, which was
+wrong for the commonest case — a mixed Easy Composites order is rolls and
+jugs and consumables belonging on three different shelves, and the second
+pass to fix it never happened.
+
+The sheet is a sibling of the Budget line-item grid and inherits its one
+hard-won rule: a cell edit never re-renders, because onchange fires while Tab
+is already carrying focus. Enter commits a line and opens the next one
+already carrying the class, shelf and supplier, so a stock-take line is name,
+Tab, count, Enter. The class cell offers Fabric / Resin / Hardener /
+Consumable and writes two fields, which is what finally lets the §6
+resin-and-hardener check fire at all — the old flow never asked for `role` or
+`hazard`, so every received lot was born unable to trigger any warning. The
+confirm runs those checks against what each shelf *would* hold, so a
+chemical-storage problem is caught before the write.
+
+Quantity fans out by class, live as you type: 3 in a fabric row reads "3
+records" before the keystroke finishes, because fabric and resin are tracked
+one container per record, and the same 3 collapses to "1 record of 3" for a
+consumable. Ids come in one block per class rather than one transaction per
+record. A paste from an order email becomes rows you then correct by typing —
+a prefill, never a mode. "Arrived" on an Incoming line seeds the *whole*
+order, which is the answer to "no import" that costs nobody anything: it is
+the team's own data, typed once when they bought the thing.
+
+After a submit you stay in the sheet with the caret in a fresh line, and the
+labels are queued on the undo bar rather than auto-printed — right with a box
+open, a screen-hijack across a 200-row session. Undo deletes what it created
+and puts the lines back on the sheet.
+
+Partial receipt works: `buyRef.n` records how many of an ordered line's units
+one record accounts for, so received quantity is a sum over the records that
+exist. Six of ten arriving leaves four outstanding instead of the line
+vanishing. A record written before `n` existed closes its line exactly as it
+always did, so nothing had to be migrated.
+
+#### Running out
+
+The reorder signal lives on the **material**, not on the jug. That is the fix
+for PP-02 — the SN5 sheet where a "Running Low" flag sat unactioned all
+season — and for a reason that had gone unnoticed: `lowFlag` lived on a
+container, and when the last container emptied it dropped out of every count,
+so being nearly out was a chip and being completely out was silence.
+
+Each lot carries a `matKey` ("IN2", "TACKY-TAPE"), and `config/restock` holds
+CS-011 §5's minimums with the standard's own reasoning attached, lead-editable
+because §5 calls them "starting values; tune with usage data". Supplier lead
+time turns "you are low" into "order by 2026-10-05", and a material already on
+its way reads *on order · BUY-SN6-040 · 9d ago* instead of nagging for the
+whole six-week lead time — a nag that is known-stale is how the SN5 flag
+became wallpaper in the first place. **Add to a purchase** creates a
+Submitted `Restock` BUY- with `matKey` on each line; when the delivery is
+received the lot is born with that key and the row disappears by itself.
+
+How full a container is, is a coarse level — Full / Half / Low / Empty — not
+a number, because a number nobody can measure goes stale silently and then
+nobody trusts any of it. Consumables also carry a real count, because boxes
+are countable.
+
+#### Getting the data back out
+
+**Export** on the map, and two rows of buttons under Reports: *Everything on
+every shelf* (one row per physical thing, with the shelf's NAME, its
+warnings, and a link back) and *Locations* (the stock-walk checklist). Both
+as a .csv download or as **Copy for Sheets**, which puts tab-separated rows
+on the clipboard to paste straight into a blank sheet — and works on a phone,
+where a browser download often silently does nothing.
 
 The records themselves are unchanged: **materials** are fabric rolls and
 offcuts, resin and hardener lots, and consumables, which is what makes
