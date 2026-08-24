@@ -4401,6 +4401,136 @@ await t("a walk-in stays a walk-in: no purchase, no price pretended", async () =
   assert(o && !o.buyRef && o.unitCost === undefined, "honestly un-costed, not guessed");
 });
 
+console.log("running out (PP-02: the flag nobody actioned):");
+
+function seedRestock() {
+  seedInventory();
+  DB.items = [{ id: "BIN-SN6-001", cls: "BIN", name: "Container Shelf A", stage: "Active", site: "RFS container" }];
+  DB.lots = [];
+  DB.budget = [];
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "TACKY-TAPE", minCount: 6, label: "Tacky tape", unit: "roll", supplier: "Easy Composites", leadDays: 7 }] };
+}
+const onlyTape = () => restockLow().filter(x => x.rule.matKey === "TACKY-TAPE")[0];
+
+await t("being completely OUT is finally expressible — the state the old model lost", () => {
+  /* invIndex drops Empty lots from every bucket and invSummaryChips filtered
+     Empty out BEFORE counting lowFlag, so the flag went with the last jug:
+     nearly out was a chip, out was silence. Counting per material fixes it. */
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", name: "Tacky tape",
+               stage: "Empty", qty: "Empty", count: 0, location: "BIN-SN6-001" }];
+  const x = onlyTape();
+  assert(x && x.onHand === 0, "none left, and the app can say so: " + JSON.stringify(x && x.onHand));
+  assert(x.records === 1 && !x.unmatched, "the record still exists — it is just empty");
+  const h = invRestockHtml();
+  assert(h.includes("none left"), "and it says it in words, not as a silent absence");
+});
+
+await t("a consumable's count is what is on hand; sealed jugs are what CS-011 §5 counts", () => {
+  seedRestock();
+  DB.lots = [
+    { id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", stage: "Open", count: 4 },
+    { id: "CON-SN6-002", cls: "CON", matKey: "TACKY-TAPE", stage: "Empty", count: 0 },
+  ];
+  assert(onlyTape().onHand === 4, "4 rolls, and the empty box adds nothing");
+  DB.lots.push({ id: "CON-SN6-003", cls: "CON", matKey: "TACKY-TAPE", stage: "Sealed", count: 3 });
+  assert(onlyTape() === undefined || onlyTape().onHand === 7, "7 is above the minimum of 6, so it drops off the list");
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "IN2", minCount: 1 }] };
+  DB.lots = [
+    { id: "RSN-SN6-001", cls: "RSN", matKey: "IN2", stage: "Open" },
+    { id: "RSN-SN6-002", cls: "RSN", matKey: "IN2", stage: "Sealed" },
+  ];
+  const in2 = restockLow().find(x => x.rule.matKey === "IN2");
+  assert(!in2 || in2.onHand === 1, "the OPENED kit is not the buffer — §5 triggers on opened + one unopened");
+});
+
+await t("an order in flight says 'on order', not 'reorder' — the nag that killed SN5", () => {
+  /* A rule that is low but already bought must not nag for the whole six-week
+     Easy Composites lead time. A nag that is known-stale is exactly how
+     "Running Low" became wallpaper for a season. */
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", stage: "Open", count: 1 }];
+  assert(onlyTape().onOrder.length === 0, "nothing in the mail yet");
+  assert(invRestockHtml().includes("order by"), "so it asks to be ordered");
+  DB.budget = [{ id: "BUY-SN6-040", source: "Easy Composites", status: "Ordered", dateOrdered: "2026-08-20",
+    lines: [{ lineId: "ln1", desc: "Tacky tape", matKey: "TACKY-TAPE", qty: "6", total: "50", lotRefs: [] }] }];
+  const x = onlyTape();
+  assert(x.onOrder.length === 1, "now it is in the mail");
+  const h = invRestockHtml();
+  assert(h.includes("on order") && h.includes("BUY-SN6-040"), "and the card says so, naming the purchase");
+  assert(!h.includes("order by"), "and stops asking");
+});
+
+await t("lead time turns 'you are low' into 'order by this date'", () => {
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", stage: "Open", count: 1 }];
+  const by = onlyTape().orderBy;
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(by), "a real date: " + by);
+  assert(by > today(), "in the future");
+});
+
+await t("a rule matching no records stays quiet instead of crying wolf", () => {
+  /* The seed is CS-011 §5's whole list and no shop stocks all of it, so a rule
+     that matches nothing has to be silent — otherwise the card opens on day one
+     with fourteen false alarms, which is exactly the wallpaper this feature
+     exists to stop being. The typo it cannot distinguish from is prevented at
+     the other end instead: matKey is a "sug" field, so entry offers the
+     spellings already in use. */
+  seedRestock();
+  window.RESTOCK_OVERRIDES = { rules: [{ matKey: "IN-2", minCount: 1, label: "IN2 typo" }] };
+  DB.lots = [{ id: "RSN-SN6-001", cls: "RSN", matKey: "IN2", stage: "Sealed" }];
+  assert(!restockLow().some(r => r.rule.matKey === "IN-2"), "no row for a rule nothing matches");
+  assert(shopSuggest("lots", "matKey").includes("IN2"), "and the real spelling is what entry offers");
+});
+
+await t("the card earns its place — nothing low, nothing rendered", () => {
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", stage: "Open", count: 20 }];
+  assert(invRestockHtml() === "", "empty states shrink the page, they do not pad it");
+});
+
+await t("reorder closes its own loop: purchase carries matKey, receiving cancels the row", async () => {
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", stage: "Open", count: 1 }];
+  assert(onlyTape(), "low to begin with");
+  openRestockPurchase();
+  document.getElementById("rs-0").checked = true;
+  document.getElementById("rs-buy").value = "";
+  await submitRestockPurchase();
+  const b = DB.budget[0];
+  assert(b && b.purpose === "Restock", "a Restock purchase, using the purpose that already existed");
+  assert(b.status === "Submitted", "submitted, not ordered — a human still has to buy it");
+  assert(b.lines.length === 1 && b.lines[0].matKey === "TACKY-TAPE",
+    "and the LINE carries the material type, which is what closes the loop");
+  assert(b.lines[0].qty === "6", "enough to CLEAR the card, not just reach the minimum: want 6, have 1");
+  assert(onlyTape().onOrder.length === 1, "the row now reads as on order rather than nagging");
+
+  // Receive it, and the row should disappear without anyone marking anything.
+  rxSetup([{ cls: "CON", name: "Tacky tape", qty: "6", bin: "BIN-SN6-001", matKey: "TACKY-TAPE",
+             buyRef: { buyId: b.id, lineId: b.lines[0].lineId } }]);
+  await rxCommitAll();
+  assert(restockOnHand("TACKY-TAPE").n === 7, "on hand is back up: " + restockOnHand("TACKY-TAPE").n);
+  assert(!onlyTape(), "and the reorder row disappears by itself — nothing to mark fulfilled");
+  window.RESTOCK_OVERRIDES = null;
+});
+
+await t("opening and emptying a container stamps the dates nobody would ever type", () => {
+  seedRestock();
+  DB.lots = [{ id: "CON-SN6-001", cls: "CON", matKey: "TACKY-TAPE", name: "Tacky tape",
+               stage: "Sealed", count: 6, location: "BIN-SN6-001" }];
+  quickAdvance("lots", "CON-SN6-001");
+  const o = recById("lots", "CON-SN6-001");
+  assert(o.stage === "Open" && o.openedOn === today(), "opened, and when");
+  quickAdvance("lots", "CON-SN6-001");
+  assert(o.stage === "Empty" && o.emptiedOn === today(), "emptied, and when");
+  assert(o.qty === "Empty" && Number(o.count) === 0, "and it stops claiming to hold six rolls");
+  undoShopStage();
+  const back = recById("lots", "CON-SN6-001");
+  assert(back.stage === "Open" && back.emptiedOn === "" && Number(back.count) === 6,
+    "undo puts back everything the tap stamped, not just the stage");
+  window.RESTOCK_OVERRIDES = null;
+});
+
 console.log("receiving: paste, and the shelf-locked framing:");
 
 await t("a pasted block becomes rows instead of landing in one cell", () => {
@@ -6225,15 +6355,28 @@ await t("consuming a board line decrements the numeric stock count; undo puts it
   assert(!wo.bom[1].consumed, "and the line is unconsumed again");
 });
 
-await t("a lot line's after-state writes the honest stock signal — stage and lowFlag, never fake math", async () => {
+await t("a lot line's after-state writes the honest stock signal — a level, never fake math", async () => {
+  /* Still no arithmetic on a quantity nobody measured. What changed is WHERE
+     the signal lives: the radio writes the container's coarse level, and
+     "do we need more" is derived from that plus the restock rule. lowFlag
+     survives as a human override. The point of the move is that an EMPTY
+     container still counts — under the old model it dropped out of every
+     surface that raises something, so being nearly out was a chip and being
+     completely out was silence. That is PP-02. */
   const wo = await seedConsume();
   const lid = wo.bom[0].lineId;
   consumeBomLines(wo, [{ lineId: lid, usedQty: "3", lotAfter: "empty" }]);
-  assert(recById("lots", "FAB-SN6-001").stage === "Empty", "the roll is spent");
+  const spent = recById("lots", "FAB-SN6-001");
+  assert(spent.stage === "Empty" && spent.qty === "Empty", "the roll is spent, and says so both ways");
+  assert(spent.emptiedOn, "and when");
+  assert(lotIsLow(spent), "an empty container reads as needing more, instead of vanishing");
   woConsumeUndo();
-  assert(recById("lots", "FAB-SN6-001").stage === "Open", "undo restores the lot");
+  const back = recById("lots", "FAB-SN6-001");
+  assert(back.stage === "Open" && back.qty !== "Empty", "undo restores the lot, level and all");
   consumeBomLines(wo, [{ lineId: lid, usedQty: "3", lotAfter: "low" }]);
-  assert(/reorder/.test(recById("lots", "FAB-SN6-001").lowFlag), "running low flags the reorder");
+  const low = recById("lots", "FAB-SN6-001");
+  assert(low.qty === "Low" && lotIsLow(low), "running low reads as running low");
+  assert(!low.lowFlag, "without stamping the override, which is for a person who looked");
 });
 
 await t("the cure buy-off carries the materials question, prefilled, and consumes on sign", async () => {

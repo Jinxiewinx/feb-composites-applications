@@ -1946,9 +1946,19 @@ function consumeBomLines(w, entries) {
     if (coll === "lots" && e.lotAfter) {
       const rec = recById("lots", l.ref);
       if (rec) {
-        undo.lots.push({ id: rec.id, prevLow: rec.lowFlag || "", prevStage: rec.stage || "" });
-        if (e.lotAfter === "low") { rec.lowFlag = "Yes — reorder"; save("lots", rec, "lowFlag"); }
-        if (e.lotAfter === "empty") { rec.stage = "Empty"; save("lots", rec, "stage"); }
+        undo.lots.push({ id: rec.id, prevLow: rec.lowFlag || "", prevStage: rec.stage || "", prevQty: rec.qty || "", prevCount: rec.count });
+        /* Writes the coarse level rather than stamping lowFlag. lowFlag is now
+           an override for a person who looked at the shelf and knows better;
+           the reorder decision is derived from the level and the restock rule,
+           so that running OUT is expressible — which is the state the old
+           model lost, because an Empty container drops out of every count. */
+        if (e.lotAfter === "low") { rec.qty = "Low"; save("lots", rec, "qty"); }
+        if (e.lotAfter === "empty") {
+          rec.stage = "Empty"; save("lots", rec, "stage");
+          rec.qty = "Empty"; save("lots", rec, "qty");
+          if (!rec.emptiedOn) { rec.emptiedOn = today(); save("lots", rec, "emptiedOn"); }
+          if (rec.cls === "CON" && Number(rec.count) > 0) { rec.count = 0; save("lots", rec, "count"); }
+        }
       }
     }
   }
@@ -1973,7 +1983,13 @@ function woConsumeUndo() {
     saveField("workOrders", w, "bom", arr => (arr || []).map(x => prevBy.has(x.lineId) ? { ...x, ...prevBy.get(x.lineId) } : x));
   }
   for (const s of u.stock) { const r = recById("stock", s.id); if (r) { r.qty = s.prev; save("stock", r, "qty"); } }
-  for (const lt of u.lots) { const r = recById("lots", lt.id); if (r) { r.lowFlag = lt.prevLow; r.stage = lt.prevStage; save("lots", r, "lowFlag"); save("lots", r, "stage"); } }
+  for (const lt of u.lots) {
+    const r = recById("lots", lt.id);
+    if (!r) continue;
+    r.lowFlag = lt.prevLow; r.stage = lt.prevStage; r.qty = lt.prevQty;
+    save("lots", r, "lowFlag"); save("lots", r, "stage"); save("lots", r, "qty");
+    if (r.count !== lt.prevCount) { r.count = lt.prevCount; save("lots", r, "count"); }
+  }
   WO_CONSUME_UNDO = null;
   toast("Materials log undone.");
   render();

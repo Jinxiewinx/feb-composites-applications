@@ -117,6 +117,216 @@ function restockRuleFor(matKey) {
   return restockRules().find(r => r.matKey === matKey) || null;
 }
 
+/* ---------- what is low, and what to do about it ----------
+ *
+ * PP-02, in the team's own words: the SN5 inventory sheet was a season-start
+ * snapshot with a "Running Low" flag nobody actioned, and MEKP sat flagged
+ * REORDER all season. The app reproduced it exactly, for a reason nobody had
+ * noticed: lowFlag lives on a CONTAINER. A container empties, invIndex drops
+ * Empty lots from every bucket, invSummaryChips filters Empty out before it
+ * counts anything — and the flag goes with it. Being nearly out was a chip.
+ * Being completely out was silence.
+ *
+ * So on-hand is counted per MATERIAL, and Empty containers are counted as the
+ * zero they are. */
+
+const LOT_LEVELS = ["Full", "Half", "Low", "Empty"];
+
+/* Is this one container low? Coarse states plus the human override. Empty
+   counts, which is the whole point. */
+function lotIsLow(o) {
+  if (!o) return false;
+  if (o.lowFlag) return true;                       // someone looked and knows better
+  if (o.stage === "Empty") return true;
+  const q = String(o.qty || "");
+  return q === "Low" || q === "Empty";
+}
+
+/* On-hand for one restock rule.
+   FAB and RSN are counted as RECORDS, which is the unit CS-011 §5 states its
+   own thresholds in ("1 unopened kit", "6 rolls"). CON is summed over count,
+   because you can honestly count boxes. Empty containers count for nothing in
+   either case — an empty jug on a shelf is not stock. */
+function restockOnHand(matKey) {
+  const rule = restockRuleFor(matKey);
+  let n = 0, empty = 0, records = 0;
+  for (const o of DB.lots || []) {
+    if (String(o.matKey || "") !== String(matKey)) continue;
+    records++;
+    if (o.stage === "Empty" || String(o.qty) === "Empty") { empty++; continue; }
+    if (o.cls === "CON") n += Number.isFinite(Number(o.count)) ? Number(o.count) : 1;
+    else if (o.stage === "Sealed") n += 1;           // unopened is the unit §5 counts
+  }
+  return { n, empty, records, rule };
+}
+
+/* Is any of this material already in the mail? Derived from the same Incoming
+   query the strip uses, so there is no second copy of "on order" anywhere.
+
+   This suppression is the single most important detail here. A rule that is
+   low but has an order in flight must say "on order", not "reorder" — without
+   it the card nags for the whole six-week Easy Composites lead time, and a nag
+   that is known-stale is precisely how "Running Low" became wallpaper. */
+function restockOnOrder(matKey) {
+  const out = [];
+  for (const x of invIncoming()) {
+    const l = x.line;
+    if (String(l.matKey || "") === String(matKey)) out.push(x);
+  }
+  return out;
+}
+
+/* Order by this date to have it before you need it. Not "you are low" but
+   "order now to have it by the 4th" — the lead-time-aware half of PP-02's root
+   cause, and one line of arithmetic. */
+function restockOrderBy(rule) {
+  const d = Number(rule && rule.leadDays);
+  if (!Number.isFinite(d) || d <= 0) return null;
+  const t = new Date();
+  t.setDate(t.getDate() + d);
+  return t.toISOString().slice(0, 10);
+}
+
+/* Every rule that has tripped.
+
+   A rule matching NO record is skipped, not reported as "none left". The seed
+   is CS-011 §5's whole list and a shop does not stock all of it, so on day one
+   every rule would match nothing and the card would open with fourteen false
+   alarms — which is precisely the wallpaper this feature exists to stop being.
+   The app cannot tell "we have never bought this" from "the matKey is spelled
+   differently on the records", and guessing wrong in either direction is worse
+   than the thing that actually prevents the typo: matKey is a "sug" field, so
+   entry offers the values already in use rather than inviting a fresh spelling.
+
+   The trigger is <= min, matching §5's own wording for the material that
+   matters most ("trigger at opened kit + 1 unopened"): you order AT the
+   minimum, not after breaking it. The shortfall is therefore min - n + 1, so
+   that ordering what the card asks for actually clears the card — asking for
+   exactly the minimum would leave it tripped forever, which is how a reorder
+   list becomes something people stop reading. */
+function restockLow() {
+  const out = [];
+  for (const rule of restockRules()) {
+    const min = Number(rule.minCount);
+    if (!Number.isFinite(min) || min <= 0) continue;
+    const { n, records } = restockOnHand(rule.matKey);
+    if (!records) continue;                 // nothing of it has ever been on a shelf
+    if (n > min) continue;
+    const onOrder = restockOnOrder(rule.matKey);
+    out.push({
+      rule, onHand: n, min, records,
+      unmatched: records === 0,
+      onOrder,
+      short: Math.max(1, min - n + 1),
+      orderBy: restockOrderBy(rule),
+    });
+  }
+  return out.sort((a, b) => (a.onHand - a.min) - (b.onHand - b.min));
+}
+
+/* The card. Same editorial rule invIncomingHtml states for itself: it earns
+   its place only when something is actually low. Empty states shrink the page,
+   they do not pad it. */
+function invRestockHtml() {
+  const low = restockLow();
+  if (!low.length) return "";
+  const need = low.filter(x => !x.onOrder.length);
+  return `<div class="card">
+    <h3>Running out <span class="muted nocaps tny">below the minimum in CS-011 §5 · ${low.length}</span>
+      ${need.length ? `<button class="sm no-print" onclick="openRestockPurchase()">Add ${need.length} to a purchase</button>` : ""}</h3>
+    ${low.map(x => {
+      const r = x.rule;
+      const unit = r.unit ? " " + esc(r.unit) + (x.onHand === 1 ? "" : "s") : "";
+      return `<div class="pmini invrow">
+        <span class="pm-name">${esc(r.label || r.matKey)}</span>
+        <span class="tny ${x.onHand === 0 ? "" : "muted"}">${x.onHand === 0 ? "none left" : x.onHand + unit + " left"} · want ${x.min}</span>
+        ${x.onOrder.length
+          ? `<span class="tny muted">on order · ${x.onOrder.map(o => esc(o.buy.id)).join(", ")}${x.onOrder[0].age != null ? ` · ${x.onOrder[0].age}d ago` : ""}</span>`
+          : `<span class="tny">${r.supplier ? esc(r.supplier) + " · " : ""}${x.orderBy ? `order by ${esc(x.orderBy)}` : "reorder"}</span>`}
+        ${r.why ? `<span class="tny muted" title="${esc(r.why)}">why?</span>` : ""}
+      </div>`;
+    }).join("")}
+    
+  </div>`;
+}
+
+/* Reorder to purchase, and the loop closes itself.
+ *
+ * The line carries matKey, so when the delivery is received the lot is born
+ * with that matKey, on-hand goes back up, and the row disappears on its own.
+ * Nothing to mark fulfilled and nothing to forget — the same reason Incoming
+ * is a query rather than a flag.
+ *
+ * The app proposes; a human confirms. A purchase is a financial act with
+ * somebody's card behind it, so nothing here creates one without a click. */
+function openRestockPurchase() {
+  const need = restockLow().filter(x => !x.onOrder.length);
+  if (!need.length) { toast("Nothing needs ordering that is not already on its way.", "info"); return; }
+  const open = (DB.budget || []).filter(b => b.status === "Submitted");
+  openModal(`<h2>Add ${need.length} thing${need.length === 1 ? "" : "s"} to a purchase</h2>
+    <p class="muted tny">One line per material, at the shortfall. Prices are not guessed —
+      whoever orders fills them in.</p>
+    <div class="lblist">
+      ${need.map((x, i) => `<label class="cutrow">
+        <input type="checkbox" id="rs-${i}" checked>
+        <span><b>${esc(x.rule.label || x.rule.matKey)}</b> ×${x.short}
+          <span class="tny muted">${x.onHand === 0 ? "none left" : x.onHand + " left"} · want ${x.min}${x.rule.supplier ? " · " + esc(x.rule.supplier) : ""}</span></span>
+      </label>`).join("")}
+    </div>
+    <div class="field"><label>Add to</label>
+      <select id="rs-buy">
+        <option value="">A new purchase</option>
+        ${open.map(b => `<option value="${esc(b.id)}">${esc(b.id)} · ${esc(b.item || "")}${b.source ? " · " + esc(b.source) : ""}</option>`).join("")}
+      </select></div>
+    <p class="muted tny">Over $50 still needs #purchasing sign-off before anyone orders it (CS-012 §7.1).</p>
+    <div class="foot">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="submitRestockPurchase()">Add to purchase</button>
+    </div>`);
+}
+
+async function submitRestockPurchase() {
+  const need = restockLow().filter(x => !x.onOrder.length);
+  // Read the whole form before any await: the offline allocId path opens its
+  // own modal over this one.
+  const take = need.filter((x, i) => {
+    const el = document.getElementById("rs-" + i);
+    return el ? !!el.checked : true;
+  });
+  const into = (document.getElementById("rs-buy") || {}).value || "";
+  if (!take.length) { toast("Nothing ticked.", "info"); return; }
+
+  const lines = take.map(x => ({
+    lineId: bomLineId(),
+    desc: x.rule.label || x.rule.matKey,
+    matKey: x.rule.matKey,
+    qty: String(x.short),
+    total: "",
+    lotRefs: [], receivedOn: "",
+  }));
+
+  let b = into ? recById("budget", into) : null;
+  if (b) {
+    b.lines = [...(b.lines || []), ...lines];
+    saveField("budget", b, "lines", arr => [...(arr || []), ...lines]);
+  } else {
+    const id = await allocId("budget");
+    if (!id) return;
+    const suppliers = take.map(x => x.rule.supplier).filter(Boolean);
+    const common = suppliers.length && suppliers.every(s => s === suppliers[0]) ? suppliers[0] : "";
+    b = {
+      id, item: `Restock — ${take.length} item${take.length === 1 ? "" : "s"}`,
+      purpose: "Restock", status: "Submitted", source: common,
+      purchaser: signerName(), cost: "", dateOrdered: "", lines,
+    };
+    (DB.budget = DB.budget || []).push(b);
+    save("budget", b);
+  }
+  closeModal();
+  toast(`${lines.length} line${lines.length === 1 ? "" : "s"} added to ${b.id}. Fill in the prices and get it ordered.`);
+  openRecord("budget", b.id);
+}
+
 /* ---------- the index: location id -> contents ---------- */
 function invEmptyBucket() {
   return { molds: [], boards: [], panels: [], jigs: [], fabric: [], resin: [], consumables: [], parts: [] };
@@ -172,7 +382,7 @@ function invLocWarnings(bin, bucket) {
   /* §6: flammables live in the rated cabinet. */
   const flams = lots.filter(o => o.hazard === "flammable").length;
   if (flams && bin.flam !== "Yes") out.push({ text: `${flams} flammable — not a rated location`, cls: "bad" });
-  const low = lots.filter(o => o.lowFlag).length;
+  const low = lots.filter(lotIsLow).length;
   if (low) out.push({ text: `${low} running low`, cls: "warn" });
   return out;
 }
@@ -192,7 +402,7 @@ function clearInvSelection() { view = { ...view, mode: "list", id: null, edit: f
 /* ---------- the map ---------- */
 function invSummaryChips(idx) {
   const allLots = (DB.lots || []).filter(o => o.stage !== "Empty");
-  const lowExpired = allLots.filter(o => o.lowFlag || lotExpired(o)).length;
+  const lowExpired = allLots.filter(o => lotIsLow(o) || lotExpired(o)).length;
   const unhoused = invBucketCount(idx.un);
   let chem = 0;
   invActiveBins().forEach(b => { chem += invLocWarnings(b, idx.by.get(b.id) || invEmptyBucket()).filter(w => w.cls === "bad").length; });
@@ -255,6 +465,7 @@ function renderInvMap() {
   return `
   ${invToolbar("map")}
   ${invSummaryChips(idx)}
+  ${invRestockHtml()}
   ${invIncomingHtml()}
   ${bins.length ? siteOrder.map(s => `
     <div class="inv-site"><div class="pgrouphd"><span class="pg-name">${esc(s)}</span><span class="pg-n">${bySite.get(s).length} location${bySite.get(s).length === 1 ? "" : "s"}</span></div>
@@ -292,7 +503,7 @@ function invRow(coll, o, pill) {
 }
 function invLotPill(o) {
   if (lotExpired(o)) return `<span class="pill OnHold">expired</span>`;
-  if (o.lowFlag) return `<span class="pill OnHold">low</span>`;
+  if (lotIsLow(o)) return `<span class="pill OnHold">low</span>`;
   return `<span class="pill ${o.stage === "Open" ? "InWork" : "Draft"}">${esc(o.stage || "—")}</span>`;
 }
 function invGroup(title, rows) {
@@ -312,7 +523,7 @@ function renderInvContents(bin) {
   const age = nowhere ? null : invDaysSince(b.walkedAt);
   const addBtn = (cls, label) => `<button class="sm" onclick="newShopRec('${cls === "PNL" || cls === "JIG" ? "items" : "lots"}','${cls}',{location:'${esc(b.id)}'})">+ ${label}</button>`;
   const flag = view.invFlag === "reorder";
-  const lotRows = arr => arr.filter(o => !flag || o.lowFlag || lotExpired(o)).map(o => invRow("lots", o, invLotPill(o))).join("");
+  const lotRows = arr => arr.filter(o => !flag || lotIsLow(o) || lotExpired(o)).map(o => invRow("lots", o, invLotPill(o))).join("");
 
   return `
   <div class="toolbar no-print">

@@ -240,11 +240,23 @@ function quickAdvance(coll, id) {
   const from = o.stage, to = stages[i + 1];
   o.stage = to;
   save(coll, o, "stage");
+  /* One tap, three facts. openedOn and emptiedOn are date fields nobody was
+     ever going to type by hand, and "when was this opened" is exactly what a
+     shelf-life question needs. The stage transition already knows. */
+  const prev = { openedOn: o.openedOn || "", emptiedOn: o.emptiedOn || "", qty: o.qty || "", count: o.count };
+  if (coll === "lots") {
+    if (to === "Open" && !o.openedOn) { o.openedOn = today(); save(coll, o, "openedOn"); }
+    if (to === "Empty") {
+      if (!o.emptiedOn) { o.emptiedOn = today(); save(coll, o, "emptiedOn"); }
+      if (o.qty !== "Empty") { o.qty = "Empty"; save(coll, o, "qty"); }
+      if (o.cls === "CON" && Number(o.count) > 0) { o.count = 0; save(coll, o, "count"); }
+    }
+  }
   /* Undo BAR, not just a toast, and the same one the Parts tab uses. A toast
      disappears on its own; "I fat-fingered that a minute ago" needs something
      that is still there a minute later. Deliberately the same idiom rather than
      a second one for the same action. */
-  SHOP_UNDO = { coll, id, from, to, name: o.name || id };
+  SHOP_UNDO = { coll, id, from, to, name: o.name || id, prev };
   toast(`${o.name || id} → ${to}`);
   render();
 }
@@ -255,6 +267,10 @@ function undoShopStage() {
   if (!o) { toast("That record is gone — nothing to undo.", "error"); render(); return; }
   o.stage = u.from;
   save(u.coll, o, "stage");
+  // Put back everything the advance stamped, not just the stage.
+  if (u.prev) for (const k of ["openedOn", "emptiedOn", "qty", "count"]) {
+    if (o[k] !== u.prev[k]) { o[k] = u.prev[k]; save(u.coll, o, k); }
+  }
   toast(`Undone — ${u.name} back to ${u.from}`);
   render();
 }

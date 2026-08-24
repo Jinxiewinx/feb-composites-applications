@@ -491,7 +491,7 @@ function dashShopStatus(blocked, curing) {
     const idx = invIndex();
     const lots = (DB.lots || []).filter(o => o.stage !== "Empty");
     const expired = lots.filter(lotExpired).length;
-    const low = lots.filter(o => o.lowFlag).length;
+    const low = lots.filter(lotIsLow).length;
     let chem = 0;
     invActiveBins().forEach(b => {
       chem += invLocWarnings(b, idx.by.get(b.id) || invEmptyBucket())
