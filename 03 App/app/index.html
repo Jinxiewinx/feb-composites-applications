@@ -1752,17 +1752,21 @@
   table.sub.rxgrid td { vertical-align: middle; padding: 4px 6px; }
   table.sub.rxgrid thead th { position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 3;
     background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--line); }
-  .rxgrid .rxc-cls { width: 124px; }
+  .rxgrid .rxc-cls { width: 116px; }
   /* The count and what it will become share one cell. A column of its own read
      "1 record" on nine rows in ten — ink spent on something that does not vary
      across rows — and it cost 100px the material name needed more. */
-  .rxgrid .rxc-qty { width: 178px; }
+  .rxgrid .rxc-qty { width: 128px; }
   .rxgrid .rxc-qty input { width: 54px; margin-right: 8px; }
-  .rxgrid .rxc-bin { width: 200px; }
-  .rxgrid .rxc-vendorLot { width: 104px; }
-  .rxgrid .rxc-expiresOn { width: 132px; }
-  .rxgrid .rxc-unitCost { width: 76px; }
-  .rxgrid .rxc-x { width: 30px; }
+  .rxgrid .rxc-bin { width: 170px; }
+  .rxgrid .rxc-vendorLot { width: 92px; }
+  .rxgrid .rxc-expiresOn { width: 122px; }
+  .rxgrid .rxc-unitCost { width: 64px; }
+  /* Wide enough for the button it holds: 13px icon + 18px padding + borders,
+     plus the cell's own 16px. table-layout: fixed never grows a column, so a
+     30px column did not squeeze the button — it let it overflow the table's
+     right edge and hang past the card border at every width. */
+  .rxgrid .rxc-x { width: 52px; }
   /* The sheet is full width, not a pane in a split. Measured: the split left
      it 784px at 1440 and 490px at 1100, which eight columns and a material
      name cannot live in — so it overflowed sideways at the design width, and
@@ -1775,7 +1779,10 @@
      one record, because one line making one record is not news; brand ink the
      moment it diverges, because that IS the news and it is exactly what the
      confirm is about to ask you to approve. */
-  .rx-fan { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* Wraps under the count input in a narrow cell rather than propping the
+     column open — "1 record of 12" was single-handedly costing 50px of the
+     material name's width on every row. */
+  .rx-fan { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .rx-fan.many { color: var(--brand-ink); font-weight: 700; }
   .rx-na { color: var(--faint); }
   .rxgrid tr:focus-within td { background: var(--hover); }
@@ -2243,7 +2250,14 @@
     .stat-row { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   }
 
-  @media (max-width: 900px) {
+  /* The receiving grid stacks to cards below 1200, not 900. Measured with the
+     sidebar open: the grid's fixed columns plus a usable material-name cell
+     need about 1000px of card, which the layout only has above ~1120. Between
+     900 and 1200 the old behaviour was the worst of both — the name squeezed
+     toward zero, then the table shoved its last column through the card edge.
+     The exact band the width sweep did not cover, which is its own lesson:
+     1440 and 900 both passing said nothing about 1000. */
+  @media (max-width: 1200px) {
     /* table.sub scrolls sideways from here down, which is right for a BOM you
        read and wrong for a grid you type into: a cell you cannot see is a cell
        you cannot fill. One card per line instead, labelled from the data-label
@@ -2270,6 +2284,9 @@
     table.sub.rxgrid .rxc-name::before, table.sub.rxgrid .rxc-x::before { display: none; }
     table.sub.rxgrid .rxc-fan { padding-top: 0; }
     table.sub.rxgrid .rxc-x { position: absolute; right: 10px; top: 7px; padding: 0; width: auto; }
+  }
+
+  @media (max-width: 900px) {
     .rxhead { grid-template-columns: 1fr; }
     .hamburger { display: inline-flex; align-items: center; }
     nav.sidebar {

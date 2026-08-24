@@ -32,8 +32,15 @@ function ok(name, cond, detail) {
    boundary in the stylesheet, not a round number. 393 is an iPhone 15 and is
    the only one that also emulates a coarse pointer, which is where the touch
    rules live. */
+/* 1240 and 1000 are here because they were NOT here: the grid's fixed columns
+   overflowed the card through the whole 901-1010 band and starved the name
+   cell to 60px at 1100, and a sweep of 1440 and 900 said nothing about either.
+   1240 exercises the slim grid, 1000 the card-stack band above the drawer. */
 const WIDTHS = [
   { w: 1440, h: 1000, id: "1440", mobile: false },
+  { w: 1240, h: 1000, id: "1240", mobile: false },
+  { w: 1201, h: 1000, id: "1201", mobile: false },
+  { w: 1000, h: 1100, id: "1000", mobile: false },
   { w: 900, h: 1100, id: "900", mobile: false },
   { w: 393, h: 852, id: "393", mobile: true },
 ];
@@ -96,6 +103,26 @@ const MEASURE = `(() => {
   for (const el of desk.querySelectorAll(".rxgrid tbody input, .rxgrid tbody select")) {
     if (!el.checkVisibility || !el.checkVisibility()) r.unreachable++;
   }
+  /* And inside the CARD, not just the viewport. table-layout: fixed lets a
+     too-narrow column push its content past the table edge without widening
+     anything, so the delete button hung over the card border while every
+     viewport-relative check stayed green. Measure against the card. */
+  const nameEl = document.querySelector("[id^=rxn-]");
+  r.nameW = nameEl ? Math.round(nameEl.getBoundingClientRect().width) : 0;
+  const anyTd = document.querySelector(".rxgrid tbody td");
+  r.gridForm = anyTd ? getComputedStyle(anyTd).display === "table-cell" : false;
+  r.spillsCard = [];
+  const card = document.querySelector(".rxsheet");
+  if (card) {
+    const cb = card.getBoundingClientRect();
+    for (const el of card.querySelectorAll("button, input, select")) {
+      if (!el.checkVisibility || !el.checkVisibility()) continue;
+      const b = el.getBoundingClientRect();
+      if (b.right > cb.right + 1 || b.left < cb.left - 1) {
+        r.spillsCard.push({ tag: el.tagName, id: el.id, right: Math.round(b.right), edge: Math.round(cb.right) });
+      }
+    }
+  }
   return r;
 })()`;
 
@@ -131,6 +158,14 @@ const main = async () => {
         ok(`${at} type >= 11px`, a.tiny.length === 0,
           a.tiny.slice(0, 2).map(t => `"${t.t}" at ${t.px}px`).join(", "));
         ok(`${at} every cell reachable`, a.unreachable === 0, `${a.unreachable} cells paint nothing`);
+        ok(`${at} nothing hangs past the card edge`, a.spillsCard.length === 0,
+          a.spillsCard.slice(0, 3).map(x => `${x.tag}#${x.id} right ${x.right} vs card ${x.edge}`).join(", "));
+        /* On-screen is not usable. At 1100 the old widths left the material
+           name input 60px wide — every numeric check green, and you could not
+           read what you typed. Only asserted when the table is a grid;
+           card-stacked rows give the name the full card. */
+        ok(`${at} the name cell is wide enough to type into`, a.gridForm === false || a.nameW >= 150,
+          `name input is ${a.nameW}px`);
         if (width.mobile) {
           ok(`${at} tap targets >= 40px`, a.small.length === 0,
             a.small.slice(0, 3).map(s => `${s.tag}#${s.id} ${s.h}px`).join(", "));
