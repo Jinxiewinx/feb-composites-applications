@@ -83,6 +83,13 @@ globalThis.fb = {
   async deleteFile(path) { calls.push(["deleteFile", path]); },
   async del(coll, id) { calls.push(["del", coll, id]); },
   async allocId(coll, cls) { const key = cls || coll; counters[key] = (counters[key] || 0) + 1; const pfx = cls || ({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]; const id = `${pfx}-SN6-${String(counters[key]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
+  async allocIdBlock(coll, cls, n) {
+    const key = cls || coll; const out = [];
+    for (let i = 0; i < n; i++) { counters[key] = (counters[key] || 0) + 1;
+      out.push(key + "-SN6-" + String(counters[key]).padStart(3, "0")); }
+    calls.push(["allocIdBlock", coll, cls, n]); return out;
+  },
+  async publishPub(recs) { calls.push(["publishPub", recs.length]); },
   async importMany(coll, arr) { calls.push(["importMany", coll, arr.length]); },
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
@@ -98,14 +105,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "labels.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN) = /gm, "$1 = ");
+src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES) = /gm, "$1 = ");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -124,7 +131,7 @@ async function t(name, fn) {
    references at module scope and deleting them would detach render()'s output
    from everything that asserts on it. */
 function resetFields() {
-  for (const k in els) { els[k].value = ""; els[k].files = []; }
+  for (const k in els) { els[k].value = ""; els[k].files = []; els[k].checked = false; }
 }
 function assert(c, m) { if (!c) throw new Error(m || "assertion failed"); }
 const main = el("main"), sidebar = el("sidebar"), topbar = el("topbar");
@@ -4057,84 +4064,394 @@ await t("old items/lots links and scans land on Inventory", () => {
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
 
-await t("receive a delivery: one shelf, several records, all located and dated", async () => {
-  seedInventory();
-  invReceive("BIN-SN6-001");
-  const bin = document.getElementById("rx-bin");
-  if (bin) bin.value = "BIN-SN6-001";
-  const n0 = document.getElementById("rx-name-0"), c0 = document.getElementById("rx-cls-0"), l0 = document.getElementById("rx-lot-0");
-  if (n0) n0.value = "VB160 bagging film"; if (c0) c0.value = "CON"; if (l0) l0.value = "24C-1001";
-  const n1 = document.getElementById("rx-name-1"), c1 = document.getElementById("rx-cls-1");
-  if (n1) n1.value = "IN2 resin 5kg"; if (c1) c1.value = "RSN";
-  const before = DB.lots.length;
-  await invReceiveSubmit();
-  const made = DB.lots.slice(before);
-  assert(made.length === 2, "two named rows became two records (blank rows skipped): " + made.length);
-  assert(made.every(o => o.location === "BIN-SN6-001" && o.receivedOn && o.stage === "Sealed"), "located, dated, sealed");
-  assert(made[0].vendorLot === "24C-1001", "vendor lot carried");
-  assert(made.some(o => o.id.startsWith("CON-")) && made.some(o => o.id.startsWith("RSN-")), "per-class ids");
-});
+/* ---------- the receiving desk ----------
+   The old modal's four tests are folded in here rather than deleted: every
+   guarantee they made (born located, dated, sealed, priced, back-linked, and
+   honestly un-costed when nobody bought it) is still asserted, plus the two
+   they left uncovered — the purchase path never checked the record's own
+   location or receivedOn, and passed only because both paths shared one code
+   path. Forking them, which this does, would have left that unprotected. */
 
-await t("Incoming is a query over purchase lines, reconciled from the records that exist", () => {
+function rxSetup(rows, opts) {
+  RX = {
+    rows: rows.map(r => ({ ...rxBlankRow({}), ...r })),
+    supplier: "", receivedOn: "2026-08-23", buyId: "",
+    defBin: "", lockBin: "", index: "orders", ...(opts || {}),
+  };
+  view = { ...view, tab: "inventory", invView: "desk", mode: "list", id: null };
+}
+async function rxCommitAll(untick) {
+  rxConfirm();
+  if (!RX_PROPOSAL) return null;
+  const n = RX_PROPOSAL.rows.length;
+  for (let i = 0; i < n; i++) {
+    document.getElementById("rxk-" + i).checked = !(untick || []).includes(i);
+  }
+  await rxSubmit();
+  return n;
+}
+function rxSeedShelves() {
   seedInventory();
-  DB.budget = [
-    { id: "BUY-SN6-031", item: "McMaster order", source: "McMaster", status: "Ordered", cost: "34", dateOrdered: "2026-08-01",
-      lines: [
-        { lineId: "lnA", desc: "chip brushes", qty: "4", total: "20", lotRefs: [] },
-        { lineId: "lnB", desc: "vac bag film", qty: "1", total: "89", lotRefs: [] },
-      ] },
-    { id: "BUY-SN6-032", item: "legacy, no lines", status: "Submitted", cost: "10", dateOrdered: "2026-08-18" },
+  DB.items = [
+    { id: "BIN-SN6-001", cls: "BIN", name: "Container Shelf A", stage: "Active", site: "RFS container" },
+    { id: "BIN-SN6-002", cls: "BIN", name: "Flammables Cabinet", stage: "Active", site: "Flammables cabinet", flam: "Yes" },
+    { id: "BIN-SN6-003", cls: "BIN", name: "Basement Shelf B3", stage: "Active", site: "Jacobs basement" },
   ];
-  // lnB was received but the back-link write never landed: only the lot's
-  // buyRef says so. The truth is the record that exists.
-  DB.lots.push({ id: "CON-SN6-090", cls: "CON", name: "vac bag film", stage: "Sealed",
-    buyRef: { buyId: "BUY-SN6-031", lineId: "lnB" } });
-  const inc = invIncoming();
-  assert(inc.length === 1 && inc[0].line.lineId === "lnA", "only the truly unreceived line shows");
-  assert(inc[0].stale === true, "ordered 2026-08-01 wears the stale flag");
-  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "map" };
-  render();
-  const h = main.innerHTML;
-  assert(h.includes("Incoming") && h.includes("chip brushes") && h.includes("$5.00 ea"), "the strip shows the line at its unit price");
-  assert(h.includes("Arrived ▸"), "with its one-tap receive");
-  assert(!h.includes("vac bag film ×"), "the reconciled line is gone");
-});
-
-await t("Arrived graduates the line: lot born priced and linked, line back-linked, Incoming drops it", async () => {
-  seedInventory();
-  DB.budget = [{ id: "BUY-SN6-031", item: "order", source: "McMaster", status: "Ordered", cost: "20", dateOrdered: "2026-08-10",
-    lines: [{ lineId: "lnA", desc: "chip brushes", qty: "4", total: "20", lotRefs: [] }] }];
-  invReceiveLine("BUY-SN6-031", "lnA");
-  assert(document.getElementById("modal").innerHTML.includes("chip brushes"), "the modal arrives prefilled");
-  const bin = document.getElementById("rx-bin");
-  if (bin) bin.value = "BIN-SN6-001";
-  const n0 = document.getElementById("rx-name-0");
-  if (n0) n0.value = "chip brushes";
-  const before = DB.lots.length;
-  await invReceiveSubmit();
-  const made = DB.lots.slice(before);
-  assert(made.length === 1, "one record made");
-  const o = made[0];
-  assert(o.unitCost === 5 && o.costUnit === "ea", "born priced at $5 each (20/4)");
-  assert(o.buyRef && o.buyRef.buyId === "BUY-SN6-031" && o.buyRef.lineId === "lnA", "born knowing which purchase bought it");
-  assert(o.qty === "4", "the count rides into the free-text qty");
-  const bl = DB.budget[0].lines[0];
-  assert(bl.lotRefs.includes(o.id) && bl.receivedOn, "the line is back-linked and dated");
-  assert(invIncoming().length === 0, "and Incoming is empty again");
-});
-
-await t("a walk-in delivery stays a walk-in: no buyRef, no price pretended", async () => {
-  seedInventory();
+  DB.lots = [];
   DB.budget = [];
-  invReceive("BIN-SN6-001");
-  const bin = document.getElementById("rx-bin");
-  if (bin) bin.value = "BIN-SN6-001";
-  const n0 = document.getElementById("rx-name-0");
-  if (n0) n0.value = "donated fabric roll";
-  const before = DB.lots.length;
-  await invReceiveSubmit();
-  const o = DB.lots[before];
+  RX_UNDO = null;
+}
+
+await t("many things onto many shelves in one pass — the whole point", async () => {
+  rxSeedShelves();
+  rxSetup([
+    { cls: "FAB", name: "195 Twill Sigmatex", qty: "2", bin: "BIN-SN6-001", vendorLot: "SG24-1180" },
+    { cls: "RSN:resin", name: "IN2 Infusion Resin", qty: "1", bin: "BIN-SN6-002" },
+    { cls: "CON", name: "Blue tack tape", qty: "6", bin: "BIN-SN6-003" },
+  ]);
+  await rxCommitAll();
+  assert(DB.lots.length === 4, "2 rolls + 1 jug + 1 tape record = 4, got " + DB.lots.length);
+  const byBin = {};
+  DB.lots.forEach(o => { byBin[o.location] = (byBin[o.location] || 0) + 1; });
+  assert(byBin["BIN-SN6-001"] === 2 && byBin["BIN-SN6-002"] === 1 && byBin["BIN-SN6-003"] === 1,
+    "three different shelves in one submit: " + JSON.stringify(byBin));
+  assert(DB.lots.every(o => o.receivedOn === "2026-08-23" && o.stage === "Sealed" && o.createdBy),
+    "every one born located, dated, sealed and attributed");
+});
+
+await t("class decides the fan-out: rolls get their own ids, tape gets a count", async () => {
+  rxSeedShelves();
+  rxSetup([
+    { cls: "FAB", name: "195 Twill", qty: "3", bin: "BIN-SN6-001", vendorLot: "SG-1" },
+    { cls: "CON", name: "Mixing cups", qty: "50", bin: "BIN-SN6-001" },
+  ]);
+  await rxCommitAll();
+  const fab = DB.lots.filter(o => o.cls === "FAB");
+  const con = DB.lots.filter(o => o.cls === "CON");
+  assert(fab.length === 3, "three rolls, three records — got " + fab.length);
+  assert(new Set(fab.map(o => o.id)).size === 3, "three distinct ids, so three labels");
+  assert(fab.every(o => o.vendorLot === "SG-1"), "one vendor lot copied to all three");
+  assert(con.length === 1 && con[0].count === 50, "fifty cups is one record with a count");
+  assert(typeof con[0].count === "number", "and the count is a NUMBER, or a threshold can never compare it");
+});
+
+await t("the fan-out is visible while typing, not sprung at the confirm", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "FAB", name: "195 Twill", qty: "1", bin: "BIN-SN6-001" }]);
+  const rid = RX.rows[0].rid;
+  assert(rxFanText(RX.rows[0]) === "1 record", "starts at one");
+  document.getElementById("rxq-" + rid).value = "4";
+  rxLive(rid);
+  assert(document.getElementById("rxf-" + rid).textContent === "4 records",
+    "typing 4 says 4 records straight away, with no save and no repaint");
+  RX.rows[0].cls = "CON";
+  RX.rows[0].qty = "4";
+  assert(rxFanText(RX.rows[0]) === "1 record of 4", "and the same 4 collapses when it becomes a consumable");
+});
+
+await t("rich capture: supplier, cost, lot, expiry and role all land on the record", async () => {
+  rxSeedShelves();
+  rxSetup([
+    { cls: "RSN:hardener", name: "AT30 Slow Hardener", qty: "1", bin: "BIN-SN6-002",
+      vendorLot: "24AT30-112", supplier: "Easy Composites", unitCost: "28.00", expiresOn: "2027-08-01" },
+  ], { supplier: "Easy Composites" });
+  await rxCommitAll();
+  const o = DB.lots[0];
+  assert(o.role === "hardener", "the class cell wrote role, which the old modal never asked for");
+  assert(o.supplier === "Easy Composites" && o.vendorLot === "24AT30-112");
+  assert(o.unitCost === 28 && o.costUnit === "ea", "cost stored as a number, not a string");
+  assert(o.expiresOn === "2027-08-01" && o.expirySource === "vendor label",
+    "expiry stamped WITH where it came from, so editing the shelf-life table later cannot move it");
+});
+
+await t("a fabric row cannot smuggle in an expiry the schema does not have", async () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "FAB", name: "195 Twill", qty: "1", bin: "BIN-SN6-001", expiresOn: "2027-01-01" }]);
+  await rxCommitAll();
+  assert(DB.lots[0].expiresOn === undefined,
+    "dry cloth has no expiresOn in SHOP_FIELDS_BY_CLASS, and a field the detail page will never render is a black hole");
+});
+
+await t("THE regression: a received lot can finally trigger the CS-011 §6 warnings", async () => {
+  /* The old flow captured class, name and vendor lot only, so a received lot
+     was born with no role and no hazard — and invLocWarnings needs both. Every
+     chemical-storage check was therefore structurally blind to everything the
+     receive flow created. */
+  rxSeedShelves();
+  rxSetup([
+    { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
+    { cls: "RSN:hardener", name: "AT30", qty: "1", bin: "BIN-SN6-002" },
+  ]);
+  await rxCommitAll();
+  const bin = shopById("items", "BIN-SN6-002");
+  const bucket = invIndex().by.get("BIN-SN6-002");
+  const warns = invLocWarnings(bin, bucket);
+  assert(warns.some(w => w.text.includes("resin + hardener together")),
+    "resin and hardener on one shelf now actually warns: " + JSON.stringify(warns));
+});
+
+await t("and the same warning is shown BEFORE the write, not discovered after", () => {
+  rxSeedShelves();
+  rxSetup([
+    { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
+    { cls: "RSN:hardener", name: "AT30", qty: "1", bin: "BIN-SN6-002" },
+  ]);
+  rxConfirm();
+  const h = document.getElementById("modal").innerHTML;
+  assert(h.includes("resin and hardener together"), "the confirm says so up front");
+  assert(h.includes("CS-011 §6"), "and cites the standard that wants them apart");
+  closeModal();
+});
+
+await t("cancelling the confirm writes absolutely nothing", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "FAB", name: "195 Twill", qty: "3", bin: "BIN-SN6-001" }]);
+  rxConfirm();
+  assert(document.getElementById("modal").innerHTML.includes("Create 3 records?"),
+    "the count is stated before anything is written");
+  closeModal();
+  assert(DB.lots.length === 0, "nothing created");
+  assert(RX.rows.length === 1, "and the sheet is untouched");
+});
+
+await t("unticking a line in the confirm leaves it out and keeps the rest", async () => {
+  rxSeedShelves();
+  rxSetup([
+    { cls: "CON", name: "tape", qty: "1", bin: "BIN-SN6-001" },
+    { cls: "CON", name: "did not turn up", qty: "1", bin: "BIN-SN6-001" },
+  ]);
+  await rxCommitAll([1]);
+  assert(DB.lots.length === 1 && DB.lots[0].name === "tape", "only the ticked line landed");
+});
+
+await t("ids come in blocks, not one transaction per record", async () => {
+  rxSeedShelves();
+  calls.length = 0;
+  rxSetup([{ cls: "CON", name: "gloves", qty: "1", bin: "BIN-SN6-001" },
+           { cls: "CON", name: "tape", qty: "1", bin: "BIN-SN6-001" },
+           { cls: "CON", name: "cups", qty: "1", bin: "BIN-SN6-001" },
+           { cls: "FAB", name: "twill", qty: "4", bin: "BIN-SN6-001" }]);
+  await rxCommitAll();
+  const blocks = calls.filter(c => c[0] === "allocIdBlock").length;
+  const singles = calls.filter(c => c[0] === "allocId").length;
+  assert(DB.lots.length === 7, "7 records");
+  assert(blocks === 2 && singles === 0,
+    "one block per class present, not seven round trips — got " + blocks + " blocks, " + singles + " singles");
+});
+
+await t("a short id block writes nothing at all rather than half a delivery", async () => {
+  rxSeedShelves();
+  const real = fb.allocIdBlock;
+  fb.allocIdBlock = async (coll, cls, n) => (await real(coll, cls, n)).slice(0, n - 1);   // one short
+  rxSetup([{ cls: "CON", name: "tape", qty: "1", bin: "BIN-SN6-001" },
+           { cls: "CON", name: "cups", qty: "1", bin: "BIN-SN6-001" }]);
+  await rxCommitAll();
+  fb.allocIdBlock = real;
+  assert(DB.lots.length === 0,
+    "the old flow broke out of its loop mid-batch and reported the truncated count as success");
+  assert(lastToast.includes("Nothing was written"), "and it says so: " + lastToast);
+});
+
+await t("a batch big enough to matter goes through importMany AND publishes its nameplates", async () => {
+  rxSeedShelves();
+  calls.length = 0;
+  rxSetup([{ cls: "CON", name: "gloves", qty: "1", bin: "BIN-SN6-001" },
+           { cls: "FAB", name: "twill", qty: "10", bin: "BIN-SN6-001" }]);
+  await rxCommitAll();
+  assert(DB.lots.length === 11);
+  assert(calls.some(c => c[0] === "importMany"), "one batched write, not eleven");
+  /* importMany does not call pubSync, which save() does on every write. Without
+     this the labels these records print would scan to "no record with this ID
+     yet" — silently, days later, at the shelf. */
+  const pub = calls.find(c => c[0] === "publishPub");
+  assert(pub && pub[1] === 11, "every record got a public nameplate: " + JSON.stringify(pub));
+});
+
+await t("after a submit you are still in the grid, with the caret ready", async () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "CON", name: "tape", qty: "1", bin: "BIN-SN6-001" }], { defBin: "BIN-SN6-001" });
+  await rxCommitAll();
+  assert(view.invView === "desk", "still on the desk — not thrown to the shelf page");
+  assert(RX.rows.length === 1 && !RX.rows[0].name, "a fresh blank line is waiting");
+  assert(RX.rows[0].bin === "BIN-SN6-001", "and it remembers the shelf you were working on");
+});
+
+await t("undo takes the records back out and puts the lines back on the sheet", async () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "FAB", name: "195 Twill", qty: "2", bin: "BIN-SN6-001" }]);
+  await rxCommitAll();
+  assert(DB.lots.length === 2 && RX_UNDO && RX_UNDO.n === 2);
+  await rxUndo();
+  assert(DB.lots.length === 0, "both records gone");
+  assert(calls.filter(c => c[0] === "del" && c[1] === "lots").length === 2, "and deleted server-side too");
+  assert(RX.rows.length === 1 && RX.rows[0].name === "195 Twill",
+    "the line is back on the sheet, so a correction is one edit and not twenty minutes of retyping");
+});
+
+console.log("receiving: reconciling against a purchase:");
+
+function rxSeedOrder() {
+  rxSeedShelves();
+  DB.budget = [{
+    id: "BUY-SN6-031", item: "Easy Composites order", source: "Easy Composites",
+    status: "Ordered", cost: "300", dateOrdered: "2026-08-10",
+    lines: [
+      { lineId: "lnA", desc: "195 Twill Sigmatex", qty: "3", total: "180", lotRefs: [] },
+      { lineId: "lnB", desc: "IN2 Infusion Resin", qty: "2", total: "120", lotRefs: [] },
+      { lineId: "lnC", desc: "Blue tack tape", qty: "10", total: "50", lotRefs: [] },
+    ],
+  }];
+}
+
+await t("Incoming is still a query, reconciled from the records that exist", () => {
+  rxSeedOrder();
+  // The back-link never landed; only the lot's own buyRef says so. The record
+  // that exists is the truth, and the reconciler self-heals from it.
+  DB.lots.push({ id: "CON-SN6-090", cls: "CON", name: "Blue tack tape",
+                 buyRef: { buyId: "BUY-SN6-031", lineId: "lnC", n: 10 } });
+  const inc = invIncoming();
+  assert(inc.length === 2, "the settled line drops off without anyone marking it: " + inc.length);
+  assert(!inc.some(x => x.line.lineId === "lnC"));
+});
+
+await t("a record with no n closes its line, exactly as it always did", () => {
+  /* Every record written before buyRef.n existed means "this line arrived".
+     Counting one as 1-of-10 would resurrect nine phantom units and put closed
+     lines back on the strip for the whole of SN5's history. */
+  rxSeedOrder();
+  DB.lots.push({ id: "CON-SN6-091", cls: "CON", name: "tape", buyRef: { buyId: "BUY-SN6-031", lineId: "lnC" } });
+  assert(!invIncoming().some(x => x.line.lineId === "lnC"), "no migration, no behaviour change on old data");
+});
+
+await t("six of ten arriving leaves four outstanding instead of the line vanishing", async () => {
+  rxSeedOrder();
+  rxSetup([{ cls: "CON", name: "Blue tack tape", qty: "6", bin: "BIN-SN6-001",
+             buyRef: { buyId: "BUY-SN6-031", lineId: "lnC" } }]);
+  await rxCommitAll();
+  const line = invIncoming().find(x => x.line.lineId === "lnC");
+  assert(line, "the line is still there — the old Set said received-or-not and lost the other four");
+  assert(line.got === 6 && line.left === 4 && line.ordered === 10,
+    "6 of 10 in, 4 to come: " + JSON.stringify({ got: line.got, left: line.left }));
+  rxSetup([{ cls: "CON", name: "Blue tack tape", qty: "4", bin: "BIN-SN6-001",
+             buyRef: { buyId: "BUY-SN6-031", lineId: "lnC" } }]);
+  await rxCommitAll();
+  assert(!invIncoming().some(x => x.line.lineId === "lnC"), "and the rest settles it");
+});
+
+await t("a whole order is taken in one pass, not one modal trip per line", () => {
+  rxSeedOrder();
+  RX = null;
+  openReceiving({ buyId: "BUY-SN6-031" });
+  const named = RX.rows.filter(r => r.name);
+  assert(named.length === 3, "all three lines seeded at once: " + named.length);
+  assert(named[0].unitCost === "60", "priced from what the team typed when they bought it");
+  assert(named[0].cls === "FAB" && named[1].cls === "RSN:resin",
+    "class guessed from the description — a prefill, fixed by typing, never a mode");
+  assert(named.every(r => r.buyRef && r.buyRef.buyId === "BUY-SN6-031"), "each one knows its line");
+});
+
+await t("Arrived graduates the line: priced, linked, located, dated, and off the strip", async () => {
+  rxSeedOrder();
+  RX = null;
+  invReceiveLine("BUY-SN6-031", "lnB");
+  assert(view.invView === "desk", "it opens the desk, not a one-row dialog");
+  RX.rows.forEach(r => { if (r.name) r.bin = "BIN-SN6-002"; });
+  await rxCommitAll();
+  const o = DB.lots.find(x => x.buyRef && x.buyRef.lineId === "lnB");
+  assert(o, "the resin landed");
+  assert(o.unitCost === 60 && o.costUnit === "ea", "born priced at 120/2");
+  assert(o.buyRef.buyId === "BUY-SN6-031", "born knowing which purchase bought it");
+  // The two gaps the old tests left: the purchase path never checked either.
+  assert(o.location === "BIN-SN6-002", "and born LOCATED");
+  assert(o.receivedOn === today(), "and the LOT's own receivedOn is stamped, not just the budget line's");
+  assert(o.stage === "Sealed" && o.createdBy, "sealed and attributed on this path too");
+  const bl = DB.budget[0].lines.find(l => l.lineId === "lnB");
+  assert(bl.lotRefs.includes(o.id) && bl.receivedOn, "the line is back-linked and dated");
+  assert(!invIncoming().some(x => x.line.lineId === "lnB"), "and Incoming drops it");
+});
+
+await t("one budget write per purchase, not one per line", async () => {
+  rxSeedOrder();
+  RX = null;
+  openReceiving({ buyId: "BUY-SN6-031" });
+  RX.rows.forEach(r => { if (r.name) r.bin = "BIN-SN6-001"; });
+  calls.length = 0;
+  await rxCommitAll();
+  const writes = calls.filter(c => c[0] === "mutateField" && c[1] === "budget").length;
+  assert(writes === 1, "a three-line order is one transaction, not three — got " + writes);
+});
+
+await t("undoing a purchase receive puts the outstanding quantities back", async () => {
+  rxSeedOrder();
+  rxSetup([{ cls: "CON", name: "Blue tack tape", qty: "10", bin: "BIN-SN6-001",
+             buyRef: { buyId: "BUY-SN6-031", lineId: "lnC" } }]);
+  await rxCommitAll();
+  assert(!invIncoming().some(x => x.line.lineId === "lnC"), "settled");
+  await rxUndo();
+  const line = invIncoming().find(x => x.line.lineId === "lnC");
+  assert(line && line.left === 10, "back to fully outstanding, derived — nothing had to be rolled back");
+  assert(DB.budget[0].lines.find(l => l.lineId === "lnC").lotRefs.length === 0, "and the back-link is reverted");
+});
+
+await t("a walk-in stays a walk-in: no purchase, no price pretended", async () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "FAB", name: "donated fabric roll", qty: "1", bin: "BIN-SN6-001" }]);
+  await rxCommitAll();
+  const o = DB.lots[0];
   assert(o && !o.buyRef && o.unitCost === undefined, "honestly un-costed, not guessed");
+});
+
+console.log("receiving: paste, and the shelf-locked framing:");
+
+await t("a pasted block becomes rows instead of landing in one cell", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "CON", name: "", qty: "1", bin: "BIN-SN6-001" }], { defBin: "BIN-SN6-001" });
+  const rid = RX.rows[0].rid;
+  const clip = "195 Twill Sigmatex\t3\nIN2 Infusion Resin\t2\nBlue tack tape\t6";
+  rxPaste({ clipboardData: { getData: () => clip }, preventDefault() {} }, rid);
+  assert(RX.rows.length === 3, "three lines, three rows — got " + RX.rows.length);
+  assert(RX.rows[0].name === "195 Twill Sigmatex" && RX.rows[0].qty === "3");
+  assert(RX.rows[0].cls === "FAB" && RX.rows[1].cls === "RSN:resin",
+    "class guessed per row, and wrong guesses are fixed by typing in a normal cell");
+  assert(RX.rows.every(r => r.bin === "BIN-SN6-001"), "all landing on the working shelf");
+});
+
+await t("pasting a single word is left to the browser", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "CON", name: "", qty: "1" }]);
+  const out = rxPaste({ clipboardData: { getData: () => "gloves" }, preventDefault() {} }, RX.rows[0].rid);
+  assert(out === null, "no rows invented for an ordinary paste");
+});
+
+await t("arriving from a shelf locks that shelf and drops the index", () => {
+  rxSeedShelves();
+  RX = null;
+  invReceive("BIN-SN6-002");
+  assert(RX.lockBin === "BIN-SN6-002" && RX.defBin === "BIN-SN6-002", "the shelf is already answered");
+  const h = renderInvDesk();
+  assert(!h.includes("mdindex"), "no order list to wade through on a phone");
+  assert(!rxCols().includes("bin"), "and no shelf column, because there is nothing to choose");
+});
+
+await t("an unfinished sheet says so on the storage map", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "CON", name: "half-typed thing", qty: "1", bin: "BIN-SN6-001" }]);
+  assert(rxResumeChip().includes("Finish 1 line"), "twenty minutes of typing does not go invisible");
+  rxSetup([{ cls: "CON", name: "", qty: "1" }]);
+  assert(rxResumeChip() === "", "and an empty sheet says nothing");
+});
+
+await t("the draft survives a reload, and expires rather than nagging forever", () => {
+  rxSeedShelves();
+  rxSetup([{ cls: "CON", name: "tape", qty: "2", bin: "BIN-SN6-001" }]);
+  rxDraftSave();
+  const back = rxDraftLoad();
+  assert(back && back.rows.length === 1 && back.rows[0].name === "tape", "it comes back");
+  const raw = JSON.parse(localStorage.getItem("feb-rx:sheet"));
+  raw.at = Date.now() - 40 * 60 * 60 * 1000;
+  localStorage.setItem("feb-rx:sheet", JSON.stringify(raw));
+  assert(rxDraftLoad() === null, "a sheet nobody came back to in a day is abandoned, not in progress");
+  rxDraftClear();
 });
 
 await t("a shelf label says what it is; a scanned mold's nameplate names the shelf", () => {

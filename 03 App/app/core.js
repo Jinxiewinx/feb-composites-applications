@@ -102,7 +102,22 @@ async function allocId(coll, cls) {
 async function allocIds(coll, cls, n) {
   if (!(n > 0)) return [];
   if (n === 1) { const id = await allocId(coll, cls); return id ? [id] : []; }
-  try { return await fb.allocIdBlock(coll, cls, n); }
+  try {
+    /* The rules cap one counter write at +50, so a stock-take asking for 180
+       consumables is four writes, not one refusal. Still nothing like the 180
+       round trips it replaces, and a block that fails partway leaves the ids
+       it already took unused — a gap, which costs nothing. */
+    const out = [];
+    while (out.length < n) {
+      const want = Math.min(50, n - out.length);
+      const got = await fb.allocIdBlock(coll, cls, want);
+      out.push(...got);
+      // A block that comes back short is a refusal, not a reason to ask again:
+      // looping would spin forever, and the caller reports the shortfall.
+      if (got.length < want) break;
+    }
+    return out;
+  }
   catch (e) {
     const ok = await confirmAsync(`Couldn't reserve ${n} IDs in one go (offline, or the shared counter is on an older ruleset). Fall back to one at a time? It is slower, and if it stops partway you will be told exactly where.`,
       { ok: "Go one at a time", danger: false });

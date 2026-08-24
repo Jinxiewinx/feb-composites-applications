@@ -272,6 +272,7 @@ function invToolbar(active) {
     <span style="flex:1"></span>
     <button class="primary ib" onclick="newShopRec('items','BIN')">+ Location</button>
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
+    ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
   </div>`;
 }
@@ -373,8 +374,25 @@ function invConfirmContents(binId) {
   render();
 }
 
+/* An unfinished sheet is invisible once you navigate away from it, and
+   twenty minutes of typing that nothing on screen mentions is twenty
+   minutes people assume they lost. */
+function rxResumeChip() {
+  if (typeof rxDraftLoad !== "function") return "";
+  const d = (typeof RX !== "undefined" && RX) ? RX : rxDraftLoad();
+  const n = d && d.rows ? d.rows.filter(r => String(r.name || "").trim()).length : 0;
+  if (!n) return "";
+  return `<button class="ib" onclick="invReceive('')">${icon("edit", 15)} Finish ${n} line${n === 1 ? "" : "s"}</button>`;
+}
+
 /* ---------- the tab ---------- */
 function renderInventory() {
+  /* The desk is a doing surface, not a view of anything, so it is checked
+     before selection: you can be receiving without a record being open.
+     But an open record wins — following a shelf chip out of the undo bar has
+     to actually show you the shelf, not the sheet you just left. The sheet is
+     still there when you come back, and the toolbar chip says so. */
+  if (view.invView === "desk" && view.mode !== "detail") return renderInvDesk();
   const sel = invSelected();
   if (view.mode === "detail" && view.id === "NOWHERE") return renderInvContents("NOWHERE");
   if (sel && sel.kind === "bin" && sel.rec) return renderInvContents(sel.rec);
@@ -384,6 +402,7 @@ function renderInventory() {
   }
   if (sel && !sel.rec) { view.mode = "list"; view.id = null; }
   const v = view.invView === "items" || view.invView === "lots" ? view.invView : "map";
+  if (view.invView !== v) view.invView = v;
   if (v === "items") return invToolbar("items") + renderShopList("items");
   if (v === "lots") return invToolbar("lots") + renderShopList("lots");
   return renderInvMap();
@@ -420,26 +439,65 @@ document.addEventListener("keydown", invKeydown);
 
 const INV_STALE_ORDER_DAYS = 14;
 
-function invReceivedKeys() {
-  const set = new Set();
+/* How much of each ordered line has actually turned up.
+
+   This used to be a Set of "buyId|lineId" — presence or absence — so a line
+   was either fully received or fully outstanding. Six of ten arriving made the
+   line vanish and the missing four leave the system permanently.
+
+   `buyRef.n` is how many of the ordered line's units ONE record accounts for:
+   1 for a roll, the count for a box of consumables. Received quantity is then
+   a SUM over the records that exist, exactly as received-ness used to be the
+   EXISTENCE of one. Same direction of trust, so Incoming stays a query and
+   never a second copy of the fact — and undo needs nothing rolled back,
+   because deleting the records re-derives the outstanding count.
+
+   `legacy` is load-bearing. Every record written before buyRef.n existed says
+   only "this line arrived", which is what it has always meant. Counting such a
+   record as 1-of-10 would resurrect nine phantom units and put long-closed
+   lines back on the strip for the whole of SN5's history. So an n-less record
+   CLOSES its line, exactly as it does today: behaviour on all existing data is
+   unchanged, and no migration runs. */
+function invReceivedBy() {
+  const m = new Map();
   for (const coll of ["lots", "stock", "items"]) {
     for (const r of DB[coll] || []) {
       const br = r.buyRef;
-      if (br && br.buyId && br.lineId) set.add(br.buyId + "|" + br.lineId);
+      if (!br || !br.buyId || !br.lineId) continue;
+      const k = br.buyId + "|" + br.lineId;
+      let e = m.get(k);
+      if (!e) { e = { n: 0, legacy: false }; m.set(k, e); }
+      const n = Number(br.n);
+      if (!Number.isFinite(n) || n <= 0) e.legacy = true;
+      else e.n += n;
     }
   }
-  return set;
+  return m;
+}
+
+/* How many the line ORDERED. line.qty is free text, and parseLooseMoney
+   returns null for "2 rolls" rather than guessing — so an uncountable line is
+   one of it, the same assumption buyLineEach already makes. */
+function invLineOrdered(line) {
+  const q = parseLooseMoney(line.qty);
+  return q != null && q > 0 ? q : 1;
 }
 
 function invIncoming() {
-  const recd = invReceivedKeys();
+  const recd = invReceivedBy();
   const out = [];
   for (const b of DB.budget || []) {
     for (const l of b.lines || []) {
       if (!l.lineId || !String(l.desc || "").trim()) continue;
-      if (recd.has(b.id + "|" + l.lineId)) continue;
+      if (l.closedShort) continue;             // short-shipped and written off
+      const e = recd.get(b.id + "|" + l.lineId);
+      const ordered = invLineOrdered(l);
+      const got = e ? (e.legacy ? ordered : e.n) : 0;
+      const left = ordered - got;
+      if (left <= 0) continue;                 // settled, or over — off the strip
       const age = b.dateOrdered ? invDaysSince(b.dateOrdered) : null;
-      out.push({ buy: b, line: l, age, stale: age != null && age > INV_STALE_ORDER_DAYS });
+      out.push({ buy: b, line: l, ordered, got, left,
+                 age, stale: age != null && age > INV_STALE_ORDER_DAYS });
     }
   }
   return out.sort((a, b2) => (b2.age || 0) - (a.age || 0));
@@ -452,11 +510,11 @@ function invIncomingHtml() {
   if (!inc.length) return "";
   return `<div class="card">
     <h3>Incoming <span class="muted nocaps tny">bought, not yet on a shelf · ${inc.length}</span></h3>
-    ${inc.map(({ buy, line, age, stale }) => {
+    ${inc.map(({ buy, line, age, stale, ordered, got, left }) => {
       const each = buyLineEach(line);
-      const n = parseLooseMoney(line.qty);
       return `<div class="pmini invrow">
-        <span class="pm-name">${esc(line.desc)}${n != null && n !== 1 ? ` ×${esc(line.qty)}` : ""}</span>
+        <span class="pm-name">${esc(line.desc)}${ordered !== 1 ? ` ×${esc(String(ordered))}` : ""}</span>
+        ${got ? `<span class="tny">${got} of ${ordered} in · ${left} to come</span>` : ""}
         ${each != null ? `<span class="tny muted">${esc(fmtMoney(each))} ea</span>` : ""}
         <span class="chip" onclick="openRecord('budget','${esc(buy.id)}')">${esc(buy.id)}</span>
         ${buy.source ? `<span class="tny muted">${esc(buy.source)}</span>` : ""}
@@ -467,102 +525,17 @@ function invIncomingHtml() {
   </div>`;
 }
 
+/* "Arrived" opens the desk with the WHOLE order seeded, not one line. The old
+   modal rendered exactly one row and hid its "+ another line" button in
+   precisely the case that needed it most, so a twelve-line order was twelve
+   separate trips through a dialog. */
 function invReceiveLine(buyId, lineId) {
-  const b = recById("budget", buyId);
-  const l = b && (b.lines || []).find(x => x.lineId === lineId);
-  if (!l) return;
-  invReceive("", { buyId, lineId, name: l.desc || "", unitCost: buyLineEach(l), qty: l.qty || "" });
+  openReceiving({ buyId });
 }
 
-/* ---------- receive a delivery ----------
- * An Easy Composites order lands as rolls + jugs + consumables at once, and
- * stocking it used to be N trips through the class picker. Pick the shelf
- * once, one line per thing, and every record is born located and dated; the
- * batch then offers its labels in one sheet. Ids are allocated serially on
- * purpose — the shared counter is the whole point of allocId. */
-let INV_RX_N = 0;
-let INV_RX_FROM = null;   // {buyId, lineId, unitCost, qty} when receiving a purchase line
-function invRxRow(preset) {
-  const i = INV_RX_N++;
-  const p = preset || {};
-  return `<div class="grid" data-rx-row style="grid-template-columns: 1fr 2fr 1fr; gap: 6px">
-    <select id="rx-cls-${i}">
-      <option value="FAB" ${p.cls === "FAB" ? "selected" : ""}>Fabric</option><option value="RSN" ${p.cls === "RSN" ? "selected" : ""}>Resin / hardener</option><option value="CON" ${p.cls !== "FAB" && p.cls !== "RSN" ? "selected" : ""}>Consumable</option>
-    </select>
-    <input id="rx-name-${i}" placeholder="what is it" value="${esc(p.name || "")}">
-    <input id="rx-lot-${i}" placeholder="vendor lot #">
-  </div>`;
-}
-function invReceive(binId, from) {
-  INV_RX_N = 0;
-  INV_RX_FROM = from || null;
-  const bins = invActiveBins();
-  openModal(`
-    <h2>Receive a delivery</h2>
-    <p class="muted tny">One line per thing in the box. Everything lands on the shelf you pick, dated today, sealed.</p>
-    ${from ? `<p class="muted tny">Receiving <b>${esc(from.name)}</b> from ${esc(from.buyId)} — the record lands${typeof from.unitCost === "number" ? ` priced at ${esc(fmtMoney(from.unitCost))} each` : ""} and linked back to the purchase.</p>` : ""}
-    <div class="field"><label>Onto</label><select id="rx-bin">
-      <option value="">—</option>
-      ${bins.map(b => `<option value="${esc(b.id)}" ${binId === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}
-    </select></div>
-    <div id="rx-rows">${from ? invRxRow({ name: from.name, cls: "CON" }) : invRxRow() + invRxRow() + invRxRow()}</div>
-    ${from ? "" : `<div class="no-print" style="margin: 6px 0"><button class="sm" onclick="document.getElementById('rx-rows').insertAdjacentHTML('beforeend', invRxRow())">+ another line</button></div>`}
-    <div class="foot">
-      <button onclick="closeModal()">Cancel</button>
-      <button class="primary" onclick="invReceiveSubmit()">Add them</button>
-    </div>`);
-}
-async function invReceiveSubmit() {
-  const val = k => (document.getElementById(k) || {}).value || "";
-  const loc = val("rx-bin");
-  if (!loc) { toast("Pick the shelf the delivery goes onto.", "error"); return; }
-  const rows = [];
-  for (let i = 0; i < INV_RX_N; i++) {
-    const name = String(val("rx-name-" + i)).trim();
-    if (!name) continue;
-    rows.push({ cls: val("rx-cls-" + i) || "CON", name, vendorLot: String(val("rx-lot-" + i)).trim() });
-  }
-  if (!rows.length) { toast("Nothing to add — name at least one thing.", "error"); return; }
-  const from = INV_RX_FROM;
-  INV_RX_FROM = null;
-  const today = new Date().toISOString().slice(0, 10);
-  const made = [];
-  for (const r of rows) {
-    const id = await allocId("lots", r.cls);
-    if (!id) break;
-    const o = { id, cls: r.cls, name: r.name, vendorLot: r.vendorLot, stage: "Sealed",
-      receivedOn: today, location: loc, createdBy: myEmail() };
-    if (from) {
-      /* The graduation: the record is born knowing what it cost and which
-         purchase bought it. Lot first, back-link second — a lot whose buyRef
-         points at a line is recoverable by the Incoming reconciler even if
-         the line update below never lands; the reverse is fiction. */
-      o.buyRef = { buyId: from.buyId, lineId: from.lineId };
-      if (typeof from.unitCost === "number") { o.unitCost = from.unitCost; o.costUnit = "ea"; }
-      if (from.qty) o.qty = String(from.qty);
-    }
-    (DB.lots = DB.lots || []).push(o);
-    save("lots", o);
-    made.push(o);
-  }
-  if (from && made.length) {
-    const bb = recById("budget", from.buyId);
-    if (bb) {
-      const ids = made.map(o => o.id);
-      const bl = (bb.lines || []).find(x => x.lineId === from.lineId);
-      if (bl) { bl.lotRefs = [...(bl.lotRefs || []), ...ids]; bl.receivedOn = today; }
-      saveField("budget", bb, "lines", arr => (arr || []).map(x =>
-        x.lineId === from.lineId ? { ...x, lotRefs: [...(x.lotRefs || []), ...ids], receivedOn: today } : x));
-    }
-  }
-  closeModal();
-  toast(`${made.length} record${made.length === 1 ? "" : "s"} received onto ${(shopById("items", loc) || {}).name || loc}.`);
-  view = { ...view, tab: "inventory", mode: "detail", id: loc, edit: false };
-  render();
-  // The batch's labels, one sheet, while the box is still open. Non-fatal:
-  // the records are already saved, and a preview that cannot draw its QRs
-  // must not read as a failed delivery.
-  if (made.length && typeof openLabelPreview === "function") {
-    try { openLabelPreview(made.map(o => ({ coll: "lots", o }))); } catch (e) { /* labels print later */ }
-  }
+/* Kept as the one entry point everything else calls. binId locks the sheet to
+   a shelf, which is the framing you get from a shelf card or a scanned shelf
+   label. */
+function invReceive(binId) {
+  openReceiving(binId ? { binId } : {});
 }

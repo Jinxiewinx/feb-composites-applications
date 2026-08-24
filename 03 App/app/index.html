@@ -1696,6 +1696,49 @@
   .loccard.lc-nowhere { border-style: dashed; border-color: var(--warn-border); background: var(--warn-bg); }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
+
+  /* ---- the receiving desk ---- */
+  /* The sheet is the budget line-item grid one size up, and wears the same
+     dress on purpose. Fixed layout so row 200 s long material name cannot
+     re-measure every column above it, and a sticky header so the column
+     meanings survive a long scroll. */
+  .rxhead { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .rxhead .f { margin: 0; }
+  table.sub.rxgrid { table-layout: fixed; }
+  table.sub.rxgrid td { vertical-align: middle; padding: 4px 6px; }
+  table.sub.rxgrid thead th { position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 3;
+    background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--line); }
+  .rxgrid .rxc-cls { width: 124px; }
+  /* The count and what it will become share one cell. A column of its own read
+     "1 record" on nine rows in ten — ink spent on something that does not vary
+     across rows — and it cost 100px the material name needed more. */
+  .rxgrid .rxc-qty { width: 178px; }
+  .rxgrid .rxc-qty input { width: 54px; margin-right: 8px; }
+  .rxgrid .rxc-bin { width: 200px; }
+  .rxgrid .rxc-vendorLot { width: 104px; }
+  .rxgrid .rxc-expiresOn { width: 132px; }
+  .rxgrid .rxc-unitCost { width: 76px; }
+  .rxgrid .rxc-x { width: 30px; }
+  /* The sheet is full width, not a pane in a split. Measured: the split left
+     it 784px at 1440 and 490px at 1100, which eight columns and a material
+     name cannot live in — so it overflowed sideways at the design width, and
+     every fix available amounted to hiding the columns people came to fill. */
+  .rxsheet { margin-top: 10px; }
+  .rxindex .toolbar { margin: 0; }
+  .rxindex-body { max-height: 30vh; overflow: auto; margin-top: 8px; }
+  .rxindex-body .pgrouphd { position: sticky; top: 0; z-index: 1; background: var(--card); }
+  /* Output, never an input — the budget grid s "each" cell restated. Muted at
+     one record, because one line making one record is not news; brand ink the
+     moment it diverges, because that IS the news and it is exactly what the
+     confirm is about to ask you to approve. */
+  .rx-fan { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rx-fan.many { color: var(--brand-ink); font-weight: 700; }
+  .rx-na { color: var(--faint); }
+  .rxgrid tr:focus-within td { background: var(--hover); }
+  .rxfoot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .rxbusy { margin: 0 0 10px; padding: 7px 10px; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--surface-2); }
+  .rxline .pm-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 640px) {
     .locgrid { grid-template-columns: 1fr; }
     /* The id crowds the name into "UT …" on a phone; the row opens the record,
@@ -2157,6 +2200,33 @@
   }
 
   @media (max-width: 900px) {
+    /* table.sub scrolls sideways from here down, which is right for a BOM you
+       read and wrong for a grid you type into: a cell you cannot see is a cell
+       you cannot fill. One card per line instead, labelled from the data-label
+       the renderer emits (labelListTables only walks table.list). */
+    table.sub.rxgrid, .rxgrid thead, .rxgrid tbody, .rxgrid tr, .rxgrid td { display: block; width: auto; }
+    .rxgrid thead { display: none; }
+    .rxgrid tr { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card);
+      box-shadow: var(--shadow); padding: 10px 12px; margin-bottom: 10px; position: relative; }
+    /* Matching table.sub.rxgrid, not .rxgrid: the component rule above is
+       (0,2,2) and would beat a (0,1,1) rule here whatever the source order.
+       Living at the end of the sheet makes the cascade predictable, not
+       automatic. */
+    /* Label ABOVE the field, not beside it. A 96px label gutter is affordable
+       at 900 and ruinous at 393: it left every input about a third of the card
+       wide, so a shelf name read "RFS CONTAI" and a date was clipped to "04".
+       Stacked is taller, and a surface you type into has to be legible before
+       it is compact. This is the .field idiom the modals already use. */
+    table.sub.rxgrid td { border-top: none; padding: 4px 0; text-align: left; }
+    table.sub.rxgrid td::before { content: attr(data-label); display: block; margin-bottom: 2px;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+    /* A cell whose label is blank would otherwise reserve an empty line. */
+    table.sub.rxgrid td[data-label=""]::before { display: none; }
+    table.sub.rxgrid .rxc-name { padding: 0 0 7px; text-align: left; border-bottom: 1px solid var(--line); margin-bottom: 5px; }
+    table.sub.rxgrid .rxc-name::before, table.sub.rxgrid .rxc-x::before { display: none; }
+    table.sub.rxgrid .rxc-fan { padding-top: 0; }
+    table.sub.rxgrid .rxc-x { position: absolute; right: 10px; top: 7px; padding: 0; width: auto; }
+    .rxhead { grid-template-columns: 1fr; }
     .hamburger { display: inline-flex; align-items: center; }
     nav.sidebar {
       position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
@@ -2710,6 +2780,7 @@
 <script src="scan.js"></script>
 <script src="molds.js"></script>
 <script src="inventory.js"></script>
+<script src="receiving.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>
