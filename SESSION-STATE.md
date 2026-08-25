@@ -38,25 +38,6 @@ curling the changed file off the live host rather than trusting the CLI.
 - `.bignum` now carries `.bad`/`.warn`/`.ok` states in both the app CSS and
   `components.css`, mirroring the dashboard's `.bnum` so one word means one
   colour everywhere. The style guide was rebuilt and the design sync ran.
-- **Every storage location is a card on the map**, empty ones included — the
-  collapsed `.locempty` strip is gone. It hid the shelves you most need
-  reminding you own, and it was the one place on that page where clicking the
-  row did nothing. `+ Location` moved off the items list onto the map; the
-  `newOn` flag in a SHOP class spec is what suppresses a class's + button on a
-  list and names where it lives instead.
-- The receiving desk's HOW MANY readout shares one line with its input.
-  It must stay short — "1 of 3", not "1 record of 3" — because the column is
-  deliberately narrow to protect the material-name width, and `test_receiving_ui`
-  fails below a 150px name input at 1201px. Widening that column is what breaks
-  it; the space came out of an oversized count input instead.
-
-**Open finding, reported not done: 25 documented classes have no rules behind
-them.** Validating `conventions.md` against the built CSS turned up the whole
-Receiving, Export, Storage map and Search results families, plus the WO fold
-classes and `table.sub` — all documented to the design agent, all living only
-in the app's own stylesheet. Lifting them into `components.css` is roughly 73
-selectors and a real decision (the Receiving grid is explicitly app plumbing),
-so it was reported rather than done. `conventions.md` now marks them app-only.
 
 ---
 
@@ -92,8 +73,12 @@ it should be tightened.
 
 ## Next up (not started)
 
-- Decide on the 25 app-only classes above: lift them into `components.css` or
-  drop them from `conventions.md`.
+- Decide the four app-only families (Receiving, Export, Storage map, Search
+  results, plus `table.sub`): lift them into `components.css` or drop them from
+  `conventions.md`. 24 classes, roughly 73 selectors, and a real call rather
+  than a chore — the Receiving grid is app plumbing by its own comment, so
+  "lift everything" is not obviously right. `conventions.md` marks them
+  app-only meanwhile, so nothing is misleading while it waits.
 - Port the traveler to the offline single-file `work-orders.html`, which still
   has the old print CSS.
 - `reports.js` "Print status board" still calls raw `window.print()`.

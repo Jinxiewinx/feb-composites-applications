@@ -104,6 +104,57 @@ asymmetry is deliberate: the coercion produces a byte-identical `SZ:` key for
 everything already stored, so there was no migration. `packer.js` has no access
 to `core.js` and does not need it — both its inputs canonicalise first.
 
+## A map that hides things is not a map
+
+Empty shelves used to collapse out of the storage map into a one-line text
+strip, on the argument that an empty recently-walked shelf is a fact rather
+than a card and that in a real shop it is over half the list. Both halves of
+that are true and the conclusion was still wrong.
+
+The map is the picture of the shop. A shelf you cannot see on it is a shelf you
+forget you own, which is the failure the map exists to prevent — and the shelves
+that vanished were exactly the ones with nothing on them to jog the memory.
+
+The strip also quietly broke the page's one interaction. A `.loccard` is
+clickable anywhere: `.lc-open` is a real button on the name whose `::after` is
+absolutely positioned over the whole card, with `.lc-act` (Confirm) as a sibling
+raised above it, so both are real buttons, both tab-reachable, and nothing calls
+`stopPropagation`. The strip reused `.lc-open` with `::after { position: static }`,
+which turns the stretched link back into a plain text link — so "click a location
+to see what is on it" was true at the top of the page and false further down.
+That asymmetry is invisible in a screenshot and does not fail any assertion;
+it was found with `elementFromPoint` at each card's corners and centre.
+
+Empty locations are quieter cards now (`.loccard.isempty`), and emptiness breaks
+ties *within* an attention rank rather than overriding it — an unwalked empty
+shelf still needs walking, so it should not sink below a walked full one.
+
+Related: **+ Location** lives on the map, not on the items list. A class whose
+records are better created elsewhere carries `newOn` in its SHOP spec, and
+`renderShopList` prints where instead of offering a button that would strand the
+user on the wrong page afterwards.
+
+## The receiving count column cannot be widened
+
+`.rxc-qty` holds the count input and the live readout of what the line will
+become. Both must sit on one line: it wrapped once, and a cell reading
+`12 / 1 record / of 12` reads as broken rather than as information.
+
+The obvious fix is the wrong one. That column is deliberately narrow because
+`table.sub.rxgrid` is `table-layout: fixed`, so every pixel it takes comes off
+the material-name input — the only column a person actually types prose into.
+`tools/test_receiving_ui.mjs` asserts the name input is at least 150px at
+1201px wide, and it guards a real regression: at 1100 the old widths left that
+input 60px while every numeric check passed. Adding 8px to `.rxc-qty` takes the
+name to 143 and fails it.
+
+So the fit has to come from inside the cell. Two things buy it: the readout is
+kept short (`1 of 12`, with the sentence moved to the element's `title`), and
+the count input is sized for the two or three digits a delivery line carries
+rather than the 54px it had. `white-space: nowrap` on the cell is what stops the
+span dropping to a second line — the break was between the input and the text,
+not inside either.
+
 ## Cell edits must not re-render
 
 The Budget line grid and the Receiving sheet both follow this: a cell edit never

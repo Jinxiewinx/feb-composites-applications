@@ -413,19 +413,13 @@ then — within a rank — shelves with something on them before empty ones, the
 name. A fixed order, because the map's job is to put what is wrong in front of
 you. A shelf with a bad warning leads with the warning and wears a red spine.
 
-**Every location is a card, and clicking anywhere on it opens the shelf.** Empty
-shelves used to collapse into a one-line text strip on the argument that in a
-real shop they are most of the list. That cost more than it saved: the map is
-the picture of the shop, and a shelf you cannot see on it is a shelf you forget
-you own. The strip was also the one place on the page where clicking the row did
-nothing — only the name itself was a target — so "click a location to see what is
-on it" stopped being true halfway down. An empty shelf is a quieter card now
-(inset surface, no shadow), never a hidden one, and its site header counts them.
+Every location is a card, including the empty ones, and clicking anywhere on a
+card opens that shelf. An empty shelf is drawn quieter — inset surface, no
+shadow — and its site header counts how many of the site's locations are empty.
 
-New shelves are created here, with **+ Location**, rather than from the items
-list: the map is the picture of the shelves, the items list is about what sits
-on them. **Confirm contents** is on the card, so CS-011 §7.1's monthly walk is
-one click from the map. Everything unhoused sits in a bar above the shelves.
+New shelves are created here, with **+ Location**. **Confirm contents** is on
+the card, so CS-011 §7.1's monthly walk is one click from the map. Everything
+unhoused sits in a bar above the shelves.
 
 ![A shelf's contents page](../design/inventory-contents-mockup-20260825.png)
 
