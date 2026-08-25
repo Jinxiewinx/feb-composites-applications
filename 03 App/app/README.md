@@ -22,7 +22,7 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
-![Dashboard: the mission-control board](../design/dashboard-mockup-20260816.png)
+![Dashboard: the mission-control board](../design/dashboard-mockup-20260825.png)
 
 The landing page is the board. It shares the app's ordinary white-card
 surfaces (Simon's call: the mission-control layout, not the navy panel it
@@ -111,7 +111,7 @@ when they disagree rather than quietly overwriting one.
 
 ### Work Orders
 
-![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260816.png)
+![A work order: the rail grouped by part, and the whole traveler in one scroll beside it](../design/workorder-detail-mockup-20260825.png)
 
 Work Orders is the manufacturing traveler: layup stack, BOM, step buy-offs
 stamped with who signed them, blocker enforcement, enforced cure holds, and a
@@ -203,7 +203,7 @@ laser. Hue is never the only thing carrying the meaning.
 
 ### Parts
 
-![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260816.png)
+![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260825.png)
 
 Parts is last season's Part Tracker reborn, and it leads the Build group
 because the part is where the work starts. Each part carries three parallel
@@ -267,27 +267,45 @@ array.
 
 ### Molds
 
-![Molds: molds, plans and boards on one screen](../design/molds-mockup-20260816.png)
+![Molds: a mold, its stage, and its mold file on one screen](../design/molds-mockup-20260825.png)
 
-Molds holds the whole physical inventory of mold-making, merged from what
-used to be two tabs (Stock and Molds) into one Parts-style split: a
-persistent rail of three groups (molds, stack plans, tooling boards) on the
-left, the selected record on the right. Arrow keys or j/k walk the rail, `1`
-advances the selected mold one named stage with the same undo bar as the
-button, `/` searches, esc goes back. On a phone it collapses to
-list-then-detail, exactly like Parts.
+Molds is a Parts-style split: a persistent rail on the left, the selected
+record on the right. The rail groups every mold by the stage it is at, in
+process order, so it reads as the pipeline it is; a stage nobody is at gets no
+header. Arrow keys or j/k walk the rail, `1` advances the selected mold one
+named stage with the same undo bar as the button, `/` searches, esc goes back.
+On a phone it collapses to list-then-detail, exactly like Parts.
+
+The grouping is a *partition* of the already stage-sorted list rather than a
+filter run per stage, which is what guarantees the arrow keys walk exactly the
+rows on screen. Group headers are drawn by the body renderer and are not rows,
+so the keyboard cannot land on one.
 
 A **mold** used to exist only as free text inside one work order, so two work
 orders using the same mold held two copies of the truth and its location was
 wrong the moment anybody moved it. Now it is a record with its own stage,
 home location, sealing date and a count of parts pulled off it; the work
-orders and parts that used it are a live join, and its stack plan's exploded
-view, blanks table, drawings and STL export sit right on it.
+orders and parts that used it are a live join.
 
-A **board** is the raw material: a full 4×8 sheet and an offcut are the same
-kind of record, so remnants come back into stock instead of piling up.
-Boards have real detail pages now, which is where a scanned BRD- label and
-the mold's "Cut from board" chip land.
+A mold's **stack plan is part of the mold**, not a record beside it. The
+rotatable 3D view of the mold sitting inside its translucent stock, the
+exploded stack, the blanks table, the drawings and the STL export are all on
+the mold's own page. They used to be one click away on a separate plan record,
+which meant asking to see a mold rotate moved you off the mold and — because
+the rail put the selected plan back into the orphan list to keep it from
+vanishing — grew a header reading "Plans with no mold" over the plan you had
+just opened *from* its mold. Only a plan with no mold to be reached through
+gets a row of its own now.
+
+**Board grade is typed, not picked from a list.** The shop mostly runs 30 and
+60 pcf, but the rack has always held sheets of other grades and the dropdown
+simply refused to say so — a mold set to 45 matched no board at all and
+silently re-prefilled as 30. Entry is free, with the catalogue plus whatever is
+actually on the rack offered as suggestions, and every value collapses to one
+canonical number on the way in. That last part is not optional: the board
+grouping key, the planner's rack filter and the packer's bucket key all compare
+density, so `"60"` and `60` landing as two values would split one rack in two
+and report a shortfall in front of a full shelf.
 
 **Plan a mold** takes an STL (or a typed rectangular block), picks board
 thicknesses that waste the least, splits tall molds at the ShopSabre's
@@ -300,11 +318,19 @@ design instead of being back-filled after machining. Three sample molds ship
 with the app, so the planner can be tried without exporting anything from
 Fusion.
 
-![Molds: the season view when nothing is selected](../design/molds-overview-mockup-20260816.png)
+![Molds: the season view when nothing is selected](../design/molds-overview-mockup-20260825.png)
 
-With nothing selected, the right pane is the season: where the live molds
-sit across the stages, the board on hand by thickness and density, and
-whether the planned blanks actually fit the rack.
+With nothing selected, the right pane is the season: where the live molds sit
+across the stages, how much board is on hand (a tile that opens the rack in
+Inventory), and whether the planned blanks actually fit it. Below that,
+"Needs a hand" — rendered only when it has something in it — collects the four
+questions that were previously answered in four places or nowhere: molds with
+no home location, molds past "Designed" with no stack plan on file, plans
+carrying a slicer warning nobody has read, and plans with no mold to be
+reached through.
+
+The rack itself is not here. A board is a thing on a shelf, so it lives in
+Inventory beside the items and the materials; see below.
 
 ### Tickets
 
@@ -320,7 +346,7 @@ and dragging a card between columns still changes its status. There is no
 separate list view any more; the rail is the list, with open/late/mine/done
 chips, a kind filter, search, and the arrow keys.
 
-![Tickets: the rail and the board](../design/tickets-mockup-20260816.png)
+![Tickets: the rail and the board](../design/tickets-mockup-20260825.png)
 
 Each ticket's page opens with a lineage bar: a sub-ticket names its parent,
 hyperlinked (that is the route to the top ticket from anywhere, including a
@@ -334,7 +360,7 @@ date defaults to the parent's and is capped there. The comment thread reads
 newest-first with the composer at the top, and on a phone the description and
 discussion come before the metadata instead of five screens after it.
 
-![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260816.png)
+![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260825.png)
 
 Issues close from the page you read them on. An open issue carries a resolve
 band: the disposition select saves the moment it changes (disposed-but-open
@@ -373,7 +399,7 @@ season by station, and the week by person. They were separate Timeline and
 Weekly Plan tabs until 2026-08; they always rendered the same schedule
 records, and old links to either still land in the right view.
 
-![Schedule: the season by station](../design/schedule-mockup-20260816.png)
+![Schedule: the season by station](../design/schedule-mockup-20260825.png)
 
 The season view is the production schedule as a station by week grid: stations are the
 rows, weeks are the columns, and tapping a cell picks the part that runs at that
@@ -455,7 +481,7 @@ older uploads working and makes re-listing a one-line change.
 
 ### Inventory
 
-![Inventory: the storage map](../design/inventory-mockup-20260816.png)
+![Inventory: the storage map](../design/inventory-mockup-20260825.png)
 
 Inventory is the storage map, and it absorbed the Items and Materials tabs.
 The default view is one card per storage location (shelf, rack, cabinet,
@@ -475,7 +501,7 @@ shelf drops to a one-line strip, which in a real shop is most of the list.
 **Confirm contents** is on the card, so CS-011 §7.1's monthly walk is one
 click from the map. Everything unhoused sits in a bar above the shelves.
 
-![A shelf's contents page](../design/inventory-contents-mockup-20260816.png)
+![A shelf's contents page](../design/inventory-contents-mockup-20260825.png)
 
 Tap a card, or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
@@ -486,9 +512,39 @@ pile is one scan each rather than one modal each. **Confirm contents** stamps
 who walked the shelf and when. The Items-list and Materials-list toggles keep
 the old flat tables.
 
+#### Boards
+
+![Boards: the tooling rack](../design/inventory-boards-mockup-20260825.png)
+
+The fourth toggle is the tooling rack, which used to be a third group on the
+Molds rail. A board is a thing on a shelf, and this is where the shelves are —
+the data had agreed for a while, since the storage map and the contents pages
+have bucketed boards by location for as long as boards have had one. Only the
+list sat in the wrong tab, crowding a rail that is meant to be about molds.
+
+A full 4×8 sheet and an offcut are the same kind of record, so remnants come
+back into stock instead of piling up. The list is one row per **size**, because
+a board is its length, width, thickness and density; the individual documents
+are one click deeper, on the size pane, because a BRD- label is stuck to a
+physical board and a mold points at the one it was cut from. Sizes are grouped
+by **grade**, since that is the one axis the packer refuses to substitute
+across (CS-004 — 60lb seals better, and you cannot swap it in silently), which
+makes it the axis that decides whether a job can be cut at all.
+
+Molds keeps exactly one number: the m² on hand, as a tile that opens this list.
+"Have we got board" is a mold-making question even though the rack is not a
+mold-making record.
+
+Routing did *not* move. `BRD-` and `STK-` still resolve to the one `stock`
+collection — repointing them would break deep-link redemption, the Move-here
+flow and the id-prefix cross-check — so `stock` is now one collection with two
+homes, split on the id at paint time. A board goes to Inventory, a stack plan
+to its mold. That also fixed a standing wart: tapping a board on a shelf's
+contents page used to throw you out of Inventory into Molds.
+
 #### Receiving
 
-![Receiving: many things, many shelves, one pass](../design/receiving-mockup-20260816.png)
+![Receiving: many things, many shelves, one pass](../design/receiving-mockup-20260825.png)
 
 **Receive a delivery** is a page, not a dialog: a working sheet with an index
 above it, reached from the map's toolbar, from an Incoming line, or from a
@@ -660,7 +716,7 @@ rows. Install steps, the trial-tab rollout and the handover note are in
 
 ## Labels
 
-![The label sheet: IDs, key facts, QR codes, and the calibration bar](../design/labels-mockup-20260816.png)
+![The label sheet: IDs, key facts, QR codes, and the calibration bar](../design/labels-mockup-20260825.png)
 
 Every physical thing gets a 4 x 1 inch label carrying its ID, its name, the fact
 that actually identifies it, and a QR code that resolves to the record. On a part
@@ -692,7 +748,7 @@ hold even a version 1 code with its quiet zone.
 
 ## Scanning
 
-![The public nameplate: what a phone camera opens, signed out](../design/scan-mockup-20260816.png)
+![The public nameplate: what a phone camera opens, signed out](../design/scan-mockup-20260825.png)
 
 Scanning a label with a plain phone camera goes to `/Q/<ID>`, which Firebase
 Hosting rewrites to `q.html`. That page works **with no account and no signal**.
