@@ -423,6 +423,15 @@ const fb = {
     const snap = await getDoc(doc(db, "config", key));
     return snap.exists() ? snap.data() : null;
   },
+  /* getConfig is a one-shot read, which is right for season/slack/tracker —
+     they are read once at boot and acted on. config/release is different: the
+     whole point is that a session already running finds out a new version
+     shipped, and a session that has been open on a bench tablet all afternoon
+     is exactly the one that needs telling. One document, one listener. */
+  watchConfig(key, cb) {
+    return onSnapshot(doc(db, "config", key), s => cb(s.exists() ? s.data() : null),
+      () => { /* a config the roster can't read is not worth a console error */ });
+  },
   async setConfig(key, data) {
     await setDoc(doc(db, "config", key), {
       ...data, updatedAt: serverTimestamp(), updatedBy: fb.user ? fb.user.email : "?",

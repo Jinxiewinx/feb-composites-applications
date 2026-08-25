@@ -45,12 +45,12 @@ The modules under it:
   for colourblind safety.
 - **This week at RFS** — only the booked stations.
 - **Activity** — a cross-app feed of what changed, one event per record per day,
-  with watched tickets that changed pinned on top.
+  with watched issues that changed pinned on top.
 - **Countdown** — T-minus, the next milestone, and three all-season counters
   (days since a missed deadline, layups banked, sign-offs). A lead sets the
   season name, date and milestones in one modal.
 - **Money** — the unreimbursed sum plus the $50 approval rule.
-- **Launchpad** — filtered jumps (my tickets, late WOs, the reorder list, the
+- **Launchpad** — filtered jumps (open issues, late WOs, the reorder list, the
   week plan), a jump to Documents, and the pinned Google links.
 - **Shop knowledge** — rotates a fact a day, most of them mined from the team's
   own SN5 documentation. On competition day the board wears gold and tells you
@@ -65,8 +65,8 @@ every attempt at making it. Everything else hangs off it:
 
 ```
 Part ─┬─ Work orders   one RUN each at making it (a remake is a second run)
+      │    └─ Issues    what went wrong on that run, and how it was disposed
       ├─ Mold ── Mold file ── Drawings
-      ├─ Tickets
       └─ Scheduled weeks
 ```
 
@@ -198,8 +198,8 @@ to be complete, and an empty plan says nothing rather than $0.00.
 
 Its **Runs** section is the rest of the picture: every run against the part with
 status, due date and ply count. The **Mold** section holds the mold and its
-**mold file**, with buttons straight to the 3D view and the drawings; tickets
-and scheduled weeks live under **Links & files**.
+**mold file**, with buttons straight to the 3D view and the drawings;
+scheduled weeks live under **Links & files**.
 
 ("Mold file" is the stack plan record, `STK-…`: the slicer's output for how the
 mold gets cut out of tooling board. The lineage bar and the part page call it
@@ -280,54 +280,50 @@ a slicer warning nobody has read, and plans with no mold to be reached through.
 The rack itself is not here. A board is a thing on a shelf, so it lives in
 Inventory beside the items and the materials; see below.
 
-### Tickets
+### Issues
 
-Tickets is a jira-style tracker holding two kinds: projects (R&D, process fixes,
-outreach, and they can have sub-tickets) and issues (a production
-nonconformance, which needs a work order, a disposition and a documented root
-cause before it can close). The tab is the same master-detail split as Parts,
-Work Orders and Molds: a rail of every ticket on the left, grouped Projects then
-Issues with each sub-ticket nested under its parent, and the open ticket beside
-it. With nothing selected the pane is the kanban board (To Do, In Progress,
-Collecting Data, On Hold, Done, Cancelled), and dragging a card between columns
-changes its status. The rail is the list, with open/late/mine/done chips, a kind
-filter, search, and the arrow keys.
+An issue is a production nonconformance: something went wrong on a run, and it
+needs a work order, a disposition and a documented root cause before that run
+can close. Issues live **on the work order they hold up** — the Issues section,
+straight after Steps.
 
-![Tickets: the rail and the board](../design/tickets-mockup-20260825.png)
+The section lists every issue on the run, flat, open ones first. Each row names
+it, says what state it is in, links back to the step it was filed from if it had
+one, and — for an open one — carries the disposition select and the root-cause
+field right there, with one Resolve button. A resolved row reads "resolved:
+&lt;method&gt;" with a quiet Reopen. The section header counts disposed/total and
+wears a warning dot while anything is undisposed; that dot overrides the fold,
+so an open issue can never be tucked out of sight.
 
-Each ticket's page opens with a lineage bar: a sub-ticket names its parent,
-hyperlinked, and an issue walks Issue, then its run, then the part the run was
-building, ghosting whatever is not linked yet. A jump bar counts what is in each
-section (an issue that still cannot close carries a warning dot) and digits 1-5
-scroll to them. Sub-tickets are a real children table with status, due date,
-lateness, priority and assignees, and the New sub-ticket modal starts from the
-parent: related parts and work orders carry over, the due date defaults to the
-parent's and is capped there. The comment thread reads newest-first with the
-composer at the top, and on a phone the description and discussion come before
-the metadata instead of five screens after it.
+**Raising one** is the ⚠ button at the bottom of the section, or the flag button
+beside any step's camera. Both are one small modal — title, what happened,
+photos attached at creation, priority — because the work order, the assignee,
+the subteam and the watchers are all already known, and because you are mid-run
+and should not be sent somewhere else. A step-filed issue remembers its step and
+shows as a chip on it, amber while open and a check once disposed.
 
-![A ticket: genealogy, sub-tickets, the thread](../design/ticket-detail-mockup-20260825.png)
-
-Issues close from the page you read them on. An open issue carries a resolve
-band: the disposition select saves the moment it changes (disposed-but-open is a
-real state — it is what lets the work order complete while the ticket stays open
-for follow-up), the root cause is the field right above, and one Resolve button
-closes through the same gate and single Slack announcement as every other path.
-A closed issue reads "Resolved" with a quiet Reopen; reopening clears the
-disposition, so a work order can never complete over an issue somebody just said
-is not actually fixed — the withdrawn method survives as a comment.
-
-Filing got cheap at the bench too. Every work-order step carries a small flag
-button beside its camera: one modal with the title prefilled from the step, the
-defect photos attached at creation, priority, and nothing else — the work order,
-assignee, subteam and watchers are already known. The issue remembers which step
-it came from, shows as a chip on that step (amber while open, a check once
-disposed), and you stay on the work order. And when someone sets a work order to
-Complete while issues are still open, the refusal opens a closeout modal instead
-of a dead end: one row per issue with its step context, disposition and root
-cause inline, per-row Resolve or "Resolve all & complete work order", and a
+**Closing one** goes through a single gate, wherever you do it. Set a work order
+to Complete while issues are still open and the refusal opens a closeout modal
+rather than a dead end: one row per issue with its step context, disposition and
+root cause inline, per-row Resolve or "Resolve all & complete work order", and a
 confirmed "Cancel ticket (false alarm)" for the ones that turned out not to be
 real. Every resolve saves immediately, so backing out mid-way loses nothing.
+Reopening clears the disposition — a work order must never complete over an
+issue somebody has just said is not actually fixed — and the withdrawn method
+survives as a comment.
+
+Disposed-but-open is a real state, and it is what lets a work order complete
+while the issue stays open for follow-up.
+
+**Finding one** when you do not know its run: the Work Orders rail has an
+`issues` chip that filters to runs with something still open, and the Dashboard
+carries issues in its deadline list and its activity feed like any other record.
+
+> **The Tickets tab was shelved in v1.0.0.** The app tracked projects as well as
+> issues until then; it tracks work now. Every existing ticket is still in
+> Firestore and still opens from a link or a chip — the tab is only off the
+> sidebar. See [SHELVED.md](SHELVED.md) for what was paused and how to bring it
+> back.
 
 ### Schedule
 

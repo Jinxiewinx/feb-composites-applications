@@ -97,6 +97,9 @@ const STATES = [
    the single-tab mode already answers better. Kept as a literal list rather
    than read out of the running page, so a tab silently disappearing from TABS
    shows up as a missing file instead of a shorter, quietly-passing run. */
+/* "projects" is the SHELVED Tickets tab (v1.0.0). It stays on this list on
+   purpose: the tab still renders and is still reachable by link, so shooting it
+   is how we would notice the shelf having broken it. */
 const ALL_TABS = ["dashboard", "workorders", "parts", "stock", "molds", "lots",
   "items", "projects", "timeline", "weekplan", "budget", "documents", "reports",
   "people"];

@@ -2814,10 +2814,99 @@
     .richfield { border-color: transparent !important; background: none !important; padding: 0; margin: 0; }
     .rf-empty { display: none; }
   }
+  /* ---- the boot splash ----
+     Markup in the body, rules here, and BOTH ahead of every script: the app is
+     33 classic <script> tags and a Firebase module, and until core.js has run
+     there is no #main to write "Connecting…" into. What the team saw on a cold
+     load at RFS was a white page, then an empty navy sidebar, then a bare card.
+
+     It draws the mark's own two plies. febMark() is a Berkeley-blue
+     parallelogram over a California-gold one, which is a two-ply layup already
+     — so they arrive on the bias, the way you actually lay a 45, and settle
+     into the stack the logo is.
+
+     Everything here is scoped under #splash and nothing else reads these
+     names, so this block cannot reach the app. */
+  #splash {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 24px;
+    background: var(--sb-bg); color: #fff;
+    /* Opacity only, and pointer-events off with it: a splash that lingers as an
+       invisible sheet over the app eats the first tap on the login field. */
+    transition: opacity .28s ease;
+  }
+  #splash.gone { opacity: 0; pointer-events: none; }
+  .sp-mark { position: relative; width: 96px; height: 96px; }
+  .sp-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  /* Each ply slides in along its own skew, top one first. translate is on the
+     <path>, so it moves in the SVG's own 100-unit space and scales with the
+     mark instead of fighting the layout box. */
+  .sp-ply { animation: sp-lay .7s cubic-bezier(.2,.8,.25,1) both; }
+  .sp-ply.b { animation-delay: .12s; }
+  @keyframes sp-lay {
+    from { transform: translate(38px, -26px); opacity: 0; }
+    to   { transform: translate(0, 0); opacity: 1; }
+  }
+  .sp-word { font-family: var(--font-display, inherit); font-weight: 700; font-size: 20px; letter-spacing: .3px;
+    animation: sp-fade .5s ease .5s both; }
+  .sp-word span { color: var(--gold); }
+  /* The season's own lore, the same pool the dashboard's fact of the day draws
+     from. A cold boot on shop wifi is dead time; this is the one place in the
+     app where making someone wait can teach them something. */
+  .sp-fact { max-width: 46ch; text-align: center; font-size: 13px; line-height: 1.55;
+    color: var(--sb-text); animation: sp-fade .5s ease .75s both; }
+  /* Only after the connection has visibly taken too long, so a fast load never
+     flashes a worry at anyone. */
+  .sp-slow { font-size: 12px; color: var(--sb-text); opacity: 0; transition: opacity .4s ease; }
+  #splash.slow .sp-slow { opacity: .8; }
+  @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+  /* The global reduce-motion rule clamps durations to .01ms, which lands every
+     element on its `to` frame — the stacked mark, all three lines up. That is
+     the right still image, so there is nothing to undo here beyond the
+     transition, which would otherwise hold the sheet up for a third of a
+     second with nothing moving. */
+  @media (prefers-reduced-motion: reduce) { #splash { transition: none; } }
+  /* Paper never gets the splash: ⌘P mounts #printroot and hides #app, and a
+     fixed full-bleed sheet would print as one navy page in front of it. */
+  @media print { #splash { display: none !important; } }
 </style>
 <link rel="stylesheet" href="print.css">
 </head>
 <body>
+<div id="splash">
+  <div class="sp-mark">
+    <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
+      <path class="sp-ply a" d="M40 18 H86 L60 52 H14 Z" fill="#2f6be4"/>
+      <path class="sp-ply b" d="M40 50 H86 L60 84 H14 Z" fill="#fdb515"/>
+    </svg>
+  </div>
+  <div class="sp-word">FEB <span>Composites</span></div>
+  <p class="sp-fact" id="sp-fact">Twill weave drapes around curves better than plain weave, and has fewer fiber crimps.</p>
+  <div class="sp-slow">Still connecting — the shop wifi at RFS drops sometimes.</div>
+</div>
+<script>
+  /* Upgrade the fact to the day's own, once facts.js has parsed. Static text
+     ships in the markup above because that is what paints on a cold load;
+     FACTS is not defined yet at this point in the document. */
+  window.addEventListener("DOMContentLoaded", function () {
+    try {
+      var pool = (typeof FACTS !== "undefined" && FACTS) || [];
+      if (!pool.length) return;
+      var el = document.getElementById("sp-fact");
+      if (el) el.textContent = pool[Math.floor(Math.random() * pool.length)].t;
+    } catch (e) { /* the shipped fact is a fine fact */ }
+  });
+  /* The splash owns the screen only while there is genuinely nothing to show.
+     render() takes it down the moment fb.state leaves "loading" — including
+     for "signedout" and "pending", or the login form would sit behind it. This
+     is the backstop for the case render() never gets there: no network, a
+     Firebase config that will not load, a module that threw. Say so rather
+     than spin forever, and get out of the way so the page underneath is
+     reachable. */
+  setTimeout(function () { var el = document.getElementById("splash"); if (el) el.classList.add("slow"); }, 4000);
+  setTimeout(function () { if (typeof hideSplash === "function") hideSplash(); }, 12000);
+</script>
 <div id="drawer-backdrop" onclick="closeDrawer()"></div>
 <div id="app">
   <nav class="sidebar" id="sidebar"></nav>

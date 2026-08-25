@@ -17,6 +17,92 @@ let view = {
 let rosterCache = null;
 let pendingRender = false;
 
+/* ---------- the shipped version ----------
+   Bumped by tools/release.mjs and by nothing else. There is no build step and
+   no ?v= cache busting here, and none is needed: firebase.json serves html/js
+   with no-cache, so a reload always fetches the real thing. The version's job
+   is to be a name — for a bug report, for a Slack note, for a lead six months
+   from now working out when the app changed under them.
+
+   `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
+   file-scope declarations through globalThis, which a lexical binding never
+   joins. Same reason as WO_NOTES_NEW. */
+var APP_VERSION = "1.0.0";
+/* What this version changed, in the words a team member would use. Rewritten
+   every release; three to six lines, or nobody reads it. */
+var WHATS_NEW = [
+  "Issues live on the work order that they hold up — raise one, dispose one, and close the run without leaving the page.",
+  "The Tickets tab is gone. The app tracks work now, not projects; every existing ticket is still there and still opens from a link.",
+  "Work Orders filter on open issues, so you can see which runs are held up.",
+  "Creating or editing a work order opens on Details, instead of below the steps.",
+  "The app has a version now, and tells you when a new one is out.",
+];
+
+/* ---------- config/release ----------
+   { version, notes[], publishedAt }, written by a lead from the ⋯ menu after a
+   deploy. The app is a long-lived SPA: an installed PWA left open on a bench
+   tablet keeps running the JS it loaded this morning, so a fix pushed at noon
+   reaches nobody until somebody happens to reload. This is how they find out.
+
+   Watched, not fetched: loadSeason can read once at boot because the season
+   does not change while you are looking at it. A release does. */
+window.RELEASE = null;
+let releaseWatched = false;
+function loadRelease() {
+  if (releaseWatched || !window.fb || fb.state !== "ready" || !fb.watchConfig) return;
+  releaseWatched = true;
+  fb.watchConfig("release", d => { window.RELEASE = d; render(); });
+}
+function newerVersionOut() {
+  const r = window.RELEASE;
+  return !!(r && r.version && r.version !== APP_VERSION && !view.relDismissed);
+}
+function releaseBanner() {
+  if (!newerVersionOut()) return "";
+  return `<div class="gate no-print"><span class="gi">↻</span><div><b>v${esc(window.RELEASE.version)} is out</b> — you are running v${esc(APP_VERSION)}.
+    <button class="link" onclick="location.reload()">Reload to get it</button>
+    <button class="link" onclick="view.relDismissed=true;render()">Not now</button></div></div>`;
+}
+/* Lead-only, from the ⋯ menu, and deliberately a separate act from deploying.
+   tools/release.mjs ships the code; a lead standing in the new version says so
+   to everyone else. That keeps the release script free of any credential. */
+async function publishRelease() {
+  if (!isLead() || !window.fb || !fb.setConfig) return;
+  try {
+    await fb.setConfig("release", { version: APP_VERSION, notes: WHATS_NEW, publishedAt: new Date().toISOString() });
+    toast(`v${APP_VERSION} announced — everyone still on an older build now sees a reload prompt.`);
+  } catch (e) { toast("Couldn't publish the release: " + ((e && e.message) || e), "error"); }
+}
+
+/* ---------- what's new ----------
+   Opens itself once per version per browser, then lives in the ⋯ menu. The
+   localStorage stamp is per-browser on purpose: "have YOU seen this" is a
+   property of the screen in front of someone, not of their account. */
+let WHATS_NEW_SHOWN = false;
+function openWhatsNew() {
+  openModal(`
+    <h2>What's new in v${esc(APP_VERSION)}</h2>
+    <ul class="tny" style="margin:0 0 4px;padding-left:18px;line-height:1.7">
+      ${WHATS_NEW.map(n => `<li>${esc(n)}</li>`).join("")}
+    </ul>
+    <div class="foot"><button class="primary" onclick="closeModal()">Got it</button></div>`);
+}
+function maybeShowWhatsNew() {
+  if (WHATS_NEW_SHOWN) return;
+  /* Never over a scanned link. A QR redeemed at the same moment would open its
+     record BEHIND this modal, which reads as the scan having failed. */
+  if (PENDING_LINK) return;
+  WHATS_NEW_SHOWN = true;
+  try {
+    const seen = localStorage.getItem("feb-app-version");
+    localStorage.setItem("feb-app-version", APP_VERSION);
+    // No stamp at all means a browser that has never run this app. A first-run
+    // user does not need to be told what changed since a version they never saw.
+    if (!seen || seen === APP_VERSION) return;
+  } catch (e) { return; }   // private mode, or a stub without localStorage
+  openWhatsNew();
+}
+
 /* ---------- season config ----------
    config/season = { compName, compDate, seasonStart, milestones: [{label,
    date}] }, the dashboard's countdown source. Lives in the lead-writable
@@ -36,6 +122,7 @@ function loadSeason() {
 /* ---------- sync hooks (called by fb.js) ---------- */
 window.onFbChange = function () {
   loadSeason();
+  loadRelease();
   if (typeof loadResinOverrides === "function") loadResinOverrides();
   if (typeof loadRestockRules === "function") loadRestockRules();
   if (typeof loadTrainingCatalog === "function") loadTrainingCatalog();
@@ -1935,6 +2022,10 @@ function openMoreMenu() {
       ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>
       <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
       <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>
+    </div>
+    <div class="muted tny" style="margin-top:14px;text-align:center">
+      v${esc(APP_VERSION)} · <button class="link" onclick="closeModal();openWhatsNew()">What's new</button>${
+      lead ? ` · <button class="link" onclick="closeModal();publishRelease()">Announce this release</button>` : ""}
     </div>`);
 }
 /* ---------- mobile drawer ---------- */
@@ -2188,6 +2279,22 @@ function markAllNotifsRead() {
   closeModal();
 }
 // Overridden meaningfully in dashboard.js once watchers exist; safe default here.
+/* Take the boot splash down. Idempotent, and safe to call before the element
+   exists (the node test harness has no such div) or after it is already gone.
+
+   Removed from the DOM after the fade rather than left at opacity:0, because a
+   full-bleed fixed sheet still answers hit tests until it is gone, and the
+   first thing under it is the sign-in field. */
+let SPLASH_DONE = false;
+function hideSplash() {
+  if (SPLASH_DONE) return;
+  const el = typeof document !== "undefined" && document.getElementById && document.getElementById("splash");
+  if (!el) return;
+  SPLASH_DONE = true;
+  el.classList.add("gone");
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+}
+
 function render() {
   /* Stock merged into Molds (2026-08): the `stock` tab id keeps resolving —
      old #/stock links, notification links and BRD-/STK- routing all pass
@@ -2202,6 +2309,9 @@ function render() {
   const el = document.getElementById("main");
   const st = window.fb ? fb.state : "loading";
   if (st === "loading") { el.innerHTML = `<div class="card">Connecting…</div>`; return; }
+  // Past here there is a real screen to show — the app, the login form, or the
+  // "you're not on the roster yet" note. The splash has done its job.
+  hideSplash();
   if (st === "signedout") { el.innerHTML = renderLogin(); return; }
   if (st === "pending") { el.innerHTML = renderPending(); return; }
   /* A scan link waiting since page load, redeemed the first time we get here
@@ -2213,7 +2323,8 @@ function render() {
   // Explicit dashboard fallback, kept even now Dashboard is TABS[0] again:
   // the landing behavior should never depend on array order.
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
-  el.innerHTML = tab.render();
+  el.innerHTML = releaseBanner() + tab.render();
+  maybeShowWhatsNew();
   labelListTables();
   // Release a GL context whose canvas this paint removed. See mvSweep.
   if (typeof mvSweep === "function") mvSweep();

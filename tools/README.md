@@ -114,6 +114,37 @@ python3 tools/gen_docs_manifest.py
 python3 tools/check_traceability.py
 ```
 
+## Cutting a release
+
+```bash
+node tools/release.mjs 1.1.0          # from the repo root
+node tools/release.mjs 1.1.0 --dry    # say what it would do, touch nothing
+```
+
+It refuses a dirty tree, reads the commit subjects since the last tag, bumps
+`APP_VERSION` and rewrites `WHATS_NEW` in `core.js`, prepends a `CHANGELOG.md`
+section, **runs the suites and refuses to ship over a failure**, then commits,
+tags, pushes, deploys hosting, and fetches `core.js` off the live host to check
+the new version is genuinely there — "Deploy complete" is not the check.
+
+What it deliberately does not do:
+
+- **It does not post to Slack.** `#composites` announcements need Simon's
+  explicit ask, so it prints the message and a human sends it.
+- **It does not write `config/release`.** That is the "Announce this release"
+  button in the app's ⋯ menu, pressed by a lead who is standing in the new
+  version — which is what makes everyone else's stale session offer a reload.
+  Keeping it there means this script needs no Firebase credential of its own,
+  and nobody is told to reload before the deploy has actually landed.
+- **It does not deploy rules or functions.** `--only hosting` means only
+  hosting. Both of those are separate, deliberate acts.
+
+The commit-message convention is what makes this cheap: subjects in this repo
+are prose sentences describing a user-visible outcome, so `git log --format=%s`
+is already a publishable release note. Keep writing them that way.
+
+What counts as major, minor or patch is at the top of `CHANGELOG.md`.
+
 ## Servers and cameras
 
 | Script | What it does |

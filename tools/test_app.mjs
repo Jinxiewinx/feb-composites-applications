@@ -113,7 +113,7 @@ const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "p
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
+src = src.replace(/^let (DB|view|rosterCache|pendingRender|WHATS_NEW_SHOWN|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
 src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
@@ -3180,6 +3180,49 @@ await t("searchAll matches a ticket by id even when it has a title (precedence b
   // offering them in the palette is an invitation into a paused feature.
   assert(!res.some(r => r.id === "TKT-78"), "a shelved project ticket is not offered: " + JSON.stringify(res));
   assert(res.find(r => r.id === "TKT-77").sub === "Issue", "and it is labelled Issue: " + JSON.stringify(res));
+});
+
+console.log("version + releases:");
+await t("the app knows its own version, and What's New has something to say", () => {
+  assert(/^\d+\.\d+\.\d+$/.test(APP_VERSION), "APP_VERSION is semver: " + APP_VERSION);
+  assert(Array.isArray(WHATS_NEW) && WHATS_NEW.length, "WHATS_NEW is a non-empty list");
+  assert(WHATS_NEW.every(n => typeof n === "string" && n.length > 20), "and each line is a sentence, not a slug");
+});
+
+await t("the reload banner appears only for a DIFFERENT version, and takes no for an answer", () => {
+  view = { ...view, relDismissed: false };
+  window.RELEASE = null;
+  assert(releaseBanner() === "", "nothing to say before config/release has arrived");
+  window.RELEASE = { version: APP_VERSION };
+  assert(releaseBanner() === "", "the version you are already running is not news");
+  window.RELEASE = { version: "99.0.0" };
+  assert(newerVersionOut() && releaseBanner().includes("99.0.0"), "a different version raises the banner");
+  assert(releaseBanner().includes("location.reload()"), "and the whole point is the reload");
+  view.relDismissed = true;
+  assert(releaseBanner() === "", "dismissing it means dismissed");
+  view.relDismissed = false; window.RELEASE = null;
+});
+
+await t("What's New opens once per version, and never ambushes a first run or a scan", () => {
+  const opened = () => (el("modal").innerHTML || "").includes("What's new");
+  // A browser that has never run the app has no version to have been upgraded
+  // FROM. Telling a first-year what changed since a build they never saw is
+  // noise on top of their first-ever screen.
+  localStorage.removeItem("feb-app-version");
+  WHATS_NEW_SHOWN = false; closeModal(); maybeShowWhatsNew();
+  assert(!opened(), "silent on a first run");
+  assert(localStorage.getItem("feb-app-version") === APP_VERSION, "but the stamp is laid down");
+
+  WHATS_NEW_SHOWN = false; closeModal(); maybeShowWhatsNew();
+  assert(!opened(), "and silent every time after, on the same version");
+
+  localStorage.setItem("feb-app-version", "0.0.1");
+  WHATS_NEW_SHOWN = false; closeModal(); maybeShowWhatsNew();
+  assert(opened(), "an actual upgrade opens it");
+
+  closeModal(); maybeShowWhatsNew();
+  assert(!opened(), "once per session, whatever render() does after that");
+  closeModal();
 });
 
 console.log("notifications + @mentions:");
