@@ -46,8 +46,9 @@ and access is controlled by the roster inside it.
 
 `03 App/app/` is the team's shared workspace for a season, running on Firebase
 with an email allowlist for the roster. It updates live for everyone and works
-on phones and tablets as well as desktop. The full manual, setup and
-architecture live in `03 App/app/README.md`; this is the short tour.
+on phones and tablets as well as desktop. The full manual and setup live in
+`03 App/app/README.md`, and the architecture behind it in
+`03 App/app/DESIGN-NOTES.md`; this is the short tour.
 
 ![Dashboard: the mission-control board on the app's white surfaces, alert strip leading](03%20App/design/dashboard-mockup-20260825.png)
 

@@ -129,6 +129,11 @@ python3 tools/check_traceability.py
 finds Chromium; `fixtures.mjs` and `fixtures-content.mjs` are the demo data)
 and `tools/fixtures/` holds a test STL.
 
+The fixtures are not optional for the camera. `loadArchive()` seeds only work
+orders, parts, schedule and stock, so without them half the tabs photograph as
+empty states — and an empty tab is the one state a density audit learns nothing
+from.
+
 For manual phone checks, open `serve_populated.mjs`'s URL in Chrome's device
 toolbar at iPhone 15 rather than a narrow desktop window. Half the responsive
 rules key off `pointer: coarse`, and only the device toolbar sets that.

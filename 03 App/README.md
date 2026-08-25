@@ -13,8 +13,9 @@ Molds, Inventory, Schedule, Budget, Documents, Reports, People) that update
 live for the whole team, plus printed QR labels and a public scan page. Molds
 also holds the tooling-board inventory and the mold stack planner (once a
 separate Stock tab); Inventory is the storage map that absorbed the Items and
-Materials tabs; Schedule merged Timeline and Weekly Plan. This is the day-to-day tool. The full manual, setup, deploy
-and the data model are in `app/README.md`.
+Materials tabs; Schedule merged Timeline and Weekly Plan. This is the day-to-day tool. The full manual,
+setup and deploy are in `app/README.md`; the decisions behind how it is built
+are in `app/DESIGN-NOTES.md`.
 
 `work-orders.html` is the original single-file work-order tool. No server, no
 account, and data lives in that browser's localStorage. It's kept as the offline

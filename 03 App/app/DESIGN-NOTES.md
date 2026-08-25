@@ -1,0 +1,371 @@
+# Design notes — the hosted app
+
+Why the app is built the way it is. `README.md` next door is the manual: it
+says what the app does and how to use it, and it is written for the team.
+This file is for whoever changes the code, and it exists so that the reasons
+behind the non-obvious choices survive the person who made them.
+
+Read this before changing behaviour the README describes. Most of what is here
+was learned by getting it wrong first.
+
+Related: `tools/README.md` for the test suites and the screenshot tools,
+`../../.claude/SESSION-STATE-POLICY.md` for what goes in the handoff file, and
+`../sheets/README.md` for the half of the sheet sync that lives in the
+spreadsheet.
+
+## Never fold with `<details>`
+
+A closed `<details>` skips **painting** its content rather than merely hiding
+it. Section folds on work orders and parts are therefore a class on the card
+(`.wosec.folded` hides `.wosec-body`), driven by a real `<button>`, and the
+print stylesheet force-shows every section body.
+
+This has bitten twice. Once as a mobile "fix" that forced a closed `<details>`
+open with `display: block` and took the ticket page's entire left rail down to
+blank white space — the children reported a real bounding box, `visibility:
+visible`, `opacity: 1`, and drew nothing. And once as folded sections silently
+vanishing from a browser print. `element.checkVisibility()` is the only helper
+that tells the truth about this; every hand-rolled "is it visible" test asks the
+wrong question.
+
+The one legitimate `<details>` is `.wo-subfold`, for reference blocks inside a
+card, where nothing prints and nothing hides.
+
+## The jump bars are buttons, not anchors
+
+The section jump bar on work orders, parts and tickets renders buttons. An
+`href="#wo-stack"` would overwrite the deep link the app keeps in the URL hash,
+which is the whole addressing scheme. The old anchor-based jump bar on Parts was
+removed for this reason; do not reintroduce one.
+
+## Routing
+
+Navigation is the in-memory `view` object; `syncUrl()` mirrors it into the hash
+with `replaceState`, **never** `pushState`. `NAV_STACK` is a referrer trail and
+browser history is chronological. Reconciling the two would either make Back lie
+or break `navBack`.
+
+A pending deep link waits up to six seconds for its record to arrive, because
+`fb.state` reaching `"ready"` only means auth is done — the collection snapshots
+land afterwards. Giving up early was the first version, and it dumped every scan
+into the search box.
+
+`BRD-` and `STK-` both resolve to the one `stock` collection. Repointing them
+would break deep-link redemption, the Move-here flow and the id-prefix
+cross-check, so `stock` stays one collection with two homes, split on the id at
+paint time: a board renders in Inventory, a stack plan on its mold.
+
+## Lineage and links
+
+`wo.partId` is the link that matters: the child names its parent, which is the
+only direction that cannot go ambiguous. `part.workOrderId` still exists but
+means "the current run", not "the link". None of the 33 SN5 parts carried an id
+link, which is why name-matching and the Confirm button exist at all.
+
+`p.mold` is the committed mold link; without it the mold is derived through the
+part's runs. A part's `moldProgress` and the mold record's `stage` are
+deliberately not synced — different enums, different owners — so the app reports
+a disagreement rather than resolving it.
+
+## Colour is derived from meaning, never from position
+
+A stage that has not started reads grey, never amber. This was wrong for the
+whole of SN5: `"N/A (Flat)"` occupies slot 0 of the mold enum, so `"Not
+Started"` sat at index 1 and coloured itself as in-progress. Derive progress
+colour from what a value *means* now, never from where it sits in an array.
+
+Related: hue is never the only carrier. Material colour is a swatch beside a
+short text tag, blockers carry the literal word, and the dashboard prints counts
+as words. Everything has to survive greyscale, a colour-blind reader and the
+black-and-white laser.
+
+## Grouping a rail is a partition, not a filter per group
+
+The Molds rail groups by stage by partitioning the already stage-sorted array.
+Running a filter per stage would let DOM order and keyboard order diverge; the
+partition is what guarantees the arrow keys walk exactly the rows on screen.
+Group headers are drawn by the body renderer and are not rows, so the keyboard
+cannot land on one.
+
+The same shape applies to any filter on a keyboard-walkable list: apply it with
+the other filters, not at render time. A no-home filter applied at render time
+once left the arrow keys walking invisible molds.
+
+## Density is canonicalised on the way in
+
+Board grade is free entry through `canonDensity()`, but every value collapses to
+one canonical form. The board grouping key, the planner's rack filter and the
+packer's bucket key all compare density, so `"60"` and `60` landing as two
+values would split one rack in two and report a shortfall in front of a full
+shelf.
+
+Board and plan density are stored as numbers, mold density as a string. That
+asymmetry is deliberate: the coercion produces a byte-identical `SZ:` key for
+everything already stored, so there was no migration. `packer.js` has no access
+to `core.js` and does not need it — both its inputs canonicalise first.
+
+## Cell edits must not re-render
+
+The Budget line grid and the Receiving sheet both follow this: a cell edit never
+triggers a render, because `onchange` fires *while* Tab is already carrying
+focus to the next field. Re-rendering destroys the destination element and focus
+falls to `document.body`.
+
+Where a render is genuinely needed after an edit, use
+`renderSoonKeepFocus()` — it defers, renders, then refocuses by id and restores
+the caret. Fields that rely on it carry a stable id.
+
+## Writes
+
+Edits save **per field**. `save(coll, obj, field)` names the field; array and
+object fields go through `saveField`. A whole-record write would let someone
+editing a BOM clobber a buy-off saved at the same moment.
+
+Each ply in a layup stack carries a hidden id so two people editing the same
+stack merge instead of overwriting. Only reordering is last-writer-wins, because
+two people reordering the same stack has no correct answer.
+
+Partial receipt uses `buyRef.n` — received quantity is a sum over the records
+that exist, so Incoming stays a query and undo needs nothing rolled back.
+Records written before `n` existed behave exactly as before; nothing was
+migrated.
+
+Incoming reconciliation trusts the received record's `buyRef` (the lot exists)
+rather than the purchase's own back-link, so a half-landed save heals itself at
+the next render.
+
+## The `config/` documents
+
+Lead-writable, roster-readable, and each one is the answer to "where does this
+number live". None of them are derivable from the code that reads them.
+
+| Doc | Holds |
+|---|---|
+| `config/season` | Season name, competition date and milestones — what the dashboard counts down to |
+| `config/restock` | CS-011 §5 minimums per material, with the standard's own reasoning attached. Editable because §5 calls them "starting values; tune with usage data" |
+| `config/trainings` | Trainings added beyond the six built-ins. Archives instead of deleting, so a historic grant keeps rendering its name |
+| `config/resins` | Per-resin cure-hold overrides. Never below the datasheet floor — see below |
+| `config/tracker` | The sheet feed's secret token. Never in source |
+
+Three field names carry more weight than they look:
+
+- **`matKey`** ("IN2", "TACKY-TAPE") is what ties a lot to a material, and so
+  what lets the reorder signal live on the material rather than the container.
+  A received lot is born with the key and the reorder row disappears by itself.
+  The old `lowFlag` lived on a container and vanished when the last one
+  emptied — being nearly out was a chip, being completely out was silence.
+- **`lotSource`** records how a lot reference was obtained: `"scanned"`,
+  `"recalled"` (the prefilled default) or `"unknown"`. It prints on the
+  traveler. A verified lot has to be distinguishable from a remembered one, or
+  the default-and-confirm design would quietly launder guesses into records.
+- **`role`** and `hazard` are written by the Receiving class cell. Before that
+  flow existed nothing asked for them, so every received lot was born unable to
+  trigger the CS-011 §6 resin/hardener check at all.
+
+The Activity feed is built from the `updatedAt` / `updatedBy` pair every record
+already carried, plus comments and step buy-offs — no separate event log.
+## Cure holds
+
+The hold numbers ship in `resins.js`, each signed off by a lead. A lead can
+write a per-resin override into `config/resins`, but only the hold and its
+sign-off can move: the datasheet floor stays in code, and an override below it
+is refused at write time **and** ignored at read time, so nothing can weaken a
+hold from either side.
+
+## The public surfaces
+
+There are two deliberate public holes, and both are narrow on purpose.
+
+**`pub/<ID>`** backs the scan nameplate. Firestore rules cannot filter fields
+(`allow read` is all-or-nothing per document), so the public page cannot read
+the real records — it reads a mirror carrying nine whitelisted fields, all of
+which are already printed on the physical label. `pubProjection()` in
+`labels.js` builds it and a `hasOnly()` clause in `firestore.rules` rejects any
+write carrying anything else, so a bug in the projection cannot publish a layup
+stack or somebody's email. `get` is public; `list` stays behind the roster, so
+the collection cannot be dumped.
+
+**`tracker/<token>`** backs the sheet sync, and is the wider of the two: the
+whole season's part list plus engineer names and comment text. What protects it
+is a 32-character random token minted by a lead and kept in `config/tracker`,
+never in source. `list` is denied to everyone including leads, so the token
+cannot be recovered by enumerating the collection.
+
+`tools/test_pub_rules.mjs` checks all of this against the emulator, including
+the regression that matters most: that `workOrders`, `parts`, `roster` and
+`budget` are all **still** 403 to an anonymous caller.
+
+A mirror failure only warns to the console, deliberately — telling someone their
+save failed when it did not is worse than a stale nameplate. **Rebuild scan
+mirror** under Reports covers records that predate the feature and writes that
+bypass `save()` (`mutateField`, `appendTo`).
+
+## Why the sheet sync is shaped like that
+
+Hosting is static, there are no Cloud Functions for this and no service account,
+so there is nowhere here to run a timer; and the app must not grow a Google
+sign-in, for the reason `gdocs.js` gives at length. So the timer lives inside
+the spreadsheet as a bound Apps Script that **pulls**, and the app publishes one
+document it can fetch with no credential.
+
+The binding constraint on the snapshot is Firestore **index entries** — 7.5 KiB
+each, 20,000 per document — not the 1 MiB document limit. That is why it stores
+one compact JSON *string* per part rather than an array of maps, which also
+means the Apps Script does one `JSON.parse` per row instead of walking
+Firestore's `{mapValue:{fields:…}}` shape.
+
+It is a whole-table rewrite rather than a per-record mirror, which makes it
+self-healing in a way `pub` is not: a failed `pub` write is only repaired by a
+later save of that same record, whereas here the next successful save of any
+part republishes everything. It rides on `fb.save()` and `fb.del()` behind a
+four-second debounce, because every field edit in `parts.js` is its own
+`updateDoc` and tabbing through a record would otherwise republish a dozen
+times.
+
+## Uploads
+
+`storage.rules` checks the file **extension** as well as the content type,
+because a browser has no MIME type for a `.SLDPRT` — it arrives as
+`application/octet-stream`, and allowing that on its own would allow any binary
+under any name. The type is still checked, and that is the actual security
+condition: nothing writable here can be served as something the browser will
+render, which is what would turn an upload into stored XSS against the whole
+team.
+
+Rich text is sanitized with the vendored DOMPurify before storage and again
+before display. `proseHtml()` in `core.js` decorates *after* sanitising to add
+`.tblwrap` and `.cgal`, because `class` is not allowlisted and authors therefore
+cannot ask for either.
+
+## The receipt parser
+
+`✨ Fill from receipt` is the app's one Cloud Function (`functions/index.js`,
+`parseReceipt`): the client sends the storage path, the function checks the
+caller against the roster, downloads the image, asks a Haiku-class Claude model
+for the line items, and returns them. The Anthropic API key lives in a Functions
+secret, server-side only — a key readable by the roster would be an open spend
+faucet, which is why the client-side option lost.
+
+Functions deploy separately (`firebase deploy --only functions`, after
+`firebase functions:secrets:set ANTHROPIC_API_KEY`) and never ride along on a
+hosting deploy.
+
+## Anything that touches a screen edge
+
+The app draws under the status bar deliberately (`viewport-fit=cover`,
+standalone PWA, translucent status bar), which is what lets the topbar meet the
+Dynamic Island instead of sitting under a white letterbox. Two rules follow:
+
+1. Use the `--sa-t` / `--sa-r` / `--sa-b` / `--sa-l` tokens, never `env()`
+   directly. The indirection is what lets `test_safearea.mjs` simulate a phone.
+   Insets belong on the base rule, not inside a `max-width` block: a landscape
+   Pro Max is 932px, so it takes the desktop rules and still has an island.
+2. Anything sticky under the topbar offsets from `--topbar-h`, never a pixel
+   count. The topbar's height depends on the top inset, so `top: 62px` is right
+   on a laptop and puts the element *behind* the bar on a phone.
+
+## CSS lives in two places, and only two
+
+All screen CSS is in the `<style>` block in `index.html`; the printed sheet is
+`print.css`. Responsive rules go in the single block at the END of that
+stylesheet — at equal specificity the later rule wins, and keeping them together
+is what makes the cascade predictable. Rules scattered back up next to their
+components are a bug waiting to happen.
+
+`print.css` is deliberately **not** inside `@media print`, so the sheet renders
+identically on screen and on paper. That is what makes the preview trustworthy
+and lets the design be reviewed from a screenshot. Label CSS lives there too and
+never in `index.html`, because `downloadSheet()` fetches `print.css` and inlines
+it — anything in `index.html` vanishes from every saved sheet, and a saved sheet
+on a phone at RFS with no wifi is the case that matters.
+
+`labelSheetHtml()` must never reuse `fitSheetHtml()`, `LAYOUTS` or `MAX_PAGES`.
+Those exist to squeeze a work order onto two pages via a ladder of candidate row
+counts measured most-generous-first; they mean nothing for a fixed label grid.
+
+`06 Design System/` was extracted from this stylesheet rather than imported by
+it, so there are two copies of the same design and nothing but
+`tools/test_designsystem.mjs` holding them together.
+
+## The QR arithmetic
+
+The QR encodes `HTTPS://FEB-COMPOSITES.WEB.APP/Q/<ID>`, uppercase, no query
+string, no fragment. QR alphanumeric mode covers only `0-9 A-Z space $%*+-./:`,
+and staying inside it keeps a 45-character URL at version 3 (29 modules) with
+error-correction level Q, 25% recovery. One lowercase letter, one `?utm=`, or a
+switch to a `#hash` route drops it to byte mode, which needs version 4 and only
+gets level M. Nothing about the printed label looks different; it just scans
+worse once it has resin on it.
+
+`tools/test_qr.mjs` asserts the module count is exactly 29, and that single
+assertion is the whole guard.
+
+The same arithmetic caps an ID at 14 characters (47 − 30 of host − 3 of `/Q/`).
+Everything in the grammar fits except a coupon, `PNL-SN6-006-C03` at 15, which
+is why coupon labels are text-only.
+
+## The dashboard
+
+The grid class is `.dboard`, because `.board` belongs to the Tickets kanban.
+
+The work list merges a part and its work order into one row: the SN5 archive
+proved the double-counting overstated "behind" by about 40%.
+
+Nothing that renders empty on the team's own archive sits above the fold. That
+is a layout constraint, not a preference — it is what stops the board reading as
+a wall of zeroes on a quiet week.
+
+## Reviewing a UI change
+
+`.claude/agents/ui-reviewer.md` is a read-only reviewer that scores a screen 0–5
+on eight axes (scan speed, signal-to-ink, colour semantics, interaction cost,
+wayfinding, hierarchy, responsive integrity, house fidelity) and passes only at
+no-axis-below-3 and average ≥4 — the same bar as the `simon` reviewer in
+`00 Agent/`. Worth running before any UI change lands: the string assertions in
+`test_app.mjs` will happily pass a screen that draws every fact twice, and did.
+
+Shoot the images with `tools/shoot_ui.mjs` first; it asserts nothing and is a
+camera, not a test. See `tools/README.md`.
+
+## The file map
+
+| File | What |
+|---|---|
+| `index.html` | Markup and all screen CSS (sidebar, board, modal, avatars, pickers, doc viewer) plus script includes |
+| `core.js` | Shell: sidebar and topbar, tab router, auth and roster, modal system, avatars, HTML sanitizer, multi-select picker, shared store |
+| `fb.js` | The only file that imports Firebase (auth, per-collection sync, writes, file upload) |
+| `workorders.js` `parts.js` `molds.js` `projects.js` `timeline.js` `weeklyplan.js` `budget.js` `people.js` `dashboard.js` `documents.js` `inventory.js` `stock.js` `reports.js` | One tab each; they reach Firebase only through core's `save()` and `del()` and `fb.*` |
+| `shop.js` | The schema engine for the physical world — molds, items and material lots all run on it, which is what makes one record type behave like the next |
+| `receiving.js` | The receiving desk: many things, onto many shelves, in one pass. Sibling of the Budget line grid and inherits its no-render-on-cell-edit rule |
+| `slicer.js` `packer.js` `slicer.worker.js` | The mold planner. `slicer.js` (geometry) and `packer.js` (blanks → cut list) are **pure**: no DOM, no Firebase, no globals, so both are fully testable under node. The worker runs the slicer off the main thread |
+| `stackview.js` | The exploded isometric view of a mold stack |
+| `rte.js` | The comment and description composer: one COMMANDS registry, three shells, the paste pipeline, and the shared comment/thread rendering |
+| `scan.js` | Pointing the phone at a label from inside the app, plus the Move and advance bench actions |
+| `resins.js` | The resin systems and their cure holds. Deep-links six datasheet PDFs **by path**, which is why those files must stay served even though they are unlisted |
+| `gdocs.js` | Google Docs, Slides and Sheets attached to the records they belong to. Its comment explains at length why the app has no Google sign-in |
+| `facts.js` | The dashboard fact of the day, mined from the team's own SN5 documentation |
+| `print.js` `print.css` | The printed work-order traveler. Styles are deliberately outside `@media print` so the sheet can be previewed and reviewed on screen |
+| `tracker.js` | The Google Sheet mirror feed: builds the whole-table snapshot the Master Tracker's Apps Script pulls, and the lead-only setup that mints its secret token. The field list in it is a security boundary, not a convenience |
+| `labels.js` | The label sheets and `pubProjection()`, which is the other security boundary |
+| `meshview.js` | The rotatable 3D mold-in-stock view. Hand-rolled WebGL, no dependency: pure camera maths tested under node, thin GL glue that only runs in a browser |
+| `drawings.js` | The printable engineering drawing set for a stack plan: general isometric, a third-angle three-view, then one dimensioned sheet per layer. The mold under the blocks is a silhouette traced off the stored STL. Pure string-building, so the whole set is asserted under node |
+| `stlio.js` | Writes binary STL and shrinks a mesh to fit storage. Serves both the stock export and the stored viewer mesh; the slicer's own `parseSTL` reads back what it writes |
+| `samples/*.stl` | Three sample molds offered in "Plan a mold", so the planner can be tried without exporting anything from Fusion. Built by `tools/gen_sample_molds.mjs`; fetched on demand, not at page load |
+| `vendor/purify.min.js` | DOMPurify 3.2.4, self-hosted with an SRI pin. Was a CDN load, which meant rich text silently fell back to plain text whenever the shop wifi dropped |
+| `firebase-config.js` | Project config, as `window.FIREBASE_CONFIG` |
+| `docs/` | Bundled reference docs and the generated `manifest.json` |
+| `sn5-*.json` | Retro SN5 archives, the seeds for "Load SN5 archive". The stock one is the board rack SN5 left behind; the stack planner picks thicknesses from what you own, so on a fresh project it has nothing to plan against until this is loaded |
+| `../sheets/Sync.gs` `../sheets/README.md` | The other half of the sheet sync, which lives inside the spreadsheet rather than here |
+| `../firestore.rules` | Server-side access control, the actual security |
+| `../storage.rules` | File-upload access control |
+| `../firebase.json`, `../.firebaserc` | Hosting, rules and emulator config |
+
+## Regenerating bundled data
+
+- `python3 tools/gen_sn5_seeds.py` rebuilds the SN5 parts and timeline seed JSON.
+- `node tools/gen_sample_molds.mjs` rebuilds the three sample molds in `samples/`.
+- `python3 tools/gen_docs_manifest.py` copies the datasheets, standards and
+  printables into `app/docs/` and rebuilds `docs/manifest.json`. Re-run it
+  whenever a datasheet or CS standard changes. It still copies every file; the
+  `UNLISTED` set at the top decides which categories get a manifest entry, and
+  Datasheets and Standards are in it as of 2026-08-18.
