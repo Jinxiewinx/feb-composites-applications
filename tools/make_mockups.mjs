@@ -117,7 +117,7 @@ const SHOTS = [
     title: "A shelf · what lives here",
     note: "Scanning a shelf's own label lands on this page. Add here creates records already located; Move here scans things onto the shelf; Confirm contents is CS-011's monthly stock walk as one tap; Receive a delivery stocks a whole order in one pass." },
   { id: "wo-issues", kind: "app", badge: 9, vh: 1200,
-    js: `setTab("workorders"); openRecord("workOrders", (DB.workOrders.find(w => issuesForWO(w.id).length) || DB.workOrders[0] || {}).id); woJump("wo-issues");`,
+    js: `setTab("workorders"); openRecord("workorders", "WO-SN6-002"); woJump("wo-issues");`,
     title: "Issues · on the run they hold up",
     note: "A nonconformance lives on its work order, straight after Steps. Open ones first, each with its disposition and root cause inline and one Resolve button; the header counts disposed/total and wears a warning dot while anything is undisposed. Raise one here or from any step's flag button — the run cannot be set Complete until every issue is disposed." },
   { id: "schedule", kind: "app", badge: 10, vh: 1000,

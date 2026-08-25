@@ -53,6 +53,8 @@ export const PROJECTS = [
     description: "Measured on three parts. Need the CMM trace before we cut anything.",
     assignees: ["mokafor@berkeley.edu"], watchers: ["starbuck@berkeley.edu"],
     relatedParts: [], relatedTickets: ["TKT-0031"], relatedWorkOrders: [],
+    workOrderId: "WO-SN6-002", resolutionMethod: "",
+    stepRef: { seq: 1, index: 0, title: "Infuse" },
     files: [], comments: [], whatHappened: "Found at trial fit on 2 of 3 clamshells.", retro: false,
   },
   {
@@ -81,7 +83,9 @@ export const PROJECTS = [
     status: "Cancelled", priority: "Low", dueDate: iso(-20), subteam: "AERO",
     description: "Resolved itself when the basement shelf opened up. Closing.",
     assignees: [], watchers: ["starbuck@berkeley.edu"],
-    relatedParts: [], relatedTickets: [], relatedWorkOrders: [], files: [], comments: [], retro: false,
+    relatedParts: [], relatedTickets: [], relatedWorkOrders: [],
+    workOrderId: "WO-SN6-002", resolutionMethod: "",
+    files: [], comments: [], retro: false,
   },
   /* Sub-tickets, both under TKT-0031 (which is DB.projects[0], the record the
      populated-content suites open). One open and one done-but-late, so the

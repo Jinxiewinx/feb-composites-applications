@@ -20,24 +20,24 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**Live matches main.** The Molds/Inventory pass, the stat-tile states and the
-Inventory/Receiving follow-ups are all on main and deployed, each verified by
-curling the changed file off the live host rather than trusting the CLI.
+**v1.0.0 is committed on main and NOT YET PUSHED OR DEPLOYED.** Two commits:
+`d96c1c6` (Tickets shelved, Issues onto the work order) and `aa5401f`
+(version, release script, splash). Live is still the previous build.
 
-- Density is free entry through `canonDensity()` in `core.js`, not a `<select>`.
-  Board and plan density stay numbers, mold density stays a string,
-  deliberately: the coercion produces a byte-identical `SZ:` key for everything
-  already stored, so there is no migration. `packer.js` is untouched and does
-  not need to be — both its inputs canonicalise first.
-- Boards render under Inventory as a fourth segment. `ID_TO_COLL` is **not**
-  changed — changing it breaks `consumePendingLink`, `invMoveHere` and
-  `test_route`. `moldsOrBoardsFor()` splits on the id instead, so `stock` stays
-  one collection with two homes.
-- The 3D viewer lives on the mold, not the plan. `planIsOrphan()` is now the
-  single definition of orphan; three contradictory ones existed.
-- `.bignum` now carries `.bad`/`.warn`/`.ok` states in both the app CSS and
-  `components.css`, mirroring the dashboard's `.bnum` so one word means one
-  colour everywhere. The style guide was rebuilt and the design sync ran.
+- The release is v1.0.0, so `tools/release.mjs` is **not** the tool that cuts
+  it — the script bumps to a *new* version, and `APP_VERSION` and the
+  `CHANGELOG.md` section for 1.0.0 are already written. Push, deploy, then
+  `git tag -a v1.0.0`. Every release after this one uses the script.
+- Nobody sees the reload banner until a lead opens the deployed app and hits
+  ⋯ → "Announce this release", which writes `config/release`. That is
+  deliberate: it cannot be announced before it has actually landed.
+- The `#composites` note is printed by the release script and needs Simon's
+  ask before anyone sends it.
+- The issue fixtures in `tools/lib/fixtures.mjs` had **no `workOrderId`** until
+  now, so `issuesForWO()` matched nothing and every browser suite and mockup
+  had been photographing an empty Issues section. Both now point at
+  WO-SN6-002. If a populated-content suite starts asserting on issue counts,
+  that is where they come from.
 
 ---
 
@@ -93,6 +93,14 @@ it should be tightened.
 ---
 
 ## Constraints — don't relitigate
+
+**The shelved `projects` TABS row is hidden but is NOT an alias.** The four
+hidden rows under it (`stock`, `items`, `lots`, `weekplan`) are normalised
+away in `render()` so their own render never runs. `projects` still renders
+itself, because the issue detail page lives there and is reached only by chip
+and by `#/PROJ-` link. Adding a normalisation line for it kills every link to
+every issue, silently. `03 App/app/SHELVED.md` is the full record.
+
 
 Each of these cost something to learn and would be easy to undo by accident.
 Anything already explained in a README is deliberately not repeated here; see
@@ -229,6 +237,13 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
+**2026-08-25 (latest) — v1.0.0: the tracker becomes a work tracker.** The
+Tickets tab is shelved behind `hidden: true` with its data and links intact;
+issues moved onto the work order as their own section, resolving through the
+one existing CS-003 gate. The app gained a version, a What's New panel, a
+`config/release` reload banner and `tools/release.mjs`. Also: a boot splash
+that lays up the mark's two plies, and "Load SN5 archive" off the toolbar.
+
 **2026-08-25 (latest) — storage map, and the receiving count column.** Adding a
 location moved from the items list to the map, where the shelves are. Empty
 shelves stopped collapsing into a text strip: they are quieter cards now, so
@@ -256,12 +271,3 @@ firebase CLI, so the emulator gate finally ran, and rules then hosting deployed
 in that order. Verified live off the host: `receiving.js` and `tracker.js`
 serve the new code, `docs/manifest.json` has 1 entry, and the two TDS PDFs
 `resins.js` cites answer 200.
-
-**2026-08-23 — inventory rebuilt around getting a shop typed in.** Five commits
-on main. Receiving became a page rather than a modal — a mixed delivery is
-rolls and jugs and consumables across three shelves, which the old one-shelf
-modal could not express. The class cell now writes `cls` AND `role`, which is
-what finally lets the CS-011 §6 resin/hardener check fire at all. Reorder moved
-off the jug and onto the material, because the old model literally could not
-express "we are completely out". Export as CSV/TSV, since a team that doubts it
-can get its data out keeps a shadow spreadsheet.

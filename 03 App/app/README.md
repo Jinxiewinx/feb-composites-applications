@@ -295,6 +295,8 @@ field right there, with one Resolve button. A resolved row reads "resolved:
 wears a warning dot while anything is undisposed; that dot overrides the fold,
 so an open issue can never be tucked out of sight.
 
+![Issues: on the run they hold up](../design/wo-issues-mockup-20260825.png)
+
 **Raising one** is the ⚠ button at the bottom of the section, or the flag button
 beside any step's camera. Both are one small modal — title, what happened,
 photos attached at creation, priority — because the work order, the assignee,
