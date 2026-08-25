@@ -6,7 +6,8 @@
   },
   "hosting": {
     "public": "app",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"],
+    "//ignore": "Internal docs are named one by one, never as **/*.md: docs/standards/*.md must stay retrievable (CS-000) and the app links them, and fonts/osifont-LICENSE.md ships with the font it licenses. DESIGN-NOTES.md joined README.md here after the app manual was split in two — the split created a second internal doc inside the hosting root and it went public on the next deploy.",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md", "DESIGN-NOTES.md"],
     "rewrites": [
       {
         "//": "Scan landing. A printed QR encodes HTTPS://FEB-COMPOSITES.WEB.APP/Q/<ID> — uppercase, because QR alphanumeric mode has no lowercase and staying inside it keeps the code at 29 modules with 25% error correction instead of 33 modules with 15%. Hosting globs are case-sensitive, so both cases are listed: the uppercase one is what every label carries, the lowercase one catches a code someone typed or OCR'd by hand. Deliberately namespaced under /Q/ rather than a bare /** rewrite, which would swallow every 404 in the app.",
