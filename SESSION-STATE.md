@@ -9,8 +9,61 @@ questions. Not a transcript.
 
 ---
 
-Last updated: 2026-08-24
-Newest: **mold-drawing-revamp merged to main, and everything deployed.**
+Last updated: 2026-08-25
+Newest: **Molds/Inventory targeted pass — density is a field, boards moved to
+Inventory, the 3D view moved onto the mold.** Four commits on main, from
+Simon's report that selecting the clamshell and asking for the rotate feature
+"shifts me to the plans with no mold section".
+
+  - **Density is typed, not picked.** It was a `<select>` in three places with
+    three different option lists and two stored types, so a board of any other
+    grade could not be entered at all — and a mold already set to 45 matched
+    zero boards and silently re-prefilled as 30. `canonDensity()` in core.js is
+    now the one form; free entry with a datalist of the catalogue unioned with
+    what is actually on the rack. Board and plan density stay numbers, mold
+    density stays a string, so no migration: the coercion produces a
+    byte-identical `SZ:` key for everything already stored. `packer.js` is
+    deliberately untouched (no core.js in the worker) and does not need to be —
+    both its inputs canonicalise first.
+  - **Boards live in Inventory**, as a fourth segment beside Items list and
+    Materials list. The data always agreed — `invIndex()` has bucketed
+    `DB.stock` by location for as long as boards have had one. `ID_TO_COLL` is
+    NOT changed (that would break `consumePendingLink`, `invMoveHere` and
+    `test_route`); `moldsOrBoardsFor()` splits on the id instead, so `stock`
+    stays one collection with two homes. Fixes a standing wart: a board chip on
+    a shelf's contents page used to throw you out of Inventory into Molds.
+  - **The clamshell bug, both halves.** The 3D viewer only lived on the plan
+    pane, so the mold offered a button that SELECTED THE PLAN to reach it; and
+    the rail's keep-the-selection-alive guard pushed that linked plan into the
+    ORPHAN list, conjuring a "Plans with no mold" header over a row printing
+    its own mold id. Viewer is on the mold now; guard only re-adds a plan that
+    is genuinely an orphan; `moldsRailSelId()` keeps the mold row highlighted
+    and the keyboard walking from it. `planIsOrphan()` folds three
+    contradictory definitions into one — a plan whose mold had been deleted
+    used to be listed as adoptable and refused by `createMoldFromPlan`.
+  - **Rail groups molds by stage**, the grouping being a partition of the
+    already-sorted array so DOM order and keyboard order cannot diverge. That
+    needed a real fix first: the no-home filter was applied at render time, not
+    with the other filters, so with the chip on ↓ already walked invisible
+    molds. Season view gains "Needs a hand" (no home, machined with no plan,
+    plans with slicer warnings, plans with no mold).
+  - `mvSweep()` closes a GL-context leak that mattered once every planned mold
+    had a viewer: `mvTeardown` was only ever called from inside `mvMount`.
+
+  KNOWN, NOT FIXED: `tile(n, label, "warn")` on a `.stat-tile` does nothing —
+  `.bignum` sets its own colour and wins on source order. Affects the Molds
+  overview's "No home location" tile and predates this work. Fixing it means a
+  rule in `06 Design System/components.css` plus a style-guide rebuild and a
+  `/design-sync`, which was out of scope for a targeted pass. Simon's call.
+
+  NOT DEPLOYED YET at time of writing — see whether a later entry says
+  otherwise. Suites all green: test_app 547, appui 1242, detailui 885,
+  route 38, packer 24, designsystem 23, labels 36, drawings 9, scan 47,
+  slicer 38, qr 69, print_mobile 14. `make_mockups.mjs` regenerated; its only
+  failure is the CFD `DP_22_variant.pdf` shot, which is gitignored and fails on
+  any machine that has not built that file locally.
+
+Previous: **mold-drawing-revamp merged to main, and everything deployed.**
 The branch (tracker feed + datasheet unlisting, already live since Aug 15/18)
 is merged into main as `1b227b9`; the only conflicts were additive lists in
 `tools/test_app.mjs` and `tools/README.md`. The inventory work's OPEN item

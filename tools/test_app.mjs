@@ -4104,7 +4104,7 @@ await t("Boards is the fourth Inventory list, beside items and materials", () =>
   assert(h.includes("newBoard()"), "+ Board came with them — the only way to add one");
   assert(h.includes("30 lb/ft³") && h.includes("60 lb/ft³"),
     "grouped by grade, the axis the packer refuses to substitute across");
-  assert(h.includes("No location"), "a board with no shelf is counted, not hidden");
+  assert(h.includes("board with no location"), "a board with no shelf is counted, not hidden");
   assert(h.includes("Board on hand, by thickness"),
     "the by-thickness split moved here — it is the question you ask at the rack");
 

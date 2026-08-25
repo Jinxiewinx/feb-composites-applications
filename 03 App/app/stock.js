@@ -261,7 +261,13 @@ function renderBoardsList() {
   const boards = groups.reduce((n, g) => n + g.qty, 0);
   const m2 = groups.reduce((n, g) => n + g.m2, 0);
   const homeless = (DB.stock || []).filter(b => !b.location).length;
-  const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
+  /* No `warn` variant on the number: .bignum sets its own colour and wins on
+     source order, so the class the Molds overview passes for the same purpose
+     has never done anything. Making it work means a rule in components.css and
+     a re-sync of the published style guide, which is not this change. The
+     tile is only rendered when the count is non-zero, so its presence is the
+     signal. */
+  const tile = (n, label) => `<div class="stat-tile"><div class="bignum">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
 
   /* Board on hand by thickness. This used to sit on the Molds overview, which
      is the wrong place to ask it: it is the question you ask standing at the
@@ -273,7 +279,7 @@ function renderBoardsList() {
   return `
   <div class="stat-row">
     ${tile(groups.length, "Sizes")}${tile(boards, "Boards")}${tile(m2.toFixed(1), "m² on hand")}${
-      homeless ? tile(homeless, "No location", "warn") : ""}
+      homeless ? tile(homeless, homeless === 1 ? "board with no location" : "boards with no location") : ""}
   </div>
   <div class="filters no-print">
     <input id="searchbox" placeholder="search size / label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
@@ -290,7 +296,7 @@ function renderBoardsList() {
   ${boardsByGrade(groups).map(([d, gs]) => `
     <div class="card">
       <div class="pgrouphd"><span class="pg-name">${d} lb/ft³</span>
-        <span class="pg-n">${gs.reduce((n, g) => n + g.qty, 0)} boards</span>
+        <span class="pg-n">${gs.reduce((n, g) => n + g.qty, 0)} board${gs.reduce((n, g) => n + g.qty, 0) === 1 ? "" : "s"}</span>
         <span class="pg-n">${gs.length} size${gs.length === 1 ? "" : "s"}</span>
         <span class="pg-n">${gs.reduce((n, g) => n + g.m2, 0).toFixed(1)} m²</span></div>
       <table class="list">

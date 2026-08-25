@@ -186,8 +186,11 @@ function moldsRailItem(kind, o) {
         ? `<span class="tny muted">${esc(home.length > 18 ? home.slice(0, 17) + "…" : home)}</span>`
         : `<span class="tny warn">no home</span>`}</span>
       <span class="pi-sub"><span class="prog3"><span class="sg ${moldStageMarkClass(o)}" title="${esc(o.stage || "")}"><b>M</b><i style="width:${moldStagePct(o)}%"></i></span></span><span class="tny muted">${moldStagePct(o)}%</span></span>
-      <span class="pi-who">${hasPlan ? "" : `<span class="tny muted">no plan</span>`}${
-        Number(o.uses) ? `<span class="tny muted">${esc(o.uses)} uses</span>` : ""}</span>
+      <span class="pi-who">${(bits => bits.length
+        ? `<span class="tny muted">${bits.join(" · ")}</span>` : "")([
+          hasPlan ? "" : "no plan",
+          Number(o.uses) ? `${esc(o.uses)} uses` : "",
+        ].filter(Boolean))}</span>
     </div>`;
   }
   if (kind === "plan") {
@@ -246,12 +249,15 @@ function renderMoldsRail() {
       ${total === 0 ? `<div class="pempty muted">${
         (DB.molds || []).length ? "Nothing matches these filters."
         : "Nothing here yet — <b>+ Mold</b>, or import the SN5 molds with <b>Find molds in work orders</b> under Reports."}</div>` : ""}
-      ${moldsStageGroups(molds).map(g => moldsGroupHead(g.stage, [
-        `${g.rows.length}`,
-        g.rows.filter(m => !m.location).length ? `${g.rows.filter(m => !m.location).length} no home` : "",
-      ]) + g.rows.map(m => moldsRailItem("mold", m)).join("")).join("")}
+      ${/* Count only. "no home" belongs to the row that has it — every row
+            already says so in red, and the chip above counts them — and a
+            header reading "1  1 no home" is two numbers you have to stop and
+            tell apart. */
+        moldsStageGroups(molds).map(g => moldsGroupHead(g.stage, [
+          `${g.rows.length} mold${g.rows.length === 1 ? "" : "s"}`,
+        ]) + g.rows.map(m => moldsRailItem("mold", m)).join("")).join("")}
       ${plans.length ? moldsGroupHead("Unlinked plans", [
-        `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn}` : ""]) : ""}
+        `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn} with warnings` : ""]) : ""}
       ${plans.map(p => moldsRailItem("plan", p)).join("")}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
