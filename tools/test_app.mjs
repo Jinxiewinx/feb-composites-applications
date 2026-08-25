@@ -3528,15 +3528,16 @@ await t("mark cut: an unticked unit stays, and a rack changed under the plan abo
 });
 await t("the rack shows one row per size, and escapes labels where they appear", async () => {
   DB.stock = [];
-  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fSub: "" }; render();
+  // The rack lives in Inventory now, not on the Molds rail.
+  view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null, q: "", invDens: "", fSub: "" }; render();
   assert(main.innerHTML.includes("No board stock recorded yet"), "empty state should explain what to do");
-  // Two boards, same size, different labels: one rail row, quantity two.
+  // Two boards, same size, different labels: one list row, quantity two.
   fillBoard({ label: "rack A" }); await submitBoard(null);
   fillBoard({ label: '<img src=x onerror=alert(1)>' }); await submitBoard(null);
   const g = groupBoards(DB.stock);
   assert(g.length === 1 && g[0].qty === 2, "same size is one row, got " + g.length + " rows");
-  view = { ...view, tab: "molds", mode: "list", id: null }; render();
-  assert(!main.innerHTML.includes("rack A"), "the rail lists sizes, not individual boards");
+  view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null }; render();
+  assert(!main.innerHTML.includes("rack A"), "the list shows sizes, not individual boards");
   // The labels come back on the size pane, and must still be inert there.
   view = { ...view, mode: "detail", id: g[0].id }; render();
   assert(main.innerHTML.includes("rack A"), "the boards themselves are one click away");
@@ -3605,10 +3606,11 @@ await t("mm and inch boards both land in the same on-hand bucket by real size", 
 await t("deleting a board is lead-only in the UI and drops it from the list", async () => {
   DB.stock = []; fillBoard(); await submitBoard(null);
   const id = DB.stock[0].id;
-  // The delete control moved from the old list rows onto the board's detail
-  // pane when Stock merged into Molds; select the board to see it.
-  view = { ...view, tab: "molds", mode: "detail", id };
-  render();
+  /* The delete control lives on the board's own pane, not on a list row.
+     openRecord rather than a hand-set view, so this also proves the routing:
+     a BRD- id resolves through the hidden `stock` tab onto Inventory. */
+  openRecord("stock", id);
+  assert(view.tab === "inventory" && view.invView === "boards", "a board opens where boards live");
   assert(main.innerHTML.includes("delBoard"), "a lead should see the delete control");
   delBoard(id); confirmProceed();
   assert(DB.stock.length === 0, "the board should be gone locally");
@@ -5047,22 +5049,22 @@ await t("planning a mold creates the mold record, linked, and lands on it", asyn
     "landing on the mold, the record the CS-003 sign-off hangs off");
 });
 
-await t("the merged rail shows molds, plans and boards as three groups", async () => {
+await t("the Molds rail is molds and orphaned plans — boards are Inventory's", async () => {
   view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fSub: "", fRetired: false, fNoHome: false };
   render();
   const h = main.innerHTML;
   /* Stack plans are no longer a rail group: a plan is a mold's file, reached
      through the mold. Only ORPHANED plans still show, under their own header. */
   assert(!h.includes("Stack plans"), "plans are reached through their mold, not listed beside it");
-  assert(h.includes("Boards"), "boards are still a group");
   assert(h.includes(DB.molds[0].id), "the auto-created mold is a rail row");
-  // Boards are rail rows BY SIZE, not one per document: Simon, "we don't need
-  // each of them being their own item as we really only care about xyz and
-  // density". The BRD- id still resolves, just not from here.
-  assert(!h.includes("BRD-0"), "individual board ids do not clutter the rail");
-  assert(h.includes(groupLabel(groupBoards(DB.stock)[0])), "a size is a rail row");
-  assert(h.includes("sizes"), "the boards group header counts sizes as well as boards");
-  assert(h.includes("m²"), "the boards group header carries the on-hand area");
+  /* Boards are a thing on a shelf, and the shelves are in Inventory. Nothing
+     about the rack belongs on a rail about molds. */
+  assert(!h.includes(groupLabel(groupBoards(DB.stock)[0])), "no board sizes on the Molds rail");
+  assert(!h.includes("BRD-0"), "and no board ids either");
+  assert(!h.includes("newBoard()"), "+ Board went with them");
+  // One number stays: whether there is board to cut, which is a mold question.
+  assert(h.includes("m² board on hand"), "the headline m² survives as a tile");
+  assert(/invView:'boards'/.test(h), "and the tile is the way through to the rack");
 });
 
 await t("a BRD- id opens a real board detail page, in Inventory where boards live", async () => {

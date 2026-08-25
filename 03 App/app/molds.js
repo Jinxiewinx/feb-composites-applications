@@ -1,19 +1,8 @@
 "use strict";
-/* molds.js — the merged Molds tab: molds, stack plans and tooling boards as
-   one master–detail split.
+/* molds.js — the Molds tab: molds and their stack plans as one master–detail
+   split.
 
-   WHY ONE TAB. A mold is made FROM boards THROUGH a stack plan; the three
-   records describe one physical process, and splitting them across two tabs
-   left the connections broken in both directions: a mold's "Cut from board"
-   chip landed on a list (boards had no detail page), a scanned BRD- label
-   dead-ended the same way, and a stack plan was an island a free-text name
-   deep — planning a mold created no mold record at all.
-
-   SHAPE. The Parts tab's split, transcribed rather than abstracted: a
-   persistent rail on the left, the selected record on the right, the season
-   view when nothing is picked.
-
-   The rail is MOLDS and BOARDS. A stack plan is a mold's file, not a record
+   WHY ONE TAB FOR MOLDS AND PLANS. A stack plan is a mold's file, not a record
    beside it — Simon: "you can condense molds and stock plans, they function the
    same... there should only be an option to make a mold." So the mold carries
    currentPlanId, plans are reached through their mold, and one + Mold button
@@ -22,26 +11,32 @@
    mold is missing, which has nothing to be reached through and would otherwise
    be invisible.
 
-   The Boards group lists SIZES, one row per length x width x thickness x
-   density with a quantity, because that is how anybody standing in front of
-   the rack would describe it. The board documents still exist one per board —
-   a BRD- label is stuck to a physical board — and come back on the size pane.
-   ↑/↓ or j/k walk the rail, `1` advances the selected mold one named stage
-   through the same quickAdvance the detail button uses, `/` searches, esc
-   clears. At or below 900px the same markup collapses to list-then-detail via
-   `has-sel`, exactly like parts.js — see the responsive block in index.html.
+   WHY BOARDS ARE NOT HERE. They used to be, as a third rail group. A board is
+   a thing on a shelf, though, and Inventory is where the shelves are — it had
+   already been bucketing DB.stock by location for its storage map and its
+   contents pages. Only the list sat here. It now lives in Inventory beside
+   Items list and Materials list (see the Boards section of stock.js); Molds
+   keeps one number, the m² on hand, as a tile that opens it. A mold's "cut
+   from board" chip and a scanned BRD- label still resolve — moldsOrBoardsFor
+   in core.js routes them to Inventory, so nothing dead-ends the way it did
+   before boards had a detail page at all.
+
+   SHAPE. The Parts tab's split, transcribed rather than abstracted: a
+   persistent rail on the left, the selected record on the right, the season
+   view when nothing is picked. ↑/↓ or j/k walk the rail, `1` advances the
+   selected mold one named stage through the same quickAdvance the detail
+   button uses, `/` searches, esc clears. At or below 900px the same markup
+   collapses to list-then-detail via `has-sel`, exactly like parts.js — see the
+   responsive block in index.html.
 
    WHAT LIVES WHERE. The mold pane is renderShopDetail("molds") embedded, plus
-   its plan's artifacts when one is linked. The plan pane is renderStackPlan()
-   (3D view included — mvMount hooks the plan markup, so the heavy viewer stays
-   there rather than being double-mounted into the mold pane). The board pane
-   is new, read-only, and is what makes BRD- links land somewhere; the modal
-   stays the editor. The cut list keeps its full-width takeover: it is a batch
-   print artifact, not a record.
+   its plan's artifacts when one is linked. The plan pane is renderStackPlan(),
+   reached for a plan with no mold to be shown through. The cut list keeps its
+   full-width takeover: it is a batch print artifact, not a record.
 
    The old `stock` TABS row survives hidden, so #/stock links, stored
-   notification links and every test literal keep resolving; render()
-   normalises it to this tab. Collections, prefixes and rules are untouched. */
+   notification links and every test literal keep resolving. Collections,
+   prefixes and rules are untouched. */
 
 function moldRecById(id) { return (DB.molds || []).find(m => m.id === id); }
 
@@ -50,11 +45,8 @@ function moldsSelected() {
   if (view.mode !== "detail" && view.mode !== "plan") return null;
   const id = String(view.id || "");
   if (id.startsWith("MOLD-")) return { kind: "mold", rec: moldRecById(id) };
-  // A size row is what the rail shows. A BRD- id still resolves, because a
-  // scanned label and a mold's "cut from board" chip both point at one board,
-  // not at a size.
-  if (id.startsWith("SZ:")) return { kind: "size", rec: boardGroupByKey(id.slice(3)) };
-  if (id.startsWith("BRD-")) return { kind: "board", rec: boardById(id) };
+  // Boards are Inventory's now — moldsOrBoardsFor sends a BRD- or SZ: id
+  // there, so one arriving here is stale and falls through to the overview.
   if (id.startsWith("STK-")) return { kind: "plan", rec: planById(id) };
   return null;
 }
@@ -99,23 +91,19 @@ function moldsRailRows() {
     .filter(p => has(p))
     .slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
 
-  /* One row per SIZE, not per board. Sorted thin-to-thick then biggest-first,
-     which is how the rack itself is stacked. */
-  let boards = groupBoards(DB.stock || []).filter(g => has(g, groupLabel(g)));
-
   /* The selected record never falls out from under you — same rule as the
      Parts rail, and the reason a filter can't blank the pane you are reading. */
   const sel = moldsSelected();
   if (sel && sel.rec) {
-    const lists = { mold: molds, plan: plans, size: boards };
+    const lists = { mold: molds, plan: plans };
     const l = lists[sel.kind];
     if (l && !l.includes(sel.rec)) l.push(sel.rec);
   }
-  return { molds, plans, boards };
+  return { molds, plans };
 }
 function moldsFlatRows() {
-  const { molds, plans, boards } = moldsRailRows();
-  return [...molds, ...plans, ...boards];
+  const { molds, plans } = moldsRailRows();
+  return [...molds, ...plans];
 }
 
 function moldsRailItem(kind, o) {
@@ -142,14 +130,7 @@ function moldsRailItem(kind, o) {
       <span class="pi-who">${o.moldId ? `<span class="tny muted">${esc(o.moldId)}</span>` : `<span class="tny muted">no mold</span>`}</span>
     </div>`;
   }
-  // a size of board, however many of them there are
-  return `<div class="pitem ${sel ? "sel" : ""}" id="pi-${esc(o.id)}" role="option" aria-selected="${sel}"
-      title="${esc(groupLabel(o))} · ${esc(o.density)} lb/ft³" onclick="${open}">
-    <span class="pi-name">${esc(groupLabel(o))}</span>
-    <span class="pi-due"><span class="tny muted">${o.m2.toFixed(2)} m²</span></span>
-    <span class="pi-sub"><span class="tny">${esc(o.density)} lb/ft³</span></span>
-    <span class="pi-who"><span class="tny muted">×${esc(o.qty)}</span></span>
-  </div>`;
+  return "";
 }
 
 function moldsGroupHead(name, bits) {
@@ -158,14 +139,13 @@ function moldsGroupHead(name, bits) {
 }
 
 function renderMoldsRail() {
-  const { molds, plans, boards } = moldsRailRows();
+  const { molds, plans } = moldsRailRows();
   const allMolds = DB.molds || [];
   const retired = allMolds.filter(m => m.stage === "Retired").length;
   const ready = allMolds.filter(m => m.stage === "Ready for layup").length;
   const noHome = allMolds.filter(m => m.stage !== "Retired" && !m.location).length;
   const planWarn = (DB.stackplans || []).filter(p => (p.warnings || []).length).length;
-  const m2 = (DB.stock || []).reduce((n, b) => n + boardAreaM2(b), 0);
-  const total = molds.length + plans.length + boards.length;
+  const total = molds.length + plans.length;
   const sel = moldsSelected();
 
   return `
@@ -173,7 +153,6 @@ function renderMoldsRail() {
     <div class="pindex-head no-print">
       <div class="toolbar">
         <button class="primary ib" onclick="uploadMold()">+ Mold</button>
-        <button class="ib" onclick="newBoard()">+ Board</button>
       </div>
       <div class="toolbar">
         ${(DB.stackplans || []).length ? `<button class="ib" onclick="view={...view,mode:'cuts',cutSel:''};render()">${icon("print", 15)} Cut list</button>` : ""}
@@ -185,26 +164,23 @@ function renderMoldsRail() {
           onclick="view.fNoHome=!view.fNoHome;render()"><b>${noHome}</b> no home</button>` : ""}
       </div>
       <div class="pfilters">
-        <input id="searchbox" placeholder="search molds / boards / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+        <input id="searchbox" placeholder="search molds / plans / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
         <select title="Mold stage" onchange="view.fStatus=this.value;render()">
           <option value="">All stages</option>
           ${MOLD_STAGE.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
         </select>
       </div>
     </div>
-    <div class="plist" role="listbox" aria-label="Molds, plans and boards">
+    <div class="plist" role="listbox" aria-label="Molds and plans">
       ${total === 0 ? `<div class="pempty muted">${
-        (DB.molds || []).length + (DB.stock || []).length ? "Nothing matches these filters."
-        : "Nothing here yet — <b>+ Mold</b>, <b>+ Board</b>, or import the SN5 molds with <b>Find molds in work orders</b> under Reports."}</div>` : ""}
+        (DB.molds || []).length ? "Nothing matches these filters."
+        : "Nothing here yet — <b>+ Mold</b>, or import the SN5 molds with <b>Find molds in work orders</b> under Reports."}</div>` : ""}
       ${molds.length || (DB.molds || []).length ? moldsGroupHead("Molds", [
         `${ready} ready`, noHome ? `${noHome} no home` : "", `${molds.length} shown`]) : ""}
       ${molds.filter(m => !view.fNoHome || !m.location).map(m => moldsRailItem("mold", m)).join("")}
       ${plans.length ? moldsGroupHead("Plans with no mold", [
         `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn}` : ""]) : ""}
       ${plans.map(p => moldsRailItem("plan", p)).join("")}
-      ${boards.length || (DB.stock || []).length ? moldsGroupHead("Boards", [
-        `${boards.reduce((n, g) => n + g.qty, 0)} boards`, `${boards.length} sizes`, `${m2.toFixed(1)} m²`]) : ""}
-      ${boards.map(g => moldsRailItem("size", g)).join("")}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
     <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
@@ -236,10 +212,13 @@ function moldsOverview() {
   const noHome = live.filter(m => !m.location).length;
   const m2 = (DB.stock || []).reduce((n, b) => n + boardAreaM2(b), 0);
 
-  const buckets = {};
-  (DB.stock || []).forEach(b => { buckets[thkKey(b)] = (buckets[thkKey(b)] || 0) + boardAreaM2(b); });
-
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
+  /* The one board number Molds still carries. The rack itself is Inventory's
+     now, but "have we got board" is a mold-making question, so the headline
+     stays here and the tile is the way through to the list. */
+  const boardTile = `<div class="stat-tile" role="button" tabindex="0" title="Open the rack in Inventory"
+      onclick="view={...view,tab:'inventory',invView:'boards',mode:'list',id:null,q:''};render();syncUrl()">
+    <div class="bignum">${m2.toFixed(1)}</div><div class="stat-label">m² board on hand ▸</div></div>`;
 
   // Where the live molds stand, MOLD_STAGE order — the parts-tab bar idiom.
   // Shared with the Dashboard's Season panel, so it lives in its own function.
@@ -263,19 +242,13 @@ function moldsOverview() {
   return `
   <section class="mddetail" aria-label="Molds overview">
     <div class="stat-row">
-      ${tile(live.length, "Molds")}${tile(ready, "Ready for layup")}${tile(noHome, "No home location", noHome ? "warn" : "")}${tile(m2.toFixed(1), "m² board on hand")}
+      ${tile(live.length, "Molds")}${tile(ready, "Ready for layup")}${tile(noHome, "No home location", noHome ? "warn" : "")}${boardTile}
     </div>
     <div class="card">
       <h2>Mold making this season</h2>
-      <div class="muted">${live.length} live mold${live.length === 1 ? "" : "s"} · ${(DB.stackplans || []).length} stack plan${(DB.stackplans || []).length === 1 ? "" : "s"} · ${(DB.stock || []).length} board${(DB.stock || []).length === 1 ? "" : "s"} on the rack. Pick anything on the left to open it.</div>
+      <div class="muted">${live.length} live mold${live.length === 1 ? "" : "s"} · ${(DB.stackplans || []).length} stack plan${(DB.stackplans || []).length === 1 ? "" : "s"}. Pick anything on the left to open it.</div>
       ${stageBar}
       ${shortLine}
-    </div>
-    <div class="card">
-      <h3>Board on hand</h3>
-      ${Object.keys(buckets).length ? `<div class="grid">
-        ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} m²</div></div>`).join("")}
-      </div>` : `<span class="muted">No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS${isLead() ? ", or <b>Load SN5 archive</b> to start from the rack SN5 left behind" : ""}.</span>`}
     </div>
     ${unlinked.length && isLead() ? `<div class="card">
       <h3>Plans with no mold record</h3>
@@ -284,96 +257,6 @@ function moldsOverview() {
         <span class="pm-name">${esc(p.name || p.id)}</span>
         <span class="pm-due muted tny">${fmtWhen(p.ts)}</span></div>`).join("")}
     </div>` : ""}
-  </section>`;
-}
-
-/* ---------- size pane ----------
-   What the rail now opens: a size of board, and however many of them are on
-   the rack. The individual documents are still here, at the bottom, because a
-   BRD- id is what a printed label carries and what `mold.board` points at —
-   but you have to want them. Simon: "we really only care about xyz and
-   density." */
-function moldsSizePane(g) {
-  if (!g) { view.mode = "list"; view.id = null; return moldsOverview(); }
-  const ids = new Set(g.members.map(b => b.id));
-  const usedBy = (DB.molds || []).filter(m => ids.has(m.board));
-  const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
-  return `
-  <section class="mddetail" aria-label="Board size detail">
-    <div class="toolbar no-print">
-      <button class="ib" onclick="clearMoldsSelection()">${icon("chevronLeft", 16)} All molds</button>
-      <button class="primary ib" onclick="newBoard()">+ Board this size</button>
-      <span class="mdnav no-print">
-        <button class="sm" title="Previous (↑)" onclick="moveMoldsSelection(-1)">${icon("chevronLeft", 14)}</button>
-        <button class="sm" title="Next (↓)" onclick="moveMoldsSelection(1)">${icon("chevronRight", 14)}</button>
-      </span>
-    </div>
-    <div class="card">
-      <h2>${esc(groupLabel(g))}</h2>
-      <div class="muted">${esc(g.density)} lb/ft³ · ${esc(g.qty)} on the rack · ${g.m2.toFixed(2)} m² of face</div>
-      <div class="grid">
-        <div class="f"><label>Length</label><div class="ro">${fmtMm(g.lenMm)} <span class="muted tny">(${Math.round(g.lenMm * 10) / 10} mm)</span></div></div>
-        <div class="f"><label>Width</label><div class="ro">${fmtMm(g.widMm)} <span class="muted tny">(${Math.round(g.widMm * 10) / 10} mm)</span></div></div>
-        <div class="f"><label>Thickness</label><div class="ro">${fmtMm(g.thkMm)} <span class="muted tny">(${Math.round(g.thkMm * 10) / 10} mm)</span></div></div>
-        <div class="f"><label>Density</label><div class="ro">${esc(g.density)} lb/ft³</div></div>
-        <div class="f"><label>Quantity</label><div class="ro">${esc(g.qty)}</div></div>
-        <div class="f"><label>Stored at</label><div class="ro">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : "—"}</div></div>
-      </div>
-      ${usedBy.length ? `<h3>Molds cut from boards this size</h3>
-        <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="selectMoldsRec('${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
-      <h3>The boards themselves</h3>
-      <div class="muted tny">One record each, because a BRD- label is stuck to a physical board and a mold points at the one it was cut from.</div>
-      <table class="list">
-        <tr><th>Board</th><th>Qty</th><th>Where</th><th></th></tr>
-        ${g.members.map(b => `<tr>
-          <td onclick="selectMoldsRec('${esc(b.id)}')"><b>${esc(b.label || b.id)}</b> <span class="muted tny">${esc(b.id)}</span>${
-            b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}</td>
-          <td>${esc(b.qty || 1)}</td>
-          <td class="tny">${b.location ? shopRefChip(String(b.location)) : "—"}</td>
-          <td>${labelBtn("stock", b.id)}<button class="ib sm" onclick="editBoard('${esc(b.id)}')">${icon("edit", 14)}</button>${
-            isLead() ? `<button class="danger ib sm" onclick="delBoard('${esc(b.id)}')">${icon("trash", 14)}</button>` : ""}</td>
-        </tr>`).join("")}
-      </table>
-    </div>
-  </section>`;
-}
-
-/* ---------- board pane ----------
-   The detail page boards never had. Read-only on purpose: the modal is already
-   the editor and two editable surfaces for one record is how fields fight. */
-function moldsBoardPane(b) {
-  if (!b) { view.mode = "list"; view.id = null; return moldsOverview(); }
-  const usedBy = (DB.molds || []).filter(m => m.board === b.id);
-  return `
-  <section class="mddetail" aria-label="Board detail">
-    <div class="toolbar no-print">
-      <button class="ib" onclick="clearMoldsSelection()">${icon("chevronLeft", 16)} All molds</button>
-      <button class="primary ib" onclick="editBoard('${esc(b.id)}')">${icon("edit", 15)} Edit</button>
-      ${labelBtn("stock", b.id)}
-      ${isLead() ? `<button class="danger" onclick="delBoard('${esc(b.id)}')">Delete</button>` : ""}
-      <span class="mdnav no-print">
-        <button class="sm" title="Previous (↑)" onclick="moveMoldsSelection(-1)">${icon("chevronLeft", 14)}</button>
-        <button class="sm" title="Next (↓)" onclick="moveMoldsSelection(1)">${icon("chevronRight", 14)}</button>
-      </span>
-    </div>
-    <div class="card" data-lbgroup="stock:${esc(b.id)}">
-      <h2>${esc(b.label || b.id)}</h2>
-      <div class="muted">${esc(b.id)}${
-        b.ts ? " · added " + fmtWhen(b.ts) : ""}${b.createdBy ? " by " + esc(b.createdBy) : ""}</div>
-      <h3>Details</h3>
-      <div class="grid">
-        <div class="f"><label>Length</label><div class="ro">${fmtDim(b.len)}</div></div>
-        <div class="f"><label>Width</label><div class="ro">${fmtDim(b.wid)}</div></div>
-        <div class="f"><label>Thickness</label><div class="ro">${fmtDim(b.thk)}</div></div>
-        <div class="f"><label>Density</label><div class="ro">${esc(b.density)} lb/ft³</div></div>
-        <div class="f"><label>Quantity</label><div class="ro">${esc(b.qty || 1)}</div></div>
-        <div class="f"><label>Area</label><div class="ro">${boardAreaM2(b).toFixed(2)} m²</div></div>
-        <div class="f"><label>Stored at</label><div class="ro">${b.location ? shopRefChip(String(b.location)) : "—"}</div></div>
-        ${b.origin ? `<div class="f"><label>From</label><div class="ro">${esc(b.origin)}</div></div>` : ""}
-      </div>
-      ${usedBy.length ? `<h3>Molds cut from this board</h3>
-        <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="selectMoldsRec('${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
-    </div>
   </section>`;
 }
 
@@ -502,8 +385,6 @@ function renderMoldsTab() {
   const sel = moldsSelected();
   let pane;
   if (!sel) pane = moldsOverview();
-  else if (sel.kind === "size") pane = moldsSizePane(sel.rec);
-  else if (sel.kind === "board") pane = moldsBoardPane(sel.rec);
   else if (sel.kind === "plan") pane = moldsPlanPane(sel.rec);
   else pane = `<section class="mddetail" aria-label="Mold detail">${renderShopDetail("molds", { embedded: true })}</section>`;
   const undo = (typeof shopUndoBar === "function" ? shopUndoBar() : "")
