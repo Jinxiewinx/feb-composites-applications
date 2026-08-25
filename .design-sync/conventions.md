@@ -31,32 +31,33 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Kanban | `.col` + `.col-inprogress`/`.col-collecting`/`.col-onhold`/`.col-done`, holding `.pcard` with `.t` and `.meta`. |
 | Feedback | `.gate` (+ `.blocked`) for blocking notices; `.toast` + `.ok`/`.err`/`.info`; `.modal-backdrop` > `.modal` > `.foot`. |
 | WO hero | `.wo-facts` band of `.wo-fact` slots (`.wf-lab` label + `.wf-num` value, `.late` red) plus `.wf-eng` engineer avatars. |
-| WO sections | `.wosec-hd` — per-card section header (gold speed-slash + uppercase label + `.wosec-n` count pill + `.wosec-w` warn word); as a `<summary>` inside `details.wo-fold` it is the always-visible face of a folded section. `.addrow` spaces a trailing add-button. `details.wo-subfold` + `summary.wo-subhd` fold reference blocks (BOM, event log) inside a card. `.fgroup-label` is the second-tier group label above a field grid. |
-| Photos | `.photogrid` of `.phtile` (`.phimg` lazy `<img>` + caption), `.phgrp` group label, `.phmini` 48px step-row thumbs inside `.step-photos`, `.ph-uploading` placeholder. |
+| WO sections | `.wosec` is the section card (a `.card` too); inside it `button.wosec-hd` is the always-visible header (gold speed-slash + uppercase label + `.wosec-n` count pill + `.wosec-w` warn word) and `.wosec-body` is the part that folds. Add `.folded` to the `.wosec` to collapse it — the fold is a class toggle on a real `<button>`, never a `<details>`. `.addrow` spaces a trailing add-button. `details.wo-subfold` + `summary.wo-subhd` fold reference blocks (BOM, event log) inside a card. `.fgroup-label` is the second-tier group label above a field grid. |
+| Photos | `.photogrid` of `.phtile` (`.phimg` lazy `<img>` + `.phcap` caption field), `.phgrp` group label, `.phmini` 48px step-row thumbs inside `.step-photos`, `.ph-uploading` placeholder. |
 | Navigation | `.sidebar` > `.sb-brand`/`.sb-brand-txt`, `.sb-nav` > `.sb-item` (+ `.active`, `.ic`); `.topbar` > `h1`, `.icon-btn` (+ `.badge`). |
 | Avatars | `.avatar`, grouped in `.avatar-stack`. |
 | Receiving | `.rxhead` (the once-per-delivery fields), `table.sub.rxgrid` (the entry sheet — the budget line grid one size up, fixed layout, sticky header, one card per line on a phone), `.rx-fan` (+ `.many`) for the live "3 records" readout, `.rx-na` for a column a class does not have, `.rxfoot`, `.rxbusy` (someone else is receiving right now), `.rxline`. Column widths hang off `.rxc-<field>` on each cell. |
 | Export | `.xgroup` > `.xg-hd` > `.xg-name` for one offered dataset; `.copyout` is the last-resort textarea for a browser that refuses the clipboard. |
 | Storage map | `.loccard` (+ `.alert`) with `.lc-open` as a stretched-link button on the name and `.lc-act` as a sibling above it; `.locempty` collapses empty, recently walked shelves to one line; `.inv-nowhere-bar` sits above the shelves. |
 | Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
-| Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip). |
+| Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip), `.w110` (a 110px width utility for a narrow cell). |
 
 **Four of those families are app-only.** Receiving, Export, Storage map and
 Search results describe patterns that still live in the SN6 app's own
 stylesheet and have not been lifted into `components.css`, so the classes are
 named here for vocabulary but `styles.css` ships no rules behind them — markup
-using them renders unstyled. The same goes for `.wo-fold`, `.wo-subfold`,
-`.wo-subhd`, `.addrow`, `.fgroup-label` and `table.sub` in the WO sections row.
-Everything else in the table is in the stylesheet. If you need one of the
+using them renders unstyled, and `table.sub` is app-only for the same reason.
+Everything else in the table does have rules in the stylesheet, `.wo-subfold`,
+`.wo-subhd`, `.addrow` and `.fgroup-label` included. If you need one of the
 app-only patterns, style it yourself from the tokens.
 
 For your own layout glue, use the tokens rather than literal values: `var(--canvas)`, `var(--card)`, `var(--surface-2)`, `var(--line)`, `var(--ink)`, `var(--muted)`, `var(--accent)`, `var(--blue)`, `var(--gold)`, spacing via `var(--radius)`/`var(--r-md)`/`var(--r-lg)`, and motion via `var(--t)`/`var(--t-fast)`/`var(--ease)`. Status colors come as triads: `--ok`/`--ok-bg`/`--ok-border`, and the same shape for `--bad`, `--retro`, `--purple`. The warning triad is the one asymmetric case: the text color is `--amber`, but the surfaces are `--warn-bg` and `--warn-border`.
 
-## Three things that will bite you
+## Four things that will bite you
 
 1. **Button modifiers are element-scoped.** The selectors are `button.primary`, `button.gold`, `button.danger`, `button.link`. An `<a class="btn primary">` gets the base button look and nothing else. Use a real `<button>` whenever you want a variant.
 2. **`.status` needs its dot.** The first child must be `<span class="dot"></span>`, which the class colors per state. Without it the badge reads as a plain label.
 3. **`table.list` does not collapse on its own.** The responsive stacked-card behavior lives in the consuming app, via a media query that hides the header row and reads `data-label` off each cell. Carry that rule across if the table has to work narrow.
+4. **Never build a fold out of `<details>`.** A closed `<details>` skips painting its content rather than merely hiding it, and it vanished from browser print. Folds here are a class on a container — `.wosec.folded` hides `.wosec-body` — driven by a real `<button>`. The one exception is `.wo-subfold`, a genuine `details`/`summary` pair used only for reference blocks inside a card.
 
 ## Where the truth lives
 

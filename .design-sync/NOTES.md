@@ -55,15 +55,6 @@ Latest (1.62.1) wants build 1234 and fails with `Executable doesn't exist`.
 Installing `playwright@1.58.0` into `.ds-sync/` avoided a ~200MB download. If the
 cache changes, re-derive the match rather than assuming 1.58.0.
 
-## Finding: `--warn` is documented but does not exist
-
-`06 Design System/README.md` lists the warning triad as "`--amber` / `--warn`
-(warning)". There is no `--warn` token in `tokens.css`, and nothing references
-`var(--warn)`. The real triad is asymmetric: text is `--amber`, surfaces are
-`--warn-bg` and `--warn-border`. The conventions header documents the actual
-shape. The README is the thing that needs fixing, and that is Simon's file to
-change, so it has been reported rather than edited.
-
 ## Known render warns
 
 None. Zero previews exist, so the render check has nothing to flag. A future
