@@ -20,10 +20,9 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**Unshipped: everything since `50cadbe`.** The Molds/Inventory pass and the
-stat-tile/design-sync follow-ups are all committed to main and **not deployed**
-at time of writing. Check whether a later Recent log entry says otherwise
-before assuming live matches main. Suites were green at each commit.
+**Live matches main.** The Molds/Inventory pass, the stat-tile states and the
+Inventory/Receiving follow-ups are all on main and deployed, each verified by
+curling the changed file off the live host rather than trusting the CLI.
 
 - Density is free entry through `canonDensity()` in `core.js`, not a `<select>`.
   Board and plan density stay numbers, mold density stays a string,
@@ -39,6 +38,17 @@ before assuming live matches main. Suites were green at each commit.
 - `.bignum` now carries `.bad`/`.warn`/`.ok` states in both the app CSS and
   `components.css`, mirroring the dashboard's `.bnum` so one word means one
   colour everywhere. The style guide was rebuilt and the design sync ran.
+- **Every storage location is a card on the map**, empty ones included — the
+  collapsed `.locempty` strip is gone. It hid the shelves you most need
+  reminding you own, and it was the one place on that page where clicking the
+  row did nothing. `+ Location` moved off the items list onto the map; the
+  `newOn` flag in a SHOP class spec is what suppresses a class's + button on a
+  list and names where it lives instead.
+- The receiving desk's HOW MANY readout shares one line with its input.
+  It must stay short — "1 of 3", not "1 record of 3" — because the column is
+  deliberately narrow to protect the material-name width, and `test_receiving_ui`
+  fails below a 150px name input at 1201px. Widening that column is what breaks
+  it; the space came out of an oversized count input instead.
 
 **Open finding, reported not done: 25 documented classes have no rules behind
 them.** Validating `conventions.md` against the built CSS turned up the whole
@@ -234,6 +244,12 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
+**2026-08-25 (latest) — storage map, and the receiving count column.** Adding a
+location moved from the items list to the map, where the shelves are. Empty
+shelves stopped collapsing into a text strip: they are quieter cards now, so
+every location is visible and clickable anywhere, which the strip was not. The
+HOW MANY readout was wrapping to three lines and reads "1 of 12" on one line.
+
 **2026-08-25 (later) — stat-tile states, and a design sync.** Simon asked why
 the warn colour never showed: `.bignum` set its own colour and won on source
 order, so tiles had been passing a state class for a year and staying navy.
@@ -264,11 +280,3 @@ what finally lets the CS-011 §6 resin/hardener check fire at all. Reorder moved
 off the jug and onto the material, because the old model literally could not
 express "we are completely out". Export as CSV/TSV, since a team that doubts it
 can get its data out keeps a shadow spreadsheet.
-
-**2026-08-21 — the repo builds and tests on Windows.** Simon develops on both
-machines from here on. Three portability bugs, all found by running the suite
-on a bare Windows box: a CRLF checkout defeated `test_app.mjs`'s strict-mode
-strip (fixed durably by `.gitattributes`; `git add --renormalize .` produced
-zero churn), and two bare-path-to-`file://` bugs made every browser suite print
-SKIPPED and exit 0 *with* Playwright installed — now `pathToFileURL()`.
-`SETUP.md` was written this session as the new-machine walkthrough.

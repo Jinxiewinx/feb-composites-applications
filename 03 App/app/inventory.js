@@ -475,13 +475,13 @@ function invCard(bin, bucket) {
      stretched over the whole card by its ::after, and Confirm as a SIBLING
      sitting above it on the z-axis. Two real buttons, both tab-reachable, both
      announced, and no stopPropagation anywhere. */
-  return `<div class="loccard ${alert ? "alert" : ""}" title="${esc(bin.id)}">
+  return `<div class="loccard ${alert ? "alert" : ""} ${n ? "" : "isempty"}" title="${esc(bin.id)}">
     ${warns.map(w => `<div class="lc-warn ${w.cls}">${icon("warning", 12)} ${esc(w.text)}</div>`).join("")}
     <div class="lc-hd">
       <button class="lc-open lc-name" onclick="selectInvRec('${esc(bin.id)}')">${esc(bin.name || bin.id)}</button>
       ${bin.locKind ? `<span class="kind">${esc(bin.locKind)}</span>` : ""}
       ${bin.flam === "Yes" ? `<span class="kind lc-flam" title="Rated for flammables">◆ flam</span>` : ""}</div>
-    <div class="lc-body">${n ? parts.map(([c, l]) => `<span>${c} ${l}</span>`).join(" · ") : '<span class="muted">empty</span>'}</div>
+    <div class="lc-body">${n ? parts.map(([c, l]) => `<span>${c} ${l}</span>`).join(" · ") : '<span class="muted">nothing on it</span>'}</div>
     ${age != null && age <= INV_WALK_STALE_DAYS ? "" :
       `<div class="lc-foot tny muted">${age == null ? "contents never confirmed" : `walked ${age}d ago ⚠`}</div>`}
     <button class="sm lc-act no-print" onclick="invConfirmContents('${esc(bin.id)}')">${icon("check", 13)} Confirm</button>
@@ -515,15 +515,25 @@ function renderInvMap() {
     if (d > INV_WALK_STALE_DAYS) return 2;
     return 3;
   };
+  /* Within one rank, a shelf with something on it comes first. Emptiness is
+     not an attention state — an unwalked empty shelf still needs walking — so
+     it breaks ties rather than overriding the rank, which keeps every shelf on
+     the map without letting a row of empties push the substantive ones down. */
+  const isEmpty = (b) => invBucketCount(idx.by.get(b.id) || invEmptyBucket()) === 0;
   for (const arr of bySite.values()) {
-    arr.sort((a, b) => rank(a) - rank(b) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+    arr.sort((a, b) => rank(a) - rank(b)
+      || (isEmpty(a) ? 1 : 0) - (isEmpty(b) ? 1 : 0)
+      || String(a.name || a.id).localeCompare(String(b.name || b.id)));
   }
-  /* An empty, recently walked shelf is a fact, not a card. In a real shop this
-     is over half the list, and it costs one line instead of a grid cell each. */
-  const quiet = (s) => bySite.get(s).filter(b => {
-    const d = invDaysSince(b.walkedAt);
-    return invBucketCount(idx.by.get(b.id) || invEmptyBucket()) === 0 && d != null && d <= INV_WALK_STALE_DAYS;
-  });
+  /* Empty shelves used to collapse into a one-line text strip, on the argument
+     that an empty recently-walked shelf is a fact rather than a card. It cost
+     more than it saved. The map is the picture of the shop, and a shelf you
+     cannot see on it is a shelf you forget you own — which is the opposite of
+     what a storage map is for. The strip was also the one place on this page
+     where clicking the row did nothing: only the name itself was a target, so
+     "click a shelf to see what is on it" stopped being true halfway down.
+     Every location is a card. An empty one is quieter, not hidden. */
+  const emptyCount = (s) => bySite.get(s).filter(isEmpty).length;
 
   const filtering = !!(q || flag);
   return `
@@ -542,12 +552,13 @@ function renderInvMap() {
     : !bins.length
     ? `<div class="card">Nothing matches${q ? ` “${esc(view.q)}”` : ""}${flag ? " and that filter" : ""}. <b>${all.length}</b> locations in total.</div>`
     : siteOrder.map(s => {
-        const shown = bySite.get(s).filter(b => !quiet(s).includes(b));
+        const rows = bySite.get(s);
+        const nEmpty = emptyCount(s);
         return `<div class="inv-site">
-          <div class="pgrouphd"><span class="pg-name">${esc(s)}</span><span class="pg-n">${bySite.get(s).length} location${bySite.get(s).length === 1 ? "" : "s"}</span></div>
-          <div class="locgrid">${shown.map(b => invCard(b, idx.by.get(b.id) || invEmptyBucket())).join("")}</div>
-          ${quiet(s).length ? `<div class="locempty"><span class="le-lab">empty</span>${quiet(s).map(b =>
-            `<button class="lc-open" onclick="selectInvRec('${esc(b.id)}')">${esc(b.name || b.id)}</button>`).join("")}</div>` : ""}
+          <div class="pgrouphd"><span class="pg-name">${esc(s)}</span>
+            <span class="pg-n">${rows.length} location${rows.length === 1 ? "" : "s"}</span>
+            ${nEmpty ? `<span class="pg-n">${nEmpty} empty</span>` : ""}</div>
+          <div class="locgrid">${rows.map(b => invCard(b, idx.by.get(b.id) || invEmptyBucket())).join("")}</div>
         </div>`;
       }).join("")}`;
 }
@@ -567,14 +578,20 @@ function invNowhereBar(idx) {
   </div>`;
 }
 
+/* Each view's primary action is the thing that view is ABOUT. + Location used
+   to sit on all four, which put "make a new shelf" on the items list — a page
+   about what is stored, not about where — and left the map, which is the
+   picture of the shelves, without it. Simon: "it makes more sense to have
+   adding locations being on the storage map page." */
 function invToolbar(active) {
   const seg = (id, label) => `<button class="ib ${active === id ? "primary" : ""}" ${active === id ? "" : `onclick="view.invView='${id}';view.mode='list';view.id=null;render()"`}>${label}</button>`;
+  const primary = active === "boards" ? `<button class="primary ib" onclick="newBoard()">+ Board</button>`
+    : active === "map" ? `<button class="primary ib" onclick="newShopRec('items','BIN')">+ Location</button>`
+    : "";
   return `<div class="toolbar no-print">
     ${seg("map", "Storage map")}${seg("items", "Items list")}${seg("lots", "Materials list")}${seg("boards", "Boards")}
     <span style="flex:1"></span>
-    ${active === "boards" ? `<button class="primary ib" onclick="newBoard()">+ Board</button>
-    <button class="ib" onclick="newShopRec('items','BIN')">+ Location</button>`
-      : `<button class="primary ib" onclick="newShopRec('items','BIN')">+ Location</button>`}
+    ${primary}
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>

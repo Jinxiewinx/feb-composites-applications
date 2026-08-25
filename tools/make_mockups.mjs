@@ -73,9 +73,18 @@ const SHOTS = [
     title: "Molds · the season view",
     note: "With nothing selected, the pane answers the standing questions: where the live molds sit across the stages, whether the planned blanks actually fit what you own, and what needs a hand — molds with no home, molds machined with no stack plan on file, plans carrying a slicer warning nobody has read, and plans with no mold to be reached through." },
   { id: "inventory", kind: "app", badge: 7, vh: 1100,
-    js: `setTab("inventory");`,
+    /* An empty shelf is half a real shop, and it is a card like any other, so
+       the shot has to contain one or it shows a range the map does not have. */
+    js: `
+      DB.items.push(
+        { id: "BIN-SN6-101", cls: "BIN", name: "Cure oven shelf", stage: "Active",
+          site: "RFS container", locKind: "shelf", walkedAt: today() },
+        { id: "BIN-SN6-102", cls: "BIN", name: "Consumables drawer", stage: "Active",
+          site: "RFS container", locKind: "drawer", walkedAt: today() });
+      setTab("inventory");
+    `,
     title: "Inventory · the storage map",
-    note: "One card per shelf, rack and bin, grouped by site, each showing what is on it and what is wrong with it: expired lots, resin and hardener together, flammables outside the rated cabinet, and how long since anyone confirmed the shelf. Search matches what is ON a shelf, so a material name leaves the shelves that have some; a shelf with something wrong leads with the warning and wears a red spine; the monthly stock walk is the Confirm button on the card. Everything with no home sits in the bar above." },
+    note: "One card per shelf, rack and bin, grouped by site, each showing what is on it and what is wrong with it: expired lots, resin and hardener together, flammables outside the rated cabinet, and how long since anyone confirmed the shelf. Click a card anywhere to see what is on that shelf. An empty shelf is a quieter card, never a hidden one — the map is the picture of the shop, and a shelf missing from it is a shelf you forget you own. Search matches what is ON a shelf, so a material name leaves the shelves that have some; a shelf with something wrong leads with the warning and wears a red spine; the monthly stock walk is the Confirm button on the card. New shelves are added here, with + Location." },
   { id: "receiving", kind: "app", badge: 8, vh: 1000,
     js: `
       DB.items = [

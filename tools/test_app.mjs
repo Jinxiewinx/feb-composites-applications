@@ -4239,9 +4239,15 @@ await t("the fan-out is visible while typing, not sprung at the confirm", () => 
   rxLive(rid);
   assert(document.getElementById("rxf-" + rid).textContent === "4 records",
     "typing 4 says 4 records straight away, with no save and no repaint");
+  /* Short on purpose. The readout shares a deliberately narrow cell with the
+     count input, and "1 record of 4" wrapped to three lines — a column reading
+     "4 / 1 record / of 4" looks broken, not informative. The sentence lives in
+     the title instead. */
   RX.rows[0].cls = "CON";
   RX.rows[0].qty = "4";
-  assert(rxFanText(RX.rows[0]) === "1 record of 4", "and the same 4 collapses when it becomes a consumable");
+  assert(rxFanText(RX.rows[0]) === "1 of 4", "and the same 4 collapses when it becomes a consumable");
+  assert(/count of 4/.test(rxFanTitle(RX.rows[0])), "with the long form on hover: " + rxFanTitle(RX.rows[0]));
+  assert(rxFanText({ ...RX.rows[0], qty: "1" }) === "1 record", "one is still spelled out — nothing to compare it to");
 });
 
 await t("rich capture: supplier, cost, lot, expiry and role all land on the record", async () => {
@@ -4749,12 +4755,20 @@ await t("nothing-has-a-home is a bar above the shelves, not a card inside the la
   assert(h.includes("Put them away"));
 });
 
-await t("an empty, recently walked shelf costs one line rather than a grid cell", () => {
+await t("an empty shelf is a quieter card, never a hidden one", () => {
+  /* It used to collapse into a one-line text strip. The map is the picture of
+     the shop, and a shelf missing from it is a shelf you forget you own — and
+     the strip was the one place here where clicking the row did nothing, since
+     only the name itself was a target. */
   seedFind();
   render();
   const h = main.innerHTML;
-  assert(h.includes("locempty"), "the quiet tier exists");
-  assert(h.includes("Basement Shelf B3"), "and the shelf is still reachable from it");
+  assert(!h.includes("locempty"), "no collapsed strip");
+  assert(h.includes("Basement Shelf B3"), "the empty shelf is on the map");
+  // It is a card, carrying the same stretched-link open button as a full one.
+  const card = (h.match(/<div class="loccard[^"]*"[^>]*>(?:(?!<\/div>\s*<div class="loccard)[\s\S])*?Basement Shelf B3/) || [])[0] || "";
+  assert(card.includes("isempty"), "wearing the quiet treatment: " + card.slice(0, 120));
+  assert(/lc-open/.test(card), "and the same click target as any other card");
 });
 
 console.log("running out (PP-02: the flag nobody actioned):");

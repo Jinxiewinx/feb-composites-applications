@@ -207,6 +207,7 @@ function rxPaintFan(rid, r) {
   const el = document.getElementById("rxf-" + rid);
   if (!el) return;
   el.textContent = rxFanText(r);
+  el.title = rxFanTitle(r);
   el.className = "rx-fan" + (rxRecordCount(r).records > 1 && rxFanText(r) ? " many" : "");
 }
 function rxRefresh(rid) {
@@ -496,11 +497,29 @@ function rxGridHtml(cols) {
   </table>`;
 }
 
+/* The readout has to fit BESIDE the count input, on one line, in a cell
+   deliberately kept narrow so the material name keeps its width. "1 record of
+   12" did not: it wrapped to three lines and the column read as broken rather
+   than as information. Short forms, and the long sentence moves to the title. */
 function rxFanText(r) {
   if (!String(r.name || "").trim()) return "";   // an unnamed line makes nothing, and should not say otherwise
   const { records, count } = rxRecordCount(r);
   if (rxIsTracked(r.cls)) return records === 1 ? "1 record" : records + " records";
-  return count === "" || Number(count) === 1 ? "1 record" : "1 record of " + count;
+  return count === "" || Number(count) === 1 ? "1 record" : "1 of " + count;
+}
+/* What the short form means, spelled out for hover and for screen readers —
+   "1 of 3" is compact, not self-explaining. */
+function rxFanTitle(r) {
+  if (!String(r.name || "").trim()) return "";
+  const { records, count } = rxRecordCount(r);
+  if (rxIsTracked(r.cls)) {
+    return records === 1
+      ? "One record: this class is tracked one container per record."
+      : `${records} records, one per container: this class is tracked one container per record.`;
+  }
+  return count === "" || Number(count) === 1
+    ? "One record."
+    : `One record carrying a count of ${count}.`;
 }
 
 function rxRowHtml(r, cols) {
@@ -515,7 +534,7 @@ function rxRowHtml(r, cols) {
         aria-label="What is it" onpaste="rxPaste(event,'${r.rid}')"
         onchange="rxUpd('${r.rid}','name',this.value)">`,
     qty: `<input id="rxq-${r.rid}" class="bl-n" inputmode="numeric" value="${esc(r.qty)}" aria-label="How many"
-        oninput="rxLive('${r.rid}')" onchange="rxUpd('${r.rid}','qty',this.value)"><span class="rx-fan ${many ? "many" : ""}" id="rxf-${r.rid}">${esc(rxFanText(r))}</span>`,
+        oninput="rxLive('${r.rid}')" onchange="rxUpd('${r.rid}','qty',this.value)"><span class="rx-fan ${many ? "many" : ""}" id="rxf-${r.rid}" title="${esc(rxFanTitle(r))}">${esc(rxFanText(r))}</span>`,
     bin: `<select id="rxbin-${r.rid}" aria-label="Shelf" onchange="rxUpd('${r.rid}','bin',this.value)">
         <option value="">— none yet —</option>
         ${invActiveBins().map(b => `<option value="${esc(b.id)}" ${r.bin === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}

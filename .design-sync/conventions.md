@@ -37,7 +37,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Avatars | `.avatar`, grouped in `.avatar-stack`. |
 | Receiving | `.rxhead` (the once-per-delivery fields), `table.sub.rxgrid` (the entry sheet — the budget line grid one size up, fixed layout, sticky header, one card per line on a phone), `.rx-fan` (+ `.many`) for the live "3 records" readout, `.rx-na` for a column a class does not have, `.rxfoot`, `.rxbusy` (someone else is receiving right now), `.rxline`. Column widths hang off `.rxc-<field>` on each cell. |
 | Export | `.xgroup` > `.xg-hd` > `.xg-name` for one offered dataset; `.copyout` is the last-resort textarea for a browser that refuses the clipboard. |
-| Storage map | `.loccard` (+ `.alert`) with `.lc-open` as a stretched-link button on the name and `.lc-act` as a sibling above it; `.locempty` collapses empty, recently walked shelves to one line; `.inv-nowhere-bar` sits above the shelves. |
+| Storage map | `.loccard` (+ `.alert`, + `.isempty` for a shelf with nothing on it) with `.lc-open` as a stretched-link button on the name — its `::after` covers the whole card, so a click anywhere opens it — and `.lc-act` as a sibling above it on the z-axis; `.inv-nowhere-bar` sits above the shelves. |
 | Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
 | Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip), `.w110` (a 110px width utility for a narrow cell). |
 

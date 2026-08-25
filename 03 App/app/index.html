@@ -1713,12 +1713,13 @@
   /* A shelf with something wrong on it leads with what is wrong, and wears a
      spine so it is findable in a grid without reading every card. */
   .loccard.alert { border-left: 3px solid var(--bad); }
-  .locempty { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 2px 2px 14px;
-    font-size: 12.5px; color: var(--muted); }
-  .locempty .le-lab { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-  .locempty .lc-open { font-weight: 500; font-size: 12.5px; color: var(--muted); }
-  .locempty .lc-open::after { position: static; }
-  .locempty .lc-open:hover { color: var(--brand-ink); text-decoration: underline; }
+  /* An empty shelf is quieter than a full one, but it is still a card and still
+     the same click target. It used to collapse into a text strip, which hid the
+     shelves you most need to be reminded you own and broke "click a location to
+     see what is on it" — only the name was hittable there. */
+  .loccard.isempty { background: var(--surface-2); box-shadow: none; }
+  .loccard.isempty .lc-name { font-weight: 600; }
+  .loccard.isempty:hover { background: var(--card); }
   .inv-nowhere-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px;
     margin: 10px 0 4px; border-radius: var(--r-md); border: 1px dashed var(--warn-border);
     background: var(--warn-bg); color: var(--ink); }
@@ -1756,8 +1757,14 @@
   /* The count and what it will become share one cell. A column of its own read
      "1 record" on nine rows in ten — ink spent on something that does not vary
      across rows — and it cost 100px the material name needed more. */
-  .rxgrid .rxc-qty { width: 128px; }
-  .rxgrid .rxc-qty input { width: 54px; margin-right: 8px; }
+  /* The count and its readout share one line. Two things make that fit without
+     the column reclaiming width the material name needs: the readout is kept
+     short ("1 of 3", not "1 record of 3"), and the input is sized for the three
+     digits a delivery line actually carries rather than for a paragraph. The
+     nowrap is what stops the span dropping to a second line — it broke between
+     the input and the text, which is how "3 / 1 record / of 3" happened. */
+  .rxgrid .rxc-qty { width: 128px; white-space: nowrap; }
+  .rxgrid .rxc-qty input { width: 46px; margin-right: 6px; }
   .rxgrid .rxc-bin { width: 170px; }
   .rxgrid .rxc-vendorLot { width: 92px; }
   .rxgrid .rxc-expiresOn { width: 122px; }
@@ -1779,10 +1786,13 @@
      one record, because one line making one record is not news; brand ink the
      moment it diverges, because that IS the news and it is exactly what the
      confirm is about to ask you to approve. */
-  /* Wraps under the count input in a narrow cell rather than propping the
-     column open — "1 record of 12" was single-handedly costing 50px of the
-     material name's width on every row. */
-  .rx-fan { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* Sits BESIDE the count input, always on one line. The column stays narrow
+     on purpose — a wide one costs the material name 50px on every row — so the
+     readout is kept short enough to fit ("1 of 3", not "1 record of 3") and
+     told never to wrap. It wrapped before, and a three-line cell reading
+     "3 / 1 record / of 3" looks broken rather than informative. */
+  .rx-fan { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+    white-space: nowrap; }
   .rx-fan.many { color: var(--brand-ink); font-weight: 700; }
   .rx-na { color: var(--faint); }
   .rxgrid tr:focus-within td { background: var(--hover); }
@@ -2587,7 +2597,6 @@
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
     .lc-open { min-height: 40px; display: inline-flex; align-items: center; }
-    .locempty .lc-open { min-height: 40px; }
     button, .icon-btn, .hamburger { min-height: 40px; }
     .mtxcell { min-height: 40px; min-width: 40px; }
     /* A rail row is a div[onclick]. A short work-order name over one meta line

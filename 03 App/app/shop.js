@@ -76,7 +76,11 @@ const SHOP = {
     classes: [
       { cls: "PNL", label: "Test panel", stage: PNL_STAGE },
       { cls: "JIG", label: "Jig / fixture", stage: ["In use", "Stored", "Retired"] },
-      { cls: "BIN", label: "Storage location", stage: ["Active", "Retired"] },
+      /* newOn: a shelf is created from the storage map, which is the picture of
+         the shelves, not from the list of what is stored on them. The class
+         still exists here — BIN records live in `items`, they filter and list
+         and open like any other — it is only the + button that moves. */
+      { cls: "BIN", label: "Storage location", stage: ["Active", "Retired"], newOn: "inventory map" },
     ],
     stage: { key: "stage", vals: null },   // per class
     list: ["name", "cls", "stage", "location", "laidOn"],
@@ -339,7 +343,15 @@ function renderShopList(tab) {
     ${tiles.map(([n, lab]) => `<div class="stat-tile"><div class="bignum">${n}</div><div class="stat-label">${esc(lab)}</div></div>`).join("")}
   </div>
   <div class="toolbar no-print">
-    ${classes.map(c => `<button class="${c === classes[0] ? "primary" : ""}" onclick="newShopRec('${tab}','${c.cls}')">+ ${esc(c.label)}</button>`).join("")}
+    ${(() => {
+      /* A class whose records are created somewhere better than this list says
+         so instead of offering a button that would strand the user on the wrong
+         page afterwards. */
+      const addable = classes.filter(c => !c.newOn);
+      return addable.map((c, i) => `<button class="${i === 0 ? "primary" : ""}" onclick="newShopRec('${tab}','${c.cls}')">+ ${esc(c.label)}</button>`).join("")
+        + classes.filter(c => c.newOn).map(c =>
+          `<span class="muted tny">${esc(c.label)}s are added on the ${esc(c.newOn)}.</span>`).join("");
+    })()}
     ${D.length ? `<button class="ib" onclick="openLabelBuilder('${spec.coll}')">${icon("print", 15)} Labels</button>` : ""}
   </div>
   <div class="filters no-print">
