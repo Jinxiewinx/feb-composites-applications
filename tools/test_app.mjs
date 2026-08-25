@@ -116,7 +116,8 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
+src = src.replace(/^let (SLACK_CFG_CACHE);$/gm, "var $1;");
 (0, eval)(src);
 
 /* ---------- runner ---------- */
@@ -175,11 +176,16 @@ await t("different prefixes still sort by prefix, and non-ids don't throw", () =
 console.log("shell + sidebar:");
 signInAsLead();
 await t("ready shows sidebar nav + Documents, dashboard default", () => { render(); assert(view.tab === "dashboard"); assert(sidebar.innerHTML.includes("Work Orders") && sidebar.innerHTML.includes("Parts") && sidebar.innerHTML.includes("Schedule") && sidebar.innerHTML.includes("Budget") && sidebar.innerHTML.includes("Documents")); });
-await t("lead topbar has Backup/Restore/Archive/Roster + avatar", () => { assert(topbar.innerHTML.includes("Load SN5 archive") && topbar.innerHTML.includes("Roster") && topbar.innerHTML.includes("Restore") && topbar.innerHTML.includes("Simon · lead") && topbar.innerHTML.includes("avatar")); });
+await t("lead topbar has Backup/Restore/Roster + avatar, and no bulk import", () => {
+  assert(topbar.innerHTML.includes("Roster") && topbar.innerHTML.includes("Restore") && topbar.innerHTML.includes("Simon · lead") && topbar.innerHTML.includes("avatar"));
+  // Retired in v1.0.0: a one-click bulk re-import of the SN5 seeds has no
+  // business in the topbar of an app holding the season actually being run.
+  assert(!topbar.innerHTML.includes("Load SN5 archive"), "no Load SN5 archive, for a lead either");
+});
 await t("setTab switches active sidebar item", () => { setTab("parts"); assert(view.tab === "parts"); assert(sidebar.innerHTML.includes("sb-item active")); assert(main.innerHTML.includes("New Part")); });
-await t("member topbar hides Load-archive/Restore/Roster", () => {
+await t("member topbar hides Restore/Roster", () => {
   fb.roster = { name: "Sander", role: "member" }; render();
-  assert(!topbar.innerHTML.includes("Load SN5 archive") && !topbar.innerHTML.includes("Roster") && !topbar.innerHTML.includes("Restore"), "member must not see lead actions");
+  assert(!topbar.innerHTML.includes("Roster") && !topbar.innerHTML.includes("Restore"), "member must not see lead actions");
   assert(topbar.innerHTML.includes("Backup"), "member still has Backup");
   fb.roster = { name: "Simon", role: "lead" };
 });
@@ -511,12 +517,62 @@ await t("relatedWorkOrders links do NOT count toward the completion gate, only t
   updWO("status", "Complete");
   assert(woById(woId).status === "Complete", "an informational relatedWorkOrders link must not gate completion");
 });
-await t("createIssueFromWO pre-fills the work order in the new-ticket modal", () => {
+await t("openWOIssue raises an issue against the work order, without the tickets modal", async () => {
   const woId = DB.workOrders[0].id;
-  createIssueFromWO(woId);
-  assert(document.getElementById("np-kind").value === "issue", "kind pre-selected");
-  assert(document.getElementById("np-wo").value === woId, "work order pre-filled");
-  closeModal();
+  setTab("workorders"); view.mode = "detail"; view.id = woId;
+  openWOIssue(woId);
+  assert(document.getElementById("wi-title"), "a purpose-built title field, not np-title");
+  // Source-level, not DOM-level: the stub keeps ids from every modal this
+  // run has opened, so "np-title is absent" would pass or fail on test order.
+  assert(!/openNewProject|ticketKindChanged/.test(String(openWOIssue)), "raising an issue must not route through the tickets modal");
+  document.getElementById("wi-title").value = "Bag leaked at the corner";
+  document.getElementById("wi-what").value = "Tape lifted off the flange mid-pull.";
+  const before = DB.projects.length;
+  await submitWOIssue(woId);
+  assert(DB.projects.length === before + 1, "the issue was created");
+  const p = DB.projects[DB.projects.length - 1];
+  assert(p.kind === "issue", "kind is issue");
+  assert(p.workOrderId === woId, "linked to the work order it was raised from");
+  assert(!p.stepRef, "raised against the run, not a step");
+  assert(!p.resolutionMethod, "undisposed, so it gates completion");
+  assert(view.tab === "workorders", "you stay on the work order");
+  assert(undisposedIssuesForWO(woId).some(i => i.id === p.id), "it reaches the completion gate");
+  DB.projects.pop();
+  // Filing an issue announces it, which primes the webhook cache. The announce
+  // is deliberately fire-and-forget, so let it settle BEFORE clearing the cache
+  // — otherwise it re-primes after the reset and the later "first push of the
+  // test run" assertion ends up measuring this one.
+  await new Promise(r => setTimeout(r, 0));
+  SLACK_CFG_CACHE = undefined;
+});
+
+await t("the Issues section owns issues now, and Quality is back to failed checks", () => {
+  const woId = DB.workOrders[0].id;
+  const sec = WO_SECTIONS_BASE.find(x => x.id === "issues");
+  assert(sec, "there is an Issues section");
+  assert(sec.anchor === "wo-issues", "its anchor is wo-issues");
+  const w = woById(woId);
+  DB.projects.push({ id: "TKT-SEC-1", title: "Undisposed", kind: "issue", status: "To Do", workOrderId: woId, resolutionMethod: "", assignees: [], watchers: [] });
+  assert(sec.warn(w), "an undisposed issue warns on the Issues section");
+  assert(!sec.foldWhen(w), "and the section is not folded away");
+  const q = WO_SECTIONS_BASE.find(x => x.id === "quality");
+  assert(!q.warn(w), "Quality no longer warns about issues — only about failed checks");
+  const html = woSecIssues(w, false);
+  assert(html.includes("TKT-SEC-1"), "the issue is listed in the section");
+  assert(html.includes("openWOIssue"), "and you can raise another from here");
+  DB.projects = DB.projects.filter(x => x.id !== "TKT-SEC-1");
+});
+
+await t("Details leads when a work order is being created or edited, Steps when it is being read", () => {
+  assert(woSections(false)[0].id === "steps", "reading a run, Steps leads — that is the bench action");
+  assert(woSections(true)[0].id === "overview", "editing one, Details leads — that is what you are filling in");
+  assert(woSections(true).length === WO_SECTIONS_BASE.length, "reordering never drops a section");
+  // The digit-key hint and the regex that serves it must agree, or a section
+  // exists that the keyboard cannot reach. They disagreed once already.
+  const woSrc = readFileSync(join(root, "workorders.js"), "utf8");
+  const n = WO_SECTIONS_BASE.length;
+  assert(woSrc.includes("/^[1-" + n + "]$/"), "the digit-key regex covers every section (" + n + ")");
+  assert(woSrc.includes("<kbd>1</kbd>\u2013<kbd>" + n + "</kbd> jump"), "the keyhint says the same number");
 });
 
 console.log("parts:");
@@ -1785,14 +1841,18 @@ await t("renderWeekPlan shows a guidance card when there are no dated weeks yet"
 await t("personTicketsThisWeek scopes to the week's date range, the person, and open status; no subteam grouping anywhere in the render", () => {
   DB.schedule = [{ id: "S1", weekOf: "2026-08-24", goals: [], doneTickets: [], cars: [] }]; // Mon 2026-08-24
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
+  // Issues, not project tickets: the weekly plan pulls only issues since the
+  // project tracker was shelved. TKT-W6 pins that a project-kind record with a
+  // perfectly in-range due date is NOT pulled in.
   DB.projects = [
-    { id: "TKT-W1", kind: "project", title: "undertray task", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" }, // Tue, in week
-    { id: "TKT-W4", kind: "project", title: "done already", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "Done" }, // must not appear
-    { id: "TKT-W5", kind: "project", title: "next month, out of range", subteam: "AERO", dueDate: "2026-09-25", assignees: ["nick@berkeley.edu"], status: "To Do" },
+    { id: "TKT-W1", kind: "issue", title: "undertray task", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" }, // Tue, in week
+    { id: "TKT-W4", kind: "issue", title: "done already", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "Done" }, // must not appear
+    { id: "TKT-W5", kind: "issue", title: "next month, out of range", subteam: "AERO", dueDate: "2026-09-25", assignees: ["nick@berkeley.edu"], status: "To Do" },
+    { id: "TKT-W6", kind: "project", title: "shelved project, in range", subteam: "AERO", dueDate: "2026-08-25", assignees: ["nick@berkeley.edu"], status: "To Do" },
   ];
   const week = weekById("S1");
   const tix = personTicketsThisWeek("nick@berkeley.edu", week);
-  assert(tix.length === 1 && tix[0].id === "TKT-W1", "only the in-week, open, assigned ticket: " + JSON.stringify(tix));
+  assert(tix.length === 1 && tix[0].id === "TKT-W1", "only the in-week, open, assigned ISSUE — a shelved project never appears: " + JSON.stringify(tix));
 
   view = { ...view, tab: "weekplan", wpWeek: "S1" };
   const html = renderWeekPlan();
@@ -1912,7 +1972,7 @@ await t("weekly plan lists you first and collapses everyone with nothing on", ()
     { email: "zoe@b.edu", name: "Zoe Busy", role: "member" },
   ];
   DB.schedule = [{ id: "W-P", weekOf: today(), goals: [], doneTickets: [], cars: [] }];
-  DB.projects = [{ id: "T-Z", title: "zoe task", status: "To Do", dueDate: today(), assignees: ["zoe@b.edu"] }];
+  DB.projects = [{ id: "T-Z", kind: "issue", title: "zoe task", status: "To Do", dueDate: today(), assignees: ["zoe@b.edu"] }];
   view = { ...view, tab: "weekplan", wpWeek: "W-P" };
   const html = renderWeekPlan();
   // Alphabetically Aaron sorts first and Simon third; you should still lead.
@@ -1923,24 +1983,19 @@ await t("weekly plan lists you first and collapses everyone with nothing on", ()
   assert(!/Aaron Idle<\/b>/.test(html), "no full block for an idle teammate: " + html.slice(0, 400));
 });
 
-await t("the weekly rollup names a sub-ticket's parent too, inline so the row stays one line", () => {
-  // Same flat-list problem as the dashboard: this pulls tickets by assignee and
-  // due date, so a sub-ticket lands next to unrelated work with nothing saying
-  // what it belongs to.
+await t("the weekly rollup pulls issues only — a shelved project and its sub-tickets stay out", () => {
   DB.users = [{ email: "simon@berkeley.edu", name: "Simon Starbuck", role: "lead" }];
   DB.schedule = [{ id: "W-SUB", weekOf: today(), goals: [], doneTickets: [], cars: [] }];
   DB.projects = [
-    { id: "T-PARENT", title: "Undertray", status: "In Progress", assignees: [] },
-    { id: "T-KID", title: "Trim the strakes", status: "To Do", dueDate: today(), parentId: "T-PARENT", assignees: ["simon@berkeley.edu"] },
+    { id: "T-PARENT", kind: "project", title: "Undertray", status: "In Progress", assignees: [] },
+    { id: "T-KID", kind: "project", title: "Trim the strakes", status: "To Do", dueDate: today(), parentId: "T-PARENT", assignees: ["simon@berkeley.edu"] },
+    { id: "T-ISSUE", kind: "issue", title: "Delam at the flange", status: "To Do", dueDate: today(), workOrderId: "WO-1", assignees: ["simon@berkeley.edu"] },
   ];
   view = { ...view, tab: "weekplan", wpWeek: "W-SUB" };
   const html = renderWeekPlan();
-  assert(html.includes("Trim the strakes"), "the sub-ticket is listed");
-  // The tag is deliberately not pinned — chip() renders a <button> now, for the
-  // tap target. What matters is that the parent is named INLINE (a block would
-  // break the flex row onto its own line) and that it is a chip.
-  assert(/<span class="tny muted">part of <\w+[^>]*class="chip"[^>]*>Undertray<\/\w+><\/span>/.test(html),
-    "parent named inline (a <div> would break the flex row onto its own line): " + html.slice(html.indexOf("Trim the strakes") - 200, html.indexOf("Trim the strakes") + 300));
+  assert(html.includes("Delam at the flange"), "the issue is listed");
+  assert(!html.includes("Trim the strakes"), "a shelved sub-ticket is not");
+  assert(!html.includes("part of"), "and nothing claims a parent — issues are flat");
 });
 
 console.log("budget:");
@@ -2489,32 +2544,30 @@ await t("curing shows a clock time, never a countdown", () => {
   assert(!/\d+\s*h\s*\d+\s*m left/.test(html), "and not as a countdown that goes stale between renders");
   assert(!/class="step"/.test(html), "and never inside .step, which would arm the 60s re-render interval");
 });
-await t("a sub-ticket on the dashboard says which ticket it belongs to", () => {
-  // Inside the Tickets tab a sub-ticket is always drawn nested under its
-  // parent, so the context is free. These lists are flat, and "Machine the
-  // plug" on its own says nothing about which mold.
+await t("the dashboard carries issues only — a shelved project never reaches the deadline list", () => {
   const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   DB.parts = []; DB.workOrders = [];
   DB.projects = [
-    { id: "TKT-P", title: "Nosecone mold", kind: "project", status: "In Progress", assignees: ["simon@berkeley.edu"] },
+    { id: "TKT-P", title: "Nosecone mold", kind: "project", status: "In Progress", dueDate: soon, assignees: ["simon@berkeley.edu"] },
     { id: "TKT-C", title: "Machine the plug", kind: "project", status: "In Progress", parentId: "TKT-P", dueDate: soon, assignees: ["simon@berkeley.edu"] },
+    { id: "TKT-X", title: "Delam on the endplate", kind: "issue", status: "In Progress", workOrderId: "WO-1", dueDate: soon, assignees: ["simon@berkeley.edu"] },
   ];
-  const kid = deadlineItems().find(i => i.id === "TKT-C");
-  assert(kid.kind === "Sub-ticket", "labelled as one, not the generic Ticket: " + kid.kind);
-  assert(kid.parent && kid.parent.label === "Nosecone mold", JSON.stringify(kid.parent));
-  const top = deadlineItems().find(i => i.id === "TKT-P");
-  assert(top.kind === "Ticket" && top.parent === null, "a top-level ticket gains nothing");
+  const items = deadlineItems();
+  assert(!items.some(i => i.id === "TKT-P" || i.id === "TKT-C"), "no project ticket, and no sub-ticket");
+  const iss = items.find(i => i.id === "TKT-X");
+  assert(iss && iss.kind === "Issue", "the issue is there, labelled Issue: " + JSON.stringify(iss && iss.kind));
   setTab("dashboard");
   const html = main.innerHTML;
-  assert(html.includes("part of"), "the context line renders: " + html.slice(0, 500));
-  assert(/part of <\w+[^>]*class="chip"[^>]*>Nosecone mold<\/\w+>/.test(html),
-    "and it's the parent's title, clickable, not a bare id: " + html);
+  assert(html.includes("Delam on the endplate"), "and it renders");
+  assert(!html.includes("part of"), "nothing claims a parent — issues are flat now");
 });
-await t("a sub-ticket whose parent was deleted still renders", () => {
-  DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "project", status: "To Do", parentId: "TKT-GONE", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
+await t("an issue carrying a legacy parentId still renders, flat", () => {
+  // parentId is left in the data on purpose (un-shelving restores it), so a
+  // pre-shelf issue can still carry one. Nothing may read it as nesting.
+  DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "issue", status: "To Do", parentId: "TKT-GONE", workOrderId: "WO-1", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
   assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
   setTab("dashboard");
-  assert(main.innerHTML.includes("Orphan"), "the ticket is still listed, it just loses the context line");
+  assert(main.innerHTML.includes("Orphan"), "the issue is listed");
   assert(!main.innerHTML.includes("part of"), "and doesn't claim a parent it can't name");
 });
 await t("dashRow closes exactly one paren per case, future/late/today (regression: the old table row used to double-close future dates and never close late ones)", () => {
@@ -2544,14 +2597,11 @@ await t("dashboard deadline items reflect ticket kind and migrated status, not r
     { id: "TKT-D1", kind: "issue", title: "issue kind on dashboard", assignees: ["simon@berkeley.edu"], status: "In Progress" },
     { id: "TKT-D2", kind: "project", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" }, // pre-migration record
   ];
+  DB.projects.push({ id: "TKT-D3", kind: "issue", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" });
   const items = deadlineItems();
-  // This list is peer to "Part"/"WO" tags — Issues stay distinctly labeled
-  // (that visibility is the point), but a Project-kind ticket reads as the
-  // generic "Ticket" here, not "Project" (that distinction belongs to the
-  // Tickets tab's own board/table/detail views, not this cross-type list).
-  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "issue kind still stands out, not a blanket 'Ticket'");
-  assert(items.find(i => i.id === "TKT-D2").kind === "Ticket", "project-kind ticket reads as the generic 'Ticket' here");
-  assert(items.find(i => i.id === "TKT-D2").done === true, "legacy Done status still reads as done through projStatus()");
+  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "an issue is labelled Issue, peer to Part/WO");
+  assert(!items.find(i => i.id === "TKT-D2"), "a project-kind ticket is shelved and never reaches this list");
+  assert(items.find(i => i.id === "TKT-D3").done === true, "legacy Done status still reads as done through projStatus()");
 });
 await t("dashboard Watched card uses the new colored .status pill, not the old flat .pill", () => {
   DB.projects = [{ id: "TKT-D3", kind: "issue", title: "watched issue", status: "Blocked", // legacy status string
@@ -2567,7 +2617,7 @@ await t("dashboard Watched card uses the new colored .status pill, not the old f
 
 await t("the feed merges touches, comments and buy-offs — one event per record per day, retro archive excluded", () => {
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
-  DB.projects = [{ id: "TKT-F1", kind: "project", title: "fed ticket", status: "In Progress",
+  DB.projects = [{ id: "TKT-F1", kind: "issue", title: "fed ticket", status: "In Progress",
     updatedAt: "2026-08-06T10:00:00", updatedBy: "nick@berkeley.edu",
     comments: [{ ts: "2026-08-06T09:00:00", email: "nick@berkeley.edu", html: "x" }] }];
   DB.workOrders = [
@@ -2586,7 +2636,7 @@ await t("the feed merges touches, comments and buy-offs — one event per record
 });
 await t("the feed prints a NAME, never a raw email (the overflow bug's regression test)", () => {
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
-  DB.projects = [{ id: "TKT-D4", kind: "project", title: "watched thing", status: "In Progress",
+  DB.projects = [{ id: "TKT-D4", kind: "issue", title: "watched thing", status: "In Progress",
     watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
   const html = renderDashboard();
   const act = html.slice(html.indexOf("b-activity"));
@@ -2762,7 +2812,7 @@ await t("openModal honors [autofocus] over the first field (new-ticket led with 
 await t("deadlineItems shows display names, never raw emails", () => {
   DB.users = [{ email: "nico@b.edu", name: "Nico Alvarez", role: "member" }];
   DB.parts = []; DB.workOrders = [];
-  DB.projects = [{ id: "T-WHO", title: "t", status: "To Do", dueDate: today(), assignees: ["nico@b.edu"] }];
+  DB.projects = [{ id: "T-WHO", kind: "issue", title: "t", status: "To Do", dueDate: today(), assignees: ["nico@b.edu"] }];
   const it = deadlineItems().find(i => i.id === "T-WHO");
   assert(it.who === "Nico Alvarez", "name, not email: " + it.who);
 });
@@ -3126,8 +3176,10 @@ await t("searchAll matches a ticket by id even when it has a title (precedence b
   ];
   const res = searchAll("tkt-7");
   assert(res.some(r => r.tab === "projects" && r.id === "TKT-77"), "finds by id despite having a title: " + JSON.stringify(res));
-  assert(res.find(r => r.id === "TKT-77").sub === "Issue", "issue still stands out, not a blanket label: " + JSON.stringify(res));
-  assert(res.find(r => r.id === "TKT-78").sub === "Ticket", "project-kind ticket reads as the generic 'Ticket' in search: " + JSON.stringify(res));
+  // TKT-78 is project-kind: shelved records are still in Firestore, but
+  // offering them in the palette is an invitation into a paused feature.
+  assert(!res.some(r => r.id === "TKT-78"), "a shelved project ticket is not offered: " + JSON.stringify(res));
+  assert(res.find(r => r.id === "TKT-77").sub === "Issue", "and it is labelled Issue: " + JSON.stringify(res));
 });
 
 console.log("notifications + @mentions:");
@@ -3225,7 +3277,7 @@ await t("a Cancelled ticket doesn't count as an open assignment on People", () =
   const a = assignmentsFor("nick@b.edu");
   assert(a.projects.length === 0, "Cancelled shouldn't read as a live commitment: " + JSON.stringify(a.projects));
 });
-await t("People lists main tickets and issues, not sub-tickets", () => {
+await t("People lists open issues — not shelved projects, not sub-tickets", () => {
   DB.users = [{ email: "nick@b.edu", name: "Nick Jepsen", role: "member" }];
   DB.workOrders = [];
   DB.parts = [{ id: "P-PE", partName: "UT DIFFUSER", layupProgress: "In Layup", moldEngineer: "Nick Jepsen" }];
@@ -3237,9 +3289,9 @@ await t("People lists main tickets and issues, not sub-tickets", () => {
   ];
   const a = assignmentsFor("nick@b.edu");
   const ids = a.projects.map(p => p.id).sort();
-  // Breaking work down properly should not make someone look like the busiest
-  // person on the team — the parent and its children are one commitment here.
-  assert(ids.join(",") === "TKT-I,TKT-M", "the parent and the issue, not the sub-tickets: " + ids.join(","));
+  // This column answers "what is this person on the hook for". Since the
+  // project tracker was shelved, that is the runs they are holding up.
+  assert(ids.join(",") === "TKT-I", "the open issue only: " + ids.join(","));
   assert(a.parts.length === 1 && a.wos.length === 0, "parts and work orders are untouched: " + JSON.stringify([a.parts.length, a.wos.length]));
 });
 await t("reports CSV has header + rows", () => {
@@ -3873,17 +3925,29 @@ await t("CRITICAL a plan is always storable — contours thin until it fits", ()
 
 console.log("the sidebar, regrouped (2026-08-04):");
 
-await t("dashboard sits on top again, groups have headers, tickets is second", () => {
+await t("dashboard sits on top, groups have headers, and the shelved Tickets row is not in the nav", () => {
   view = { ...view, tab: "dashboard", mode: "list", id: null };
   render();
   const sb = sidebar.innerHTML;
   // The brand button also targets dashboard, so compare against the LAST
-  // dashboard occurrence (the nav copy) versus the tickets button.
+  // dashboard occurrence (the nav copy) versus the first Build-group entry.
   const dashNav = sb.lastIndexOf("setTab('dashboard')");
-  const tickets = sb.indexOf("setTab('projects')");
-  assert(dashNav >= 0 && tickets > dashNav, "Dashboard precedes Tickets in the nav (2026-08-04 round three)");
+  assert(dashNav >= 0 && sb.indexOf("setTab('parts')") > dashNav, "Dashboard precedes the Build group");
   for (const g of ["Build", "Planning", "Team"]) assert(sb.includes(`>${g}</span>`), g + " header renders");
   assert(!sb.includes(">Stock<"), "hidden alias rows stay out of the sidebar");
+  assert(!sb.includes("setTab('projects')") && !sb.includes(">Tickets<"), "the shelved Tickets row stays out of the sidebar");
+});
+
+await t("shelving Tickets hides the tab without breaking a single link to an issue", () => {
+  const row = TABS.find(t => t.id === "projects");
+  assert(row && row.hidden, "the row is hidden");
+  assert(row.coll === "projects", "it keeps its coll, or tabForId and recById lose PROJ-");
+  assert(tabForId("PROJ-SN6-001") === "projects", "a PROJ- id still routes");
+  // The point of the second flavour of hidden: unlike stock/items/lots/weekplan
+  // this row still RENDERS, because the issue detail page lives on it.
+  view = { ...view, tab: "projects", mode: "detail", id: null };
+  render();
+  assert(view.tab === "projects", "render() must not normalise this tab away");
 });
 
 await t("an unknown tab falls back to Dashboard, not whatever sits first", () => {
@@ -4213,7 +4277,7 @@ await t("old items/lots links and scans land on Inventory", () => {
   setTab("lots");
   assert(view.tab === "inventory", "lots normalises");
   assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
-  assert(TABS.filter(t => !t.hidden).length === 11, "eleven visible tabs");
+  assert(TABS.filter(t => !t.hidden).length === 10, "ten visible tabs (Tickets shelved in v1.0.0)");
   openRecord("lots", "RSN-SN6-001");
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });

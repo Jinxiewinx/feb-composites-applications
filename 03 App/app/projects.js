@@ -491,11 +491,6 @@ function renderTicketIndex() {
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search title / id / assignee…" value="${esc(view.q)}" oninput="searchInput(this)">
-        <select title="Kind" onchange="view.tkFilter=this.value;render()">
-          <option value="" ${kf ? "" : "selected"}>All kinds</option>
-          <option value="project" ${kf === "project" ? "selected" : ""}>Projects</option>
-          <option value="issue" ${kf === "issue" ? "selected" : ""}>Issues</option>
-        </select>
         <button class="sm sortdir" title="Clear filters" onclick="resetTicketFilters()">✕</button>
       </div>
     </div>

@@ -24,16 +24,12 @@ function assignmentsFor(email) {
     return vals.some(v => { v = String(v || "").toLowerCase(); return v === email.toLowerCase() || v === name.toLowerCase() || v === name.toLowerCase().split(" ")[0]; });
   };
   const parts = DB.parts.filter(p => !["Layup Complete", "Polished"].includes(p.layupProgress) && mine([p.moldEngineer, p.manufacturingEngineer]));
-  /* Main tickets and issues only — a sub-ticket does not get its own chip here.
-     This column answers "what is this person on the hook for", and at that
-     altitude "Undertray mold" and its four sub-tickets are one thing, not five.
-     Listing both meant the person who broke their work down properly looked
-     like the busiest person on the team, which is exactly backwards.
-
-     An issue can never be a sub-ticket, so this reads as "main tickets, and
-     issues" and is one condition. The sub-tickets are still one tap away on
-     the parent's own page, and still on the board where the planning happens. */
-  const projects = DB.projects.filter(p => !p.parentId && !["Done", "Cancelled"].includes(projStatus(p)) && mine(p.assignees || []));
+  /* Open issues only. This column answers "what is this person on the hook
+     for", and since the project tracker was shelved the answer is the runs
+     they are holding up — a project ticket nobody can navigate to is not an
+     obligation, it is history. The parentId test that used to keep sub-tickets
+     out is gone with them: an issue is never a sub-ticket. */
+  const projects = DB.projects.filter(p => isIssue(p) && !["Done", "Cancelled"].includes(projStatus(p)) && mine(p.assignees || []));
   const wos = DB.workOrders.filter(w => w.status !== "Complete" && mine([w.moldEngineer, w.manufacturingEngineer]));
   return { parts, projects, wos };
 }

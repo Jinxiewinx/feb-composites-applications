@@ -26,22 +26,14 @@ function deadlineItems() {
     date: p.layupDeadline, done: partDone(p),
     mine: isMine([p.moldEngineer, p.manufacturingEngineer]),
   }));
-  DB.projects.forEach(p => items.push({
-    // projStatus()/ticketKind() migrate the old 4-value status and default an
-    // absent kind, same as everywhere else a ticket is read — going around
-    // them here would show a stale "Backlog" or the wrong kind on this list.
-    // This list is peer to "Part"/"WO" tags, so a non-issue ticket reads as the
-    // generic "Ticket" here — Issues still stand out as "Issue" since that
-    // visibility is the whole point of the kind. Inside the Tickets tab itself
-    // (board/table/detail), keep showing "Project"/"Issue" — that distinction
-    // is what those views are for.
+  // Issues only. Project tickets are shelved (see the TABS row in core.js),
+  // and a deadline for a record nobody can navigate to is a deadline nobody
+  // can act on. projStatus() still migrates the old 4-value status, same as
+  // everywhere else a ticket is read.
+  DB.projects.filter(isIssue).forEach(p => items.push({
     coll: "projects", id: p.id,
-    // A sub-ticket says so. Everywhere else a ticket appears it is nested under
-    // its parent, which supplies the context; these dashboard lists are flat,
-    // so "Machine the plug" arrived with nothing saying what it belonged to.
-    kind: isIssue(p) ? "Issue" : (p.parentId ? "Sub-ticket" : "Ticket"),
+    kind: "Issue",
     label: p.title || p.id,
-    parent: parentOf(p),
     who: whoLabel(p.assignees || []),
     date: p.dueDate, done: projStatus(p) === "Done",
     mine: isMine(p.assignees || []),
@@ -186,7 +178,7 @@ function bucketOf(it) {
   const dd = daysUntil(it.date);
   return (DASH_BUCKETS.find(b => b.test(dd)) || DASH_BUCKETS[DASH_BUCKETS.length - 1]).id;
 }
-const KIND_RANK = { WO: 0, Part: 1, Issue: 2, "Sub-ticket": 3, Ticket: 4 };
+const KIND_RANK = { WO: 0, Part: 1, Issue: 2 };
 function dashSort(a, b) {
   return (a.date || "9999").localeCompare(b.date || "9999")
     || (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9)
@@ -217,7 +209,7 @@ function dashRow(it) {
     ? `<span class="${dd != null && dd < 0 ? "warn" : ""}">${esc(it.date)}${dd != null ? ` (${paren})` : ""}</span>`
     : "no date";
   return `<div class="srow">
-    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${parentLine(it.parent)}</span>
+    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}</span>
     <span class="srow-meta">${esc(it.who || "—")} · ${when}</span>
   </div>`;
 }
@@ -240,7 +232,7 @@ function renderDashboard() {
 
   const blocked = blockedNow();
   const curing = curingNow();
-  const watched = (DB.projects || []).filter(p => typeof projUnread === "function" && projUnread(p))
+  const watched = (DB.projects || []).filter(p => isIssue(p) && typeof projUnread === "function" && projUnread(p))
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
   const showTeam = view.dashTeam == null ? !mine.length : !!view.dashTeam;
@@ -311,7 +303,7 @@ function dashLaunch() {
   return `<div class="bmod b-launch">
     <div class="bmod-hd"><span>Launchpad</span></div>
     <div class="lgrid">
-      ${tile("setTab('projects');view.tkMine=true;render()", "My tickets", "assigned to you")}
+      ${tile("setTab('workorders');view.woIssues=true;render()", "Open issues", "runs with one open")}
       ${tile("setTab('workorders');view.woLate=true;render()", "Late WOs", "past due only")}
       ${tile("view.invFlag='reorder';setTab('inventory')", "Reorder list", "low + expired")}
       ${tile("view.schedView='week';setTab('timeline')", "Week plan", "goals by person")}
@@ -536,7 +528,7 @@ function dashShopStatus(blocked, curing) {
 function dashFeedEvents() {
   const ev = [];
   const push = (ts, who, verb, coll, id, label) => { if (ts) ev.push({ ts: String(ts), who, verb, coll, id, label }); };
-  (DB.projects || []).forEach(p => {
+  (DB.projects || []).filter(isIssue).forEach(p => {
     push(p.updatedAt, p.updatedBy, "updated", "projects", p.id, p.title || p.id);
     (p.comments || []).forEach(c => push(c.ts, c.email || c.author, "commented on", "projects", p.id, p.title || p.id));
   });
@@ -572,7 +564,7 @@ function dashFeed(watched) {
   return `<div class="bmod b-activity">
     <div class="bmod-hd"><span>${wShown.length ? '<span class="unread-dot"></span> ' : ""}Activity</span><span class="gh-n">latest across the app</span></div>
     ${wShown.map(p => `<div class="srow">
-      <span class="sr-main"><span class="kind">${isIssue(p) ? "Issue" : "Ticket"}</span> ${chip("projects", p.id, p.title || p.id)}${parentLine(parentOf(p))}</span>
+      <span class="sr-main"><span class="kind">Issue</span> ${chip("projects", p.id, p.title || p.id)}</span>
       <span class="srow-meta"><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span>
         ${fmtWhen(p.updatedAt)} by ${esc(whoLabel(p.updatedBy) || "?")}</span>
     </div>`).join("")}
@@ -580,7 +572,7 @@ function dashFeed(watched) {
       <span class="sr-main">${chip(e.coll, e.id, e.label)}</span>
       <span class="srow-meta">${e.verb} by ${esc(whoLabel(e.who) || "?")} · ${fmtWhen(e.ts)}</span>
     </div>`).join("")}
-    ${watched.length > wShown.length ? `<button class="dg-more" onclick="setTab('projects')">All watched — ${watched.length}</button>` : ""}
+    ${watched.length > wShown.length ? `<button class="dg-more" onclick="setTab('workorders');view.woIssues=true;render()">All watched — ${watched.length}</button>` : ""}
   </div>`;
 }
 

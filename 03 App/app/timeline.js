@@ -359,7 +359,6 @@ function renderTimeline() {
       <p>The production schedule assigns a part to a station for a given week.</p>
       <div class="toolbar tl-center no-print">
         <button class="primary" onclick="newWeek()">+ Add week</button>
-        ${lead ? `<button onclick="loadArchive()">Load SN5 archive</button>` : ""}
       </div>
     </div>`;
   }

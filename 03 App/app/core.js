@@ -1320,6 +1320,18 @@ function importJSON(input) {
 // Lead-only: seed all SN5 retro archives (work orders, parts, timeline, and the
 // board rack SN5 left behind — the stack planner can't pick thicknesses from an
 // empty rack, so a fresh project has nothing to plan against until this runs).
+/* NO UI ENTRY POINT since v1.0.0, on purpose — and deliberately not deleted.
+
+   This seeded four collections from the sn5-*.json snapshots back when the app
+   held no real data and an empty tab read as a broken one. It is a one-click
+   bulk import, which is the wrong thing to leave in a lead's topbar now that
+   the app holds the season the team is actually running: the archive is loaded,
+   and the only thing a second run can do is surprise somebody.
+
+   Kept because the seeds it reads are still load-bearing outside the app —
+   tools/make_mockups.mjs, tools/serve_populated.mjs and tools/lib/browser.mjs
+   all seed from those same files — and because re-seeding a fresh Firebase
+   project is a real need for whoever inherits this. Call it from the console. */
 async function loadArchive() {
   const sources = [
     ["workOrders", "sn5-work-orders.json"],
@@ -1795,7 +1807,22 @@ const GROUPS = [
 ];
 const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, grp: "today", tip: "Dashboard — the team-wide picture", render: () => renderDashboard() },
-  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", tip: "Tickets — tasks, issues and who owns them", render: () => renderProjects() },
+  /* SHELVED 2026-08-25 — paused, NOT deleted. See SHELVED.md.
+
+     The team stopped running projects out of the app; what it kept is the
+     Issue, which now lives as a section on the work order it holds up. The
+     project-tracking half is off the nav and out of the dashboard, search and
+     reports, and the Firestore `projects` collection is untouched: every
+     PROJ-SN6-### record is exactly where it was. Deleting this row is what
+     brings it back.
+
+     CAREFUL — this hidden row is NOT one of the aliases below it. stock,
+     items, lots and weekplan are hidden AND normalised away in render(), so
+     their own render never runs. This one still renders itself, because the
+     issue detail page lives here and is reached by chip and by #/PROJ- deep
+     link. Do not "tidy up" by adding a normalisation line for it: that would
+     silently kill every link to every issue. */
+  { id: "projects", label: "Tickets", ic: "projects", coll: "projects", grp: "today", hidden: true, render: () => renderProjects() },
   { id: "parts", label: "Parts", ic: "parts", coll: "parts", grp: "build", tip: "Parts — every part, its mold, its stack and its runs", render: () => renderParts() },
   { id: "workorders", label: "Work Orders", ic: "workorders", coll: "workOrders", grp: "build", tip: "Work Orders — one run at making a part", render: () => renderWorkOrders() },
   /* `stock` survives as a hidden alias of the merged Molds tab: #/stock links,
@@ -1854,7 +1881,7 @@ function renderSidebar() {
         if (!rows.length) return "";
         return `${g.label ? `<div class="sb-hd" aria-hidden="true"><span>${esc(g.label)}</span></div>` : ""}${
           rows.map(t => `<button class="sb-item ${view.tab === t.id ? "active" : ""}" title="${esc(t.tip || t.label)}" onclick="setTab('${t.id}')">
-        <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>${t.id === "projects" && watchedUnreadCount() ? '<span class="dot"></span>' : ""}
+        <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>
       </button>`).join("")}`;
       }).join("")}
     </div>
@@ -1883,7 +1910,6 @@ function renderTopbar() {
       <span class="tb-desktop">
         <button onclick="exportAll()">Backup</button>
         ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
-        <button onclick="loadArchive()">Load SN5 archive</button>
         <button onclick="openRoster()">Roster</button>` : ""}
         <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
         <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
@@ -1907,7 +1933,6 @@ function openMoreMenu() {
       <button onclick="closeModal();setMyAvatar()">${icon("edit", 18)}Change photo</button>
       <button onclick="closeModal();exportAll()">${icon("download", 18)}Backup database</button>
       ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>
-      <button onclick="closeModal();loadArchive()">${icon("archive", 18)}Load SN5 archive</button>
       <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
       <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>
     </div>`);
@@ -2085,7 +2110,9 @@ function searchAll(q) {
   };
   DB.workOrders.forEach(w => add("workorders", w.id, w.partName || w.id, "Work order " + w.id));
   DB.parts.forEach(p => add("parts", p.id, p.partName || p.id, "Part " + p.id, "", p));
-  DB.projects.forEach(p => add("projects", p.id, p.title || p.id, isIssue(p) ? "Issue" : "Ticket"));
+  // Issues only: a shelved project ticket surfacing in ⌘K is an invitation
+  // into a paused feature. The records are still there, just not offered.
+  DB.projects.filter(isIssue).forEach(p => add("projects", p.id, p.title || p.id, "Issue"));
   DB.budget.forEach(b => add("budget", b.id, b.item || b.id, "Purchase", b.source));
   (DB.molds || []).forEach(m => add("molds", m.id, m.name || m.id, "Mold " + m.id, "", m));
   (DB.stock || []).forEach(b => add("stock", b.id, b.label || b.id, "Tooling board " + b.id, b.origin, b));
@@ -2161,7 +2188,6 @@ function markAllNotifsRead() {
   closeModal();
 }
 // Overridden meaningfully in dashboard.js once watchers exist; safe default here.
-function watchedUnreadCount() { return typeof unreadWatched === "function" ? unreadWatched() : 0; }
 function render() {
   /* Stock merged into Molds (2026-08): the `stock` tab id keeps resolving —
      old #/stock links, notification links and BRD-/STK- routing all pass
@@ -2234,8 +2260,8 @@ function syncChromeMetrics() {
   /* Fold the account row into the ⋯ menu when it genuinely doesn't fit, rather
      than at a width someone guessed.
 
-     A lead's topbar carries Backup + Restore + Load SN5 archive + Roster +
-     avatar + name + Sign out. Whether that fits depends on the width, on the
+     A lead's topbar carries Backup + Restore + Roster + avatar + name +
+     Sign out. Whether that fits depends on the width, on the
      role, on the name's length AND on the safe-area inset — a landscape iPhone
      spends 59px of its right edge on the island, which is enough to push Sign
      out off the screen at 932px even though the breakpoint says "desktop".

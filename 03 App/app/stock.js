@@ -317,8 +317,7 @@ function renderBoardsList() {
   </div>
   ${!groups.length ? `<div class="card"><span class="muted">${
     (DB.stock || []).length ? "Nothing matches these filters."
-    : `No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS${
-        isLead() ? ", or <b>Load SN5 archive</b> to start from the rack SN5 left behind" : ""}.`}</span></div>` : ""}
+    : `No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS.`}</span></div>` : ""}
   ${boardsByGrade(groups).map(([d, gs]) => `
     <div class="card">
       <div class="pgrouphd"><span class="pg-name">${d} lb/ft³</span>

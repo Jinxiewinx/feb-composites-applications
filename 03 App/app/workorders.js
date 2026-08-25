@@ -511,6 +511,13 @@ function undisposedIssuesForWO(woId) { return issuesForWO(woId).filter(p => proj
    match key (it survives step-array edits better than the index, and the
    title snapshot survives everything). NOT parentId: a sub-ticket can never
    be an issue, and stepRef is a pointer, not a parentage. */
+/* Open = still being worked. Deliberately NOT undisposedIssuesForWO: that one
+   answers "can this work order close" and is the completion gate. This one
+   answers "is anything still going on here", which is the browsing question the
+   rail chip asks, and a resolved-but-reopened issue belongs in that answer. */
+function openIssuesForWO(woId) {
+  return issuesForWO(woId).filter(p => !["Done", "Cancelled"].includes(projStatus(p)));
+}
 function stepIssues(wo, s) {
   return issuesForWO(wo.id).filter(t => t.stepRef && t.stepRef.seq === s.seq);
 }
@@ -645,6 +652,7 @@ function woIndexRows() {
     .filter(w => (!view.fSub || w.subteam === view.fSub))
     .filter(w => (!view.woLate || isWoLate(w)))
     .filter(w => (!view.woMine || isMine([w.moldEngineer, w.manufacturingEngineer])))
+    .filter(w => (!view.woIssues || openIssuesForWO(w.id).length))
     .filter(w => !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q));
   // The open run never falls out from under you — a filter that would hide what
   // you are reading keeps it in place instead. This is the whole point of a
@@ -657,16 +665,16 @@ function woIndexRows() {
 function woSummary() {
   const D = DB.workOrders || [];
   const open = D.filter(w => w.status !== "Complete");
-  let curing = 0, blocked = 0;
-  D.forEach(w => { const f = woFlags(w); if (f.curing) curing++; if (f.blocked) blocked++; });
+  let curing = 0, blocked = 0, issues = 0;
+  D.forEach(w => { const f = woFlags(w); if (f.curing) curing++; if (f.blocked) blocked++; if (openIssuesForWO(w.id).length) issues++; });
   return {
     total: D.length, open: open.length, done: D.length - open.length,
     late: D.filter(isWoLate).length,
     mine: open.filter(w => isMine([w.moldEngineer, w.manufacturingEngineer])).length,
-    curing, blocked,
+    curing, blocked, issues,
   };
 }
-function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, fStatus: "", fSub: "", q: "" }; render(); }
+function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, fStatus: "", fSub: "", q: "" }; render(); }
 
 /* ---------- selection ----------
    view.mode === "detail" stays the switch, exactly as it was when this tab was
@@ -835,6 +843,7 @@ function renderWOIndex() {
         ${summaryChip("late", s.late, !!view.woLate, "view.woLate=!view.woLate;view.woMine=false;render()", s.late ? "bad" : "")}
         ${summaryChip("mine", s.mine, !!view.woMine, "view.woMine=!view.woMine;view.woLate=false;render()")}
         ${summaryChip("done", s.done, !!view.woDone, "view.woDone=!view.woDone;view.woOpen=false;render()")}
+        ${summaryChip("issues", s.issues, !!view.woIssues, "view.woIssues=!view.woIssues;view.woDone=false;render()", s.issues ? "bad" : "")}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -854,11 +863,11 @@ function renderWOIndex() {
     </div>
     <div class="plist" role="listbox" aria-label="Work orders">
       ${rows.length || (key === "gpart" && (DB.parts || []).length) ? woIndexBody(rows) : `<div class="pempty muted">${
-        D.length ? "No work orders match these filters." : `No work orders yet — <b>New WO</b> to start${isLead() ? ", or <b>Load SN5 archive</b> for the retro records" : ""}.`}</div>`}
+        D.length ? "No work orders match these filters." : `No work orders yet — <b>New WO</b> to start.`}</div>`}
       <div class="plistfade" aria-hidden="true"></div>
     </div>
     <div class="keyhint no-print muted tny"><span><kbd>↑</kbd><kbd>↓</kbd> move</span>${
-      selectedWO() ? "<span><kbd>1</kbd>–<kbd>6</kbd> jump</span>" : ""
+      selectedWO() ? "<span><kbd>1</kbd>–<kbd>8</kbd> jump</span>" : ""
     }<span><kbd>/</kbd> search</span><span><kbd>e</kbd> edit</span><span><kbd>esc</kbd> back</span></div>
   </aside>`;
 }
@@ -965,7 +974,7 @@ function fld(wo, label, key, type) {
 
    The sections are a table rather than six inline blocks so the jump bar and
    the body cannot disagree about what exists or what order it is in. */
-const WO_SECTIONS = [
+const WO_SECTIONS_BASE = [
   { id: "steps", label: "Steps", anchor: "wo-steps",
     badge: w => { const p = woProgress(w); return p.total ? `${p.done}/${p.total}` : ""; },
     warn: w => { const f = woFlags(w); return !!(f.blocked || f.curing); },
@@ -975,6 +984,17 @@ const WO_SECTIONS = [
     foldHint: w => (!w.retro && (w.steps || []).some(s => stepState(s) !== "done" && stepState(s) !== "failed"))
       ? '<span class="secnav-dot gold" aria-hidden="true" title="has an up-next step"></span>' : "",
     body: (w, E) => woSecSteps(w, E) },
+  /* Issues used to be a bare chip row inside Quality, which made a defect that
+     holds this run from closing look like a footnote to the acceptance table.
+     It is its own section now: the badge counts disposed/total, and the warn
+     dot overrides the empty-fold so an undisposed issue can never be stowed. */
+  { id: "issues", label: "Issues", anchor: "wo-issues",
+    badge: w => { const all = issuesForWO(w.id);
+      return all.length ? `${all.filter(p => projStatus(p) === "Done").length}/${all.length}` : ""; },
+    warn: w => undisposedIssuesForWO(w.id).length > 0,
+    warnWord: w => { const n = undisposedIssuesForWO(w.id).length; return n > 1 ? `${n} undisposed` : "undisposed"; },
+    foldWhen: w => !issuesForWO(w.id).length,
+    body: (w, E) => woSecIssues(w, E) },
   // Pure reference: the facts band above carries status, due, mass and the
   // engineers, so the field grid folds by default (secFolded opens it in E).
   { id: "overview", label: "Details", anchor: "wo-overview", badge: () => "",
@@ -991,11 +1011,11 @@ const WO_SECTIONS = [
     body: (w, E) => woSecPhotos(w, E) },
   { id: "quality", label: "Quality", anchor: "wo-quality",
     badge: w => String((w.qualityChecks || []).length || ""),
-    warn: w => (w.qualityChecks || []).some(q => q.pass === false) || undisposedIssuesForWO(w.id).length > 0,
-    warnWord: w => { const nf = (w.qualityChecks || []).filter(q => q.pass === false).length; return nf ? `${nf} failed` : "open issue"; },
+    warn: w => (w.qualityChecks || []).some(q => q.pass === false),
+    warnWord: w => { const nf = (w.qualityChecks || []).filter(q => q.pass === false).length; return `${nf} failed`; },
     // Reference-shaped when empty: nothing to read, nothing wrong. Edit mode
     // keeps it open (secFolded) so "+ check" is on screen.
-    foldWhen: w => !(w.qualityChecks || []).length && !issuesForWO(w.id).length,
+    foldWhen: w => !(w.qualityChecks || []).length,
     body: (w, E) => woSecQuality(w, E) },
   { id: "files", label: "Files & docs", anchor: "wo-docs",
     badge: w => String(((w.docs || []).length + (w.files || []).length) || ""),
@@ -1011,6 +1031,26 @@ const WO_SECTIONS = [
     fresh: w => woNotesFresh(w),
     body: (w, E) => woSecNotes(w, E) },
 ];
+
+/* Order is a function of edit mode, not a constant.
+
+   Creating a work order (newWO opens in edit) and editing one both put you in
+   the Details field grid — and Details was the SECOND card, below a seven-step
+   list, so a new run opened already scrolled past the only fields it has. In
+   edit mode Details leads; reading a run, Steps leads, because that is the
+   bench action.
+
+   Every consumer — the jump bar, the section cards, secJumpOpen and the digit
+   keys — goes through this ONE call. That is the whole reason the sections are
+   a table: the bar and the body cannot disagree about what order they are in. */
+function woSections(E) {
+  if (!E) return WO_SECTIONS_BASE;
+  const i = WO_SECTIONS_BASE.findIndex(s => s.id === "overview");
+  if (i < 0) return WO_SECTIONS_BASE;
+  const out = WO_SECTIONS_BASE.slice();
+  out.unshift(out.splice(i, 1)[0]);
+  return out;
+}
 
 /* "New since you last looked", for the Notes & log fold. Session map + a
    localStorage stamp: the stamp advances the moment the record renders, and
@@ -1056,7 +1096,7 @@ function woJump(anchor) {
   // A jump to a folded section means "show me": secJumpOpen opens the fold
   // (and any inner <details> like the BOM) before scrolling.
   const wo = woById(view.id);
-  if (wo) secJumpOpen(WO_SECTIONS, wo, anchor); else secJump(anchor);
+  if (wo) secJumpOpen(woSections(view.edit), wo, anchor); else secJump(anchor);
 }
 
 /* The part this run belongs to, for the header chip and for stackDrift().
@@ -1086,7 +1126,7 @@ function renderWODetail() {
     <button class="primary" onclick="view.edit=!view.edit;render()">${E ? "Done editing" : "Edit"}</button>
     <button onclick="openPrintPreview('${wo.id}')">Print</button>
     ${labelBtn("workOrders", wo.id)}
-    <button onclick="createIssueFromWO('${wo.id}')">⚠ Create issue</button>
+    <button onclick="woJump('wo-issues')">⚠ Issues</button>
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
     <span class="mdnav no-print">
@@ -1133,8 +1173,8 @@ function renderWODetail() {
   ${/* A jump bar, not a switch: every section below is rendered, this scrolls
         to one. Carries the count and the attention dot so you can see there are
         five plies, or that a quality check failed, without going there. */""}
-  ${secNav("wosec", WO_SECTIONS, wo, "woJump", "Jump to a section of this work order")}
-  ${WO_SECTIONS.map(s => woSectionCard(s, wo, E)).join("")}
+  ${secNav("wosec", woSections(E), wo, "woJump", "Jump to a section of this work order")}
+  ${woSections(E).map(s => woSectionCard(s, wo, E)).join("")}
   ${woThreadCard(wo)}
   </section>`;
 }
@@ -1406,11 +1446,147 @@ function woSecSteps(wo, E) {
     })()}`;
 }
 
-function woSecQuality(wo, E) {
-  const issues = issuesForWO(wo.id);
+/* ---------- the Issues section ----------
+   Everything an issue needs while you are standing at the work order: what is
+   open, what it was disposed as, and a way to raise the next one. It is a flat
+   list on purpose — sub-tickets were a project-planning device and issues are
+   not projects, so a parentId is shown as a read-only "part of" line and never
+   as nesting.
+
+   Resolving here goes through resolveIssue(), the SAME choke point the ticket
+   page and the closeout modal use: statusGate() validates, Slack announces
+   once. A second gate implementation is the bug this section must not become.
+
+   Rows reuse .corow from the closeout modal — same shape, same problem, and
+   two stylings of one row is how they drift apart. */
+function woSecIssues(wo, E) {
+  const all = issuesForWO(wo.id).slice().sort((a, b) => {
+    const ad = projStatus(a) === "Done" || projStatus(a) === "Cancelled";
+    const bd = projStatus(b) === "Done" || projStatus(b) === "Cancelled";
+    if (ad !== bd) return ad ? 1 : -1;          // open first
+    return String(a.id).localeCompare(String(b.id));
+  });
+  const rows = all.map(p => {
+    const st = projStatus(p);
+    const done = st === "Done" || st === "Cancelled";
+    const parent = p.parentId ? parentOf(p) : null;
+    const stepLine = p.stepRef
+      ? ` · <button class="link" onclick="woJump('wo-steps')" title="Go to the step this was filed from">step ${esc(String(p.stepRef.seq))}${p.stepRef.title ? " · " + esc(p.stepRef.title) : ""}</button>`
+      : "";
+    const nFiles = (p.files || []).length;
+    const meta = `<span class="muted tny">${esc(st)}${p.updatedAt ? " · updated " + esc(fmtWhen(p.updatedAt)) : ""}${nFiles ? ` · ${nFiles} file${nFiles > 1 ? "s" : ""}` : ""}</span>${stepLine}`;
+    /* A parentId can only come from before issues went flat. Read-only, so the
+       context is not lost, and no nesting UI grows back around it. */
+    const pLine = parent
+      ? `<div class="muted tny">part of ${chip("projects", parent.id, parent.title || parent.id)}</div>` : "";
+
+    if (done) {
+      return `<div class="corow codone"><div><span class="ok">✓</span> ${chip("projects", p.id, p.id)} <b>${esc(p.title || "")}</b>
+        <span class="muted tny">— ${st === "Cancelled" ? "cancelled (false alarm)" : "resolved: " + esc(p.resolutionMethod || "?")}</span></div>
+        ${pLine}
+        ${st === "Done" && !E ? `<div><button class="link no-print" onclick="reopenIssue('${esc(p.id)}')">Reopen</button></div>` : ""}</div>`;
+    }
+    return `<div class="corow">
+      <div>${chip("projects", p.id, p.id)} <b>${esc(p.title || "")}</b> ${meta}</div>
+      ${pLine}
+      ${E ? `<div class="muted tny">Leave edit mode to dispose this issue.</div>` : `
+      <div class="field"><label for="wi-m-${esc(p.id)}">Disposition</label>
+        <select id="wi-m-${esc(p.id)}">
+          <option value="" ${p.resolutionMethod ? "" : "selected"}>— not yet disposed —</option>
+          ${RESOLUTION_METHODS.map(m => `<option ${p.resolutionMethod === m ? "selected" : ""}>${m}</option>`).join("")}
+        </select></div>
+      <div class="field"><label for="wi-w-${esc(p.id)}">What happened</label>
+        <textarea id="wi-w-${esc(p.id)}" placeholder="Root cause — required before this work order can close">${esc(p.whatHappened || "")}</textarea></div>
+      <div class="no-print"><button onclick="woResolveIssue('${esc(p.id)}')">Resolve</button></div>`}
+    </div>`;
+  }).join("");
+
+  const n = undisposedIssuesForWO(wo.id).length;
   return `
-    ${issues.length ? `<h3>Issues</h3>
-    <div class="stagerow">${issues.map(i => chip("projects", i.id, (i.resolutionMethod ? "✓ " : "") + (i.title || i.id))).join(" ")}</div>` : ""}
+    ${all.length ? "" : `<p class="muted">No issues on this run.</p>`}
+    ${rows}
+    ${n ? `<p class="gate blocked"><span class="gi">✕</span><span>${n} issue${n > 1 ? "s" : ""} still ${n > 1 ? "need" : "needs"} a disposition before ${esc(wo.id)} can complete.</span></p>` : ""}
+    <div class="no-print"><button onclick="openWOIssue('${esc(wo.id)}')">⚠ Raise an issue</button></div>`;
+}
+
+/* Read the row, hand it to the one gate, and render whatever it refuses with.
+   resolveIssue returns the refusal string verbatim — the caller never composes
+   its own wording, or the two would drift. */
+function woResolveIssue(pid) {
+  const m = document.getElementById("wi-m-" + pid);
+  const w = document.getElementById("wi-w-" + pid);
+  const r = resolveIssue(pid, m ? m.value : undefined, w ? w.value : undefined);
+  if (r) toast(r, "error");
+}
+
+/* ---------- raising an issue from the work order ----------
+   The same reasoning as openStepIssue: purpose-built, NOT the tickets modal.
+   That form fronts five fields nobody reporting a defect cares about and
+   navigates away on submit. The difference here is only that no step is
+   implied — this is a problem with the run, not with one operation in it. */
+function openWOIssue(woId) {
+  const w = woById(woId); if (!w) return;
+  openModal(`
+    <h2>Raise an issue — ${esc(w.id)}${w.partName ? " · " + esc(w.partName) : ""}</h2>
+    <div class="field"><label for="wi-title">Title</label><input id="wi-title" placeholder="What is wrong, in a few words"></div>
+    <div class="field"><label for="wi-what">What happened</label>
+      <textarea id="wi-what" placeholder="What went wrong, and why. (needed before this can close)"></textarea></div>
+    <div class="row2">
+      ${/* No capture attribute, for the same reason as the step picker: on iOS
+            it forces the camera and locks out the library, and the photo you
+            want is usually the one you already took. */""}
+      <div class="field"><label for="wi-photos">Photos</label><input id="wi-photos" type="file" accept="image/*" multiple></div>
+      <div class="field"><label for="wi-priority">Priority</label><select id="wi-priority">${PRIORITY.map(pr => `<option ${pr === "Medium" ? "selected" : ""}>${pr}</option>`).join("")}</select></div>
+    </div>
+    <p class="muted tny">Assigned to you and linked to ${esc(w.id)} — it holds this work order's completion until it is disposed.</p>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitWOIssue('${esc(woId)}')">File issue</button></div>
+  `);
+  setTimeout(() => { const el = document.getElementById("wi-title"); if (el && el.focus) el.focus(); }, 0);
+}
+async function submitWOIssue(woId) {
+  const w = woById(woId); if (!w) return;
+  // Read the WHOLE form before any await: allocId's offline fallback opens a
+  // confirm modal that replaces this markup (the submitNewProject footgun).
+  const title = ((document.getElementById("wi-title") || {}).value || "").trim();
+  const what = ((document.getElementById("wi-what") || {}).value || "");
+  const priority = ((document.getElementById("wi-priority") || {}).value || "Medium");
+  const filesEl = document.getElementById("wi-photos");
+  const files = filesEl && filesEl.files ? Array.from(filesEl.files) : [];
+  if (!title) { toast("Give the issue a title.", "error"); return; }
+  const id = await allocId("projects");
+  if (!id) return;
+  const p = {
+    id, title, kind: "issue",
+    status: "To Do", priority, dueDate: "", subteam: w.subteam || "",
+    description: "", assignees: [myEmail()], watchers: [myEmail()],
+    relatedParts: [], relatedTickets: [], relatedWorkOrders: [],
+    files: [], comments: [],
+    createdBy: myEmail(), retro: false,
+    workOrderId: w.id, resolutionMethod: "", whatHappened: what,
+  };
+  DB.projects.push(p); saveProj(p);
+  // Photos upload after the doc exists; a failed photo is its own toast, never
+  // a lost issue. Same entry shape as addRecordFiles.
+  let uploaded = 0;
+  for (const f of files) {
+    try {
+      const up = await fb.upload(`projects/${id}/${Date.now()}-${f.name}`, f);
+      p.files = (p.files || []).concat([{ id: "F" + Date.now() + Math.random().toString(36).slice(2, 5),
+        name: up.name, url: up.url, type: up.type, size: up.size, by: myEmail(), ts: new Date().toISOString(), path: up.path }]);
+      uploaded++;
+    } catch (e) { toast(`Photo ${f.name} didn't upload: ` + e.message, "error"); }
+  }
+  if (uploaded) saveProj(p, "files");
+  postToSlack(slackIssueCreatedMsg(p));
+  closeModal();
+  toast(`${id} filed on ${w.id}${uploaded ? ` with ${uploaded} photo${uploaded > 1 ? "s" : ""}` : ""}. It holds this run until it is disposed.`);
+  render(); // stay on the WO
+}
+
+function woSecQuality(wo, E) {
+  // Issues moved out to their own section (wo-issues). Quality means the
+  // acceptance table again, and its warn dot means a check FAILED.
+  return `
     <h3>Quality checks / acceptance criteria</h3>
     <table class="sub"><thead><tr><th>Criterion</th><th>Target (set at creation!)</th><th>Actual</th><th>Pass</th></tr></thead><tbody>
       ${(wo.qualityChecks || []).map((q, i) => E
@@ -1711,14 +1887,6 @@ function coComplete(woId) {
       : "No open issues remained."}</p>
     <div class="foot"><button class="primary" onclick="closeModal()">Close</button></div>
   `);
-}
-// Reuses the Tickets "new ticket" modal wholesale, pre-selected to Issue and
-// pre-filled with this work order — same modal, same fields, no duplication.
-function createIssueFromWO(woId) {
-  openNewProject();
-  document.getElementById("np-kind").value = "issue";
-  ticketKindChanged();
-  document.getElementById("np-wo").value = woId;
 }
 
 /* ---------- quick capture from a step ----------
@@ -2550,14 +2718,15 @@ function woKeydown(e) {
     return "search";
   }
   if (k === "e" && view.mode === "detail") { view.edit = !view.edit; render(); return "edit"; }
-  /* 1-7 scroll to a section of the open record. Digits are free here in a way
+  /* 1-8 scroll to a section of the open record. Digits are free here in a way
      they are not on Parts, which spends 1/2/3 advancing stages: a work order
      has no stage enum to advance. There is no ←/→ any more, because with the
      whole record in one scroll there is no "current section" for them to step
      from — that was a switch, and this is a jump. */
-  if (view.mode === "detail" && /^[1-7]$/.test(k) && WO_SECTIONS[+k - 1]) {
+  const SEC = woSections(view.edit);
+  if (view.mode === "detail" && /^[1-8]$/.test(k) && SEC[+k - 1]) {
     if (e.preventDefault) e.preventDefault();
-    woJump(WO_SECTIONS[+k - 1].anchor);
+    woJump(SEC[+k - 1].anchor);
     return "section";
   }
   return null;

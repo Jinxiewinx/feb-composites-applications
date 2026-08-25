@@ -5,11 +5,15 @@
    1. Weekly Goals — one row per person, not per subteam. Subteam describes
       what a *part* is for, not who's building it (composites builds every
       part regardless of subteam), so it has no place organizing who's doing
-      what this week. Each person gets a checklist: tickets due this week
-      (auto-pulled from DB.projects, exactly like before) plus goals typed in
-      at the Monday meeting (freeform, with an optional link to a ticket).
-      Checking off a ticket-linked row is LOCAL to this week's plan — it does
-      not touch the ticket's real status in the Tickets tab.
+      what this week. Each person gets a checklist: open ISSUES due this week
+      (auto-pulled from DB.projects) plus goals typed in at the Monday meeting
+      (freeform, with an optional link to an issue). Checking off a linked row
+      is LOCAL to this week's plan — it does not touch the issue's real status.
+
+      Issues, not tickets, since the project tracker was shelved: a row for a
+      record nobody can navigate to is a row nobody can act on. Old goals and
+      doneTickets entries that name a shelved project simply stop matching a
+      rendered row — dead, harmless, and reversible if the tab ever comes back.
 
    2. Car Groups — literal carpools, not work teams. A driver sets up one car
       for a specific day/time with a fixed seat count, then adds people until
@@ -55,12 +59,12 @@ function defaultWeekId(weeks) {
 
 /* ============================= Section 1: Weekly Goals ============================= */
 
-// Tickets due within a week's date range, assigned to this person, still open.
+// Issues due within a week's date range, assigned to this person, still open.
 function personTicketsThisWeek(email, week) {
   const dates = weekDates(week.weekOf);
   if (!dates.length) return [];
   const start = dates[0], end = dates[dates.length - 1];
-  return DB.projects.filter(p => p.dueDate && p.dueDate >= start && p.dueDate <= end
+  return DB.projects.filter(p => isIssue(p) && p.dueDate && p.dueDate >= start && p.dueDate <= end
     && !["Done", "Cancelled"].includes(projStatus(p)) && (p.assignees || []).includes(email));
 }
 function isTicketDoneThisWeek(week, email, ticketId) {
@@ -84,13 +88,13 @@ function toggleTicketDoneThisWeek(weekId, email, ticketId, done) {
 }
 
 function openAddGoalModal(weekId, email) {
-  const tickets = DB.projects.filter(p => !["Done", "Cancelled"].includes(projStatus(p)))
+  const tickets = DB.projects.filter(p => isIssue(p) && !["Done", "Cancelled"].includes(projStatus(p)))
     .slice().sort((a, b) => (a.title || a.id).localeCompare(b.title || b.id));
   openModal(`
     <h2>Add goal — ${esc(userName(email))}</h2>
     <div class="field"><label>Task</label><input id="wg-text" autofocus placeholder="What's the goal?"></div>
     <div class="field"><label>Due date</label><input id="wg-due" type="date"></div>
-    <div class="field"><label>Linked ticket (optional)</label>
+    <div class="field"><label>Linked issue (optional)</label>
       <select id="wg-ticket"><option value="">— none —</option>
         ${tickets.map(t => `<option value="${esc(t.id)}">${esc(t.title || t.id)}</option>`).join("")}
       </select>
