@@ -272,6 +272,13 @@ const body = `
           <div class="stat-tile"><div class="bignum">6</div><div class="stat-label">On hold</div></div>
           <div class="stat-tile"><div class="bignum">&lt;5Ω</div><div class="stat-label">Ground target</div></div>
         </div>`, true)}
+      ${demo(`<code>.bignum.bad</code> is wrong · <code>.bignum.warn</code> needs attention · <code>.bignum.ok</code> is clear. Same three words, same three colours, as the dashboard's <code>.bnum</code>.`, `
+        <div class="stat-row" style="width:100%">
+          <div class="stat-tile"><div class="bignum bad">4</div><div class="stat-label">Behind deadline</div></div>
+          <div class="stat-tile"><div class="bignum warn">9</div><div class="stat-label">Unassigned</div></div>
+          <div class="stat-tile"><div class="bignum ok">21</div><div class="stat-label">Signed off</div></div>
+          <div class="stat-tile"><div class="bignum">33</div><div class="stat-label">No state</div></div>
+        </div>`, true)}
     </div>
 
     <div class="ds-block"><h3>Gate</h3>

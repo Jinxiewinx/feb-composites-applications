@@ -27,7 +27,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Badges | `.pill` + `.ok`/`.warn`/`.bad`/`.retro`/`.now` (gold, for the current week or today — not a status); `.stage` + `.st-mid`/`.st-done`/`.st-na`; `.chip` (accent-tinted, clickable — render it as a `button`, it grows to a 36px tap target on touch); `.kind` (tiny uppercase tag); `.tpill` (training credential capsule — fully rounded, one quiet color, short code like "INF"; rows of them wrap inside `.trwrap`, and `.trrow` is the checkbox row in the grant modal). |
 | Status | `.status` + one of `.todo`, `.inprogress`, `.collecting`, `.onhold`, `.done`, `.cancelled`. |
 | Progress | `.stage-bar` wrapping `.stage-bar-fill` + `.st-0`/`.st-mid`/`.st-done`. |
-| Tiles | `.stat-row` of `.stat-tile`, each holding `.bignum` and `.stat-label`. |
+| Tiles | `.stat-row` of `.stat-tile`, each holding `.bignum` and `.stat-label`. Add `.bad`/`.warn`/`.ok` to the `.bignum` itself to colour the number — `.bad` is wrong (late, blocked), `.warn` is amber and means needs-attention (unassigned, curing, no location), `.ok` is clear. A bare `.warn` utility on the element will not work: `.bignum` sets its own colour and wins on source order. |
 | Kanban | `.col` + `.col-inprogress`/`.col-collecting`/`.col-onhold`/`.col-done`, holding `.pcard` with `.t` and `.meta`. |
 | Feedback | `.gate` (+ `.blocked`) for blocking notices; `.toast` + `.ok`/`.err`/`.info`; `.modal-backdrop` > `.modal` > `.foot`. |
 | WO hero | `.wo-facts` band of `.wo-fact` slots (`.wf-lab` label + `.wf-num` value, `.late` red) plus `.wf-eng` engineer avatars. |
@@ -65,6 +65,10 @@ Read `_ds/<folder>/styles.css` and its import closure before styling: `tokens/to
     <div className="stat-tile">
       <div className="bignum">4</div>
       <div className="stat-label">Plies remaining</div>
+    </div>
+    <div className="stat-tile">
+      <div className="bignum bad">2</div>
+      <div className="stat-label">Behind deadline</div>
     </div>
   </div>
 

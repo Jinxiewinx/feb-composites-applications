@@ -1970,6 +1970,14 @@
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .stat-tile { background: var(--surface-2); border-radius: var(--r-md); padding: 12px 14px; }
   .stat-tile .bignum { font-size: 22px; }
+  /* Same three states as the dashboard's .bnum, and the same words mean the
+     same colours: .bad is wrong (late, blocked), .warn is amber and means
+     needs-attention (unassigned, curing, no home), .ok is clear. Tiles passed
+     a class for a year and it did nothing — .bignum sets its own colour and
+     beats bare .warn on source order, so the number stayed navy. */
+  .bignum.bad { color: var(--bad); }
+  .bignum.warn { color: var(--amber); }
+  .bignum.ok { color: var(--ok); }
   .stat-tile .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-top: 2px; }
   /* ---- dashboard row plumbing ----
      Rounds one to three of this page are design history now (see git); what

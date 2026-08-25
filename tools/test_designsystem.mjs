@@ -270,6 +270,39 @@ if (VERBOSE) {
   absent.forEach(s => console.log(`    ${s}`));
 }
 
+/* -------------------------------------------------- state modifiers --
+   A class that sets its own colour cannot be recoloured by a bare utility:
+   `.warn { color: var(--bad) }` and `.bignum { color: var(--brand-ink) }` have
+   equal specificity, so source order decides and the later base rule wins. The
+   stat tiles shipped `class="bignum warn"` for a year and stayed navy, and
+   nothing here noticed, because the rule-by-rule diff above only compares
+   selectors that exist in BOTH files — a modifier missing from one copy is
+   skipped, not reported.
+
+   So: for every numeral scale that sets its own colour, the state modifiers
+   have to exist, qualified on the class itself, AFTER the base. Where 06
+   publishes the scale, both copies must carry them or they have drifted. */
+{
+  const STATES = ["bad", "warn", "ok"];
+  const check = (label, css, base) => {
+    const bare = stripComments(css);
+    const baseAt = bare.search(new RegExp(`\\${base}\\s*\\{`));
+    if (baseAt < 0) return;                       // scale not in this file
+    const missing = [], early = [];
+    for (const s of STATES) {
+      const at = bare.search(new RegExp(`\\${base}\\.${s}\\s*\\{`));
+      if (at < 0) missing.push(`${base}.${s}`);
+      else if (at < baseAt) early.push(`${base}.${s} is declared before ${base}, so the base wins`);
+    }
+    ok(`${label}: ${base} carries its own ${STATES.join("/")} states`,
+      missing.length === 0 && early.length === 0,
+      [...missing.map(m => `no ${m}`), ...early].join(", "));
+  };
+  check("app", appCss, ".bignum");
+  check("06", compCss, ".bignum");
+  check("app", appCss, ".bnum");     // the dashboard's sibling scale, app-only
+}
+
 /* ------------------------------------------------------------- literals --
    A hardcoded value that a token already spells is the drift mechanism
    itself: it looks identical today and stops tracking the moment the token

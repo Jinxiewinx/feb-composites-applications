@@ -62,8 +62,22 @@
   --bad: #cf3430;   --bad-bg: #fdeceb;   --bad-border: #f4bbb6;  /* error, blocked, late */
   --retro: #5a45b0; --retro-bg: #ece8fb; --retro-border: #c7bcf0;/* retro / not-applicable */
   --purple: #6a3fb0;--purple-bg: #efe7fb;--purple-border: #d3c0f0;/* collecting / secondary */
+  --hold: #47566b;  --hold-bg: #e8edf4;  --hold-border: #c3cfdf; /* on hold, parked — cool slate, deliberately not amber (in-work) or red (late) */
   --info-bg: #e8f0fd;
   --gold-bg: #fff7e0;     /* "today" / unread highlight */
+
+  /* ---- ply materials (layup stack swatches) ----
+     One family per material class, matching plyClass() in core.js. These are
+     read as a small colour swatch beside a text tag, never as the background
+     of the row text — hue must never be the only carrier of meaning (the same
+     rule print.css states for the printed traveler). The dark values are
+     lightened rather than reused: the light greys sat at roughly 2:1 against a
+     dark card, which is what the old hardcoded .plybar hex got wrong. */
+  --ply-cf: #3b4653;      /* woven carbon / twill / a bare gsm number */
+  --ply-spread: #6b7684;  /* spread tow */
+  --ply-mesh: #c98f4a;    /* copper mesh and other meshes */
+  --ply-core: #FDB515;    /* Nomex, foam, Rohacell, honeycomb */
+  --ply-other: #cfd6e0;   /* anything unrecognised */
 
   /* ---- radius ---- */
   --radius: 6px;  /* controls, small elements */
@@ -96,6 +110,12 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
+  /* Berkeley Blue lifted off the dark canvas. --blue is used as a SURFACE
+     (primary button, selected filter chip, goal bar) and had no dark value,
+     so it stayed #003262 against a #0b0f16 canvas and every selected state
+     read as a hole rather than a selection. Still the brand hue, still about
+     6.8:1 under the white text these surfaces carry. */
+  --blue: #1d5aa8;
   --navy-2: #2a6bb5; --sb-bg: #071a30; --brand-ink: #6f9dff;
 
   --canvas: #0b0f16; --card: #141c28; --surface: #141c28;
@@ -111,7 +131,11 @@
   --bad: #ff6f62;   --bad-bg: #2c1613;   --bad-border: #56291f;
   --retro: #a99bf0; --retro-bg: #1d1935; --retro-border: #3a3168;
   --purple: #a385e6;--purple-bg: #241c3a;--purple-border: #3d2f5c;
+  --hold: #a9bbd1;  --hold-bg: #232b36;  --hold-border: #3a4757;
   --info-bg: #182842; --gold-bg: #2a2411;
+
+  --ply-cf: #7d8ba0; --ply-spread: #9aa7ba; --ply-mesh: #d8a35f;
+  --ply-core: #FDB515; --ply-other: #46536a;
 
   --shadow: 0 1px 2px rgba(0,0,0,.5);
   --shadow-md: 0 4px 18px rgba(0,0,0,.55);
@@ -306,6 +330,100 @@ table.list.dash td { cursor: default; }
   margin-right: 3px; vertical-align: 1px; text-transform: uppercase;
 }
 
+/* ---- WO hero facts band ----
+   Labeled fact slots instead of a middle-dot sentence: status (statusdrop),
+   steps progress, due, mass, engineer avatars. */
+.wo-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 8px 0 6px; }
+.wo-fact { display: inline-flex; align-items: baseline; gap: 5px; }
+.wf-lab { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.wf-num { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.wf-num.late { color: var(--bad); }
+.wf-eng { display: inline-flex; }
+.wf-eng + .wf-eng { margin-left: -6px; }
+
+/* ---- section header + folds (WO and Parts detail) ----
+   One card per section; this header replaces the bare h3. Same recipe as
+   the dashboard module header (gold speed-slash + Saira uppercase), plus a
+   count pill and, when something needs attention, a red slash and a word
+   beside the dot — hue is never the only carrier. The header is a <button>
+   that toggles a CLASS fold (.wosec.folded hides .wosec-body; a closed
+   <details> skips painting and vanished from browser print). The caret is
+   a 28px chip so the fold reads as the button it is. */
+.wosec-hd { display: flex; align-items: center; gap: 8px; margin: 0; list-style: none; }
+button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; background: none; border: 0;
+  padding: 0; font: inherit; text-align: left; cursor: pointer; min-height: 40px; color: inherit; }
+.wosec-hd > span:first-child { position: relative; padding-left: 11px; font-family: var(--font-display);
+  font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.wosec-hd > span:first-child::before { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 3px;
+  border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
+.wosec-hd.warn > span:first-child::before { background: var(--bad); }
+.wosec-n { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+.wosec-w { font-size: 11.5px; font-weight: 600; color: var(--bad); }
+.wosec-hd::after { content: "▾"; width: 28px; height: 28px; margin-left: auto; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; color: var(--muted);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.wosec-hd:hover::after { background: var(--hover); color: var(--ink); }
+.wosec.folded > .wosec-hd::after { content: "▸"; }
+.wosec:not(.folded) > .wosec-hd { margin-bottom: 10px; }
+.wosec.folded > .wosec-body { display: none; }
+.addrow { margin-top: 8px; }
+/* Sub-fold inside a section card (BOM, event log): folds even when
+   populated; the summary wears the h3 register plus a count. */
+.wo-subfold > summary.wo-subhd { cursor: pointer; list-style: none; min-height: 40px;
+  display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 10px; }
+.wo-subfold > summary.wo-subhd::-webkit-details-marker { display: none; }
+.wo-subfold > summary.wo-subhd::before { content: "▸"; color: var(--faint); transition: transform var(--t-fast) var(--ease); }
+.wo-subfold[open] > summary.wo-subhd::before { content: "▾"; }
+.w110 { width: 110px; }
+/* Second-tier group label inside a section card, below h3, above a grid. */
+.fgroup-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--faint); margin: 12px 0 4px; }
+.fgroup-label:first-child { margin-top: 0; }
+
+/* ---- photos ----
+   Real <img loading="lazy"> tiles so the lightbox collects them and offscreen
+   loads defer. .photogrid is the section grid, .phmini the 48px step strip. */
+.phgrp { margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.phgrp:first-of-type { margin-top: 0; }
+.photogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.phtile { margin: 0; min-width: 0; }
+.phimg { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius);
+  border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+.phtile figcaption { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phcap { width: 100%; margin-top: 2px; font-size: 12px; padding: 3px 6px; }
+.step-photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.step-photos:empty { display: none; }
+.phmini { width: 48px; height: 48px; object-fit: cover; border-radius: var(--radius);
+  border: 1px solid var(--line); cursor: pointer; display: block; background: var(--fill); }
+.ph-uploading { font-size: 11px; color: var(--muted); border: 1px dashed var(--border-2);
+  border-radius: var(--radius); padding: 14px 10px; animation: phpulse 1.2s ease-in-out infinite; }
+@keyframes phpulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* ---- badges: training capsule ----
+   A credential, not a status: fully-rounded silhouette and one quiet color so
+   it can never be misread as done/in-work/blocked. Carries a short code
+   ("INF", "CNC"); the long name and grant provenance ride in the tooltip. */
+.tpill {
+  display: inline-flex; align-items: center; padding: 1px 8px;
+  border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  color: var(--muted); white-space: nowrap;
+}
+/* Wrap container for a row of training capsules. */
+.trwrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+/* One training per row in the grant/revoke modal; the whole row is the tap
+   target so the checkbox is reachable with gloves on. */
+.trrow {
+  display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px;
+  min-height: 40px; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.trrow:last-of-type { border-bottom: 0; }
+.trrow input[type="checkbox"] { margin-top: 3px; width: 16px; height: 16px; }
+
 /* ---- badges: status (dot + label, the 6-state enum) ---- */
 .status {
   display: inline-flex; align-items: center; gap: 6px;
@@ -319,8 +437,8 @@ table.list.dash td { cursor: default; }
 .status.inprogress .dot { background: var(--accent); }
 .status.collecting { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
 .status.collecting .dot { background: var(--purple); }
-.status.onhold     { background: var(--warn-bg);   color: var(--amber);  border-color: var(--warn-border); }
-.status.onhold .dot { background: var(--amber); }
+.status.onhold     { background: var(--hold-bg);   color: var(--hold);   border-color: var(--hold-border); }
+.status.onhold .dot { background: var(--hold); }
 .status.done       { background: var(--ok-bg);     color: var(--ok);     border-color: var(--ok-border); }
 .status.done .dot  { background: var(--ok); }
 .status.cancelled  { background: var(--surface-2); color: var(--faint);  border-color: var(--line); text-decoration: line-through; }
@@ -368,6 +486,13 @@ table.list.dash td { cursor: default; }
   font-family: var(--font-display); font-size: 32px; font-weight: 700;
   color: var(--brand-ink); letter-spacing: .01em;
 }
+/* One word, one colour, across every numeral scale: .bad is wrong (late,
+   blocked), .warn is amber and means needs-attention (unassigned, curing),
+   .ok is clear. These have to be stated on .bignum itself — it sets its own
+   colour, so a bare .warn utility loses to it on source order. */
+.bignum.bad { color: var(--bad); }
+.bignum.warn { color: var(--amber); }
+.bignum.ok { color: var(--ok); }
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 
 /* ---- kanban ---- */
@@ -379,7 +504,7 @@ table.list.dash td { cursor: default; }
 .col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--border-2); }
 .col.col-inprogress::before { background: var(--accent); }
 .col.col-collecting::before { background: var(--purple); }
-.col.col-onhold::before     { background: var(--amber); }
+.col.col-onhold::before     { background: var(--hold); }
 .col.col-done::before       { background: var(--ok); }
 .col h4 {
   margin: 4px 6px 8px; font-family: var(--font-display); font-size: 11.5px;
@@ -707,6 +832,13 @@ kbd {
           <div class="stat-tile"><div class="bignum">6</div><div class="stat-label">On hold</div></div>
           <div class="stat-tile"><div class="bignum">&lt;5Ω</div><div class="stat-label">Ground target</div></div>
         </div></div><div class="ds-demo-cap"><code>.stat-tile</code> + <code>.bignum</code> in a <code>.stat-row</code></div></div>
+      <div class="ds-demo"><div class="ds-demo-stage col">
+        <div class="stat-row" style="width:100%">
+          <div class="stat-tile"><div class="bignum bad">4</div><div class="stat-label">Behind deadline</div></div>
+          <div class="stat-tile"><div class="bignum warn">9</div><div class="stat-label">Unassigned</div></div>
+          <div class="stat-tile"><div class="bignum ok">21</div><div class="stat-label">Signed off</div></div>
+          <div class="stat-tile"><div class="bignum">33</div><div class="stat-label">No state</div></div>
+        </div></div><div class="ds-demo-cap"><code>.bignum.bad</code> is wrong · <code>.bignum.warn</code> needs attention · <code>.bignum.ok</code> is clear. Same three words, same three colours, as the dashboard's <code>.bnum</code>.</div></div>
     </div>
 
     <div class="ds-block"><h3>Gate</h3>

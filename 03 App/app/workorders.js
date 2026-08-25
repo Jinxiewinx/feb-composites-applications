@@ -897,7 +897,7 @@ function renderWOOverview() {
   return `
   <section class="mddetail" aria-label="Work orders overview">
     <div class="stat-row">
-      ${tile(s.open, "Open runs")}${tile(s.late, "Behind due date", s.late ? "warn" : "")}${tile(s.curing, "Curing")}${tile(s.blocked, "Blocked", s.blocked ? "warn" : "")}
+      ${tile(s.open, "Open runs")}${tile(s.late, "Behind due date", s.late ? "bad" : "")}${tile(s.curing, "Curing", s.curing ? "warn" : "")}${tile(s.blocked, "Blocked", s.blocked ? "bad" : "")}
     </div>
     <div class="card">
       <h2>Runs in flight</h2>

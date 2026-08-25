@@ -148,7 +148,7 @@ reusable: tokens, component styles, and a living style guide in light and
 dark. The app remains the source of truth; `tools/test_designsystem.mjs` keeps
 the two from drifting apart. It also syncs to claude.ai/design.
 
-![The style guide: tokens and components, light theme](06%20Design%20System/styleguide-light-mockup-20260803.png)
+![The style guide: tokens and components, light theme](06%20Design%20System/styleguide-light-mockup-20260825.png)
 
 **The team website** (`08`) is the public site for sponsors and recruits,
 plain HTML and CSS on the `06` design system, no framework. Photos are

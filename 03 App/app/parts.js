@@ -523,7 +523,7 @@ function partStatRow(compact) {
   const s = partSummary();
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
   return `<div class="stat-row pstats${compact ? " compact" : ""}">
-    ${tile(s.open, "Open parts")}${tile(s.late, "Behind deadline", s.late ? "warn" : "")}${tile(s.mine, "On you")}${tile(s.done, "Finished")}
+    ${tile(s.open, "Open parts")}${tile(s.late, "Behind deadline", s.late ? "bad" : "")}${tile(s.mine, "On you")}${tile(s.done, "Finished")}
   </div>`;
 }
 

@@ -328,6 +328,13 @@ button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; backg
   font-family: var(--font-display); font-size: 32px; font-weight: 700;
   color: var(--brand-ink); letter-spacing: .01em;
 }
+/* One word, one colour, across every numeral scale: .bad is wrong (late,
+   blocked), .warn is amber and means needs-attention (unassigned, curing),
+   .ok is clear. These have to be stated on .bignum itself — it sets its own
+   colour, so a bare .warn utility loses to it on source order. */
+.bignum.bad { color: var(--bad); }
+.bignum.warn { color: var(--amber); }
+.bignum.ok { color: var(--ok); }
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 
 /* ---- kanban ---- */

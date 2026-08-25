@@ -50,11 +50,20 @@ Simon's report that selecting the clamshell and asking for the rotate feature
   - `mvSweep()` closes a GL-context leak that mattered once every planned mold
     had a viewer: `mvTeardown` was only ever called from inside `mvMount`.
 
-  KNOWN, NOT FIXED: `tile(n, label, "warn")` on a `.stat-tile` does nothing —
-  `.bignum` sets its own colour and wins on source order. Affects the Molds
-  overview's "No home location" tile and predates this work. Fixing it means a
-  rule in `06 Design System/components.css` plus a style-guide rebuild and a
-  `/design-sync`, which was out of scope for a targeted pass. Simon's call.
+  **Follow-up, now fixed (Simon asked):** `.bignum` carries its own
+  `.bad`/`.warn`/`.ok` states, in the app CSS and in `components.css`, mirroring
+  the dashboard's `.bnum` so one word means one colour everywhere — `.bad` is
+  wrong, `.warn` is amber and means needs-attention, `.ok` is clear. The stat
+  tiles had passed a class for a year and stayed navy. Call sites corrected to
+  the vocabulary the dashboard already set: Behind deadline and Blocked are
+  `bad`, Curing and No-home are `warn`. Style guide has a states row and was
+  rebuilt; `.design-sync/conventions.md` documents the modifiers; the sync ran.
+
+  The drift test did NOT catch this and would not have caught the rule being
+  dropped from one copy — its rule-by-rule diff only compares selectors present
+  in BOTH files, so a missing modifier is skipped, not reported. There is now
+  an explicit state-modifier check (verified to fail on both failure modes:
+  rule missing from one copy, and modifier written as a bare utility).
 
   NOT DEPLOYED YET at time of writing — see whether a later entry says
   otherwise. Suites all green: test_app 547, appui 1242, detailui 885,
