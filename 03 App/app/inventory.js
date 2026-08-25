@@ -398,6 +398,12 @@ function invLocWarnings(bin, bucket) {
 function invSelected() {
   if (view.mode !== "detail") return null;
   const id = String(view.id || "");
+  /* Boards first, and before BIN-, so a BRD- can never fall through to the
+     generic item branch below and be looked up in DB.items. SZ: is a synthetic
+     size key minted by groupBoards, not a stored record — boardGroupByKey
+     re-derives it, which is why it resolves at all. */
+  if (id.startsWith("SZ:")) return { kind: "size", rec: boardGroupByKey(id.slice(3)) };
+  if (id.startsWith("BRD-")) return { kind: "board", rec: boardById(id) };
   if (id.startsWith("BIN-")) return { kind: "bin", rec: shopById("items", id) };
   if (/^(PNL|JIG)-/.test(id)) return { kind: "item", rec: shopById("items", id) };
   if (/^(FAB|RSN|CON)-/.test(id)) return { kind: "lot", rec: shopById("lots", id) };
@@ -564,9 +570,11 @@ function invNowhereBar(idx) {
 function invToolbar(active) {
   const seg = (id, label) => `<button class="ib ${active === id ? "primary" : ""}" ${active === id ? "" : `onclick="view.invView='${id}';view.mode='list';view.id=null;render()"`}>${label}</button>`;
   return `<div class="toolbar no-print">
-    ${seg("map", "Storage map")}${seg("items", "Items list")}${seg("lots", "Materials list")}
+    ${seg("map", "Storage map")}${seg("items", "Items list")}${seg("lots", "Materials list")}${seg("boards", "Boards")}
     <span style="flex:1"></span>
-    <button class="primary ib" onclick="newShopRec('items','BIN')">+ Location</button>
+    ${active === "boards" ? `<button class="primary ib" onclick="newBoard()">+ Board</button>
+    <button class="ib" onclick="newShopRec('items','BIN')">+ Location</button>`
+      : `<button class="primary ib" onclick="newShopRec('items','BIN')">+ Location</button>`}
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
@@ -877,15 +885,21 @@ function renderInventory() {
   const sel = invSelected();
   if (view.mode === "detail" && view.id === "NOWHERE") return renderInvContents("NOWHERE");
   if (sel && sel.kind === "bin" && sel.rec) return renderInvContents(sel.rec);
+  /* Boards branch BEFORE the generic one below, which resolves anything that
+     is not a lot to the items schema — a board handed to renderShopDetail
+     ("items") is an id that is not in DB.items and paints an empty card. */
+  if (sel && sel.kind === "size") { view.invView = "boards"; return invToolbar("boards") + boardSizePane(sel.rec); }
+  if (sel && sel.kind === "board") { view.invView = "boards"; return invToolbar("boards") + boardPane(sel.rec); }
   if (sel && sel.rec) {
     const tab = sel.kind === "lot" ? "lots" : "items";
     return `<section class="mddetail">${renderShopDetail(tab, { embedded: true, back: "clearInvSelection", move: null, backLabel: "Storage map" })}</section>`;
   }
   if (sel && !sel.rec) { view.mode = "list"; view.id = null; }
-  const v = view.invView === "items" || view.invView === "lots" ? view.invView : "map";
+  const v = ["items", "lots", "boards"].includes(view.invView) ? view.invView : "map";
   if (view.invView !== v) view.invView = v;
   if (v === "items") return invToolbar("items") + renderShopList("items");
   if (v === "lots") return invToolbar("lots") + renderShopList("lots");
+  if (v === "boards") return invToolbar("boards") + renderBoardsList();
   return renderInvMap();
 }
 

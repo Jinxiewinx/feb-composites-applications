@@ -742,6 +742,18 @@ const ID_TO_COLL = {
   PNL: "items", JIG: "items", BIN: "items",
   FAB: "lots", RSN: "lots", CON: "lots",
 };
+/* One collection, two homes. `stock` holds tooling boards (BRD-) and the
+   stack plans cut from them (STK-), and since boards moved to Inventory those
+   two want different tabs: a board is a thing on a shelf, a stack plan is a
+   mold's file. ID_TO_COLL still maps both to `stock` so recById finds either —
+   changing it would break consumePendingLink, invMoveHere's coll lookup and
+   test_route's ID_PREFIX check. The split happens here instead, on the id,
+   once, before anything paints. #/stock with no id is still Molds. */
+function moldsOrBoardsFor(id) {
+  const s = String(id || "");
+  if (s.startsWith("BRD-") || s.startsWith("SZ:")) { view.invView = "boards"; return "inventory"; }
+  return "molds";
+}
 function tabForId(id) {
   const pfx = (String(id || "").toUpperCase().match(/^([A-Z]+)-/) || [])[1];
   const coll = ID_TO_COLL[pfx];
@@ -1790,7 +1802,11 @@ const TABS = [
      stored notification links, scanned BRD-/STK- codes and the test literals
      all resolve through this row's id and coll. render() normalises the tab id
      before painting, so the row's own render never actually runs. */
-  { id: "stock", label: "Stock", ic: "layers", coll: "stock", grp: "build", hidden: true, render: () => { view.tab = "molds"; return renderMoldsTab(); } },
+  /* Reached for real, not just by #/stock: consumePendingLink redeems a deep
+     link AFTER render() has normalised the tab, so a #/BRD- link arrives here
+     still saying "stock". Same dispatch as the normalisation, for that reason. */
+  { id: "stock", label: "Stock", ic: "layers", coll: "stock", grp: "build", hidden: true,
+    render: () => { view.tab = moldsOrBoardsFor(view.id); return view.tab === "inventory" ? renderInventory() : renderMoldsTab(); } },
   { id: "molds", label: "Molds", ic: "molds", coll: "molds", grp: "build", tip: "Molds — molds, stack plans and tooling board", render: () => renderMoldsTab() },
   /* Inventory replaces the Items and Materials tabs (2026-08-04): the storage
      map. Its coll is "items" and it sits BEFORE the hidden items alias, so
@@ -2152,7 +2168,7 @@ function render() {
      through it — but what paints is the merged tab. Normalised before the
      sidebar so the Molds entry lights up, and mode/id survive so a routed
      BRD- lands selected in the rail. */
-  if (view.tab === "stock") view.tab = "molds";
+  if (view.tab === "stock") view.tab = moldsOrBoardsFor(view.id);
   if (view.tab === "weekplan") { view.tab = "timeline"; view.schedView = "week"; }
   if (view.tab === "items" || view.tab === "lots") view.tab = "inventory";
   renderSidebar();

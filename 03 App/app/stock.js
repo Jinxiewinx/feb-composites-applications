@@ -216,6 +216,188 @@ function delBoard(id) {
 }
 
 /* ==========================================================================
+   The Boards view of Inventory.
+
+   Boards used to be a third group on the Molds rail, beside molds and stack
+   plans. They are not that: a board is a thing on a shelf, which is what
+   Inventory is for, and Inventory already had them — invIndex has bucketed
+   DB.stock by location since boards gained one, and a shelf's contents page
+   has always listed its tooling board. Only the LIST lived in the wrong tab.
+
+   The renderers live in this file rather than inventory.js because this file
+   owns the board data, the modal that edits it, and the eight helpers these
+   panes read (groupBoards, boardSizeKey, groupLabel, boardAreaM2, fmtDim,
+   fmtMm, thkKey, boardById). Moving the rendering "into the Inventory file"
+   would split it from its data and make inventory.js reach across for all
+   eight. Script order allows the call this way round: stock.js loads first.
+
+   Flat, like Items list and Materials list. Inventory has no rail anywhere —
+   the map is a grid of cards, the receiving desk drops the index on purpose —
+   and a fourth navigation shape inside one tab is a tab that behaves
+   differently depending on which segment you happened to press.
+   ========================================================================== */
+
+/* Grouped by GRADE, because that is the axis the packer refuses to substitute
+   across (CS-004 — 60lb seals better, and you cannot swap it in silently), so
+   it is the one that decides whether a job can be cut at all. */
+function boardsByGrade(groups) {
+  const m = new Map();
+  for (const g of groups) {
+    const d = canonDensity(g.density) ?? 30;
+    if (!m.has(d)) m.set(d, []);
+    m.get(d).push(g);
+  }
+  return [...m.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+function renderBoardsList() {
+  const q = (view.q || "").toLowerCase();
+  const all = groupBoards(DB.stock || []);
+  const dens = view.invDens ? canonDensity(view.invDens) : null;
+  const groups = all
+    .filter(g => dens == null || (canonDensity(g.density) ?? 30) === dens)
+    .filter(g => !q || (groupLabel(g) + " " + g.density + " " + JSON.stringify(g.members)).toLowerCase().includes(q));
+
+  const boards = groups.reduce((n, g) => n + g.qty, 0);
+  const m2 = groups.reduce((n, g) => n + g.m2, 0);
+  const homeless = (DB.stock || []).filter(b => !b.location).length;
+  const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
+
+  /* Board on hand by thickness. This used to sit on the Molds overview, which
+     is the wrong place to ask it: it is the question you ask standing at the
+     rack, deciding whether to cut or to order. */
+  const buckets = {};
+  (DB.stock || []).forEach(b => { buckets[thkKey(b)] = (buckets[thkKey(b)] || 0) + boardAreaM2(b); });
+  const grades = [...new Set((DB.stock || []).map(b => canonDensity(b.density) ?? 30))].sort((a, b) => a - b);
+
+  return `
+  <div class="stat-row">
+    ${tile(groups.length, "Sizes")}${tile(boards, "Boards")}${tile(m2.toFixed(1), "m² on hand")}${
+      homeless ? tile(homeless, "No location", "warn") : ""}
+  </div>
+  <div class="filters no-print">
+    <input id="searchbox" placeholder="search size / label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+    <select title="Board grade" onchange="view.invDens=this.value;render()">
+      <option value="">All grades</option>
+      ${grades.map(d => `<option value="${d}" ${String(view.invDens) === String(d) ? "selected" : ""}>${d} lb/ft³</option>`).join("")}
+    </select>
+    ${view.q || view.invDens ? `<button class="sm" onclick="view.q='';view.invDens='';render()">Clear</button>` : ""}
+  </div>
+  ${!groups.length ? `<div class="card"><span class="muted">${
+    (DB.stock || []).length ? "Nothing matches these filters."
+    : `No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS${
+        isLead() ? ", or <b>Load SN5 archive</b> to start from the rack SN5 left behind" : ""}.`}</span></div>` : ""}
+  ${boardsByGrade(groups).map(([d, gs]) => `
+    <div class="card">
+      <div class="pgrouphd"><span class="pg-name">${d} lb/ft³</span>
+        <span class="pg-n">${gs.reduce((n, g) => n + g.qty, 0)} boards</span>
+        <span class="pg-n">${gs.length} size${gs.length === 1 ? "" : "s"}</span>
+        <span class="pg-n">${gs.reduce((n, g) => n + g.m2, 0).toFixed(1)} m²</span></div>
+      <table class="list">
+        <tr><th>Size</th><th>Thickness</th><th>Qty</th><th>Area</th><th>Where</th></tr>
+        ${gs.map(g => {
+          const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
+          return `<tr onclick="selectInvRec('${esc(g.id)}')">
+            <td><b>${esc(groupLabel(g))}</b></td>
+            <td>${fmtMm(g.thkMm)}</td>
+            <td>${esc(g.qty)}</td>
+            <td>${g.m2.toFixed(2)} m²</td>
+            <td class="tny">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : `<span class="muted">—</span>`}</td>
+          </tr>`;
+        }).join("")}
+      </table>
+    </div>`).join("")}
+  ${Object.keys(buckets).length ? `<div class="card">
+    <h3>Board on hand, by thickness</h3>
+    <div class="grid">
+      ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} m²</div></div>`).join("")}
+    </div>
+  </div>` : ""}`;
+}
+
+/* ---------- size pane ----------
+   A size of board, and however many of them are on the rack. The individual
+   documents are still here, at the bottom, because a BRD- id is what a printed
+   label carries and what mold.board points at — but you have to want them.
+   Simon: "we really only care about xyz and density." */
+function boardSizePane(g) {
+  if (!g) { view.mode = "list"; view.id = null; return renderBoardsList(); }
+  const ids = new Set(g.members.map(b => b.id));
+  const usedBy = (DB.molds || []).filter(m => ids.has(m.board));
+  const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
+  return `
+  <section class="mddetail" aria-label="Board size detail">
+    <div class="toolbar no-print">
+      <button class="ib" onclick="clearInvSelection()">${icon("chevronLeft", 16)} All boards</button>
+      <button class="primary ib" onclick="newBoard()">+ Board this size</button>
+    </div>
+    <div class="card">
+      <h2>${esc(groupLabel(g))}</h2>
+      <div class="muted">${esc(g.density)} lb/ft³ · ${esc(g.qty)} on the rack · ${g.m2.toFixed(2)} m² of face</div>
+      <div class="grid">
+        <div class="f"><label>Length</label><div class="ro">${fmtMm(g.lenMm)} <span class="muted tny">(${Math.round(g.lenMm * 10) / 10} mm)</span></div></div>
+        <div class="f"><label>Width</label><div class="ro">${fmtMm(g.widMm)} <span class="muted tny">(${Math.round(g.widMm * 10) / 10} mm)</span></div></div>
+        <div class="f"><label>Thickness</label><div class="ro">${fmtMm(g.thkMm)} <span class="muted tny">(${Math.round(g.thkMm * 10) / 10} mm)</span></div></div>
+        <div class="f"><label>Density</label><div class="ro">${esc(g.density)} lb/ft³</div></div>
+        <div class="f"><label>Quantity</label><div class="ro">${esc(g.qty)}</div></div>
+        <div class="f"><label>Stored at</label><div class="ro">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : "—"}</div></div>
+      </div>
+      ${usedBy.length ? `<h3>Molds cut from boards this size</h3>
+        <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
+      <h3>The boards themselves</h3>
+      <div class="muted tny">One record each, because a BRD- label is stuck to a physical board and a mold points at the one it was cut from.</div>
+      <table class="list">
+        <tr><th>Board</th><th>Qty</th><th>Where</th><th></th></tr>
+        ${g.members.map(b => `<tr>
+          <td onclick="selectInvRec('${esc(b.id)}')"><b>${esc(b.label || b.id)}</b> <span class="muted tny">${esc(b.id)}</span>${
+            b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}</td>
+          <td>${esc(b.qty || 1)}</td>
+          <td class="tny">${b.location ? shopRefChip(String(b.location)) : "—"}</td>
+          <td>${labelBtn("stock", b.id)}<button class="ib sm" onclick="editBoard('${esc(b.id)}')">${icon("edit", 14)}</button>${
+            isLead() ? `<button class="danger ib sm" onclick="delBoard('${esc(b.id)}')">${icon("trash", 14)}</button>` : ""}</td>
+        </tr>`).join("")}
+      </table>
+    </div>
+  </section>`;
+}
+
+/* ---------- board pane ----------
+   The detail page boards never had, and what makes a BRD- link land somewhere.
+   Read-only on purpose: the modal is already the editor, and two editable
+   surfaces for one record is how fields fight. */
+function boardPane(b) {
+  if (!b) { view.mode = "list"; view.id = null; return renderBoardsList(); }
+  const usedBy = (DB.molds || []).filter(m => m.board === b.id);
+  return `
+  <section class="mddetail" aria-label="Board detail">
+    <div class="toolbar no-print">
+      <button class="ib" onclick="clearInvSelection()">${icon("chevronLeft", 16)} All boards</button>
+      <button class="primary ib" onclick="editBoard('${esc(b.id)}')">${icon("edit", 15)} Edit</button>
+      ${labelBtn("stock", b.id)}
+      ${isLead() ? `<button class="danger" onclick="delBoard('${esc(b.id)}')">Delete</button>` : ""}
+    </div>
+    <div class="card" data-lbgroup="stock:${esc(b.id)}">
+      <h2>${esc(b.label || b.id)}</h2>
+      <div class="muted">${esc(b.id)}${
+        b.ts ? " · added " + fmtWhen(b.ts) : ""}${b.createdBy ? " by " + esc(b.createdBy) : ""}</div>
+      <h3>Details</h3>
+      <div class="grid">
+        <div class="f"><label>Length</label><div class="ro">${fmtDim(b.len)}</div></div>
+        <div class="f"><label>Width</label><div class="ro">${fmtDim(b.wid)}</div></div>
+        <div class="f"><label>Thickness</label><div class="ro">${fmtDim(b.thk)}</div></div>
+        <div class="f"><label>Density</label><div class="ro">${esc(canonDensity(b.density) ?? b.density)} lb/ft³</div></div>
+        <div class="f"><label>Quantity</label><div class="ro">${esc(b.qty || 1)}</div></div>
+        <div class="f"><label>Area</label><div class="ro">${boardAreaM2(b).toFixed(2)} m²</div></div>
+        <div class="f"><label>Stored at</label><div class="ro">${b.location ? shopRefChip(String(b.location)) : "—"}</div></div>
+        ${b.origin ? `<div class="f"><label>From</label><div class="ro">${esc(b.origin)}</div></div>` : ""}
+      </div>
+      ${usedBy.length ? `<h3>Molds cut from this board</h3>
+        <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
+    </div>
+  </section>`;
+}
+
+/* ==========================================================================
    Mold stack plans — upload an STL, slice it, prove the mold fits the blocks.
    ========================================================================== */
 

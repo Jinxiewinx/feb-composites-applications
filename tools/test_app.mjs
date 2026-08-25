@@ -4086,6 +4086,40 @@ await t("the chemical and freshness warnings fire where CS-011 says they should"
   assert(w2.length === 0, "the clean bin stays clean");
 });
 
+await t("Boards is the fourth Inventory list, beside items and materials", () => {
+  /* Boards are a thing on a shelf, so they live where the shelves are. The
+     data always agreed — invIndex has bucketed DB.stock by location for as
+     long as boards have had one — it was only the list that sat on the Molds
+     rail. */
+  seedInventory();
+  DB.stock.push({ id: "BRD-2", label: "rack B", density: 60, qty: 2,
+    len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" }, location: "" });
+  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "boards", q: "", invDens: "" };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Storage map") && h.includes("Items list") && h.includes("Materials list") && h.includes("Boards"),
+    "all four segments are on the toolbar");
+  assert(h.includes("newBoard()"), "+ Board came with them — the only way to add one");
+  assert(h.includes("30 lb/ft³") && h.includes("60 lb/ft³"),
+    "grouped by grade, the axis the packer refuses to substitute across");
+  assert(h.includes("No location"), "a board with no shelf is counted, not hidden");
+  assert(h.includes("Board on hand, by thickness"),
+    "the by-thickness split moved here — it is the question you ask at the rack");
+
+  // A size row opens the size pane, and the individual boards come back there.
+  const g = groupBoards(DB.stock).find(x => x.qty === 1);
+  selectInvRec(g.id);
+  const s = main.innerHTML;
+  assert(s.includes("rack A"), "the boards themselves are one click away");
+  assert(s.includes("All boards"), "and the way back says boards, not molds");
+  assert(!s.includes("moveMoldsSelection"), "no rail here, so no rail navigation to call into");
+
+  // A BRD- lands on the read-only pane, with the modal still the editor.
+  selectInvRec("BRD-2");
+  assert(main.innerHTML.includes("editBoard"), "the modal is still the one editor");
+  view = { ...view, mode: "list", id: null };
+});
+
 await t("the map renders sites, cards, and the No-location card; a tap opens contents", () => {
   seedInventory();
   view = { ...view, tab: "inventory", mode: "list", id: null, invView: "map" };
@@ -5031,11 +5065,15 @@ await t("the merged rail shows molds, plans and boards as three groups", async (
   assert(h.includes("m²"), "the boards group header carries the on-hand area");
 });
 
-await t("a BRD- id opens a real board detail page (the old dead end)", async () => {
+await t("a BRD- id opens a real board detail page, in Inventory where boards live", async () => {
   const b = DB.stock[0];
   DB.molds[0].board = b.id;
   openRecord("stock", b.id);
-  assert(view.tab === "molds", "the hidden stock tab normalises to the merged tab");
+  /* One collection, two homes: ID_TO_COLL still sends BRD- and STK- to
+     `stock`, and the id is what decides which tab paints it. A board is a
+     thing on a shelf; a stack plan is a mold's file. */
+  assert(view.tab === "inventory" && view.invView === "boards",
+    "a board lands on Inventory's Boards view, not on Molds");
   const h = main.innerHTML;
   assert(h.includes("editBoard"), "the modal is still the editor, one click away");
   assert(h.includes("Molds cut from this board"), "the reverse join boards never had");
