@@ -5195,7 +5195,7 @@ await t("a mold can be recorded with no geometry at all", async () => {
   assert(DB.molds[0].name === "SN5 nosecone tool" && DB.molds[0].stage === "Designed", "named and staged");
 });
 
-await t("the mold detail carries its plan's artifacts; the 3D view stays on the plan", async () => {
+await t("the mold detail carries its plan's artifacts, 3D view included", async () => {
   // Seeds its own mold+plan rather than inheriting whatever ran before it.
   seedStock(); DB.molds = []; DB.stackplans = [];
   fillMold({ src: "box", box: [300, 200, 100] });
@@ -5207,7 +5207,57 @@ await t("the mold detail carries its plan's artifacts; the 3D view stays on the 
   // two things both called a plan was the confusion this replaced.
   assert(h.includes("Mold file"), "the linked plan section renders");
   assert(h.includes("openDrawings") && h.includes("exportSectionStl"), "drawings and STL export inline");
-  assert(!h.includes("mv-canvas"), "the WebGL viewer is not double-mounted here");
+  /* The viewer is on the mold. Asserting on the surrounding markup, never on a
+     canvas id: mvHasWebGL() is false under the stub, so meshViewHtml returns
+     its no-WebGL paragraph and no canvas is ever emitted here. (The assertion
+     this replaced looked for "mv-canvas", a string meshViewHtml has never
+     produced — it emits mv-<planId> — so it passed no matter what.) */
+  assert(h.includes("Mold in stock") && h.includes("drag to rotate"),
+    "the 3D view is on the mold, where the thing it shows is");
+  assert(!h.includes("Open plan"), "and there is no trip to the plan pane to get at it");
+  assert(h.includes("CS-003 §7.2"), "with the review caption that only the plan pane used to carry");
+});
+
+await t("opening a mold's own plan never invents a Plans-with-no-mold group", async () => {
+  /* The clamshell report: select a mold, ask for the 3D view, and the rail
+     grew a header reading "Plans with no mold" over the plan you had just
+     opened FROM its mold — which printed that mold's id one slot to the right.
+     Two causes, both fixed: the viewer no longer requires leaving the mold,
+     and the keep-the-selection-alive guard no longer pushes a LINKED plan into
+     the orphan list. */
+  seedStock(); DB.molds = []; DB.stackplans = [];
+  fillMold({ src: "box", box: [300, 200, 100], name: "clamshell" });
+  await submitMold();
+  const mold = DB.molds[0], plan = DB.stackplans[0];
+  assert(plan.moldId === mold.id, "fixture: the plan is linked to its mold");
+
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fRetired: false, fNoHome: false };
+  selectMoldsRec(plan.id);
+  const h = main.innerHTML;
+  assert(!h.includes("Unlinked plans"), "a linked plan is not an unlinked one: " + h.slice(0, 200));
+  const row = (h.match(new RegExp(`<div class="pitem[^>]*id="pi-${mold.id}"`)) || [])[0] || "";
+  assert(row, "the mold is still the rail row");
+  assert(/\bsel\b/.test(row), "and it keeps the selection highlight: " + row);
+
+  // The keyboard has to agree with the eye: walking from a plan opened through
+  // its mold starts at the mold's row, not at the top of the rail.
+  assert(moldsRailSelId() === mold.id, "the rail's idea of what is selected is the mold");
+});
+
+await t("a plan pointing at a deleted mold can still be adopted", async () => {
+  /* An orphan is a plan with nothing to be reached THROUGH. The rail said that
+     (no moldId OR a dangling one), the overview said only "no moldId", and
+     createMoldFromPlan refused anything with a truthy moldId — so a plan whose
+     mold had been deleted was offered adoption on the rail and could not
+     actually be adopted. One predicate now. */
+  DB.molds = [];
+  DB.stackplans = [{ id: "STK-dangle", moldId: "MOLD-gone", name: "orphan", ts: "2026-02-01T00:00:00Z",
+    layers: [], thicknessesMm: [] }];
+  assert(planIsOrphan(DB.stackplans[0]), "a dangling moldId is an orphan");
+  await createMoldFromPlan("STK-dangle");
+  assert(DB.molds.length === 1, "adopting it creates the mold: " + lastToast);
+  assert(DB.stackplans[0].moldId === DB.molds[0].id, "and re-points the plan at it");
+  assert(!planIsOrphan(DB.stackplans[0]), "so it stops being an orphan");
 });
 
 await t("a lead can delete a shop record without hunting for edit mode first", async () => {

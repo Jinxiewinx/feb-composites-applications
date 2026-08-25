@@ -491,6 +491,23 @@ function mvTeardown(v) {
   } catch (e) { /* context already gone */ }
 }
 
+/* render() rebuilds #main wholesale, so a pane with no viewer drops the canvas
+   without telling the viewer. mvMount only tears down when it is about to
+   build a replacement, which means leaving a plan and never opening another
+   leaks a live GL context attached to a detached canvas — the "canvas goes
+   permanently blank after a while on a busy day" failure mvTeardown exists to
+   prevent. Rare when the viewer lived on one pane; routine now that every
+   planned mold has one. Called from render() after the paint.
+   Identity is not compared: if an element with this id is on the page, a
+   viewer belongs there and mvMount owns it. */
+function mvSweep() {
+  if (!MV_LIVE) return;
+  if (typeof document === "undefined" || !document.getElementById) return;
+  if (document.getElementById(MV_LIVE.canvas.id)) return;
+  mvTeardown(MV_LIVE);
+  MV_LIVE = null;
+}
+
 /* Thin glue over mvGesture: turn pointer events into camera changes. Pointer
    events already cover mouse, pen and touch uniformly, so there is no separate
    touch path to keep in step. */

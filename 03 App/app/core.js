@@ -2189,6 +2189,8 @@ function render() {
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
   el.innerHTML = tab.render();
   labelListTables();
+  // Release a GL context whose canvas this paint removed. See mvSweep.
+  if (typeof mvSweep === "function") mvSweep();
   /* Timeline scrolls sideways along the season, and innerHTML above just reset
      that to zero — so without this every edit throws you back to the first
      week. Optional-function guard because tools/test_app.mjs loads the tab

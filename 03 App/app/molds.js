@@ -39,6 +39,13 @@
    prefixes and rules are untouched. */
 
 function moldRecById(id) { return (DB.molds || []).find(m => m.id === id); }
+/* An orphan is a plan with nothing to be reached THROUGH: no mold id, or one
+   pointing at a mold that is gone. This used to be written out twice with two
+   different meanings — the rail tested both halves, the overview only the
+   first — so a plan with a dangling moldId showed on the rail offering
+   adoption and was invisible on the overview, and createMoldFromPlan refused
+   it outright because p.moldId was truthy. One predicate, four callers. */
+function planIsOrphan(p) { return !!p && (!p.moldId || !moldRecById(p.moldId)); }
 
 /* ---------- selection ---------- */
 function moldsSelected() {
@@ -87,17 +94,22 @@ function moldsRailRows() {
      the one exception: it has no mold to be reached through, so it still shows
      until somebody adopts it. */
   let plans = (DB.stackplans || [])
-    .filter(p => !p.moldId || !moldRecById(p.moldId))
+    .filter(planIsOrphan)
     .filter(p => has(p))
     .slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
 
   /* The selected record never falls out from under you — same rule as the
-     Parts rail, and the reason a filter can't blank the pane you are reading. */
+     Parts rail, and the reason a filter can't blank the pane you are reading.
+
+     But "put it back" is not the same as "put it in the ORPHAN list". Pushing
+     a LINKED plan into `plans` conjured a group header reading "Plans with no
+     mold" over a row that printed its own mold id one slot to the right, and
+     stole the sel highlight off the mold. A linked plan is not a rail row at
+     all: it is represented by its mold's row. See moldsRailSelId. */
   const sel = moldsSelected();
   if (sel && sel.rec) {
-    const lists = { mold: molds, plan: plans };
-    const l = lists[sel.kind];
-    if (l && !l.includes(sel.rec)) l.push(sel.rec);
+    if (sel.kind === "mold" && !molds.includes(sel.rec)) molds.push(sel.rec);
+    else if (sel.kind === "plan" && planIsOrphan(sel.rec) && !plans.includes(sel.rec)) plans.push(sel.rec);
   }
   return { molds, plans };
 }
@@ -106,9 +118,21 @@ function moldsFlatRows() {
   return [...molds, ...plans];
 }
 
+/* Which rail row wears `sel`. A plan opened through its mold marks the MOLD:
+   there is no plan row to mark, and an unmarked rail while a pane is open
+   reads as "nothing is selected". Shared with moldsNeighborId so the keyboard
+   walks from the same row the eye is on — otherwise findIndex misses, and the
+   first arrow key jumps to the top of the rail. */
+function moldsRailSelId() {
+  if (view.mode !== "detail" && view.mode !== "plan") return null;
+  const sel = moldsSelected();
+  if (!sel || !sel.rec) return null;
+  if (sel.kind === "plan" && !planIsOrphan(sel.rec)) return sel.rec.moldId;
+  return sel.rec.id;
+}
+
 function moldsRailItem(kind, o) {
-  const selId = (view.mode === "detail" || view.mode === "plan") ? view.id : null;
-  const sel = selId === o.id;
+  const sel = moldsRailSelId() === o.id;
   const open = `selectMoldsRec('${esc(o.id)}')`;
   if (kind === "mold") {
     const done = o.stage === "Retired";
@@ -178,7 +202,7 @@ function renderMoldsRail() {
       ${molds.length || (DB.molds || []).length ? moldsGroupHead("Molds", [
         `${ready} ready`, noHome ? `${noHome} no home` : "", `${molds.length} shown`]) : ""}
       ${molds.filter(m => !view.fNoHome || !m.location).map(m => moldsRailItem("mold", m)).join("")}
-      ${plans.length ? moldsGroupHead("Plans with no mold", [
+      ${plans.length ? moldsGroupHead("Unlinked plans", [
         `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn}` : ""]) : ""}
       ${plans.map(p => moldsRailItem("plan", p)).join("")}
       <div class="plistfade" aria-hidden="true"></div>
@@ -237,7 +261,7 @@ function moldsOverview() {
   }
 
   // Plans that predate the auto-created mold record, offered for adoption.
-  const unlinked = (DB.stackplans || []).filter(p => !p.moldId);
+  const unlinked = (DB.stackplans || []).filter(planIsOrphan);
 
   return `
   <section class="mddetail" aria-label="Molds overview">
@@ -251,7 +275,7 @@ function moldsOverview() {
       ${shortLine}
     </div>
     ${unlinked.length && isLead() ? `<div class="card">
-      <h3>Plans with no mold record</h3>
+      <h3>Unlinked plans</h3>
       <div class="muted tny">Made before planning started creating the mold record automatically. Link each to the mold it became, or create one from it.</div>
       ${unlinked.map(p => `<div class="pmini" onclick="selectMoldsRec('${esc(p.id)}')">
         <span class="pm-name">${esc(p.name || p.id)}</span>
@@ -262,14 +286,16 @@ function moldsOverview() {
 
 /* ---------- plan pane ----------
    renderStackPlan() unchanged underneath; this wraps it as the right-hand pane
-   and, for a plan that predates auto-created molds, offers the two adoption
-   actions. The 3D viewer stays here — mvMount hooks this markup after render,
-   and mounting it twice (here AND inside the mold pane) is the double-mount
-   class of bug meshview.js documents. */
+   and, for a plan that has no mold, offers the two adoption actions.
+
+   Only two ways in now that the mold pane carries its own 3D view: an orphan
+   from the rail, or an "Earlier:" chip on a mold that has been re-planned.
+   Both want exactly what this renders — the adoption offer, or the Superseded
+   warning that says do not cut from this one. */
 function moldsPlanPane(p) {
   if (!p) { view.mode = "list"; view.id = null; return moldsOverview(); }
   const owner = p.moldId ? moldRecById(p.moldId) : null;
-  const adopt = !p.moldId && isLead() ? `<div class="card no-print">
+  const adopt = planIsOrphan(p) && isLead() ? `<div class="card no-print">
     <b>No mold record is linked to this plan.</b>
     <div class="muted tny">Plans made before 2026-08 predate the automatic mold record.</div>
     <div class="toolbar" style="margin-top:6px">
@@ -293,7 +319,7 @@ function moldsPlanPane(p) {
 
 async function createMoldFromPlan(planId) {
   const p = planById(planId);
-  if (!p || p.moldId) return;
+  if (!p || !planIsOrphan(p)) return;
   const id = await allocId("molds");
   if (!id) return;
   const m = {
@@ -351,10 +377,24 @@ function linkPlanToMold(planId, moldId) {
 }
 
 /* ---------- mold pane extras ----------
-   The plan artifacts a linked mold shows inline: the exploded stack, the
-   blanks table, and the Drawings / STL export actions. Newest linked plan is
-   current; older ones are listed as superseded. Rendered by shop.js's detail
-   through the hook below, so Materials and Items stay untouched. */
+   Everything a linked mold's plan has to say, on the mold: the rotatable 3D
+   view, the exploded stack, the blanks table, the plan's own warnings and
+   notes, and the Drawings / STL export actions. Newest linked plan is current;
+   older ones are chips. Rendered by shop.js's detail through the hook below,
+   so Materials and Items stay untouched.
+
+   The 3D view is HERE, not one click away. It used to live only on the plan
+   pane, so "show me this mold turning" meant pressing a button that selected
+   the PLAN — which switched the pane, dropped the sel highlight off the mold,
+   and made a group header appear reading "Plans with no mold" over the plan
+   you had just opened from its mold. The viewer is where the thing it shows
+   is, and the plan pane is now only for plans that have no mold.
+
+   Single-mount still holds, by construction rather than by hope: meshViewHtml
+   is the only thing that schedules mvMount, its two callers are this function
+   and renderStackPlan, and renderMoldsTab reaches them through mutually
+   exclusive branches of one if/else chain. mvMount's per-element guard is the
+   backstop, and mvSweep in render() releases a context whose canvas has gone. */
 function moldPlanSection(m) {
   const plans = plansForMold(m);
   if (!plans.length) {
@@ -369,13 +409,18 @@ function moldPlanSection(m) {
     ${plans.length > 1 ? `<div class="muted tny">Earlier: ${plans.slice(1).map(x =>
       `<span class="chip tny" onclick="selectMoldsRec('${esc(x.id)}')">${esc(x.name || x.id)} · ${fmtWhen(x.ts)}</span>`).join(" ")}</div>` : ""}
     <div class="toolbar no-print">
-      <button class="ib" onclick="selectMoldsRec('${esc(p.id)}')">${icon("parts", 15)} Open plan &amp; 3D view</button>
       ${isLead() ? `<button class="ib" onclick="replanMold('${esc(m.id)}')">${icon("edit", 15)} Re-plan</button>` : ""}
       <button class="ib" onclick="openDrawings('${esc(p.id)}')">${icon("print", 15)} Drawings</button>
       ${nSec === 1 ? `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',0)">${icon("download", 15)} Stock STL</button>`
         : Array.from({ length: nSec }, (_, i) => `<button class="ib" onclick="exportSectionStl('${esc(p.id)}',${i})">${icon("download", 15)} STL S${i + 1}</button>`).join("")}
     </div>
+    ${(p.warnings || []).map(w => `<div class="warn">${icon("warning", 14)} ${esc(w)}</div>`).join("")}
+    ${(p.notes || []).map(n => `<div class="muted tny">${esc(n)}</div>`).join("")}
+    <h3>Mold in stock <span class="muted" style="text-transform:none">— drag to rotate, scroll or pinch to zoom</span></h3>
+    ${meshViewHtml(p)}
+    <h3>Stack</h3>
     ${stackSvg(p)}
+    <p class="muted tny">Dashed outline is the mold at the top of each layer. Check it sits inside every block before initialling the CS-003 §7.2 review step.</p>
     ${stackTable(p)}`;
 }
 
@@ -398,7 +443,7 @@ function renderMoldsTab() {
 function moldsNeighborId(dir) {
   const rows = moldsFlatRows();
   if (!rows.length) return null;
-  const i = rows.findIndex(r => r.id === view.id);
+  const i = rows.findIndex(r => r.id === moldsRailSelId());
   if (i < 0) return rows[dir > 0 ? 0 : rows.length - 1].id;
   return rows[Math.min(rows.length - 1, Math.max(0, i + dir))].id;
 }
