@@ -1,7 +1,11 @@
 # CLAUDE.md — SN6 Resources repo
 
-Repo-specific authorizations from Simon. These extend the working rules in the
-parent folder's CLAUDE.md; read that one too.
+Repo-specific authorizations and working rules from Simon.
+
+Two files carry the rest: `SESSION-STATE.md` is the rolling handoff — read it
+first if a session was cut off — and `.claude/SESSION-STATE-POLICY.md` says
+what may go in it and what has to come out. Keeping SESSION-STATE current
+means pruning it, not only appending to it.
 
 ## Main and deploys are open (2026-08-05)
 
@@ -23,6 +27,12 @@ land or ship work himself:
 - After deploying, verify: `curl` a changed file off the live host and check
   the new code is actually in it. The CLI's "Deploy complete" is not the check.
 
-Everything else from the parent CLAUDE.md stands: detailed commit messages,
-README updated in the same push, SESSION-STATE.md kept current, no secrets or
-junk files, and `#composites` announcements still need asking.
+## Push over HTTPS, never SSH
+
+The machine's SSH key authenticates as `starbuckgold`, but the repo belongs to
+`Jinxiewinx`, which is the `gh` CLI account. `ssh -T git@github.com` reporting
+success is misleading here.
+
+The standing rules: detailed commit messages, README updated in the same push,
+SESSION-STATE.md kept current and pruned, no secrets or junk files, and
+`#composites` announcements still need asking.

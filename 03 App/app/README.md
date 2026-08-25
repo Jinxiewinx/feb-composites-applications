@@ -693,6 +693,16 @@ That token is also what buys the extra columns. A guessable path would have
 forced dropping `Extra Comments` and shortening the engineer names, and then the
 sheet would no longer match the tracker it is supposed to mirror.
 
+One dependency worth writing down, because it is easy to change without
+realising what it touches. The sync itself does **not** need the spreadsheet
+to be shared — the Apps Script runs inside the document under an editor's own
+account — and the sheet was made link-viewable on 2026-08-15 only so the live
+column headers could be read. But the case for publishing comment text and
+full names through the feed leans on that same data already being
+link-readable. **If the spreadsheet is ever set back to restricted, revisit
+what the feed publishes in the same breath**, rather than leaving the wider
+hole open on an argument that no longer holds.
+
 The snapshot is a whole-table rewrite rather than a per-record mirror, which
 makes it self-healing in a way `pub` is not: a failed `pub` write is only
 repaired by a later save of that same record, whereas here the next successful

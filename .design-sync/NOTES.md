@@ -70,6 +70,16 @@ None. Zero previews exist, so the render check has nothing to flag. A future
 sync that reports render warns means components were added, which would be a
 genuine shape change worth stopping on.
 
+## Never hand-write `_ds_sync.json`
+
+Its hashes come from a recipe that cannot be reproduced without the CLI
+(`keyRecipe 7`, `auxSha`, `bundleSha12`). A wrong hash is worse than a stale
+one: stale simply makes the next real sync detect a mismatch and re-upload,
+whereas wrong makes it skip a file that needed pushing. Leave it alone and let
+a CLI sync regenerate it. The same reasoning covers the generated tail of the
+remote README (its property count is converter output) — leave it byte-identical
+rather than hand-editing it to numbers you would be guessing at.
+
 ## Re-sync risks
 
 - **The class vocabulary in `conventions.md` is hand-maintained.** It is
@@ -87,3 +97,11 @@ genuine shape change worth stopping on.
   library would be code with no consumer, drifting against `components.css`.
 - The staged package pins `version: 1.0.0`. It is not read from anything real,
   so it never changes and never invalidates anything.
+- **Documented but unstyled is invisible.** The header validator checks that
+  every class it names exists in the built CSS, and `06 Design System/README.md`
+  tells the design agent "a class not listed here has no styling behind it" —
+  which makes the converse trap silent: listed, but equally unstyled. The
+  2026-08-25 sync found 25 such classes (Receiving, Export, Storage map, Search
+  results, the WO fold classes, `table.sub`), all living only in the app's own
+  stylesheet. They are marked app-only in `conventions.md`; lifting them is
+  ~73 selectors and a real decision, not a tidy-up.

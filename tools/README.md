@@ -166,6 +166,25 @@ dark-pixel fraction lands between 0.30 and 0.60. A real code is about 45%
 dark, a blank square is 0%, a black box is 100%. Pixels are the only honest
 check for a QR.
 
+### Three traps in the harness itself
+
+**A new app file must be added to `FILES` in `test_app.mjs`.** The harness
+concatenates the app's classic scripts into one indirect `eval`; a file left
+out of that list is silently invisible, and the tests for it pass by testing
+nothing. Top-level `const` stays lexical and is invisible too, which is why a
+named list of declarations gets rewritten into implicit globals.
+
+**Never assert sanitizer allowlist policy in `test_app.mjs`** — it cannot see
+it. `test_sanitize.mjs` runs the real vendored DOMPurify in Chromium. The old
+suite stubbed DOMPurify with a regex that ignored the allowlist, so the
+sanitizer had zero real coverage; running the library for real found two live
+bugs immediately.
+
+**A backtick inside a JS template literal ends the literal.** It has bitten
+`documents.js`, `projects.js` and the `AUDIT` string in `test_detailui.mjs`,
+every time as prose in a comment quoting code. Write those comments without
+backticks — that is why `AUDIT` says "no backticks below this line".
+
 ### Shoot both widths, especially the one the change is for
 
 That `<details>` regression shipped because the change existed only to alter
