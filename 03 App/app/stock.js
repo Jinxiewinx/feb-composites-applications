@@ -13,7 +13,39 @@
    (48 -> 1219.2 -> 47.99999 -> saved). toMm() is the ONLY conversion point;
    everything downstream (slicer, stack planner) reads through it. */
 
-const DENSITIES = [30, 60];          // lb/ft^3 — CS-003 §5. 60 seals better (CS-004).
+const DENSITIES = [30, 45, 60];      // lb/ft^3 — CS-003 §5. 60 seals better (CS-004).
+/* Grades to OFFER, not grades allowed: density is typed, not picked, because
+   the rack has always held sheets outside the catalogue and the dropdown just
+   refused to say so. The union means a 45lb sheet somebody entered last week is
+   one keystroke away AND the catalogue grades still appear on an empty rack.
+   Numeric sort — localeCompare puts 100 before 30. */
+function densityOptions() {
+  const set = new Set(DENSITIES);
+  const add = v => { const d = canonDensity(v); if (d != null) set.add(d); };
+  (DB.stock || []).forEach(b => add(b.density));
+  (DB.molds || []).forEach(m => add(m.density));
+  (DB.stackplans || []).forEach(p => add(p.density));
+  return [...set].sort((a, b) => a - b);
+}
+/* How much board each grade actually has. The mold planned at 45lb that
+   matched nothing on the rack was this number being invisible until after
+   Plan was pressed. */
+function densityStockCounts() {
+  const m = new Map();
+  for (const b of (DB.stock || [])) {
+    const d = canonDensity(b.density);
+    if (d == null) continue;
+    m.set(d, (m.get(d) || 0) + (b.qty || 1));
+  }
+  return m;
+}
+/* One datalist, one call site shape. The id has to be unique per rendered
+   input, because two datalists sharing an id is the silently-wrong-suggestions
+   bug nobody reports. */
+function densityInput(id, value, attrs) {
+  return `<input id="${id}" list="dl-${id}" inputmode="decimal" value="${esc(value ?? "")}" placeholder="e.g. 30" ${attrs || ""}>
+    <datalist id="dl-${id}">${densityOptions().map(d => `<option value="${d}"></option>`).join("")}</datalist>`;
+}
 const UNITS = ["in", "mm"];
 const MAX_DIM_MM = 10000;            // 10 m. Anything larger is a typo or a unit mistake.
 
@@ -50,7 +82,7 @@ function boardAreaM2(b) {
 }
 // Group key for the summary: boards of the same thickness+density are
 // interchangeable stock, which is exactly the bucket the packer will use.
-function thkKey(b) { return `${Math.round(toMm(b.thk) * 10) / 10}mm · ${b.density} lb`; }
+function thkKey(b) { return `${Math.round(toMm(b.thk) * 10) / 10}mm · ${canonDensity(b.density) ?? 30} lb`; }
 
 /* ---------- boards, grouped by size ----------
    Simon: "we don't need each of them being their own item as we really only
@@ -69,7 +101,7 @@ function boardSizeKey(b) {
   const r = v => Math.round(v * 10) / 10;
   // Face dimensions are sorted, because tooling board has no grain and the
   // packer turns blanks freely — a 48x96 and a 96x48 are the same stock.
-  return `${r(Math.max(l, w))}x${r(Math.min(l, w))}x${r(t)}|${Number(b.density) || 30}`;
+  return `${r(Math.max(l, w))}x${r(Math.min(l, w))}x${r(t)}|${canonDensity(b.density) ?? 30}`;
 }
 function groupBoards(list) {
   const m = new Map();
@@ -79,7 +111,7 @@ function groupBoards(list) {
       const l = toMm(b.len), w = toMm(b.wid);
       m.set(key, {
         key, id: "SZ:" + key, lenMm: Math.max(l, w), widMm: Math.min(l, w),
-        thkMm: toMm(b.thk), density: Number(b.density) || 30, qty: 0, m2: 0, members: [],
+        thkMm: toMm(b.thk), density: canonDensity(b.density) ?? 30, qty: 0, m2: 0, members: [],
       });
     }
     const g = m.get(key);
@@ -116,7 +148,7 @@ function boardModal(b) {
     ${dimRow("len", "Length", e.len)}
     ${dimRow("wid", "Width", e.wid)}
     ${dimRow("thk", "Thickness", e.thk)}
-    <div class="field"><label>Density</label><select id="bd-density">${DENSITIES.map(d => `<option ${String(e.density || 30) === String(d) ? "selected" : ""}>${d}</option>`).join("")}</select></div>
+    <div class="field"><label>Density (lb/ft³)</label>${densityInput("bd-density", canonDensity(e.density) ?? 30)}</div>
     <div class="field"><label>Quantity</label><input id="bd-qty" value="${esc(e.qty || 1)}"></div>
     <div class="field"><label>Stored at</label><select id="bd-location">
       <option value="">—</option>
@@ -143,6 +175,8 @@ function readBoardForm() {
   }
   const qty = Number(String(val("bd-qty")).trim() || "1");
   if (!Number.isFinite(qty) || qty < 1 || Math.floor(qty) !== qty) { toast("Quantity must be a whole number, 1 or more.", "error"); return null; }
+  const dens = canonDensity(val("bd-density"));
+  if (dens == null) { toast("Density is a plain number in lb/ft³ — 30, 45, 60.", "error"); return null; }
   // Optional. Blank stays blank — a board with no cost is un-costed, not free.
   const rawCost = String(val("bd-unitcost")).trim();
   const unitCost = rawCost === "" ? "" : Math.round(Number(rawCost) * 100) / 100;
@@ -150,7 +184,7 @@ function readBoardForm() {
   return {
     ...out, qty, unitCost,
     label: String(val("bd-label")).trim(),
-    density: Number(val("bd-density")) || 30,
+    density: dens,
     origin: String(val("bd-origin")).trim(),
     location: String(val("bd-location")).trim(),
   };
@@ -295,10 +329,10 @@ function fitPlanForStorage(plan) {
 /* Distinct thicknesses actually on the rack, in mm — what the planner is
    allowed to choose from. No point offering a 3in stack we do not own. */
 function stockThicknessesMm(density) {
-  const d = density == null ? null : Number(density);
+  const d = density == null ? null : canonDensity(density);
   const set = new Map();
   for (const b of (DB.stock || [])) {
-    if (d != null && Number(b.density) !== d) continue;
+    if (d != null && canonDensity(b.density) !== d) continue;
     const mm = toMm(b.thk);
     if (Number.isFinite(mm) && mm > 0) set.set(Math.round(mm * 10) / 10, true);
   }
@@ -343,12 +377,15 @@ async function loadSampleMold(file) {
 function uploadMold(existing) {
   const avail = stockThicknessesMm();
   const e = existing || {};
-  const dens = Number(e.density) || 30;
+  const dens = canonDensity(e.density) ?? 30;
+  const counts = densityStockCounts();
   openModal(`
     <h2>${existing ? "Re-plan " + esc(e.name || e.id) : "New mold"}</h2>
     <div class="field"><label>Name</label><input id="ml-name" value="${esc(e.name || "")}" placeholder="e.g. UT nose plug"></div>
-    <div class="field"><label>Board density (lb/ft³)</label><select id="ml-density">${DENSITIES.map(d => `<option ${d === dens ? "selected" : ""}>${d}</option>`).join("")}</select>
-      <span class="muted tny">Cut lists pack blanks onto boards of this density.</span></div>
+    <div class="field"><label>Board density (lb/ft³)</label>${densityInput("ml-density", dens)}
+      <span class="muted tny">Cut lists pack blanks onto boards of this density.
+        ${counts.size ? `On the rack: ${[...counts].sort((a, b) => a[0] - b[0]).map(([d, n]) => `${d} lb (${n})`).join(" · ")}.`
+                      : "Nothing on the rack yet."}</span></div>
     <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
       <option value="box">dimensions (X &times; Y &times; Z)</option>
       <option value="stl">an STL file &mdash; beta</option>
@@ -422,7 +459,7 @@ async function submitMold() {
     if (!name) { toast("Give the mold a name.", "error"); return; }
     const id = await allocId("molds");
     if (!id) return;
-    const m = { id, name, stage: "Designed", density: String(Number(val("ml-density")) || 30), createdBy: myEmail() };
+    const m = { id, name, stage: "Designed", density: String(canonDensity(val("ml-density")) ?? 30), createdBy: myEmail() };
     (DB.molds = DB.molds || []).push(m);
     save("molds", m);
     closeModal();
@@ -433,7 +470,8 @@ async function submitMold() {
   }
   const isBox = val("ml-src") !== "stl";
   const auto = val("ml-mode") !== "manual";
-  const density = Number(val("ml-density")) || 30;
+  const density = canonDensity(val("ml-density"));
+  if (density == null) { toast("Board density is a plain number in lb/ft³ — 30, 45, 60.", "error"); return; }
 
   let thkMm = null;
   if (!auto) {
@@ -457,7 +495,14 @@ async function submitMold() {
     const k = Math.round(b.thk * 10) / 10;
     supply[k] = (supply[k] || 0) + (b.qty || 1);
   }
-  if (auto && !available.length) { toast(`No ${density} lb board stock on the rack — the planner picks thicknesses from what you actually have. Add boards, or pick the other density.`, "error"); return; }
+  if (auto && !available.length) {
+    // Name the grades that DO have board. "pick the other density" was fine
+    // when there were two; density is typed now, so say what is actually there.
+    const have = [...densityStockCounts().keys()].sort((a, b) => a - b);
+    toast(`No ${density} lb board stock on the rack — the planner picks thicknesses from what you actually have. ${
+      have.length ? `Add boards, or plan at ${have.join(" or ")} lb.` : "Add boards first."}`, "error");
+    return;
+  }
 
   const prog = document.getElementById("ml-progress");
   const setProg = m => { if (prog) prog.textContent = m; };
@@ -628,7 +673,7 @@ function blanksFromPlans(plans) {
   plans.forEach(p => (p.layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
     id: `${p.name} L${i + 1}${L.blanks.length > 1 ? String.fromCharCode(97 + k) : ""}`,
     planId: p.id, w: b.x1 - b.x0, h: b.y1 - b.y0,
-    thickness: L.thickness, density: p.density || 30,
+    thickness: L.thickness, density: canonDensity(p.density) ?? 30,
   }))));
   return out;
 }
@@ -636,7 +681,7 @@ function boardsForPacking() {
   return (DB.stock || []).map(b => ({
     id: b.id, label: b.label,
     len: toMm(b.len), wid: toMm(b.wid), thk: toMm(b.thk),
-    density: Number(b.density) || 30, qty: b.qty || 1,
+    density: canonDensity(b.density) ?? 30, qty: b.qty || 1,
   })).filter(b => Number.isFinite(b.len) && Number.isFinite(b.wid) && Number.isFinite(b.thk));
 }
 function renderCutList() {

@@ -3560,6 +3560,40 @@ await t("a size is one row however the board was measured, and density splits it
   fillBoard({ thk: "25.4", thkU: "mm" }); await submitBoard(null);
   assert(groupBoards(DB.stock).length === 1, "one inch and 25.4mm are one thickness");
 });
+await t("density is typed, not picked — and one grade is one grade however it was typed", async () => {
+  /* The rack has always held sheets outside the 30/60 catalogue; the dropdown
+     just refused to say so. Free entry is only safe if every form of the same
+     number collapses to one, because boardSizeKey bakes density into the SZ:
+     grouping id and boardsForPacking filters the rack with ===. "60", 60 and
+     "60 " reaching the packer as three values is a shortfall reported while
+     standing in front of a full shelf. */
+  assert(canonDensity("60") === 60 && canonDensity(60) === 60 && canonDensity(" 60 ") === 60,
+    "every way of typing one grade is one number");
+  assert(canonDensity("45.5") === 45.5, "half grades survive — 45.5lb board exists");
+  assert(canonDensity("") === null && canonDensity(null) === null && canonDensity("60 lb") === null
+    && canonDensity("0") === null && canonDensity("-4") === null,
+    "blank and junk are null, so each caller states its own default instead of inheriting 30");
+
+  // A grade off the catalogue can be entered at all, and groups as its own row.
+  DB.stock = [];
+  fillBoard({ density: "45" }); await submitBoard(null);
+  assert(DB.stock.length === 1 && DB.stock[0].density === 45, "45lb board is storable and stored as a number");
+  fillBoard({ density: " 45 " }); await submitBoard(null);
+  assert(groupBoards(DB.stock).length === 1, "45 and \" 45 \" are one size on the rack, not two");
+  assert(groupBoards(DB.stock)[0].qty === 2, "and the count adds up");
+  assert(densityOptions().includes(45), "what is on the rack is offered next time");
+
+  // The whole point: a 45lb plan finds the 45lb rack. This is what the strict
+  // === in boardsForPacking could not do while the two sides disagreed on type.
+  assert(boardsForPacking().filter(b => b.density === 45).length === 2,
+    "the packer's density filter matches the boards the shop actually has");
+
+  // Density that will not parse is refused, never silently defaulted to 30.
+  const before = DB.stock.length;
+  fillBoard({ density: "sixty" }); await submitBoard(null);
+  assert(DB.stock.length === before, "an unparseable density does not become a board");
+  assert(/plain number/.test(lastToast), "and it says so: " + lastToast);
+});
 await t("mm and inch boards both land in the same on-hand bucket by real size", async () => {
   DB.stock = [];
   fillBoard({ thk: "1", thkU: "in" }); await submitBoard(null);
@@ -3605,8 +3639,12 @@ function plugTris(hb, ht, z0, z1) {
   }
   return out;
 }
-function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "", thkU = "mm", size = null, src = "stl", mode = "auto", body = null, box = null } = {}) {
+function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "", thkU = "mm", size = null, src = "stl", mode = "auto", body = null, box = null, density = "30" } = {}) {
   el("ml-name").value = name; el("ml-unit").value = unit;
+  // The real modal renders this prefilled (canonDensity(mold.density) ?? 30);
+  // the stub renders nothing, so say what the browser would have shown. Blank
+  // is a user who deliberately cleared the field, and the planner refuses it.
+  el("ml-density").value = density;
   el("ml-thk").value = thk; el("ml-thk-u").value = thkU;
   el("ml-src").value = src; el("ml-mode").value = mode;
   if (box) {

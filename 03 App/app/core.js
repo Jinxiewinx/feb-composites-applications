@@ -235,6 +235,24 @@ function febMark(size) {
 
 /* ---------- small helpers ---------- */
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+/* One number for a board grade.
+   Density is typed by hand in three places and read by a dozen, two of which
+   compare it with === and one of which builds the SZ: grouping key out of it.
+   "60", 60 and "60 " must therefore collapse to one value everywhere, or one
+   rack splits into two rows and the packer reports a shortfall while standing
+   in front of a full shelf.
+   Strict Number, not parseFloat: quietly accepting "60 lb" is exactly the
+   coercion this exists to stop. One decimal, because 45.5lb board exists and
+   45.50001 does not. Blank or unparseable -> null, so every caller states its
+   own default rather than inheriting 30 by accident.
+   NOT reachable from packer.js, which is importScripts()'d into
+   slicer.worker.js without core.js. The packer needs no helper: blanksFromPlans
+   and boardsForPacking both canonicalise before it ever runs. */
+function canonDensity(v) {
+  const n = Number(String(v ?? "").trim());
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 10) / 10;
+}
 /* Compare two record ids the way a person reads them.
    Ids are PREFIX-SNx-NNN and allocId pads the number to three digits, so the
    padding STOPS at 999 — plain string order therefore puts FAB-SN6-1000 before
@@ -813,7 +831,13 @@ function clearPendingLink() {
    always holds something scannable and shareable; a list gets /#/<tab>. */
 function syncUrl() {
   if (typeof history === "undefined" || !history.replaceState || typeof location === "undefined") return;
-  const frag = view.mode === "detail" && view.id ? "#/" + view.id : "#/" + view.tab;
+  /* Only a REAL record id goes in the address bar. The board rack selects by a
+     synthetic "SZ:<w>x<h>x<t>|<density>" key, which PENDING_LINK's
+     /^#/([A-Za-z0-9-]+)/ would truncate to "SZ" and stash as junk for the
+     next load to redeem. Nothing calls syncUrl with one today; this is what
+     keeps that true when someone wires up the rail. */
+  const real = /^[A-Z]+-/.test(String(view.id || ""));
+  const frag = view.mode === "detail" && view.id && real ? "#/" + view.id : "#/" + view.tab;
   if (location.hash !== frag) history.replaceState(null, "", frag);
 }
 

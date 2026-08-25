@@ -301,7 +301,7 @@ function labelLines(coll, o, p) {
       name: up(o.name || o.partName),
       key: j(o.sealedDate ? `SEALED ${o.sealedDate}` : "", o.sealedBy ? up(o.sealedBy) : "",
              o.uses != null ? `USES ${String(o.uses).padStart(2, "0")}` : "", o.rev ? `REV ${up(o.rev)}` : ""),
-      mid: j(o.density ? `${o.density} PCF` : "", up(o.layers), up(o.sealingType)),
+      mid: j(o.density ? `${canonDensity(o.density) ?? o.density} PCF` : "", up(o.layers), up(o.sealingType)),
       // Short because it competes with board and location for one 7pt line, and
       // the full rule lives in CS-001. "40MM" is the number someone needs while
       // holding a roll of tacky tape; the reasoning is not.
@@ -355,7 +355,7 @@ function labelLines(coll, o, p) {
     : String(d);
   return {
     name: up(o.label || o.name || p.cls),
-    key: o.density ? `${o.density} PCF` : "",
+    key: o.density ? `${canonDensity(o.density) ?? o.density} PCF` : "",
     mid: j(o.len && o.wid ? `${dim(o.len)} X ${dim(o.wid)} X ${dim(o.thk) || "?"}` : "", o.qty ? `QTY ${o.qty}` : ""),
     foot: j(up(o.origin || o.originLegacy), up(o.location || o.label))
   };

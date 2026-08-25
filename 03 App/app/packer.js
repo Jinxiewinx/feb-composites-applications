@@ -253,6 +253,10 @@ function packAll(blanks, boards, opts) {
   // (CS-004 — 60lb seals better, and you cannot swap it in silently).
   const buckets = new Map();
   for (const b of blanks) {
+    // No coercion here on purpose: this file is importScripts()'d into the
+    // worker without core.js, so canonDensity is out of reach. It does not
+    // need to be — blanksFromPlans and boardsForPacking in stock.js both
+    // canonicalise, so both sides of the key below are already one form.
     const k = `${Math.round(b.thickness / tol)}|${b.density || 30}`;
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(b);

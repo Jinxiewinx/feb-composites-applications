@@ -38,7 +38,7 @@ const PNL_STAGE = ["Planned", "Laid up", "Cured", "Cut", "Tested"];
 const LOT_STATE = ["Sealed", "Open", "Empty", "Expired"];
 
 /* `f` fields: [key, label, type, opts]
-   type: text | date | num | select | rec:<coll> | textarea
+   type: text | date | num | dens | select | rec:<coll> | sug | money | textarea
    `list` names the columns the table shows, in order. `key` is the one field
    that is bold in the list and largest on the label. */
 /* CS-011 §7.3's site vocabulary, in one place. It used to exist twice — here
@@ -58,7 +58,7 @@ const SHOP = {
       ["stage", "Stage", "select", MOLD_STAGE],
       ["location", "Home location", "rec:BIN"],
       ["wo", "Work order", "rec:workOrders"],
-      ["density", "Board density (lb/ft³)", "select", ["30", "45", "60"]],
+      ["density", "Board density (lb/ft³)", "dens"],
       ["layers", "Board layers", "text"],
       ["sealingType", "Sealing system", "select", ["XCR", "S120", "Resin", "Other"]],
       ["sealedDate", "Sealed on", "date"],
@@ -270,6 +270,19 @@ function updShop(tab, key, val) {
       toast("That needs to be a whole number, or empty.", "error"); render(); return;
     }
     val = n == null ? "" : n;
+  }
+  /* "dens" is stored as a canonical numeric STRING: display-only on a mold
+     (labels, the printed traveler), so the string writer below stays generic,
+     but canonical so it groups and compares with the numeric density on the
+     boards and plans. See canonDensity in core.js for why one form matters. */
+  if (fType === "dens") {
+    const s = String(val).trim();
+    if (s === "") val = "";
+    else {
+      const d = canonDensity(s);
+      if (d == null) { toast("Board density is a plain number in lb/ft³ — 30, 45, 60.", "error"); render(); return; }
+      val = String(d);
+    }
   }
   o[key] = val;
   save(spec.coll, o, key);
@@ -537,6 +550,15 @@ function shopFld(spec, tab, o, f, c) {
       <input list="${dl}" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)">
       <datalist id="${dl}">${shopSuggest(spec.coll, key).map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist></div>`;
   }
+  /* "dens" — a "sug" whose suggestions are not what has been typed before but
+     what the shop actually stocks, which is the useful list on a collection
+     holding three values. Its own type rather than a key-name check in
+     updShop, because a field key becoming load-bearing is how "density"
+     appearing on a second schema quietly changes behaviour. */
+  if (type === "dens") {
+    return `<div class="f"><label>${esc(label)}</label>${densityInput(
+      `sf-${spec.coll}-${key}`, v, `onchange="updShop('${tab}','${key}',this.value)"`)}</div>`;
+  }
   if (String(type).startsWith("rec:")) {
     return `<div class="f"><label>${esc(label)}</label>
       <select onchange="updShop('${tab}','${key}',this.value)">
@@ -693,7 +715,7 @@ async function runMoldImport() {
       legacyNames: [g.raw],
       stage: g.mold.sealingType ? "Sealed" : "Machined",
       location: g.mold.location || "",
-      density: g.mold.density || "",
+      density: String(canonDensity(g.mold.density) ?? ""),
       layers: g.mold.layers || "",
       sealingType: g.mold.sealingType || "",
       wo: w ? w.id : "",

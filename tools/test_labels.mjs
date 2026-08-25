@@ -93,9 +93,10 @@ const HARNESS = `<!doctype html><meta charset="utf-8">
 <div id="printroot"></div>
 <script src="/vendor/qrcode.min.js"></script>
 <script>
-  // labels.js needs these four from core.js/print.js. Stubbing the boundary
+  // labels.js needs these from core.js/print.js. Stubbing the boundary
   // rather than booting the whole app keeps this test about labels.
   function esc(s){ return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+  function canonDensity(v){ const n = Number(String(v ?? "").trim()); return !Number.isFinite(n) || n <= 0 ? null : Math.round(n * 10) / 10; }
   function today(){ return "2026-08-03"; }
   function icon(){ return ""; }
   function toast(){}

@@ -415,7 +415,7 @@ async function createMoldFromPlan(planId) {
   if (!id) return;
   const m = {
     id, name: p.name || p.id, stage: "Designed",
-    density: String(p.density || ""), layers: (p.thicknessesMm || []).length ? `${p.thicknessesMm.length} layers` : "",
+    density: String(canonDensity(p.density) ?? ""), layers: (p.thicknessesMm || []).length ? `${p.thicknessesMm.length} layers` : "",
     createdBy: myEmail(),
   };
   DB.molds.push(m);
