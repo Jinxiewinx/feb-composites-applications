@@ -75,10 +75,18 @@ function parseDim(raw, unit) {
 }
 
 function boardById(id) { return (DB.stock || []).find(b => b.id === id); }
-function boardAreaM2(b) {
-  const l = toMm(b.len), w = toMm(b.wid);
-  if (!Number.isFinite(l) || !Number.isFinite(w)) return 0;
-  return (l * w) / 1e6 * (b.qty || 1);
+/* How much board there IS. Area used to answer this and it is the wrong
+   question: "how much face" is what you ask about fabric, but a mold is cut
+   out of a solid and eats thickness, so a 3in sheet and a 1in sheet of the
+   same face are not remotely the same stock. Cubic feet rather than litres or
+   in³ because density is already lb/ft³ — multiply the two and you have the
+   weight of what is on the rack, in the units the datasheet and the shop both
+   already use. */
+const MM3_PER_FT3 = 28316846.6;
+function boardVolumeFt3(b) {
+  const l = toMm(b.len), w = toMm(b.wid), t = toMm(b.thk);
+  if (![l, w, t].every(Number.isFinite)) return 0;
+  return (l * w * t) / MM3_PER_FT3 * (b.qty || 1);
 }
 // Group key for the summary: boards of the same thickness+density are
 // interchangeable stock, which is exactly the bucket the packer will use.
@@ -111,12 +119,12 @@ function groupBoards(list) {
       const l = toMm(b.len), w = toMm(b.wid);
       m.set(key, {
         key, id: "SZ:" + key, lenMm: Math.max(l, w), widMm: Math.min(l, w),
-        thkMm: toMm(b.thk), density: canonDensity(b.density) ?? 30, qty: 0, m2: 0, members: [],
+        thkMm: toMm(b.thk), density: canonDensity(b.density) ?? 30, qty: 0, ft3: 0, members: [],
       });
     }
     const g = m.get(key);
     g.qty += b.qty || 1;
-    g.m2 += boardAreaM2(b);
+    g.ft3 += boardVolumeFt3(b);
     g.members.push(b);
   }
   return [...m.values()].sort((a, b) => (a.thkMm - b.thkMm)
@@ -135,8 +143,13 @@ function groupLabel(g) {
 }
 
 /* ---------- create / edit ---------- */
-function boardModal(b) {
-  const e = b || {};
+/* `preset` prefills a NEW board without making it an edit: b is still the
+   editing flag, so the footer button and submitBoard's id are unaffected. It
+   carries the size and grade only — "another board this size" means another
+   sheet of that stock, not a copy of that sheet's label, shelf or provenance,
+   and quantity starts at one because you are recording what you just found. */
+function boardModal(b, preset) {
+  const e = b || preset || {};
   const dimRow = (key, label, d) => `
     <div class="field"><label>${label}</label>
       <input id="bd-${key}" value="${esc(d ? d.value : "")}" placeholder="0">
@@ -156,11 +169,23 @@ function boardModal(b) {
         `<option value="${esc(b2.id)}" ${e.location === b2.id ? "selected" : ""}>${esc(b2.name || b2.id)}</option>`).join("")}
     </select></div>
     <div class="field"><label>Where it came from</label><input id="bd-origin" value="${esc(e.origin || "")}" placeholder="work order or mold it came off, if it is a leftover"></div>
+    <div class="field"><label>Notes</label><textarea id="bd-notes" rows="2"
+      placeholder="anything the next person should know — bumpy face, off-colour, a soft corner, which end is square">${esc(e.notes || "")}</textarea></div>
     <div class="field"><label>Unit cost ($, per sheet)</label><input id="bd-unitcost" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(e.unitCost ?? "")}" placeholder="leave blank if unknown"></div>
     <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitBoard(${b ? `'${esc(b.id)}'` : "null"})">${b ? "Save" : "Add"}</button></div>
   `);
 }
 function newBoard() { boardModal(null); }
+/* + Board this size, from a size pane. Reads the size back off the group's
+   first member rather than off the synthetic SZ: key, so the new sheet is
+   entered in the units the old one was measured in — the key is canonical mm
+   and would silently retype an inch rack as millimetres. */
+function newBoardLike(gid) {
+  const g = boardGroupByKey(String(gid).replace(/^SZ:/, ""));
+  const m = g && g.members[0];
+  if (!m) { newBoard(); return; }
+  boardModal(null, { len: m.len, wid: m.wid, thk: m.thk, density: m.density });
+}
 function editBoard(id) { const b = boardById(id); if (b) boardModal(b); }
 
 /* Read the modal into a validated board. Returns null (and toasts) on the first
@@ -173,6 +198,7 @@ function readBoardForm() {
     if (r.err) { toast(`${label} ${r.err}.`, "error"); return null; }
     out[key] = r.dim;
   }
+  const notes = String(val("bd-notes")).trim();
   const qty = Number(String(val("bd-qty")).trim() || "1");
   if (!Number.isFinite(qty) || qty < 1 || Math.floor(qty) !== qty) { toast("Quantity must be a whole number, 1 or more.", "error"); return null; }
   const dens = canonDensity(val("bd-density"));
@@ -186,6 +212,7 @@ function readBoardForm() {
     label: String(val("bd-label")).trim(),
     density: dens,
     origin: String(val("bd-origin")).trim(),
+    notes,
     location: String(val("bd-location")).trim(),
   };
 }
@@ -226,7 +253,7 @@ function delBoard(id) {
 
    The renderers live in this file rather than inventory.js because this file
    owns the board data, the modal that edits it, and the eight helpers these
-   panes read (groupBoards, boardSizeKey, groupLabel, boardAreaM2, fmtDim,
+   panes read (groupBoards, boardSizeKey, groupLabel, boardVolumeFt3, fmtDim,
    fmtMm, thkKey, boardById). Moving the rendering "into the Inventory file"
    would split it from its data and make inventory.js reach across for all
    eight. Script order allows the call this way round: stock.js loads first.
@@ -259,7 +286,7 @@ function renderBoardsList() {
     .filter(g => !q || (groupLabel(g) + " " + g.density + " " + JSON.stringify(g.members)).toLowerCase().includes(q));
 
   const boards = groups.reduce((n, g) => n + g.qty, 0);
-  const m2 = groups.reduce((n, g) => n + g.m2, 0);
+  const ft3 = groups.reduce((n, g) => n + g.ft3, 0);
   const homeless = (DB.stock || []).filter(b => !b.location).length;
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
 
@@ -267,18 +294,18 @@ function renderBoardsList() {
      is the wrong place to ask it: it is the question you ask standing at the
      rack, deciding whether to cut or to order. */
   const buckets = {};
-  (DB.stock || []).forEach(b => { buckets[thkKey(b)] = (buckets[thkKey(b)] || 0) + boardAreaM2(b); });
+  (DB.stock || []).forEach(b => { buckets[thkKey(b)] = (buckets[thkKey(b)] || 0) + boardVolumeFt3(b); });
   const grades = [...new Set((DB.stock || []).map(b => canonDensity(b.density) ?? 30))].sort((a, b) => a - b);
 
   return `
   <div class="stat-row">
-    ${tile(groups.length, "Sizes")}${tile(boards, "Boards")}${tile(m2.toFixed(1), "m² on hand")}${
+    ${tile(groups.length, "Sizes")}${tile(boards, "Boards")}${tile(ft3.toFixed(1), "ft³ on hand")}${
       /* Amber, not red: a board nobody has given a shelf is a gap to close, not
          a thing that is wrong. Same reading as the dashboard's Unassigned. */
       homeless ? tile(homeless, homeless === 1 ? "board with no location" : "boards with no location", "warn") : ""}
   </div>
   <div class="filters no-print">
-    <input id="searchbox" placeholder="search size / label / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+    <input id="searchbox" placeholder="search id / size / label / notes…" value="${esc(view.q || "")}" oninput="searchInput(this)">
     <select title="Board grade" onchange="view.invDens=this.value;render()">
       <option value="">All grades</option>
       ${grades.map(d => `<option value="${d}" ${String(view.invDens) === String(d) ? "selected" : ""}>${d} lb/ft³</option>`).join("")}
@@ -294,16 +321,24 @@ function renderBoardsList() {
       <div class="pgrouphd"><span class="pg-name">${d} lb/ft³</span>
         <span class="pg-n">${gs.reduce((n, g) => n + g.qty, 0)} board${gs.reduce((n, g) => n + g.qty, 0) === 1 ? "" : "s"}</span>
         <span class="pg-n">${gs.length} size${gs.length === 1 ? "" : "s"}</span>
-        <span class="pg-n">${gs.reduce((n, g) => n + g.m2, 0).toFixed(1)} m²</span></div>
+        <span class="pg-n">${gs.reduce((n, g) => n + g.ft3, 0).toFixed(1)} ft³</span></div>
       <table class="list">
-        <tr><th>Size</th><th>Thickness</th><th>Qty</th><th>Area</th><th>Where</th></tr>
+        <tr><th>Board</th><th>Size</th><th>Qty</th><th>Volume</th><th>Where</th></tr>
         ${gs.map(g => {
           const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
+          /* The id leads, because that is what is printed on the label stuck to
+             the sheet and what anybody standing at the rack reads off it. A row
+             is still a SIZE, so it names the id when the size is one record —
+             which it nearly always is — and says how many records otherwise. */
+          const ids = g.members.map(b => b.id);
+          const lead = ids.length === 1 ? esc(ids[0])
+            : `${esc(ids[0])} <span class="muted tny">+${ids.length - 1} more</span>`;
+          const note = g.members.map(b => b.notes).filter(Boolean)[0] || "";
           return `<tr onclick="selectInvRec('${esc(g.id)}')">
-            <td><b>${esc(groupLabel(g))}</b></td>
-            <td>${fmtMm(g.thkMm)}</td>
+            <td><b>${lead}</b>${note ? `<div class="tny muted">${esc(note.length > 46 ? note.slice(0, 45) + "…" : note)}</div>` : ""}</td>
+            <td>${esc(groupLabel(g))}</td>
             <td>${esc(g.qty)}</td>
-            <td>${g.m2.toFixed(2)} m²</td>
+            <td>${g.ft3.toFixed(2)} ft³</td>
             <td class="tny">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : `<span class="muted">—</span>`}</td>
           </tr>`;
         }).join("")}
@@ -312,7 +347,7 @@ function renderBoardsList() {
   ${Object.keys(buckets).length ? `<div class="card">
     <h3>Board on hand, by thickness</h3>
     <div class="grid">
-      ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} m²</div></div>`).join("")}
+      ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} ft³</div></div>`).join("")}
     </div>
   </div>` : ""}`;
 }
@@ -331,17 +366,18 @@ function boardSizePane(g) {
   <section class="mddetail" aria-label="Board size detail">
     <div class="toolbar no-print">
       <button class="ib" onclick="clearInvSelection()">${icon("chevronLeft", 16)} All boards</button>
-      <button class="primary ib" onclick="newBoard()">+ Board this size</button>
+      <button class="primary ib" onclick="newBoardLike('${esc(g.id)}')">+ Board this size</button>
     </div>
     <div class="card">
       <h2>${esc(groupLabel(g))}</h2>
-      <div class="muted">${esc(g.density)} lb/ft³ · ${esc(g.qty)} on the rack · ${g.m2.toFixed(2)} m² of face</div>
+      <div class="muted">${esc(g.density)} lb/ft³ · ${esc(g.qty)} on the rack · ${g.ft3.toFixed(2)} ft³</div>
       <div class="grid">
         <div class="f"><label>Length</label><div class="ro">${fmtMm(g.lenMm)} <span class="muted tny">(${Math.round(g.lenMm * 10) / 10} mm)</span></div></div>
         <div class="f"><label>Width</label><div class="ro">${fmtMm(g.widMm)} <span class="muted tny">(${Math.round(g.widMm * 10) / 10} mm)</span></div></div>
         <div class="f"><label>Thickness</label><div class="ro">${fmtMm(g.thkMm)} <span class="muted tny">(${Math.round(g.thkMm * 10) / 10} mm)</span></div></div>
         <div class="f"><label>Density</label><div class="ro">${esc(g.density)} lb/ft³</div></div>
         <div class="f"><label>Quantity</label><div class="ro">${esc(g.qty)}</div></div>
+        <div class="f"><label>Volume</label><div class="ro">${g.ft3.toFixed(2)} ft³ <span class="muted tny">≈ ${Math.round(g.ft3 * (canonDensity(g.density) ?? 30))} lb</span></div></div>
         <div class="f"><label>Stored at</label><div class="ro">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : "—"}</div></div>
       </div>
       ${usedBy.length ? `<h3>Molds cut from boards this size</h3>
@@ -351,8 +387,10 @@ function boardSizePane(g) {
       <table class="list">
         <tr><th>Board</th><th>Qty</th><th>Where</th><th></th></tr>
         ${g.members.map(b => `<tr>
-          <td onclick="selectInvRec('${esc(b.id)}')"><b>${esc(b.label || b.id)}</b> <span class="muted tny">${esc(b.id)}</span>${
-            b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}</td>
+          <td onclick="selectInvRec('${esc(b.id)}')"><b>${esc(b.id)}</b>${
+            b.label ? ` <span class="muted tny">${esc(b.label)}</span>` : ""}${
+            b.origin ? ` <span class="muted tny">· from ${esc(b.origin)}</span>` : ""}${
+            b.notes ? `<div class="tny muted">${esc(b.notes)}</div>` : ""}</td>
           <td>${esc(b.qty || 1)}</td>
           <td class="tny">${b.location ? shopRefChip(String(b.location)) : "—"}</td>
           <td>${labelBtn("stock", b.id)}<button class="ib sm" onclick="editBoard('${esc(b.id)}')">${icon("edit", 14)}</button>${
@@ -379,9 +417,9 @@ function boardPane(b) {
       ${isLead() ? `<button class="danger" onclick="delBoard('${esc(b.id)}')">Delete</button>` : ""}
     </div>
     <div class="card" data-lbgroup="stock:${esc(b.id)}">
-      <h2>${esc(b.label || b.id)}</h2>
-      <div class="muted">${esc(b.id)}${
-        b.ts ? " · added " + fmtWhen(b.ts) : ""}${b.createdBy ? " by " + esc(b.createdBy) : ""}</div>
+      <h2>${esc(b.id)}</h2>
+      <div class="muted">${b.label ? esc(b.label) + " · " : ""}${
+        b.ts ? "added " + fmtWhen(b.ts) : ""}${b.createdBy ? " by " + esc(b.createdBy) : ""}</div>
       <h3>Details</h3>
       <div class="grid">
         <div class="f"><label>Length</label><div class="ro">${fmtDim(b.len)}</div></div>
@@ -389,10 +427,11 @@ function boardPane(b) {
         <div class="f"><label>Thickness</label><div class="ro">${fmtDim(b.thk)}</div></div>
         <div class="f"><label>Density</label><div class="ro">${esc(canonDensity(b.density) ?? b.density)} lb/ft³</div></div>
         <div class="f"><label>Quantity</label><div class="ro">${esc(b.qty || 1)}</div></div>
-        <div class="f"><label>Area</label><div class="ro">${boardAreaM2(b).toFixed(2)} m²</div></div>
+        <div class="f"><label>Volume</label><div class="ro">${boardVolumeFt3(b).toFixed(2)} ft³ <span class="muted tny">≈ ${Math.round(boardVolumeFt3(b) * (canonDensity(b.density) ?? 30))} lb</span></div></div>
         <div class="f"><label>Stored at</label><div class="ro">${b.location ? shopRefChip(String(b.location)) : "—"}</div></div>
         ${b.origin ? `<div class="f"><label>From</label><div class="ro">${esc(b.origin)}</div></div>` : ""}
       </div>
+      ${b.notes ? `<h3>Notes</h3><p class="ro">${esc(b.notes)}</p>` : ""}
       ${usedBy.length ? `<h3>Molds cut from this board</h3>
         <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
     </div>

@@ -3425,7 +3425,8 @@ await t("Print button opens the traveler, not window.print()", () => {
 
 console.log("stock (board inventory):");
 // Fill the board modal the way a person would, then submit it.
-function fillBoard({ len = "48", lenU = "in", wid = "96", widU = "in", thk = "2", thkU = "in", qty = "1", density = "30", kind = "sheet", label = "", origin = "" } = {}) {
+function fillBoard({ len = "48", lenU = "in", wid = "96", widU = "in", thk = "2", thkU = "in", qty = "1", density = "30", kind = "sheet", label = "", origin = "", notes = "" } = {}) {
+  el("bd-notes").value = notes;
   el("bd-len").value = len; el("bd-len-u").value = lenU;
   el("bd-wid").value = wid; el("bd-wid-u").value = widU;
   el("bd-thk").value = thk; el("bd-thk-u").value = thkU;
@@ -3526,6 +3527,64 @@ await t("mark cut: an unticked unit stays, and a rack changed under the plan abo
   assert(/rack changed/.test(lastToast), "told to re-check: " + lastToast);
   DB.stackplans = []; DB.stock = [];
 });
+await t("the boards list leads with the id, reports volume, and carries notes", async () => {
+  /* The id is what is printed on the label stuck to the sheet, so it is what
+     somebody at the rack reads off it — it leads the row, and the size follows.
+     Volume, not area: a mold is cut out of a solid and eats thickness, so a 3in
+     and a 1in sheet of the same face are not the same stock. */
+  DB.stock = [];
+  fillBoard({ label: "rack A", len: "96", wid: "48", thk: "2", qty: "1", notes: "one corner is soft" });
+  await submitBoard(null);
+  const b = DB.stock[0];
+  assert(b.notes === "one corner is soft", "notes are stored on the board: " + JSON.stringify(b.notes));
+
+  // 96 x 48 x 2 in = 9216 in³ = 5.333 ft³.
+  const v = boardVolumeFt3(b);
+  assert(Math.abs(v - 5.3333) < 0.01, "volume in ft³, the unit density is already in: " + v);
+  assert(Math.abs(boardVolumeFt3({ ...b, qty: 3 }) - 3 * v) < 0.01, "and it counts the quantity");
+
+  view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null, q: "", invDens: "" };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("<th>Board</th>"), "the id column leads the table");
+  assert(h.indexOf("<th>Board</th>") < h.indexOf("<th>Size</th>"), "before the size, not after it");
+  // Size already ends in the thickness; a column repeating it was pure noise.
+  assert(!h.includes("<th>Thickness</th>"), "and thickness is not restated beside the size that contains it");
+  assert(h.includes(b.id), "and the row names the board");
+  assert(h.includes("ft³") && !h.includes("m²"), "volume replaces area outright");
+  assert(h.includes("one corner is soft"), "a note shows on the row without opening it");
+
+  // The board's own pane leads with the id too, and shows the note in full.
+  selectInvRec(b.id);
+  const p = main.innerHTML;
+  assert(p.includes(`<h2>${b.id}</h2>`), "the pane is titled by id, not by label");
+  assert(p.includes("one corner is soft"), "with the note");
+  assert(/≈ \d+ lb/.test(p), "and the weight the volume implies, since density is lb/ft³: " + p.slice(0, 80));
+  view = { ...view, mode: "list", id: null };
+});
+
+await t("adding another board this size starts from that size", async () => {
+  /* "+ Board this size" used to open a blank form, so the one thing the button
+     promised was the one thing you had to retype. */
+  DB.stock = [];
+  fillBoard({ len: "96", wid: "48", thk: "1.5", thkU: "in", density: "60" });
+  await submitBoard(null);
+  const g = groupBoards(DB.stock)[0];
+  newBoardLike(g.id);
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Add board"), "it is a new board, not an edit of the one referenced");
+  assert(/id="bd-len" value="96"/.test(m) && /id="bd-wid" value="48"/.test(m) && /id="bd-thk" value="1.5"/.test(m),
+    "size prefilled: " + (m.match(/id="bd-(len|wid|thk)" value="[^"]*"/g) || []).join(", "));
+  assert(/id="bd-density"[^>]*value="60"/.test(m), "and the grade, which is part of what makes it that stock");
+  /* Units come off the referenced board, not off the canonical mm in the SZ:
+     key — retyping an inch rack as millimetres is the whole trap here. */
+  assert((m.match(/<option selected="?"?>in<\/option>|<option selected>in<\/option>/g) || []).length >= 3
+    || /bd-len-u[\s\S]*?<option selected>in/.test(m), "in the units it was measured in: " + m.slice(m.indexOf("bd-len-u"), m.indexOf("bd-len-u") + 120));
+  assert(!/id="bd-label" value="[^"]/.test(m), "label does not carry over — it is a different sheet");
+  assert(/id="bd-qty" value="1"/.test(m), "and quantity starts at one");
+  closeModal();
+});
+
 await t("the rack shows one row per size, and escapes labels where they appear", async () => {
   DB.stock = [];
   // The rack lives in Inventory now, not on the Molds rail.
@@ -5145,7 +5204,7 @@ await t("the Molds rail is molds and orphaned plans — boards are Inventory's",
   assert(!h.includes("BRD-0"), "and no board ids either");
   assert(!h.includes("newBoard()"), "+ Board went with them");
   // One number stays: whether there is board to cut, which is a mold question.
-  assert(h.includes("m² board on hand"), "the headline m² survives as a tile");
+  assert(h.includes("ft³ board on hand"), "the headline volume survives as a tile");
   assert(/invView:'boards'/.test(h), "and the tile is the way through to the rack");
 });
 

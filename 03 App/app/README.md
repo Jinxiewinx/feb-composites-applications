@@ -439,17 +439,33 @@ The fourth toggle is the tooling rack, which used to be a third group on the
 Molds rail. A board is a thing on a shelf, and this is where the shelves are.
 
 A full 4×8 sheet and an offcut are the same kind of record, so remnants come
-back into stock instead of piling up. The list is one row per **size**, because
-a board is its length, width, thickness and density; the individual documents
-are one click deeper, because a BRD- label is stuck to a physical board and a
-mold points at the one it was cut from. Sizes are grouped by **grade**, since
-that is the one axis the packer refuses to substitute across (CS-004 — 60lb
-seals better, and you cannot swap it in silently), which makes it the axis that
-decides whether a job can be cut at all.
+back into stock instead of piling up. Rows lead with the **board id** — that is
+what the printed label on the sheet says, and what you read off it standing at
+the rack — followed by the size. A row is still one **size**, so where two
+records happen to share a size it names the first and says how many more; open
+it and the individual boards are listed, because a BRD- label is stuck to a
+physical board and a mold points at the one it was cut from. Sizes are grouped
+by **grade**, since that is the one axis the packer refuses to substitute
+across (CS-004 — 60lb seals better, and you cannot swap it in silently), which
+makes it the axis that decides whether a job can be cut at all.
 
-Molds keeps exactly one number: the m² on hand, as a tile that opens this list.
-"Have we got board" is a mold-making question even though the rack is not a
-mold-making record.
+Quantities are **volume in ft³**, not area. A mold is cut out of a solid and
+eats thickness, so a 3in and a 1in sheet of the same face are not the same
+stock at all. Cubic feet because density is already lb/ft³: the two multiply to
+the weight of what is on the rack, which the panes show alongside.
+
+Every board carries a free **notes** field — a soft corner, a bumpy face, an
+off-colour batch, which end is square. Notes show under the id in the list and
+in full on the board's own page, and the search box matches them.
+
+**+ Board this size**, on a size page, opens the form already filled in with
+that size and grade, in the units it was measured in. Label, shelf and
+provenance stay blank, and quantity starts at one: it is another sheet of that
+stock, not a copy of that sheet.
+
+Molds keeps exactly one number: the ft³ on hand, as a tile that opens this
+list. "Have we got board" is a mold-making question even though the rack is not
+a mold-making record.
 
 #### Receiving
 

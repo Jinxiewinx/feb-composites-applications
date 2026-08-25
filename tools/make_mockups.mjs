@@ -111,7 +111,7 @@ const SHOTS = [
   { id: "inventory-boards", kind: "app", badge: 8, vh: 1000,
     js: `view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null, q: "", invDens: "" }; render();`,
     title: "Boards · the tooling rack",
-    note: "A board is a thing on a shelf, so the rack lives beside the items and the materials rather than on the Molds rail. One row per size, because a board is its length, width, thickness and density; the individual records and their printed labels are one click deeper. Grouped by grade, since that is the one axis the packer refuses to substitute across — and grade is typed, not picked from a list, because the rack has always held sheets outside the 30/60 catalogue." },
+    note: "A board is a thing on a shelf, so the rack lives beside the items and the materials rather than on the Molds rail. Rows lead with the board id, because that is what the printed label on the sheet says and what you read off it at the rack. Quantities are volume in ft³, not area: a mold is cut out of a solid and eats thickness, and cubic feet times the lb/ft³ grade is the weight on the rack. Grouped by grade, since that is the one axis the packer refuses to substitute across — and grade is typed, not picked from a list, because the rack has always held sheets outside the 30/60 catalogue." },
   { id: "inventory-contents", kind: "app", badge: 8, vh: 1150,
     js: `setTab("inventory"); selectInvRec("BIN-SN6-001");`,
     title: "A shelf · what lives here",

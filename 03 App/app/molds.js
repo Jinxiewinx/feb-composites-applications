@@ -16,7 +16,7 @@
    already been bucketing DB.stock by location for its storage map and its
    contents pages. Only the list sat here. It now lives in Inventory beside
    Items list and Materials list (see the Boards section of stock.js); Molds
-   keeps one number, the m² on hand, as a tile that opens it. A mold's "cut
+   keeps one number, the ft³ on hand, as a tile that opens it. A mold's "cut
    from board" chip and a scanned BRD- label still resolve — moldsOrBoardsFor
    in core.js routes them to Inventory, so nothing dead-ends the way it did
    before boards had a detail page at all.
@@ -288,7 +288,7 @@ function moldsOverview() {
   const live = molds.filter(m => m.stage !== "Retired");
   const ready = live.filter(m => m.stage === "Ready for layup").length;
   const noHome = live.filter(m => !m.location).length;
-  const m2 = (DB.stock || []).reduce((n, b) => n + boardAreaM2(b), 0);
+  const ft3 = (DB.stock || []).reduce((n, b) => n + boardVolumeFt3(b), 0);
 
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
   /* The one board number Molds still carries. The rack itself is Inventory's
@@ -296,7 +296,7 @@ function moldsOverview() {
      stays here and the tile is the way through to the list. */
   const boardTile = `<div class="stat-tile" role="button" tabindex="0" title="Open the rack in Inventory"
       onclick="view={...view,tab:'inventory',invView:'boards',mode:'list',id:null,q:''};render();syncUrl()">
-    <div class="bignum">${m2.toFixed(1)}</div><div class="stat-label">m² board on hand ▸</div></div>`;
+    <div class="bignum">${ft3.toFixed(1)}</div><div class="stat-label">ft³ board on hand ▸</div></div>`;
 
   // Where the live molds stand, MOLD_STAGE order — the parts-tab bar idiom.
   // Shared with the Dashboard's Season panel, so it lives in its own function.
