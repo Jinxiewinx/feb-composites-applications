@@ -5275,6 +5275,39 @@ await t("keyboard: arrows walk the rail across group boundaries, 1 advances the 
   assert(DB.molds[0].stage === before, "and undo restores it");
 });
 
+await t("Log offcuts is offered at the glue-up, and starts a board off that mold", () => {
+  /* Gluing a stack is the one moment an offcut exists AND is known — the saw
+     is out and the remnant is in someone's hand. Ask later and nobody can say
+     which mold it came off. So the offer rides the undo bar for exactly that
+     stage change, and nowhere else. */
+  DB.molds = [{ id: "MOLD-SN6-050", name: "clamshell", stage: "Designed" }];
+  DB.stock = [];
+
+  // Designed -> Board glued is the glue-up. The offer appears.
+  quickAdvance("molds", "MOLD-SN6-050");
+  assert(DB.molds[0].stage === "Board glued", "fixture: the advance landed on the glue-up: " + DB.molds[0].stage);
+  const bar = shopUndoBar();
+  assert(bar.includes("Log offcuts"), "the offer rides the undo bar: " + bar.slice(0, 160));
+  assert(/logOffcutFromMold\('MOLD-SN6-050'\)/.test(bar), "carrying the mold it came off");
+
+  // It opens the ordinary Add-board form, with only the provenance filled in.
+  logOffcutFromMold("MOLD-SN6-050");
+  const m = document.getElementById("modal").innerHTML;
+  assert(m.includes("Add board"), "a new board, not an edit of anything");
+  assert(/id="bd-origin" value="MOLD-SN6-050"/.test(m),
+    "origin prefilled: " + (m.match(/id="bd-origin" value="[^"]*"/) || ["(absent)"])[0]);
+  /* The size is deliberately NOT guessed — a remnant is whatever is left, and
+     only the person holding it can measure it. */
+  assert(/id="bd-len" value=""/.test(m) && /id="bd-wid" value=""/.test(m) && /id="bd-thk" value=""/.test(m),
+    "and the size is left blank for whoever is holding the piece");
+  closeModal();
+
+  // Every other stage change leaves the bar alone.
+  quickAdvance("molds", "MOLD-SN6-050");
+  assert(DB.molds[0].stage === "Machined", "fixture: advanced past the glue-up");
+  assert(!shopUndoBar().includes("Log offcuts"), "no offer where it would make no sense");
+});
+
 await t("embedded shop detail is opt-in; Materials and Items keep the bare shape", () => {
   DB.lots = [{ id: "FAB-SN6-001", cls: "FAB", name: "195 twill", stage: "Sealed" }];
   view = { ...view, tab: "lots", mode: "detail", id: "FAB-SN6-001", edit: false };

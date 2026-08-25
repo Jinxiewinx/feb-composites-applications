@@ -294,11 +294,9 @@ function shopUndoBar() {
 }
 /* Pre-filled leftover-board entry: origin = the mold it came off. A leftover
    is not a separate kind of thing, just a smaller board, so the only thing
-   worth prefilling is where it came from. boardModal has no preset parameter,
-   so the field is set after it opens — same pattern quickMoveScan uses. */
+   worth prefilling is where it came from — the size is whatever is left, which
+   only the person holding it knows. */
 function logOffcutFromMold(moldId) {
   if (typeof boardModal !== "function") return;
-  boardModal(null);
-  const origin = document.getElementById("bd-origin");
-  if (origin) origin.value = moldId;
+  boardModal(null, { origin: moldId });
 }

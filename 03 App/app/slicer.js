@@ -900,7 +900,7 @@ function sliceMold(tris, thicknesses, opts) {
   const maxDepth = opts.maxCutDepth == null ? MAX_CUT_DEPTH_MM : opts.maxCutDepth;
   const sections = sectionize(layers, maxDepth);
   if (sections.length > 1) {
-    warnings.push(`This mold is ${((bounds.z1 - bounds.z0) / 25.4).toFixed(2)}in tall, past the ShopSabre's ${(maxDepth / 25.4).toFixed(0)}in cut depth, so it is split into ${sections.length} sections machined separately. Design dowel and datum features into the mating faces in CAD (CS-003 §7.1.6) — do not improvise them at the machine.`);
+    warnings.push(`This mold is ${((bounds.z1 - bounds.z0) / 25.4).toFixed(2)}in tall, past the ShopSabre's ${(maxDepth / 25.4).toFixed(0)}in cut depth, so it is split into ${sections.length} sections machined separately. Design dowel and datum features into the mating faces in CAD — do not improvise them at the machine.`);
   }
   const tooThick = layers.find(L => L.thickness > maxDepth + 1e-6);
   if (tooThick) warnings.push(`Layer ${tooThick.index + 1} is a single board ${(tooThick.thickness / 25.4).toFixed(2)}in thick, deeper than the machine can cut. Use thinner boards for that layer.`);

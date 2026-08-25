@@ -144,10 +144,13 @@ function groupLabel(g) {
 
 /* ---------- create / edit ---------- */
 /* `preset` prefills a NEW board without making it an edit: b is still the
-   editing flag, so the footer button and submitBoard's id are unaffected. It
-   carries the size and grade only — "another board this size" means another
-   sheet of that stock, not a copy of that sheet's label, shelf or provenance,
-   and quantity starts at one because you are recording what you just found. */
+   editing flag, so the footer button and submitBoard's id are unaffected.
+   Each caller carries only what it actually knows. "+ Board this size" passes
+   the size and grade and nothing else — another sheet of that stock is not a
+   copy of that sheet's label, shelf or provenance. "Log offcuts" passes only
+   the mold it came off, because the size of a remnant is whatever is left and
+   only the person holding it knows that. Quantity starts at one either way:
+   you are recording what is in front of you. */
 function boardModal(b, preset) {
   const e = b || preset || {};
   const dimRow = (key, label, d) => `
