@@ -41,6 +41,15 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
 | Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip). |
 
+**Four of those families are app-only.** Receiving, Export, Storage map and
+Search results describe patterns that still live in the SN6 app's own
+stylesheet and have not been lifted into `components.css`, so the classes are
+named here for vocabulary but `styles.css` ships no rules behind them — markup
+using them renders unstyled. The same goes for `.wo-fold`, `.wo-subfold`,
+`.wo-subhd`, `.addrow`, `.fgroup-label` and `table.sub` in the WO sections row.
+Everything else in the table is in the stylesheet. If you need one of the
+app-only patterns, style it yourself from the tokens.
+
 For your own layout glue, use the tokens rather than literal values: `var(--canvas)`, `var(--card)`, `var(--surface-2)`, `var(--line)`, `var(--ink)`, `var(--muted)`, `var(--accent)`, `var(--blue)`, `var(--gold)`, spacing via `var(--radius)`/`var(--r-md)`/`var(--r-lg)`, and motion via `var(--t)`/`var(--t-fast)`/`var(--ease)`. Status colors come as triads: `--ok`/`--ok-bg`/`--ok-border`, and the same shape for `--bad`, `--retro`, `--purple`. The warning triad is the one asymmetric case: the text color is `--amber`, but the surfaces are `--warn-bg` and `--warn-border`.
 
 ## Three things that will bite you
