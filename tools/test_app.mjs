@@ -5049,6 +5049,74 @@ await t("planning a mold creates the mold record, linked, and lands on it", asyn
     "landing on the mold, the record the CS-003 sign-off hangs off");
 });
 
+await t("the rail groups molds by stage, and the keyboard walks what is on screen", async () => {
+  DB.molds = [
+    { id: "MOLD-a", name: "alpha", stage: "Designed" },
+    { id: "MOLD-b", name: "bravo", stage: "Sealed", location: "BIN-SN6-001" },
+    { id: "MOLD-c", name: "charlie", stage: "Designed" },
+    { id: "MOLD-d", name: "delta", stage: "Retired" },
+  ];
+  DB.stackplans = [];
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fRetired: false, fNoHome: false };
+  render();
+  const h = main.innerHTML;
+  /* Mold making is a pipeline, so the rail reads like one. A stage nobody is
+     at gets no header — the overview's stage bar answers "which are empty". */
+  // Scoped to the group heads: every stage name also appears in the filter
+  // <select>, so a bare includes() would pass on the dropdown alone.
+  const heads = [...h.matchAll(/class="pg-name">([^<]*)</g)].map(m => m[1]);
+  assert(heads.includes("Designed") && heads.includes("Sealed"), "a header per stage in use: " + heads);
+  assert(!heads.includes("Machined"), "and none for a stage nobody is at: " + heads);
+  assert(!heads.includes("Retired"), "Retired stays behind its own chip: " + heads);
+  assert(heads.indexOf("Designed") < heads.indexOf("Sealed"), "in pipeline order, not alphabetical");
+  // The stage word leaves the row; the header above it is where it lives now.
+  assert((h.match(/class="tny muted">\d+%</g) || []).length >= 3, "rows show stage progress, not the stage word");
+  assert(h.includes("no home"), "and call out the mold with no shelf");
+
+  /* The grouping is a partition of the sorted array, not a filter per stage,
+     so what renders IS moldsFlatRows() with headers dropped in. If those two
+     ever disagree, the arrow keys walk rows that are not on screen. */
+  const walked = moldsFlatRows().map(r => r.id);
+  const rendered = [...h.matchAll(/id="pi-(MOLD-[a-z]+)"/g)].map(m => m[1]);
+  assert(walked.join() === rendered.join(), `keyboard order must equal DOM order: ${walked} vs ${rendered}`);
+
+  /* The no-home filter is applied with the other filters, not spliced into the
+     render call — which is what used to make the two lists above diverge. */
+  view.fNoHome = true; render();
+  const h2 = main.innerHTML;
+  const walked2 = moldsFlatRows().map(r => r.id);
+  const rendered2 = [...h2.matchAll(/id="pi-(MOLD-[a-z]+)"/g)].map(m => m[1]);
+  assert(walked2.join() === rendered2.join(), `filtered too: ${walked2} vs ${rendered2}`);
+  assert(!rendered2.includes("MOLD-b"), "the mold that has a home is filtered out of both");
+  view.fNoHome = false;
+});
+
+await t("the season view names what needs a hand, and nothing when nothing does", () => {
+  DB.molds = [{ id: "MOLD-ok", name: "fine", stage: "Designed", location: "BIN-SN6-001" }];
+  DB.stackplans = [];
+  view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fRetired: false, fNoHome: false };
+  render();
+  assert(!main.innerHTML.includes("Needs a hand"),
+    "an empty fix-me card is a card you learn to stop reading");
+
+  DB.molds.push({ id: "MOLD-x", name: "homeless", stage: "Machined" });
+  DB.stackplans = [
+    { id: "STK-w", moldId: "MOLD-ok", name: "warned", ts: "2026-03-01T00:00:00Z", layers: [], warnings: ["thinned"] },
+    { id: "STK-o", moldId: "", name: "orphan", ts: "2026-03-02T00:00:00Z", layers: [] },
+  ];
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("Needs a hand"), "the card appears once there is something in it");
+  assert(h.includes("No home location") && h.includes("homeless"), "molds with no shelf");
+  assert(h.includes("No stack plan on file"), "molds past Designed with nothing to cut from");
+  assert(h.includes("Plans with warnings") && h.includes("warned"),
+    "slicer warnings, which were computed and shown nowhere");
+  assert(h.includes("Unlinked plans") && h.includes("orphan"), "and the plans with no mold");
+  // A warned plan that HAS a mold opens the mold, not a pane the user has to
+  // find their way back from.
+  assert(h.includes(`selectMoldsRec('MOLD-ok')`), "a linked warned plan is reached through its mold");
+});
+
 await t("the Molds rail is molds and orphaned plans — boards are Inventory's", async () => {
   view = { ...view, tab: "molds", mode: "list", id: null, q: "", fStatus: "", fSub: "", fRetired: false, fNoHome: false };
   render();

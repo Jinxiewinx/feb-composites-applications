@@ -29,9 +29,22 @@
    collapses to list-then-detail via `has-sel`, exactly like parts.js — see the
    responsive block in index.html.
 
+   THE RAIL IS GROUPED BY STAGE, one header per stage a mold is actually at.
+   Mold making is a pipeline and the rail now reads like one. Because the group
+   is a PARTITION of the already stage-sorted array rather than a filter per
+   stage, what renders is moldsFlatRows() with headers dropped in — which is
+   what keeps ↑/↓ walking exactly the rows on screen. Group headers are drawn
+   by the body renderer and are not rows, so the keyboard cannot land on one.
+   The row itself drops the stage word (the header above says it) and spends
+   those slots on what you would otherwise open the mold to learn: whether it
+   has a home, and whether it has a stack plan.
+
    WHAT LIVES WHERE. The mold pane is renderShopDetail("molds") embedded, plus
-   its plan's artifacts when one is linked. The plan pane is renderStackPlan(),
-   reached for a plan with no mold to be shown through. The cut list keeps its
+   its plan's artifacts when one is linked — 3D view included. The plan pane is
+   renderStackPlan(), reached for a plan with no mold to be shown through. The
+   season view carries the stage bar, the board headline, and "Needs a hand":
+   the molds with no home, the ones past Designed with no plan, the plans
+   carrying slicer warnings, and the plans with no mold. The cut list keeps its
    full-width takeover: it is a batch print artifact, not a record.
 
    The old `stock` TABS row survives hidden, so #/stock links, stored
@@ -85,6 +98,11 @@ function moldsRailRows() {
   let molds = (DB.molds || [])
     .filter(m => view.fRetired ? true : m.stage !== "Retired")
     .filter(m => !view.fStatus || m.stage === view.fStatus)
+    /* Applied HERE, with the other filters, not at render time. It used to be
+       spliced into the group's .map() call, so moldsFlatRows — which is what
+       the keyboard walks — disagreed with the DOM whenever the chip was on,
+       and ↓ stepped through molds that were not on screen. */
+    .filter(m => !view.fNoHome || !m.location)
     .filter(m => has(m))
     .sort((a, b) => (MOLD_STAGE.indexOf(a.stage) - MOLD_STAGE.indexOf(b.stage)) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
 
@@ -118,6 +136,24 @@ function moldsFlatRows() {
   return [...molds, ...plans];
 }
 
+/* One header per stage, in MOLD_STAGE order, produced by WALKING the sorted
+   array rather than filtering it once per stage. The sort in moldsRailRows is
+   already stage-then-name, so grouping is just a partition — which means what
+   renders is literally moldsFlatRows() with headers dropped in, and
+   moldsNeighborId cannot disagree with what is on screen. A stage nobody is at
+   gets no header; the overview's stage bar is where "which stages are empty"
+   is answered. Retired sorts last in MOLD_STAGE, so it groups last for free. */
+function moldsStageGroups(molds) {
+  const out = [];
+  for (const m of molds) {
+    const stage = MOLD_STAGE.includes(m.stage) ? m.stage : MOLD_STAGE[0];
+    const cur = out[out.length - 1];
+    if (cur && cur.stage === stage) cur.rows.push(m);
+    else out.push({ stage, rows: [m] });
+  }
+  return out;
+}
+
 /* Which rail row wears `sel`. A plan opened through its mold marks the MOLD:
    there is no plan row to mark, and an unmarked rail while a pane is open
    reads as "nothing is selected". Shared with moldsNeighborId so the keyboard
@@ -136,12 +172,22 @@ function moldsRailItem(kind, o) {
   const open = `selectMoldsRec('${esc(o.id)}')`;
   if (kind === "mold") {
     const done = o.stage === "Retired";
+    /* The stage WORD is gone from the row: the header directly above it says
+       the stage, and repeating it in every row is the noise that made the rail
+       hard to scan. It survives in the tooltip and on the detail pill. The
+       slots it frees go to the two things you would otherwise have to open the
+       mold to find out — whether it has a home, and whether it has a plan. */
+    const home = o.location ? ((shopById("items", o.location) || {}).name || String(o.location)) : "";
+    const hasPlan = !!currentPlanFor(o);
     return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""}" id="pi-${esc(o.id)}" role="option" aria-selected="${sel}"
         title="${esc(o.id)} · ${esc(o.stage || "")}" onclick="${open}">
       <span class="pi-name">${esc(o.name || o.id)}</span>
-      <span class="pi-due">${o.location ? `<span class="tny muted">${esc(((n => n.length > 18 ? n.slice(0, 17) + "…" : n)((shopById("items", o.location) || {}).name || String(o.location))))}</span>` : ""}</span>
-      <span class="pi-sub"><span class="prog3"><span class="sg ${moldStageMarkClass(o)}" title="${esc(o.stage || "")}"><b>M</b><i style="width:${moldStagePct(o)}%"></i></span></span><span class="tny">${esc(o.stage || "")}</span></span>
-      <span class="pi-who">${Number(o.uses) ? `<span class="tny muted">${esc(o.uses)} uses</span>` : ""}</span>
+      <span class="pi-due">${home
+        ? `<span class="tny muted">${esc(home.length > 18 ? home.slice(0, 17) + "…" : home)}</span>`
+        : `<span class="tny warn">no home</span>`}</span>
+      <span class="pi-sub"><span class="prog3"><span class="sg ${moldStageMarkClass(o)}" title="${esc(o.stage || "")}"><b>M</b><i style="width:${moldStagePct(o)}%"></i></span></span><span class="tny muted">${moldStagePct(o)}%</span></span>
+      <span class="pi-who">${hasPlan ? "" : `<span class="tny muted">no plan</span>`}${
+        Number(o.uses) ? `<span class="tny muted">${esc(o.uses)} uses</span>` : ""}</span>
     </div>`;
   }
   if (kind === "plan") {
@@ -166,9 +212,11 @@ function renderMoldsRail() {
   const { molds, plans } = moldsRailRows();
   const allMolds = DB.molds || [];
   const retired = allMolds.filter(m => m.stage === "Retired").length;
-  const ready = allMolds.filter(m => m.stage === "Ready for layup").length;
   const noHome = allMolds.filter(m => m.stage !== "Retired" && !m.location).length;
-  const planWarn = (DB.stackplans || []).filter(p => (p.warnings || []).length).length;
+  // Warnings among the plans THIS HEADER HEADS. It used to count every plan in
+  // the collection, so a linked plan's warning showed up as a number over the
+  // unlinked list — which is not where you would go looking for it.
+  const planWarn = plans.filter(p => (p.warnings || []).length).length;
   const total = molds.length + plans.length;
   const sel = moldsSelected();
 
@@ -183,9 +231,8 @@ function renderMoldsRail() {
         ${(allMolds.length + (DB.stock || []).length) ? `<button class="ib" onclick="openLabelBuilder('molds')">${icon("print", 15)} Labels</button>` : ""}
       </div>
       <div class="psum">
-        ${retired ? `<button class="psum-chip ${view.fRetired ? "on" : ""}" onclick="view.fRetired=!view.fRetired;render()"><b>${retired}</b> retired</button>` : ""}
-        ${noHome ? `<button class="psum-chip ${view.fStatus === "" && view.fNoHome ? "on" : ""} bad" title="Molds with no home location"
-          onclick="view.fNoHome=!view.fNoHome;render()"><b>${noHome}</b> no home</button>` : ""}
+        ${retired ? summaryChip("retired", retired, !!view.fRetired, "view.fRetired=!view.fRetired;render()") : ""}
+        ${noHome ? summaryChip("no home", noHome, !!view.fNoHome, "view.fNoHome=!view.fNoHome;render()", "bad") : ""}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search molds / plans / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
@@ -199,9 +246,10 @@ function renderMoldsRail() {
       ${total === 0 ? `<div class="pempty muted">${
         (DB.molds || []).length ? "Nothing matches these filters."
         : "Nothing here yet — <b>+ Mold</b>, or import the SN5 molds with <b>Find molds in work orders</b> under Reports."}</div>` : ""}
-      ${molds.length || (DB.molds || []).length ? moldsGroupHead("Molds", [
-        `${ready} ready`, noHome ? `${noHome} no home` : "", `${molds.length} shown`]) : ""}
-      ${molds.filter(m => !view.fNoHome || !m.location).map(m => moldsRailItem("mold", m)).join("")}
+      ${moldsStageGroups(molds).map(g => moldsGroupHead(g.stage, [
+        `${g.rows.length}`,
+        g.rows.filter(m => !m.location).length ? `${g.rows.filter(m => !m.location).length} no home` : "",
+      ]) + g.rows.map(m => moldsRailItem("mold", m)).join("")).join("")}
       ${plans.length ? moldsGroupHead("Unlinked plans", [
         `${plans.length}`, planWarn ? `${icon("warning", 12)} ${planWarn}` : ""]) : ""}
       ${plans.map(p => moldsRailItem("plan", p)).join("")}
@@ -260,8 +308,34 @@ function moldsOverview() {
       : `<div class="muted">Every planned blank fits the rack: ${blanks.length} blanks across ${res.boardsUsed} board${res.boardsUsed === 1 ? "" : "s"}.</div>`;
   }
 
-  // Plans that predate the auto-created mold record, offered for adoption.
+  /* The fix-me list. Four questions that used to be answered in four different
+     places, or nowhere: which molds have no home, which have been machined
+     with no stack plan on file, which plans came back from the slicer with a
+     warning nobody has read, and which plans have no mold to be reached
+     through. Each row opens the thing it is about. Rendered only when there is
+     something in it — an empty "Needs a hand" card is a card that teaches you
+     to stop reading it. */
+  const homeless = live.filter(m => !m.location);
+  // Past "Designed": a mold nobody has cut yet is allowed to have no plan.
+  const noPlan = live.filter(m => MOLD_STAGE.indexOf(m.stage) > 0 && !currentPlanFor(m));
+  const warned = (DB.stackplans || []).filter(p => (p.warnings || []).length);
   const unlinked = (DB.stackplans || []).filter(planIsOrphan);
+
+  const chips = list => `<div class="stagerow">${list}</div>`;
+  const needs = [
+    homeless.length ? `<h3>No home location</h3>
+      <div class="muted tny">A mold with no shelf is a mold somebody walks the shop looking for.</div>
+      ${chips(homeless.map(m => `<span class="chip" onclick="selectMoldsRec('${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join(""))}` : "",
+    noPlan.length ? `<h3>No stack plan on file</h3>
+      <div class="muted tny">Past “Designed” with nothing to cut from. Plan the stack, or record why there is no file.</div>
+      ${chips(noPlan.map(m => `<span class="chip" onclick="selectMoldsRec('${esc(m.id)}')">${esc(m.name || m.id)} <span class="tny muted">${esc(m.stage || "")}</span></span>`).join(""))}` : "",
+    warned.length ? `<h3>Plans with warnings</h3>
+      <div class="muted tny">The slicer had something to say about these — thinned outlines, a mold near the block edge. Read before cutting.</div>
+      ${chips(warned.map(p => `<span class="chip" onclick="selectMoldsRec('${esc(p.moldId && moldRecById(p.moldId) ? p.moldId : p.id)}')">${icon("warning", 12)} ${esc(p.name || p.id)}</span>`).join(""))}` : "",
+    unlinked.length && isLead() ? `<h3>Unlinked plans</h3>
+      <div class="muted tny">No mold to be reached through — made before planning created the mold record, or pointing at one since deleted. Open each to link or adopt it.</div>
+      ${chips(unlinked.map(p => `<span class="chip" onclick="selectMoldsRec('${esc(p.id)}')">${esc(p.name || p.id)} <span class="tny muted">${fmtWhen(p.ts)}</span></span>`).join(""))}` : "",
+  ].filter(Boolean);
 
   return `
   <section class="mddetail" aria-label="Molds overview">
@@ -274,12 +348,9 @@ function moldsOverview() {
       ${stageBar}
       ${shortLine}
     </div>
-    ${unlinked.length && isLead() ? `<div class="card">
-      <h3>Unlinked plans</h3>
-      <div class="muted tny">Made before planning started creating the mold record automatically. Link each to the mold it became, or create one from it.</div>
-      ${unlinked.map(p => `<div class="pmini" onclick="selectMoldsRec('${esc(p.id)}')">
-        <span class="pm-name">${esc(p.name || p.id)}</span>
-        <span class="pm-due muted tny">${fmtWhen(p.ts)}</span></div>`).join("")}
+    ${needs.length ? `<div class="card">
+      <h2>Needs a hand</h2>
+      ${needs.join("")}
     </div>` : ""}
   </section>`;
 }
