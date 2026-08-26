@@ -4626,6 +4626,21 @@ await t("a member cannot bulk-delete, and the rail does not offer it", async () 
   assert(!main.innerHTML.includes("wopick"), "and cancelling puts the rail back");
 });
 
+await t("the Season tab says it is a work in progress", () => {
+  /* Marked at Simon's ask while the tab settles. It has to be the first thing
+     on the tab — a caveat below the fold is a caveat nobody reads. */
+  view = { ...view, tab: "season", mode: "list", id: null, seasonQ: "", seasonSub: "" };
+  render();
+  const h = main.innerHTML;
+  assert(/Work in progress/i.test(h), "the Season tab should say so");
+  assert(h.indexOf("Work in progress") < h.indexOf("seasonAddRow"),
+    "and say it above the toolbar, not under the table");
+  assert(/class="gate no-print"/.test(h),
+    "on the app\x27s existing amber notice strip, and off the printed blueprint");
+  assert(/safe to fill in/i.test(h),
+    "and say edits are kept — otherwise \x27work in progress\x27 reads as \x27do not use\x27");
+});
+
 await t("the Boards list groups and sorts, and does nothing at all until asked", () => {
   /* view.sortKey is reset on every tab switch (core.js), so "nobody touched the
      control" is the state everybody lands in — and it has to be the order this

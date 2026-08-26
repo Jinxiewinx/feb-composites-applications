@@ -31,11 +31,7 @@ var APP_VERSION = "2.1.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "Every board on the rack has its own line and its own BRD- number. Two identical sheets stacked together are two rows now, so you can say which one you cut.",
-  "The board list groups by grade, thickness or shelf, and sorts by rack order, size, id or newest. A shelf reads top of the pile down and says how deep each board is, so you know what you have to move first.",
-  "A mold can be planned across a range of board densities instead of one — say 30 to 45 — and the planner will use anything on the rack inside that range, which means fewer jobs blocked on the one grade being out.",
-  "Because a mold can now come off two grades, the cut list and every drawing sheet say the highest density used. Machine the whole stack at that feed rate.",
-  "Deleting a work order now takes its issues, photos and uploads with it instead of leaving them behind, and leads can tick off several runs and clear them in one go.",
+  "The Season tab is marked work in progress at the top. It is still being built and its columns will change — what you enter is saved, so it is safe to fill in.",
 ];
 
 /* ---------- config/release ----------

@@ -237,6 +237,15 @@ function renderSeason() {
   const all = (DB.parts || []).filter(p => !p.retro);
   const named = all.filter(p => String(p.partName || "").trim()).length;
   return `
+  ${/* Marked work in progress at Simon's ask. .gate is the app's existing amber
+        notice strip — the release banner, the bad-link hint and the "can't close
+        yet" message all use it — so this needs no new CSS and no design-system
+        entry. no-print, like every other banner: the printed blueprint is a
+        deliberate artifact and the app keeps banners off it. */""}
+  <div class="gate no-print"><span class="gi">⚠</span><div>
+    <b>Work in progress.</b> The Season tab is still being built, so columns and
+    behaviour will change. What you enter is saved, so it is safe to fill in.
+  </div></div>
   <div class="toolbar no-print">
     <button class="primary" onclick="seasonAddRow()">+ Row</button>
     <span class="muted tny" style="margin-left:auto">${rows.length} of ${all.length} parts${
