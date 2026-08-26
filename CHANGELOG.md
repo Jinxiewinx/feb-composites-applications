@@ -19,6 +19,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.1.1 — 2026-08-26
+
+- Mark the Season tab a work in progress
+- The #composites note is WHATS_NEW, not commit subjects
+- SESSION-STATE: v2.1.0 is out, and the Slack note still guesses
+
+---
+
 ## v2.1.0 — 2026-08-25
 
 - What's New for the board and work-order release
