@@ -302,6 +302,7 @@ const ICONS = {
   link: '<path d="M9.5 14.5a3.5 3.5 0 0 0 5 0l3-3a3.54 3.54 0 0 0-5-5l-1 1"/><path d="M14.5 9.5a3.5 3.5 0 0 0-5 0l-3 3a3.54 3.54 0 0 0 5 5l1-1"/>',
   externalLink: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
   presentation: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8.5 21l3.5-2 3.5 2"/>',
+  season: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/>',
   _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
 };
 function icon(name, size) {
@@ -1894,6 +1895,15 @@ const GROUPS = [
 ];
 const TABS = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", coll: null, grp: "today", tip: "Dashboard — the team-wide picture", render: () => renderDashboard() },
+  /* The blueprint: every part the team means to make, as a wide editable table.
+     It replaces the Composites Master Tracker sheet the season used to be run
+     from, and its rows ARE parts — sparse ones, until somebody fills them in.
+
+     coll STAYS null. tabForId() does TABS.find(t => t.coll === coll) and takes
+     the first match, so a row here carrying coll:"parts" would sit above the
+     Parts row and hijack every P- chip, deep link and scanned label in the app
+     into this table instead of the part's own page. */
+  { id: "season", label: "Season", ic: "season", coll: null, grp: "today", tip: "Season — the blueprint: every part we mean to make", render: () => renderSeason() },
   /* SHELVED 2026-08-25 — paused, NOT deleted. See SHELVED.md.
 
      The team stopped running projects out of the app; what it kept is the

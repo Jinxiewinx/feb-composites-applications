@@ -35,7 +35,7 @@ const ok = (name, cond, detail = "") => {
   else { fail++; console.log(`  FAIL ${name}${detail ? " — " + detail : ""}`); }
 };
 
-const TABS = ["dashboard", "workorders", "parts", "stock", "molds", "lots", "items",
+const TABS = ["dashboard", "season", "workorders", "parts", "stock", "molds", "lots", "items",
   "projects", "timeline", "weekplan", "budget", "documents", "reports", "people"];
 
 /* The same four widths shoot_ui.mjs photographs, so a failing number and the

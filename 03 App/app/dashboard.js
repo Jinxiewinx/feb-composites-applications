@@ -665,16 +665,22 @@ function dashWeek() {
   </div>`;
 }
 
-/* The Season panel, the page's centerpiece and the graphic Simon asked to
-   keep: the parts stage bars (all-parts denominator, counts printed as words
+/* The build-progress panel, the page's centerpiece and the graphic Simon asked
+   to keep: the parts stage bars (all-parts denominator, counts printed as words
    for colourblind safety — both documented decisions from round two) plus the
-   molds pipeline via the same moldsStageBar() the Molds tab renders. */
+   molds pipeline via the same moldsStageBar() the Molds tab renders.
+
+   It used to be called "Season". The Season TAB took that word — it is the
+   blueprint, the plan for what gets made — and this panel is how far through
+   BUILDING it the team is, which is a different question. The class stays
+   .b-season so the grid areas and every CSS rule keep working; only the word
+   somebody reads changed. */
 function dashSeason() {
   const parts = DB.parts || [];
   if (!parts.length || typeof PART_STAGES === "undefined") return "";
   const liveMolds = (DB.molds || []).filter(m => m.stage !== "Retired");
   return `<section class="bmod b-season">
-    <div class="bmod-hd"><span>Season</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
+    <div class="bmod-hd"><span>Build progress</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
     ${PART_STAGES.map(st => {
       const b = stageBreakdown(st.key, st.vals, parts);
       const tot = b["st-0"] + b["st-mid"] + b["st-done"] + b["st-na"] || 1;

@@ -203,6 +203,59 @@ export const ITEMS = [
   { id: "BIN-SN6-002", cls: "BIN", name: "JACOBS BASEMENT SHELF B3", stage: "Active" },
   { id: "JIG-SN6-001", cls: "JIG", name: "NOSECONE TRIM JIG", stage: "Stored", location: "BIN-SN6-002" },
 ];
+/* THIS SEASON'S PARTS — the blueprint the Season tab is for.
+
+   All 33 records in sn5-parts.json carry retro: true, because they are a
+   finished season. Both the Season tab and tracker.js's feed exclude retro on
+   purpose, so without these the blueprint photographs EMPTY in every screenshot
+   and the browser suites never render a single one of its cells. Same gap the
+   two live work orders below were added to close, one collection over.
+
+   Deliberately uneven, because that is what a blueprint looks like in
+   September: one part fully specified, one half-filled, one with a name and
+   nothing else, and one with no name at all — somebody knows a fourth panel is
+   coming and has not decided what it is. Between them they exercise every cell
+   type the table renders: all three stage colours including N/A, an engineer on
+   the roster, an engineer who is NOT (the SN5 tracker is full of bare first
+   names, and the select has to keep a value it does not recognise), a set
+   deadline and a missing one. */
+export const SEASON_PARTS = [
+  {
+    id: "P-SN6-001", partName: "NOSECONE OUTER", subteam: "AERO", layupType: "MOLD INFUSION",
+    layupSchedule: "2x 200 2x2 TWILL", moldLocation: "RFS rack 2",
+    moldEngineer: "Dana Chen", manufacturingEngineer: "Miles Okafor",
+    cadProgress: "Mold CAD/CAM Done", moldProgress: "Machining", layupProgress: "Not Started",
+    weightG: "420", weightActualG: "", layupDeadline: iso(47),
+    comments: "Draft angle opened 2° from the SN5 mold.",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+  },
+  {
+    id: "P-SN6-002", partName: "UT DIFFUSER", subteam: "AERO", layupType: "MOLD INFUSION",
+    layupSchedule: "", moldLocation: "RFS",
+    moldEngineer: "Ana Rivera", manufacturingEngineer: "",
+    cadProgress: "Part CAD Done", moldProgress: "Not Started", layupProgress: "Not Started",
+    weightG: "", weightActualG: "", layupDeadline: iso(61), comments: "",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+  },
+  {
+    id: "P-SN6-003", partName: "FIREWALL", subteam: "BERGO", layupType: "GLASS INFUSION",
+    layupSchedule: "", moldLocation: "",
+    // Not on the roster: the select must offer this value rather than blanking
+    // the cell the first time anybody touches the row.
+    moldEngineer: "Justin", manufacturingEngineer: "",
+    cadProgress: "Not Started", moldProgress: "N/A (Flat)", layupProgress: "Not Started",
+    weightG: "", weightActualG: "", layupDeadline: "", comments: "",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+  },
+  {
+    id: "P-SN6-004", partName: "", subteam: "AUTO-MECH", layupType: "MOLD WET LAY",
+    layupSchedule: "", moldLocation: "", moldEngineer: "", manufacturingEngineer: "",
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started",
+    weightG: "", weightActualG: "", layupDeadline: "", comments: "",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+  },
+];
+
 export const LOTS = [
   { id: "RSN-SN6-001", cls: "RSN", name: "IN2 INFUSION RESIN", role: "resin", stage: "Open",
     ratio: "100 : 30 BY WEIGHT", vendorLot: "24C-0918", supplier: "Easy Composites",
@@ -235,6 +288,10 @@ export const APPLY_FIXTURES = `
   window.onFbData("molds", ${JSON.stringify(MOLDS)});
   window.onFbData("items", ${JSON.stringify(ITEMS)});
   window.onFbData("lots", ${JSON.stringify(LOTS)});
+  /* Concatenated onto the SN5 archive, not replacing it. Parts and the
+     dashboard want both seasons; only the Season tab and the tracker feed
+     filter retro out, which is the whole point of these four. */
+  window.onFbData("parts", (DB.parts || []).concat(${JSON.stringify(SEASON_PARTS)}));
   /* Season config for the dashboard countdown. Relative dates, so the module
      photographs alive on any day the suites run; the loader in core.js never
      overwrites a planted value with a missing doc. */

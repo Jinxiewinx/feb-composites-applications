@@ -20,22 +20,34 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v1.0.0 is live and tagged.** Pushed, deployed, and verified by curling the
-changed files off the host: `APP_VERSION = "1.0.0"`, the `projects` TABS row
-carrying `hidden: true`, the splash markup, no "Load SN5 archive" anywhere,
-and `SHELVED.md` answering 404 rather than serving.
+**v2.0.0 is committed on main and NOT YET RELEASED.** Four commits since the
+v1.0.0 tag. Live is still v1.0.0.
 
-- **Nobody sees the reload banner yet.** It needs a lead to open the deployed
-  app and hit ⋯ → "Announce this release", which writes `config/release`.
-  Deliberate: it cannot announce a version before that version has landed.
-- **The #composites note has not been sent** — that needs Simon.
-- Every release after this one is `node tools/release.mjs <version>`. This one
-  was cut by hand because the script bumps to a *new* version and 1.0.0 was
-  already written into core.js and CHANGELOG.md.
-- The issue fixtures in `tools/lib/fixtures.mjs` had **no `workOrderId`** until
-  this release, so `issuesForWO()` matched nothing and every browser suite and
-  mockup had been photographing an empty Issues section. Both now point at
-  WO-SN6-002.
+- Cut it with `node tools/release.mjs 2.0.0` — unlike 1.0.0, this one goes
+  through the script. It will rewrite `APP_VERSION` and `WHATS_NEW`, prepend the
+  CHANGELOG section from the commit subjects, run the five suites, tag, push,
+  deploy `--only hosting` and verify against the live host. **Prune WHATS_NEW
+  before it deploys**: the script takes the first six subjects, and four of the
+  five commits here are one feature each.
+- Major, per the rule at the top of CHANGELOG.md: Season is a new top-level area
+  and the navigation moved.
+- Then: a lead hits ⋯ → "Announce this release" in the deployed app, and the
+  `#composites` note (printed by the script) needs Simon before anyone sends it.
+
+**Fixture gaps found twice now, same shape both times.** The test fixtures
+described records the app considers impossible, and nothing failed because
+nothing asserted on a count that was always zero:
+
+- v1.0.0: neither issue carried a `workOrderId`, so every browser suite and
+  mockup photographed an empty Issues section.
+- v2.0.0: all 33 parts in `sn5-parts.json` are `retro: true`, so the Season tab
+  and the tracker feed — which both exclude retro — photographed empty.
+  `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix: four SN6 parts,
+  deliberately uneven, covering every cell type including an engineer who is not
+  on the roster.
+
+Worth a look before the next one: **which other fixtures describe last season
+only?** The pattern is a filter the fixtures do not satisfy.
 
 ---
 
@@ -235,6 +247,13 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
+**2026-08-26 (latest) — v2.0.0: the season plan comes into the app.** A
+Season tab replaces the Composites Master Tracker sheet: one editable row per
+part, blueprint-sparse by design, and a row IS a part. The dashboard stopped
+saying things twice — shop status split, T-minus once, issues folded into the
+run they hold up. Details leads on a part in edit mode, and issue photos work
+after creation.
+
 **2026-08-25 (latest) — v1.0.0: the tracker becomes a work tracker.** The
 Tickets tab is shelved behind `hidden: true` with its data and links intact;
 issues moved onto the work order as their own section, resolving through the
@@ -261,11 +280,3 @@ report that selecting the clamshell and asking for the rotate feature "shifts
 me to the plans with no mold section". Density became a typed field, boards
 moved into Inventory, the 3D viewer moved onto the mold, and the rail now
 groups molds by stage. `mvSweep()` closes a GL-context leak.
-
-**2026-08-24 — mold-drawing-revamp merged, everything deployed.** Merged to
-main as `1b227b9`; the only conflicts were additive lists in
-`tools/test_app.mjs` and `tools/README.md`. This machine gained a JDK and the
-firebase CLI, so the emulator gate finally ran, and rules then hosting deployed
-in that order. Verified live off the host: `receiving.js` and `tracker.js`
-serve the new code, `docs/manifest.json` has 1 entry, and the two TDS PDFs
-`resins.js` cites answer 200.

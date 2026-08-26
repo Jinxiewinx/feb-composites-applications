@@ -337,9 +337,21 @@ function partHasEngineer(p, name) {
   return [p.moldEngineer, p.manufacturingEngineer].some(v => String(v || "").toLowerCase() === n);
 }
 
-async function newPart() {
+/* A part with nothing in it but an id.
+
+   This literal is the whole substance of what the Season tab means by a
+   blueprint row: the team knows it is making a nosecone long before anyone
+   knows its layup schedule or who is machining the mold, and a row that exists
+   with everything blank is a real commitment, not a placeholder. So a blueprint
+   row IS a part — no second collection, no promotion step, no migration — and
+   "making the real part file" is filling this in later.
+
+   Which is why it lives in one place and both callers use it. newPart() opens
+   the new part's page; seasonAddRow() stays in the table. Duplicating the
+   literal is how the two would drift into meaning different things. */
+async function createBlankPart() {
   const id = await allocId("parts");
-  if (!id) return;
+  if (!id) return null;
   const p = {
     id, partName: "", subteam: "AERO", layupType: "MOLD INFUSION",
     layupSchedule: "", moldLocation: "RFS", moldEngineer: "", manufacturingEngineer: "",
@@ -349,7 +361,12 @@ async function newPart() {
     createdBy: myEmail(),
   };
   DB.parts.push(p); savePart(p);
-  view = { ...view, mode: "detail", id, edit: true }; render();
+  return p;
+}
+async function newPart() {
+  const p = await createBlankPart();
+  if (!p) return;
+  view = { ...view, mode: "detail", id: p.id, edit: true }; render();
 }
 function delPart(id) {
   confirmModal("Delete " + id + " for everyone? Back up first if unsure.", () => {

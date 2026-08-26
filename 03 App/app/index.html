@@ -425,7 +425,34 @@
   .statusdrop.Draft select { background: var(--fill); color: var(--muted); border-color: var(--border-2); }
   .statusdrop.InWork select { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); }
   .statusdrop.Complete select { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
+  /* Season's three stage columns. The variants above are named for ticket and
+     work-order STATUSES; these are named for what stageClass() returns, which
+     is a judgement about meaning rather than position in an enum — so they take
+     the same tokens the .stage pills use, and one word means one colour whether
+     you are reading a rail, a pill or a table cell. */
+  .statusdrop.st-0 select { background: var(--fill); color: var(--muted); border-color: var(--border-2); }
+  .statusdrop.st-mid select { background: var(--warn-bg); color: var(--amber); border-color: var(--warn-border); }
+  .statusdrop.st-done select { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
+  .statusdrop.st-na select { background: var(--retro-bg); color: var(--retro); border-color: var(--retro-border); }
   .list .statusdrop select { padding: 4px 22px 4px 9px; font-size: 12px; }
+
+  /* ---- the Season blueprint table ----
+     Thirteen columns of mostly-empty cells, inside .mtxwrap, which owns the
+     sideways scroll and the sticky first column (the People matrix recipe).
+     Cells are controls rather than text, so they get a little more room than a
+     read-only list row and the inputs fill their cell rather than sitting in it
+     at some browser default width. */
+  table.season td { padding: 4px 6px; }
+  table.season td input, table.season td select { width: 100%; min-width: 96px; font: inherit; font-size: 12px;
+    padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); color: var(--ink); }
+  table.season td .statusdrop { display: block; }
+  table.season td .statusdrop select { min-width: 132px; }
+  /* The name column is the one you scroll back to, so it is the widest and the
+     one that sticks. .mtxperson supplies the stickiness; this is just size. */
+  table.season .mtxperson { min-width: 190px; }
+  table.season td:first-child input { font-weight: 600; }
+  /* Headers sort, so they are buttons in everything but name. */
+  table.season th.sortable { white-space: nowrap; }
   /* Budget goals: one bar per category, spent against the lead-set goal, and
      a Season bar whose tick marks where base ends and contingency begins (the
      split is deliberately quiet — tooltip, not headline). The owed card is
@@ -2388,6 +2415,21 @@
        rather than blowing out their card. */
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+    /* SEASON: stays a table on a phone, like the spreadsheet it replaces.
+       Not table.list's generic card collapse, on purpose — same call the
+       timeline makes below, for a different reason. That collapse leans on
+       `td:empty { display: none }` so a sparse row shows only what is filled,
+       which would be a lovely fit for a blueprint except that a <td> holding an
+       <input> is never :empty. Every row would become thirteen labelled inputs
+       stacked down a 393px screen. Inside .mtxwrap it scrolls sideways with the
+       part name pinned, which is what the sheet does and what the team already
+       knows how to read. */
+    table.season, table.season tr, table.season td, table.season th { display: revert; }
+    table.season tr { border: none; margin: 0; padding: 0; background: none; box-shadow: none; }
+    table.season td { border-top: 1px solid var(--line); }
+    table.season td::before { display: none; }
+    table.season td:empty { display: revert; }
+
     /* TIMELINE: the grid becomes one card per week, from the same DOM. The
        markup is week-major, so `display: block` alone puts the weeks in
        reading order with nothing reordered — which is the whole reason the
@@ -2947,6 +2989,7 @@
 <script src="rte.js"></script>
 <script src="workorders.js"></script>
 <script src="parts.js"></script>
+<script src="season.js"></script>
 <script src="projects.js"></script>
 <script src="timeline.js"></script>
 <script src="weeklyplan.js"></script>

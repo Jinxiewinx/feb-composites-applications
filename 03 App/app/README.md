@@ -24,7 +24,7 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
-![Dashboard: the mission-control board](../design/dashboard-mockup-20260825.png)
+![Dashboard: the mission-control board](../design/dashboard-mockup-20260826.png)
 
 The landing page is the board: read-only, every element linking into the tab it
 came from. On a phone it stacks today-first.
@@ -35,28 +35,69 @@ clock, and T-minus to the competition. All quiet renders a green all-clear cell.
 
 The modules under it:
 
-- **The work list** — one grouped deadline list, an item in exactly one bucket,
-  with a part and its work order merged into one row. Late and This week render
+- **The work list** — one grouped deadline list, an item in exactly one bucket.
+  One row per physical thing: a part and its work order are the same object seen
+  twice and merge into one row, and an issue folds into the run it holds up,
+  leaving a ⚑ with the count of what is still open. Late and This week render
   open; the quieter buckets fold.
-- **Shop status** — what is blocked, what is curing (a clock time, never a
-  countdown), and the Inventory warnings in one severity-dotted list. A clean
-  shop reads a single "All clear" line.
-- **Season** — the stage bars plus the molds pipeline, counts printed as words
-  for colourblind safety.
+- **Shop status** — what is blocked and what is curing (a clock time, never a
+  countdown), and nothing else. A clean shop reads a single "All clear" line,
+  which is real information at a Monday meeting.
+- **Build progress** — the stage bars plus the molds pipeline, counts printed as
+  words for colourblind safety.
 - **This week at RFS** — only the booked stations.
-- **Activity** — a cross-app feed of what changed, one event per record per day,
-  with watched issues that changed pinned on top.
-- **Countdown** — T-minus, the next milestone, and three all-season counters
-  (days since a missed deadline, layups banked, sign-offs). A lead sets the
-  season name, date and milestones in one modal.
+- **Activity** — a cross-app feed of what changed, one event per record per day.
+  The header wears a gold pip when something you watch is in it.
+- **Countdown** — the competition it is counting to, the next milestone, and
+  three all-season counters (days since a missed deadline, layups banked,
+  sign-offs). The T-minus number itself lives in the strip above, once. A lead
+  sets the season name, date and milestones in one modal.
 - **Money** — the unreimbursed sum plus the $50 approval rule.
 - **Launchpad** — filtered jumps (open issues, late WOs, the reorder list, the
   week plan), a jump to Documents, and the pinned Google links.
+- **Stock & housekeeping** — expired lots, chemical-storage warnings, what is
+  running low, what has no shelf, and how long since anyone walked the stock.
+  Reference rather than an alarm, so it sits at the bottom and disappears
+  entirely when there is nothing to say.
 - **Shop knowledge** — rotates a fact a day, most of them mined from the team's
   own SN5 documentation. On competition day the board wears gold and tells you
   to go run the car.
 
 Empty states shrink the page instead of padding it.
+
+### Season
+
+![Season: the blueprint](../design/season-mockup-20260826.png)
+
+The blueprint, and the tab that replaced the Composites Master Tracker
+spreadsheet. One row per part the team means to make, thirteen columns, and most
+of the cells empty — which is the point, not a defect. In September the team
+knows it is building a nosecone, an undertray and four side panels; it does not
+yet know the layup schedule, the mold location or who is machining what. **A row
+that exists with nothing in it is a commitment to build the thing.**
+
+A row **is a real part**, with a `P-` id from the moment it exists. There is no
+separate "planned part" record and no promotion step — "making the real part
+file" just means filling the row in, here or on the Parts tab. So a blueprint
+row is immediately linkable, schedulable and countable.
+
+Every cell edits in place, like the sheet. **+ Row** adds one and puts the
+cursor in the name. The three stage columns are colour-coded by what the value
+*means* — not started, under way, done, not applicable — and changing one still
+goes through the evidence gate, the skip-ahead confirm and the move-back confirm
+that the part's own page uses; a refused change puts the control back rather
+than lying about what was saved. The part name column stays pinned while the
+other twelve scroll sideways, on a phone as well as a laptop.
+
+Only this season: `retro` records are excluded, the same rule the Google Sheet
+feed uses, because a blueprint for a season already built is not a blueprint.
+
+**The sheet is downstream now.** The app still publishes the parts list to it
+every 15 minutes, so it keeps updating itself — but it is a mirror, and an edit
+made there is overwritten on the next publish.
+
+Season is the planning view; **Parts** is the working view, a rail plus one open
+record for when you are doing something to one part. Same records, two questions.
 
 ### How parts, runs and molds fit together
 
@@ -178,7 +219,7 @@ laser. Hue is never the only thing carrying the meaning.
 
 ### Parts
 
-![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260825.png)
+![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260826.png)
 
 Parts is last season's Part Tracker reborn, and it leads the Build group because
 the part is where the work starts. Each part carries three parallel progress

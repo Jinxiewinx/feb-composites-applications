@@ -100,7 +100,7 @@ const STATES = [
 /* "projects" is the SHELVED Tickets tab (v1.0.0). It stays on this list on
    purpose: the tab still renders and is still reachable by link, so shooting it
    is how we would notice the shelf having broken it. */
-const ALL_TABS = ["dashboard", "workorders", "parts", "stock", "molds", "lots",
+const ALL_TABS = ["dashboard", "season", "workorders", "parts", "stock", "molds", "lots",
   "items", "projects", "timeline", "weekplan", "budget", "documents", "reports",
   "people"];
 const SWEEP = TAB === "all";

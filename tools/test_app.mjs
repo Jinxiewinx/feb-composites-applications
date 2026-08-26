@@ -109,14 +109,14 @@ globalThis.fb = {
 };
 
 /* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js", "tracker.js"];
+const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "season.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js", "tracker.js"];
 let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 src = src.replace(/"use strict";\n/g, "");
 // core's top-level lexical bindings → implicit globals so tests can read them.
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|WHATS_NEW_SHOWN|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PART_SECTIONS_BASE|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PART_SECTIONS_BASE|SEASON_COLS|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
 src = src.replace(/^let (SLACK_CFG_CACHE);$/gm, "var $1;");
 (0, eval)(src);
 
@@ -3225,6 +3225,129 @@ await t("searchAll matches a ticket by id even when it has a title (precedence b
   assert(res.find(r => r.id === "TKT-77").sub === "Issue", "and it is labelled Issue: " + JSON.stringify(res));
 });
 
+console.log("season — the blueprint:");
+await t("the Season tab is this season's blueprint: retro records stay out", () => {
+  DB.parts = [
+    { id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN5-900", partName: "OLD DASH", subteam: "AERO", retro: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null };
+  render();
+  const html = main.innerHTML;
+  assert(html.includes("NOSECONE"), "this season's part is on the blueprint");
+  assert(!html.includes("OLD DASH"), "last season's is not — the archive is a finished season, not a plan");
+  assert(html.includes('class="mtxwrap"'), "the table lives in the scroller that owns sideways scroll and the sticky column");
+  assert(html.indexOf('class="mtxwrap"') < html.indexOf("<table"), "and the scroller wraps it, or the UI suite's overflow guard fires");
+});
+
+await t("a blueprint row is a real part, blank on purpose", async () => {
+  signInAsLead();
+  DB.parts = [];
+  view = { ...view, tab: "season", mode: "list", id: null };
+  const before = DB.parts.length;
+  await seasonAddRow();
+  assert(DB.parts.length === before + 1, "a row was added");
+  const p = DB.parts[DB.parts.length - 1];
+  assert(/^P-/.test(p.id), "with a real part id from the moment it exists: " + p.id);
+  assert(p.partName === "", "and no name yet — that is the point of a blueprint");
+  assert(p.retro === false && p.cadProgress === "Not Started", "but a complete, valid part record");
+  // Every column the tab offers must have somewhere to land, or an edit writes
+  // a field nothing else in the app reads.
+  SEASON_COLS.forEach(c => assert(c.key in p, "the blank part has a home for " + c.key));
+  assert(view.tab === "season", "and you stay on the blueprint rather than being thrown at the part page");
+});
+
+await t("newPart and seasonAddRow build the same record — one literal, two doors", async () => {
+  signInAsLead();
+  DB.parts = [];
+  await seasonAddRow();
+  const fromTable = { ...DB.parts[DB.parts.length - 1] };
+  await newPart();
+  const fromParts = { ...DB.parts[DB.parts.length - 1] };
+  assert(view.mode === "detail" && view.edit === true, "newPart still opens the new part for editing");
+  delete fromTable.id; delete fromParts.id;
+  assert(JSON.stringify(Object.keys(fromTable).sort()) === JSON.stringify(Object.keys(fromParts).sort()),
+    "identical shape, because both go through createBlankPart");
+});
+
+await t("a Season cell writes one field and does NOT re-render", () => {
+  DB.parts = [{ id: "P-SN6-901", partName: "UT", subteam: "AERO", layupType: "MOLD INFUSION",
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started", moldLocation: "" }];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  const before = main.innerHTML;
+  calls.length = 0;
+  seasonUpd("P-SN6-901", "moldLocation", "RFS rack 3");
+  const saves = calls.filter(c => c[0] === "save" && c[1] === "parts");
+  assert(saves.length === 1 && saves[0][3] === "moldLocation", "exactly one scoped save: " + JSON.stringify(saves));
+  assert(partById("P-SN6-901").moldLocation === "RFS rack 3", "and the value landed");
+  // The no-render contract: a render on change eats the cell Tab is moving into.
+  assert(main.innerHTML === before, "the page did not repaint");
+});
+
+await t("a Season stage change goes through the gate, not around it", () => {
+  DB.parts = [{ id: "P-SN6-902", partName: "GATED", subteam: "AERO", layupType: "MOLD INFUSION",
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started", files: [], docs: [] }];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  // "Mold CAD/CAM Done" needs CAD evidence (PART_STAGE_NEEDS), so the gate must
+  // refuse it from the table exactly as it does from the part's own page.
+  const sel = { value: "Mold CAD/CAM Done" };
+  seasonStage("P-SN6-902", "cadProgress", sel);
+  assert(partById("P-SN6-902").cadProgress === "Not Started", "the evidence gate still bites in the table");
+  assert(sel.value === "Not Started", "and the select is put back to what the record actually says");
+  // An ungated forward step still works.
+  seasonStage("P-SN6-902", "layupProgress", { value: "In Layup" });
+  assert(partById("P-SN6-902").layupProgress === "In Layup", "an allowed move goes through");
+});
+
+await t("a Season stage cell is a coloured statusdrop WRAPPER, not a classed select", () => {
+  // Silent bug, caught by looking: .statusdrop is a wrapper class everywhere in
+  // this app and every colour rule is written `.statusdrop.<state> select`. With
+  // the class on the <select> itself the selectors matched nothing, so all three
+  // stage columns rendered plain white and the colour coding did nothing at all
+  // while looking entirely fine in the DOM.
+  DB.parts = [{ id: "P-SN6-905", partName: "COLOURS", subteam: "AERO", layupType: "MOLD INFUSION",
+    cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" }];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  const html = main.innerHTML;
+  assert(/<span id="sq-P-SN6-905-cadProgress" class="statusdrop st-done">\s*<select/.test(html),
+    "the wrapper carries the state class and the select is its child: " + html.slice(html.indexOf("sq-P-SN6-905-cadProgress") - 60, html.indexOf("sq-P-SN6-905-cadProgress") + 160));
+  assert(/class="statusdrop st-na"/.test(html), "N/A gets its own state, not lumped in with not-started");
+  assert(!/<select[^>]*class="statusdrop/.test(html), "and no select wears the class itself, which matches no rule in the stylesheet");
+  // The colour rules the wrapper depends on must exist for all four states.
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  ["st-0", "st-mid", "st-done", "st-na"].forEach(k =>
+    assert(css.includes(".statusdrop." + k + " select"), "a colour rule exists for " + k));
+});
+
+await t("Season keeps its own filter state, so Parts' filters do not leak into it", () => {
+  DB.parts = [
+    { id: "P-SN6-903", partName: "AERO ONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-904", partName: "BERGO ONE", subteam: "BERGO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "BERGO", seasonQ: "", fSub: "AERO" };
+  render();
+  assert(main.innerHTML.includes("BERGO ONE") && !main.innerHTML.includes("AERO ONE"),
+    "seasonSub filters, and Parts' own fSub is ignored here");
+  view.seasonSub = ""; view.seasonQ = "aero";
+  render();
+  assert(main.innerHTML.includes("AERO ONE") && !main.innerHTML.includes("BERGO ONE"), "and the search box works");
+  resetSeasonFilters();
+  assert(!view.seasonSub && !view.seasonQ && !view.seasonSort, "clearing clears everything Season owns");
+});
+
+await t("TRACKER_FIELDS is the public feed's whitelist and is not the Season tab's column list", () => {
+  // Two lists that agree today, on purpose kept apart: TRACKER_FIELDS decides
+  // what a URL with NO LOGIN serves (see tracker.js's header), SEASON_COLS
+  // decides what the table shows. Deriving one from the other means widening a
+  // UI table silently widens a public disclosure.
+  assert(TRACKER_FIELDS.join(",") === "id,partName,subteam,layupType,layupSchedule,moldLocation,moldEngineer,manufacturingEngineer,cadProgress,moldProgress,layupProgress,weightG,layupDeadline,comments",
+    "TRACKER_FIELDS changed. Widening it publishes a new field to an unauthenticated URL — that is a disclosure decision, not a UI one. If the Season tab needs a column, add it to SEASON_COLS in season.js and leave this alone.");
+  assert(SEASON_COLS.every(c => typeof c.key === "string" && c.label), "every Season column names a field and has a header");
+});
+
 console.log("version + releases:");
 await t("the app knows its own version, and What's New has something to say", () => {
   assert(/^\d+\.\d+\.\d+$/.test(APP_VERSION), "APP_VERSION is semver: " + APP_VERSION);
@@ -4363,7 +4486,7 @@ await t("old items/lots links and scans land on Inventory", () => {
   setTab("lots");
   assert(view.tab === "inventory", "lots normalises");
   assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
-  assert(TABS.filter(t => !t.hidden).length === 10, "ten visible tabs (Tickets shelved in v1.0.0)");
+  assert(TABS.filter(t => !t.hidden).length === 11, "eleven visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0)");
   openRecord("lots", "RSN-SN6-001");
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
@@ -5608,7 +5731,8 @@ await t("setTab('stock') still works and paints the merged tab (legacy links, te
   assert(tabForId("BRD-0") === "stock" && tabForId("STK-001") === "stock" && tabForId("MOLD-SN6-001") === "molds",
     "routing prefixes unchanged, so scans and chips resolve as before");
   const visible = TABS.filter(t => !t.hidden).map(t => t.id);
-  assert(!visible.includes("stock") && visible.includes("molds"), "one sidebar entry, thirteen tabs");
+  assert(!visible.includes("stock") && visible.includes("molds"), "one sidebar entry for a collection with two homes");
+  assert(visible.includes("season"), "the blueprint has its own row, beside Dashboard");
 });
 
 console.log("stock STL export + 3D view:");
