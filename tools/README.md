@@ -122,10 +122,16 @@ node tools/release.mjs 1.1.0 --dry    # say what it would do, touch nothing
 ```
 
 It refuses a dirty tree, reads the commit subjects since the last tag, bumps
-`APP_VERSION` and rewrites `WHATS_NEW` in `core.js`, prepends a `CHANGELOG.md`
-section, **runs the suites and refuses to ship over a failure**, then commits,
-tags, pushes, deploys hosting, and fetches `core.js` off the live host to check
-the new version is genuinely there — "Deploy complete" is not the check.
+`APP_VERSION` in `core.js`, prepends a `CHANGELOG.md` section, **runs the suites
+and refuses to ship over a failure**, then commits, tags, pushes, deploys
+hosting, and fetches `core.js` off the live host to check the new version is
+genuinely there — "Deploy complete" is not the check.
+
+**`WHATS_NEW` is yours, and it is the only thing the team reads.** The script
+does not write it: it checks you changed it since the last tag, refuses to ship
+if you did not, and prints the subjects as raw material. Both team-facing
+surfaces read that one list — the What's New panel in the app and the
+`#composites` note this prints — so they cannot say different things.
 
 What it deliberately does not do:
 
@@ -141,7 +147,9 @@ What it deliberately does not do:
 
 The commit-message convention is what makes this cheap: subjects in this repo
 are prose sentences describing a user-visible outcome, so `git log --format=%s`
-is already a publishable release note. Keep writing them that way.
+is already the CHANGELOG. Keep writing them that way — but they are written for
+the next engineer reading `git log`, which is why they stop at the CHANGELOG and
+`WHATS_NEW` is written separately for the shop.
 
 What counts as major, minor or patch is at the top of `CHANGELOG.md`.
 

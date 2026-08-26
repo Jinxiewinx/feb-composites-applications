@@ -28,18 +28,14 @@ copy, not commit subjects.
   deployed app and hit ⋯ → "Announce this release", which writes
   `config/release`. Until then everyone stays on whatever they loaded last.
 - **The #composites note has not been sent** — that needs Simon. The script
-  prints it and never posts.
+  prints it and never posts. The note that run printed was the old
+  subject-based one; v2.1.0 was the last release cut before the note switched
+  to reading WHATS_NEW, so do not paste it as printed.
 
-**The Slack note the release script prints is built from commit subjects**, so
-v2.1.0's included "What's New for the board and work-order release" and "Write
-down what v2.0.0 actually was" — internal sentences, in front of the whole team.
-This is the exact failure that got subject-generation removed from WHATS_NEW;
-the Slack note still has it. Rewrite the note by hand before sending, or fix the
-script to reuse WHATS_NEW.
-
-**`min == max` is asserted byte-identical to the pre-range packer.** That test in `test_packer.mjs` is the rollback story
-for the whole density-range feature — a mold planned at one grade must pack
-exactly as it did before ranges existed. Do not let it drift.
+**`min == max` is asserted byte-identical to the pre-range packer.** That test
+in `test_packer.mjs` is the rollback story for the whole density-range feature —
+a mold planned at one grade must pack exactly as it did before ranges existed.
+Do not let it drift.
 
 **Adding a method to `fb` means adding it to seven dev shims too.** `fb.js` is
 the real one, but `tools/serve_populated.mjs`, `tools/lib/browser.mjs`,

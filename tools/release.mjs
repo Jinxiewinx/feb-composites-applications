@@ -16,7 +16,7 @@
  *   7. commits, tags, pushes over HTTPS
  *   8. deploys hosting — ONLY hosting
  *   9. verifies the new version is actually live, by fetching it
- *  10. prints the Slack note and STOPS
+ *  10. prints the Slack note — built from WHATS_NEW, not from subjects — and STOPS
  *
  * WHAT IT REFUSES TO GUESS:
  *
@@ -31,6 +31,14 @@
  * touch it: it CHECKS that you changed it since the last tag, prints the
  * subjects as raw material, and refuses to ship if you did not. The CHANGELOG
  * keeps the subjects either way.
+ *
+ * The #composites note had the SAME bug one step further on, and v2.1.0 shipped
+ * with it: the note was built from subjects, so it opened with "What's New for
+ * the board and work-order release" and "Write down what v2.0.0 actually was" —
+ * two internal sentences, in front of the whole team. Slack and the What's New
+ * panel have exactly one audience between them, so they now say the same thing:
+ * the note is WHATS_NEW. Subjects stay where they were always right, in the
+ * CHANGELOG.
  *
  * WHAT IT DELIBERATELY DOES NOT DO:
  *
@@ -110,13 +118,15 @@ if (!subjects.length && !DRY) die("No commits since " + prev + " — nothing to 
 say(`  ${subjects.length} commit${subjects.length === 1 ? "" : "s"} to describe\n`);
 subjects.forEach(l => say("    - " + l));
 
-/* Six is a reading limit, not a storage limit: the full list goes to the
-   changelog, and WHATS_NEW is what interrupts someone's screen. */
+/* Six is a reading limit, not a storage limit: past it the CHANGELOG folds the
+   rest into a <details>. Nothing team-facing is capped here any more — WHATS_NEW
+   is its own hand-written list and is what both the app panel and the Slack note
+   read. */
 const HIGHLIGHT_CAP = 6;
 const highlights = subjects.slice(0, HIGHLIGHT_CAP);
 if (subjects.length > HIGHLIGHT_CAP) {
-  say(`\n  Note: WHATS_NEW takes the first ${HIGHLIGHT_CAP}. Edit core.js before you deploy`);
-  say("  if those are not the ones the team cares about.");
+  say(`\n  Note: the CHANGELOG lists the first ${HIGHLIGHT_CAP} and folds the other ${subjects.length - HIGHLIGHT_CAP}`);
+  say("  into a <details>. What the team reads is WHATS_NEW, which is yours.");
 }
 
 /* ---- 4. the version in the app ----------------------------------------- */
@@ -147,11 +157,26 @@ if (prev) {
 core = core.replace(vRe, `var APP_VERSION = "${version}";`);
 act("write core.js (APP_VERSION only — WHATS_NEW is yours)", () => writeFileSync(CORE, core));
 
-/* Printed AFTER the stale check, so what is shown is what will ship. */
-say("\n  WHATS_NEW, which is what the team reads on their next reload:");
-((core.match(nRe) || [""])[0].match(/"(?:[^"\\]|\\.)*"/g) || []).forEach(q => {
-  try { say("    • " + JSON.parse(q)); } catch { say("    • " + q); }
-});
+/* Parsed AFTER the stale check, so what is shown is what will ship — and parsed
+   ONCE, because this is now the source for the Slack note as well as this
+   preview. Two parses would be two chances to disagree about what the team was
+   told.
+
+   Empty is fatal, and fatal HERE rather than at step 10: the note is printed
+   after the deploy has already gone out, which is far too late to find out
+   there was nothing to say. */
+const whatsNew = ((core.match(nRe) || [""])[0].match(/"(?:[^"\\]|\\.)*"/g) || [])
+  .map(q => { try { return JSON.parse(q); } catch { return q; } })
+  .filter(s => String(s).trim());
+if (!whatsNew.length) {
+  die("WHATS_NEW in core.js is empty, so the What's New panel and the\n" +
+      "#composites note would both have nothing in them. Write it before shipping.\n\n" +
+      "This release's commit subjects, as raw material:\n\n" +
+      highlights.map(h => "  - " + h).join("\n") + "\n");
+}
+say("\n  WHATS_NEW — the What's New panel on their next reload, and the");
+say("  #composites note at the bottom of this run:");
+whatsNew.forEach(n => say("    • " + n));
 
 /* ---- 5. the changelog --------------------------------------------------- */
 const today = run("git", ["log", "-1", "--format=%cs"]).trim();
@@ -248,11 +273,18 @@ if (!DRY) {
 
 /* ---- 10. the Slack note, for a human to send --------------------------- */
 /* Slack mrkdwn, not HTML: *bold* is a single asterisk and there is no entity
-   escaping — the app's own slackIssueCreatedMsg carries the same warning. */
+   escaping — the app's own slackIssueCreatedMsg carries the same warning.
+
+   The three characters Slack DOES want escaped in message text are & < >, and
+   they have to be escaped in the copy but NOT in the link below it, where the
+   angle brackets are the link syntax. Prose is unlikely to contain them; a note
+   silently turning into half a link because somebody wrote "<1/8 in" is the kind
+   of thing nobody catches until it is on fifteen screens. */
+const slackEscape = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const slack = [
   `*Composites app v${version} is out* — <${HOST}|feb-composites.web.app>`,
   "",
-  ...highlights.map(h => `• ${h}`),
+  ...whatsNew.map(h => `• ${slackEscape(h)}`),
   "",
   "Reload the app to get it. If you have it installed on a tablet, it will prompt you.",
 ].join("\n");
