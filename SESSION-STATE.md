@@ -20,34 +20,32 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.0.0 is committed on main and NOT YET RELEASED.** Four commits since the
-v1.0.0 tag. Live is still v1.0.0.
+**v2.0.0 is live and tagged.** Cut with `node tools/release.mjs 2.0.0` — the
+first real run of the script. Verified against the host: `APP_VERSION` is
+"2.0.0", `season.js` answers 200, and the Season row is in TABS.
 
-- Cut it with `node tools/release.mjs 2.0.0` — unlike 1.0.0, this one goes
-  through the script. It will rewrite `APP_VERSION` and `WHATS_NEW`, prepend the
-  CHANGELOG section from the commit subjects, run the five suites, tag, push,
-  deploy `--only hosting` and verify against the live host. **Prune WHATS_NEW
-  before it deploys**: the script takes the first six subjects, and four of the
-  five commits here are one feature each.
-- Major, per the rule at the top of CHANGELOG.md: Season is a new top-level area
-  and the navigation moved.
-- Then: a lead hits ⋯ → "Announce this release" in the deployed app, and the
-  `#composites` note (printed by the script) needs Simon before anyone sends it.
+- **Nobody sees the reload banner yet.** A lead has to open the deployed app and
+  hit ⋯ → "Announce this release", which writes `config/release`.
+- **The #composites note has not been sent** — that needs Simon. The script
+  printed it; it never posts.
+- The release script's live-check **failed the first time on a deploy that was
+  fine**: the CLI returns when the release is finalised and the edge can serve
+  the old file for a few more seconds. Now retried six times over 25s, with a
+  cache-busted URL per attempt so a proxy ignoring no-store cannot make all six
+  agree on the same stale answer.
 
-**Fixture gaps found twice now, same shape both times.** The test fixtures
-described records the app considers impossible, and nothing failed because
-nothing asserted on a count that was always zero:
+**Fixture gaps, found twice now, same shape both times.** The fixtures described
+records the app considers impossible, and nothing failed because nothing
+asserted on a count that was always zero:
 
 - v1.0.0: neither issue carried a `workOrderId`, so every browser suite and
   mockup photographed an empty Issues section.
-- v2.0.0: all 33 parts in `sn5-parts.json` are `retro: true`, so the Season tab
-  and the tracker feed — which both exclude retro — photographed empty.
-  `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix: four SN6 parts,
-  deliberately uneven, covering every cell type including an engineer who is not
-  on the roster.
+- v2.0.0: all 33 parts in `sn5-parts.json` are `retro: true`, and both the
+  Season tab and the tracker feed exclude retro — so the blueprint photographed
+  empty. `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix.
 
-Worth a look before the next one: **which other fixtures describe last season
-only?** The pattern is a filter the fixtures do not satisfy.
+Worth a pass before the next release: **which other fixtures describe last
+season only?** The pattern is a filter the fixtures do not satisfy.
 
 ---
 

@@ -176,14 +176,38 @@ act("deploy hosting", () => {
 });
 
 /* ---- 9. verify it is actually live ------------------------------------- */
-/* "Deploy complete" is not the check (CLAUDE.md). Fetch the file and look. */
+/* "Deploy complete" is not the check (CLAUDE.md). Fetch the file and look.
+
+   Retried, because the first run of this against a real deploy failed and the
+   deploy was fine: the CLI returns as soon as the release is finalised, and the
+   edge can still be serving the previous file for a few seconds. A single fetch
+   turns that race into a red "NOT v2.0.0" on a release that shipped correctly,
+   which is worse than useless — the next person learns to ignore the check.
+
+   Cache-busted per attempt as well as no-store: an intermediate proxy that
+   ignores no-store would otherwise hand back the same stale body every time and
+   the retries would all agree with each other about the wrong answer. */
 if (!DRY) {
   say("\n  verifying against " + HOST);
-  const res = await fetch(`${HOST}/core.js`, { cache: "no-store" });
-  if (!res.ok) die(`Couldn't fetch core.js off the live host (HTTP ${res.status}).`);
-  const live = await res.text();
-  if (!live.includes(`var APP_VERSION = "${version}";`)) {
-    die(`The deploy reported success but ${HOST}/core.js is NOT v${version}.\nCheck the Firebase console before telling anyone it shipped.`);
+  const TRIES = 6, GAP = 5000;
+  let live = "", ok = false;
+  for (let i = 1; i <= TRIES; i++) {
+    try {
+      const res = await fetch(`${HOST}/core.js?v=${version}-${i}`, { cache: "no-store" });
+      if (res.ok) {
+        live = await res.text();
+        if (live.includes(`var APP_VERSION = "${version}";`)) { ok = true; break; }
+      }
+    } catch (e) { /* a blip mid-propagation is exactly what the retries are for */ }
+    if (i < TRIES) {
+      say(`    not there yet (${i}/${TRIES}) — the edge can lag the CLI by a few seconds`);
+      await new Promise(r => setTimeout(r, GAP));
+    }
+  }
+  if (!ok) {
+    die(`The deploy reported success but ${HOST}/core.js is still NOT v${version}\n` +
+        `after ${TRIES} tries over ${(TRIES - 1) * GAP / 1000}s. Check the Firebase console\n` +
+        `before telling anyone it shipped.`);
   }
   say(`  ✓ ${HOST} is serving v${version}`);
 }
