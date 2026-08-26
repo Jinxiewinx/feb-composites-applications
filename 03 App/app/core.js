@@ -27,15 +27,14 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "1.0.0";
+var APP_VERSION = "2.0.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "Issues live on the work order that they hold up — raise one, dispose one, and close the run without leaving the page.",
-  "The Tickets tab is gone. The app tracks work now, not projects; every existing ticket is still there and still opens from a link.",
-  "Work Orders filter on open issues, so you can see which runs are held up.",
-  "Creating or editing a work order opens on Details, instead of below the steps.",
-  "The app has a version now, and tells you when a new one is out.",
+  "Release notes skip the handoff file's own commits",
+  "Season: the master tracker comes into the app",
+  "The board stops saying things twice",
+  "Details leads on a part too, and an issue's photos stop being write-once",
 ];
 
 /* ---------- config/release ----------

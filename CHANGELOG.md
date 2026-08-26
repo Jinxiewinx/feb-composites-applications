@@ -19,6 +19,15 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.0.0 — 2026-08-25
+
+- Release notes skip the handoff file's own commits
+- Season: the master tracker comes into the app
+- The board stops saying things twice
+- Details leads on a part too, and an issue's photos stop being write-once
+
+---
+
 ## v1.0.0 — 2026-08-25
 
 The first named release. Also the release that turned the app from a project
