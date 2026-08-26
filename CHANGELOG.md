@@ -19,6 +19,13 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.1.2 — 2026-08-26
+
+- Datasheets back on the Documents tab, printables guide off
+- SESSION-STATE: the Season WIP banner is meant to come off
+
+---
+
 ## v2.1.1 — 2026-08-26
 
 - Mark the Season tab a work in progress
