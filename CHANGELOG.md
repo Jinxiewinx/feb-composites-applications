@@ -19,6 +19,13 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.0.1 — 2026-08-25
+
+- What's New reads like a note to a person, not a changelog
+- The release check stops crying wolf
+
+---
+
 ## v2.0.0 — 2026-08-25
 
 - Release notes skip the handoff file's own commits
