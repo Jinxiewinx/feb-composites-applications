@@ -18,6 +18,15 @@
  *   9. verifies the new version is actually live, by fetching it
  *  10. prints the Slack note and STOPS
  *
+ * WHAT IT CANNOT DO FOR YOU:
+ *
+ * Commit subjects here are written for the next engineer reading git log, and
+ * they make good CHANGELOG lines. They are NOT always the sentence to put on
+ * fifteen people's screens — "Release notes skip the handoff file's own
+ * commits" is a true and useless thing to interrupt somebody with. Read
+ * WHATS_NEW in core.js before this deploys and rewrite it in the team's words.
+ * The CHANGELOG keeps the subjects either way.
+ *
  * WHAT IT DELIBERATELY DOES NOT DO:
  *
  * It does not post to Slack. `#composites` announcements need Simon's explicit
@@ -104,6 +113,10 @@ if (subjects.length > HIGHLIGHT_CAP) {
   say(`\n  Note: WHATS_NEW takes the first ${HIGHLIGHT_CAP}. Edit core.js before you deploy`);
   say("  if those are not the ones the team cares about.");
 }
+say("\n  WHATS_NEW now reads as below. These interrupt the whole team on their next");
+say("  reload — rewrite them in core.js in the team's words if they read like a");
+say("  changelog rather than a note to a person:");
+highlights.forEach(h => say("    • " + h));
 
 /* ---- 4. the version in the app ----------------------------------------- */
 let core = readFileSync(CORE, "utf8");

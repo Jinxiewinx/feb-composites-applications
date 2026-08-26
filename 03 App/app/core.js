@@ -31,10 +31,11 @@ var APP_VERSION = "2.0.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "Release notes skip the handoff file's own commits",
-  "Season: the master tracker comes into the app",
-  "The board stops saying things twice",
-  "Details leads on a part too, and an issue's photos stop being write-once",
+  "The Season tab is the master tracker, in the app. One row per part we mean to make — add a row and name it, fill in the rest whenever you know it.",
+  "Every cell on it edits in place, and the stage columns still ask for evidence before they move.",
+  "The dashboard stopped saying things twice: shop status is just what is blocked and curing, and an issue now shows as a flag on the run it is holding up.",
+  "Adding photos to an issue works after you have raised it, from the work order.",
+  "Creating or editing a part opens on Details instead of below the steps.",
 ];
 
 /* ---------- config/release ----------
