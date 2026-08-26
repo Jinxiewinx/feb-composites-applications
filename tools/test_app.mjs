@@ -116,7 +116,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|WHATS_NEW_SHOWN|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PART_SECTIONS_BASE|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
 src = src.replace(/^let (SLACK_CFG_CACHE);$/gm, "var $1;");
 (0, eval)(src);
 
@@ -6770,6 +6770,63 @@ await t("addStepPhotos writes object entries through the steps transaction", asy
   assert(calls.some(c => c[0] === "mutateField" && c[3] === "steps"), "written through the steps transaction");
 });
 
+await t("a photo added to an issue from the work order lands in the issue's own files", async () => {
+  signInAsLead();
+  DB.workOrders = [{ id: "WO-IPH-1", partName: "IPH", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [] }];
+  DB.projects = [{ id: "TKT-IPH", kind: "issue", title: "Delam", status: "To Do", workOrderId: "WO-IPH-1",
+    resolutionMethod: "", assignees: [], watchers: [], files: [] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-IPH-1", edit: false };
+  const orig = document.createElement;
+  let input = null;
+  document.createElement = () => { input = { click() {}, files: [] }; return input; };
+  addIssuePhotos("TKT-IPH");
+  document.createElement = orig;
+  assert(input && typeof input.onchange === "function", "an input with a live onchange was created");
+  input.files = [{ name: "delam.jpg", type: "image/jpeg" }];
+  calls.length = 0;
+  await input.onchange();
+  input.files = [];                       // the DOM stub is shared for the whole run
+  const files = projById("TKT-IPH").files;
+  assert(files.length === 1 && files[0].url.includes("projects/TKT-IPH/"), "on the ISSUE, under its own tree: " + JSON.stringify(files));
+  assert(calls.some(c => c[0] === "upload" && String(c[1]).startsWith("projects/TKT-IPH/")), "uploaded under the issue's tree, which storage.rules already allows");
+  render();
+  const html = main.innerHTML;
+  assert(html.includes('class="phmini"') && html.includes('data-lb-src'), "the thumb strip renders on the row");
+  assert(html.indexOf('data-lbgroup="workOrders:WO-IPH-1"') < html.indexOf('class="phmini"'),
+    "and sits inside the run's lightbox group, so the arrows walk defect and step photos as one roll");
+});
+
+await t("a half-typed root cause survives the re-render a photo upload causes", async () => {
+  signInAsLead();
+  DB.workOrders = [{ id: "WO-IPH-2", partName: "IPH2", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [] }];
+  DB.projects = [
+    { id: "TKT-IPA", kind: "issue", title: "A", status: "To Do", workOrderId: "WO-IPH-2", resolutionMethod: "", assignees: [], watchers: [], files: [] },
+    { id: "TKT-IPB", kind: "issue", title: "B", status: "To Do", workOrderId: "WO-IPH-2", resolutionMethod: "", assignees: [], watchers: [], files: [] },
+  ];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-IPH-2", edit: false };
+  render();
+  // What the oninput handler does when you type into TKT-IPA's textarea.
+  wiDraft("TKT-IPA", "what", "bag lifted at the corner");
+  wiDraft("TKT-IPA", "method", "Rework");
+  // Now attach a photo to the OTHER issue, which ends in render().
+  const orig = document.createElement;
+  let input = null;
+  document.createElement = () => { input = { click() {}, files: [] }; return input; };
+  addIssuePhotos("TKT-IPB");
+  document.createElement = orig;
+  input.files = [{ name: "b.jpg", type: "image/jpeg" }];
+  await input.onchange();
+  input.files = [];
+  assert(main.innerHTML.includes("bag lifted at the corner"), "the untouched row's narrative is still on screen");
+  assert(/<select id="wi-m-TKT-IPA"[^>]*>[\s\S]*?<option selected>Rework</.test(main.innerHTML), "and so is its unsaved disposition");
+  // Resolving spends the draft — leaving it would shadow the saved record.
+  document.getElementById("wi-m-TKT-IPA").value = "Rework";
+  document.getElementById("wi-w-TKT-IPA").value = "bag lifted at the corner";
+  woResolveIssue("TKT-IPA");
+  assert(!WI_DRAFTS["TKT-IPA"], "the draft is cleared once it is saved");
+  assert(projStatus(projById("TKT-IPA")) === "Done", "and it went through the one gate");
+});
+
 await t("a signed step folds its history one tap away; the up-next button is the one primary", () => {
   DB.workOrders = [{ id: "WO-ROW-1", partName: "ROW", status: "InWork", processType: "Other", bom: [], qualityChecks: [], timeline: [], steps: [
     { seq: 1, title: "Prep plate", status: "done", buyoff: { name: "Nick Jepsen", email: "nick@b.edu", date: "2026-08-14" },
@@ -6849,6 +6906,29 @@ await t("Parts renders through PART_SECTIONS: same machinery, anchors preserved,
   assert(!/<a href="#pt-/.test(html), "no anchor links that would clobber the deep-link hash");
   assert(/class="card wosec folded">\s*<button[^>]*id="pt-details"/.test(html), "Details folds by default on a part too");
   assert(/class="card wosec">\s*<button[^>]*id="pt-progress"/.test(html), "Progress stays open — it is what you come for");
+});
+
+await t("creating or editing a part opens on Details, reading one opens on Progress", () => {
+  DB.parts = [{ id: "PRT-ORD-1", partName: "ORDER", subteam: "AERO", layupType: "MOLD INFUSION",
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started",
+    layupStack: [], commentLog: [], docs: [], files: [] }];
+  DB.workOrders = [];
+  assert(partSections(false)[0].id === "progress", "reading a part, Progress leads — three stages is what you came for");
+  assert(partSections(true)[0].id === "details", "filling one in, Details leads — newPart opens in edit with nothing but fields");
+  assert(partSections(true).length === PART_SECTIONS_BASE.length, "reordering never drops a section");
+
+  // The jump bar and the cards must agree, which is the whole reason the
+  // sections are a table rather than eight inline blocks.
+  view = { ...view, tab: "parts", mode: "detail", id: "PRT-ORD-1", edit: true, secFold: undefined };
+  render();
+  const html = main.innerHTML;
+  assert(html.indexOf('id="pt-details"') < html.indexOf('id="pt-progress"'), "Details card comes first in edit mode");
+  assert(html.indexOf('id="ptsec-details"') < html.indexOf('id="ptsec-progress"'), "and the jump bar says the same");
+  // foldWhen is () => true on Details, but secFolded returns false in edit mode.
+  assert(!/class="card wosec folded">\s*<button[^>]*id="pt-details"/.test(html), "and it is open, not folded shut at the top");
+
+  view = { ...view, edit: false }; render();
+  assert(main.innerHTML.indexOf('id="pt-progress"') < main.innerHTML.indexOf('id="pt-details"'), "back to Progress first when reading");
 });
 console.log("traveler spine:");
 await t("the spine and the progress badge can never disagree about done", () => {

@@ -695,6 +695,9 @@ function reopenIssue(id) {
   const c = { id: "C" + Date.now(), author: signerName(), email: myEmail(), ts: new Date().toISOString(), text: note, html: esc(note) };
   p.comments = (p.comments || []).concat([c]);           // optimistic
   saveField("projects", p, "comments", arr => (arr || []).concat([c]));
+  // The work order Issues section keeps unsaved row text in WI_DRAFTS; a
+  // withdrawn disposition must not come back as a draft shadowing the record.
+  if (typeof wiClearDraft === "function") wiClearDraft(id);
   toast(`${p.id} reopened — it gates ${p.workOrderId || "its work order"} again.`);
   render();
 }

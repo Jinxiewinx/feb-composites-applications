@@ -1446,6 +1446,46 @@ function woSecSteps(wo, E) {
     })()}`;
 }
 
+/* ---------- an issue's own photos, on the work order ----------
+   The same 48px strip a step gets, for the same reason: an issue IS bench
+   evidence, and the person who can photograph the defect is standing at the
+   run, not at the issue's own page. `.step-photos:empty { display: none }`
+   means an issue with no photos costs nothing.
+
+   These render inside data-lbgroup="workOrders:<id>" (renderWODetail), so the
+   thumbs join the run's lightbox set and the arrows walk defect photos and
+   step photos as one roll. */
+function issueThumbs(p) {
+  const imgs = (p.files || []).filter(f => (f.type || "").startsWith("image/"));
+  const shown = imgs.slice(0, 5);
+  return `<div class="step-photos">
+    ${shown.map(f => {
+      const name = f.name || "photo";
+      return `<img class="phmini" loading="lazy" src="${esc(f.url)}" data-lb-src="${esc(f.url)}" data-lb-name="${esc(name)}" alt="${esc(name)}">`;
+    }).join("")}
+    ${imgs.length > 5 ? `<button class="link no-print" onclick="openRecord('projects','${esc(p.id)}')">+${imgs.length - 5} more</button>` : ""}
+  </div>`;
+}
+/* Straight to the generic record-file picker: it writes entries byte-identical
+   to the ones submitWOIssue creates, and storage.rules already allows
+   projects/<id>/<file> for image/*, so no rules deploy rides on this. */
+function addIssuePhotos(pid) { addRecordFiles("projects", pid, null, "image/*"); }
+
+/* ---------- the Issues rows' unsaved text ----------
+   The disposition select and the "what happened" textarea are uncontrolled DOM
+   inputs, read only when Resolve is pressed. This tab re-renders on every
+   Firestore snapshot — a teammate's save, or your own photo upload, since
+   addRecordFiles ends in render() — and each of those took a half-typed root
+   cause with it.
+
+   Write-through rather than the closeout modal's harvest-before-render
+   (coDrafts): there, one function owns the moment the modal is rebuilt, so it
+   can grab the drafts on the way past. Here the render can come from anywhere,
+   including another person's browser, so there is no such moment. */
+var WI_DRAFTS = {};
+function wiDraft(pid, k, v) { (WI_DRAFTS[pid] = WI_DRAFTS[pid] || {})[k] = v; }
+function wiClearDraft(pid) { delete WI_DRAFTS[pid]; }
+
 /* ---------- the Issues section ----------
    Everything an issue needs while you are standing at the work order: what is
    open, what it was disposed as, and a way to raise the next one. It is a flat
@@ -1473,8 +1513,8 @@ function woSecIssues(wo, E) {
     const stepLine = p.stepRef
       ? ` · <button class="link" onclick="woJump('wo-steps')" title="Go to the step this was filed from">step ${esc(String(p.stepRef.seq))}${p.stepRef.title ? " · " + esc(p.stepRef.title) : ""}</button>`
       : "";
-    const nFiles = (p.files || []).length;
-    const meta = `<span class="muted tny">${esc(st)}${p.updatedAt ? " · updated " + esc(fmtWhen(p.updatedAt)) : ""}${nFiles ? ` · ${nFiles} file${nFiles > 1 ? "s" : ""}` : ""}</span>${stepLine}`;
+    const nOther = (p.files || []).filter(f => !(f.type || "").startsWith("image/")).length;
+    const meta = `<span class="muted tny">${esc(st)}${p.updatedAt ? " · updated " + esc(fmtWhen(p.updatedAt)) : ""}${nOther ? ` · ${nOther} file${nOther > 1 ? "s" : ""}` : ""}</span>${stepLine}`;
     /* A parentId can only come from before issues went flat. Read-only, so the
        context is not lost, and no nesting UI grows back around it. */
     const pLine = parent
@@ -1484,20 +1524,27 @@ function woSecIssues(wo, E) {
       return `<div class="corow codone"><div><span class="ok">✓</span> ${chip("projects", p.id, p.id)} <b>${esc(p.title || "")}</b>
         <span class="muted tny">— ${st === "Cancelled" ? "cancelled (false alarm)" : "resolved: " + esc(p.resolutionMethod || "?")}</span></div>
         ${pLine}
+        ${issueThumbs(p)}
         ${st === "Done" && !E ? `<div><button class="link no-print" onclick="reopenIssue('${esc(p.id)}')">Reopen</button></div>` : ""}</div>`;
     }
+    const d = WI_DRAFTS[p.id] || {};
+    const method = d.method !== undefined ? d.method : (p.resolutionMethod || "");
+    const what = d.what !== undefined ? d.what : (p.whatHappened || "");
+    const camera = `<button class="ib sm no-print" title="Add photos to this issue" aria-label="Add photos to ${esc(p.id)}" onclick="addIssuePhotos('${esc(p.id)}')">${icon("image", 14)}</button>`;
     return `<div class="corow">
       <div>${chip("projects", p.id, p.id)} <b>${esc(p.title || "")}</b> ${meta}</div>
       ${pLine}
-      ${E ? `<div class="muted tny">Leave edit mode to dispose this issue.</div>` : `
+      ${issueThumbs(p)}
+      ${E ? `<div class="muted tny">Leave edit mode to dispose this issue.</div>
+      <div class="no-print">${camera}</div>` : `
       <div class="field"><label for="wi-m-${esc(p.id)}">Disposition</label>
-        <select id="wi-m-${esc(p.id)}">
-          <option value="" ${p.resolutionMethod ? "" : "selected"}>— not yet disposed —</option>
-          ${RESOLUTION_METHODS.map(m => `<option ${p.resolutionMethod === m ? "selected" : ""}>${m}</option>`).join("")}
+        <select id="wi-m-${esc(p.id)}" onchange="wiDraft('${esc(p.id)}','method',this.value)">
+          <option value="" ${method ? "" : "selected"}>— not yet disposed —</option>
+          ${RESOLUTION_METHODS.map(m => `<option ${method === m ? "selected" : ""}>${m}</option>`).join("")}
         </select></div>
       <div class="field"><label for="wi-w-${esc(p.id)}">What happened</label>
-        <textarea id="wi-w-${esc(p.id)}" placeholder="Root cause — required before this work order can close">${esc(p.whatHappened || "")}</textarea></div>
-      <div class="no-print"><button onclick="woResolveIssue('${esc(p.id)}')">Resolve</button></div>`}
+        <textarea id="wi-w-${esc(p.id)}" oninput="wiDraft('${esc(p.id)}','what',this.value)" placeholder="Root cause — required before this work order can close">${esc(what)}</textarea></div>
+      <div class="no-print"><button onclick="woResolveIssue('${esc(p.id)}')">Resolve</button>${camera}</div>`}
     </div>`;
   }).join("");
 
@@ -1516,7 +1563,9 @@ function woResolveIssue(pid) {
   const m = document.getElementById("wi-m-" + pid);
   const w = document.getElementById("wi-w-" + pid);
   const r = resolveIssue(pid, m ? m.value : undefined, w ? w.value : undefined);
-  if (r) toast(r, "error");
+  if (r) { toast(r, "error"); return; }
+  // Saved, so the draft has done its job. Leaving it would shadow the record.
+  wiClearDraft(pid);
 }
 
 /* ---------- raising an issue from the work order ----------

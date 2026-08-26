@@ -1101,8 +1101,12 @@ function ptSecNotes(p, E) {
 /* Anchors pt-progress and pt-children are load-bearing (tests pin them, and
    they predate this table as the old jumpbar's targets). Stage advance stays
    on the 1/2/3 keys (partsKeydown), so parts deliberately does NOT get the
-   WO tab's digit-jumps. */
-const PART_SECTIONS = [
+   WO tab's digit-jumps.
+
+   This is the READING order. partSections() below decides the real one, because
+   the order a part wants depends on whether you are reading it or filling it
+   in. Nothing may read this array directly. */
+const PART_SECTIONS_BASE = [
   { id: "progress", label: "Progress", anchor: "pt-progress",
     badge: p => {
       const done = PART_STAGES.filter(st => {
@@ -1165,6 +1169,29 @@ const PART_SECTIONS = [
     foldWhen: () => true,
     body: (p, E) => ptSecNotes(p, E) },
 ];
+
+/* Order is a function of edit mode, not a constant — the same change Work
+   Orders got (woSections, workorders.js).
+
+   newPart() opens in edit, and Details was the FIFTH card, below Progress, the
+   layup stack, the materials plan and the runs. So creating a part opened
+   scrolled past the only thing a brand-new part has: its own empty fields.
+   Editing one had the same problem for the same reason.
+
+   Reading a part, Progress still leads — three stages and where they are is
+   what you came for. Filling one in, Details leads.
+
+   Every consumer goes through this ONE call, so the jump bar and the cards
+   cannot disagree about what order they are in. That is the whole reason the
+   sections are a table. */
+function partSections(E) {
+  if (!E) return PART_SECTIONS_BASE;
+  const i = PART_SECTIONS_BASE.findIndex(s => s.id === "details");
+  if (i < 0) return PART_SECTIONS_BASE;
+  const out = PART_SECTIONS_BASE.slice();
+  out.unshift(out.splice(i, 1)[0]);
+  return out;
+}
 
 /* ---------- Materials (plan): the part's BOM ----------
  *
@@ -1300,7 +1327,7 @@ function ptSecBom(p, E) {
 
 function ptJump(anchor) {
   const p = partById(view.id);
-  if (p) secJumpOpen(PART_SECTIONS, p, anchor); else secJump(anchor);
+  if (p) secJumpOpen(partSections(view.edit), p, anchor); else secJump(anchor);
 }
 
 function renderPartDetail() {
@@ -1336,8 +1363,8 @@ function renderPartDetail() {
         <span class="muted">${dd != null ? (dd < 0 ? Math.abs(dd) + " days late" : dd === 0 ? "today" : dd + " days out") : ""}</span></div>` : ""}
       ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
     </div>
-    ${secNav("ptsec", PART_SECTIONS, p, "ptJump", "Jump to a section of this part")}
-    ${PART_SECTIONS.map(s => sectionCard(s, p, E)).join("")}
+    ${secNav("ptsec", partSections(E), p, "ptJump", "Jump to a section of this part")}
+    ${partSections(E).map(s => sectionCard(s, p, E)).join("")}
   </section>`;
 }
 
