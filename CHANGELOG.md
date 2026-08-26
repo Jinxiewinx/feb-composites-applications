@@ -19,6 +19,12 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.0.2 — 2026-08-25
+
+- The release script stops writing the team's release note for them
+
+---
+
 ## v2.0.1 — 2026-08-25
 
 - What's New reads like a note to a person, not a changelog
