@@ -464,15 +464,21 @@ its name. A new training gates nothing until a step template references it —
 adding to the catalog is bookkeeping, gating stays a deliberate act.
 
 Documents is the team shelf (pinned links to the things people keep asking for),
-member uploads, and the shop printables. Anyone can upload a doc.
+member uploads, and the **25 manufacturer datasheets**. Anyone can upload a doc.
 
-It used to bundle the reference library too: 25 manufacturer datasheets and the
-CS standards and pain-points. Simon asked for those off the app on 2026-08-18,
-and they are **unlisted rather than deleted** — the files are still in `docs/`
-and still served, because `resins.js` deep-links six datasheet PDFs by path for
-its TDS citations and CS-000 requires an issued standard to stay retrievable.
-The switch is `UNLISTED` in `tools/gen_docs_manifest.py`; empty that set to put
-them back.
+What the tab advertises is a data change, not a code change: the switch is
+`UNLISTED` in `tools/gen_docs_manifest.py`, and everything is copied into
+`docs/` and served whether it is listed or not. That matters, because
+`resins.js` deep-links six datasheet PDFs by path for its TDS citations and
+CS-000 requires an issued standard to stay retrievable — so unlisting removes
+the manifest entry and never the bytes.
+
+Currently unlisted: the **CS standards and pain-points** (off since 2026-08-18)
+and the **shop printables guide** (off since 2026-08-26). The datasheets went
+off on 2026-08-18 and came back on 2026-08-26. Add or remove a category name in
+that set to change it; nothing else needs touching. Re-run
+`tools/gen_docs_manifest.py` afterwards to rewrite `docs/manifest.json` (it
+needs Python 3).
 
 ### Inventory
 

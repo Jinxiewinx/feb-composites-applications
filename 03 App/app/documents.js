@@ -4,11 +4,14 @@
    tools/gen_docs_manifest.py bundles into docs/manifest.json. PDFs open in an
    in-app viewer, markdown renders in-app, printables open as HTML.
 
-   The bundled datasheets and CS standards were unlisted on 2026-08-18 at
-   Simon's request. Their FILES are still in docs/ and still served — resins.js
-   deep-links six datasheet PDFs by path, and an issued standard has to stay
-   retrievable under CS-000 — they simply are not advertised here any more. The
-   switch is UNLISTED in tools/gen_docs_manifest.py, not anything in this file.
+   What is advertised here is decided by UNLISTED in
+   tools/gen_docs_manifest.py, not by anything in this file. Everything is
+   copied into docs/ and served either way: resins.js deep-links six datasheet
+   PDFs by path, and an issued standard has to stay retrievable under CS-000,
+   so unlisting removes the manifest entry and never the bytes.
+
+   As of 2026-08-26 that is the CS standards and Shop Printables. The
+   datasheets were unlisted on 2026-08-18 and are listed again.
 
    Nothing below hardcodes what may exist. A document carrying any category,
    including one of the unlisted ones, still renders under it; that is what

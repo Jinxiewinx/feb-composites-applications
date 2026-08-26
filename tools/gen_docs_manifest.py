@@ -9,10 +9,13 @@ them in-browser. Copies into `03 App/app/docs/` and writes manifest.json.
 
 Re-run any time the source docs change. Safe to re-run (overwrites).
 
-NOTE (2026-08-18): the datasheets and CS standards are still COPIED into
-docs/, but they are no longer listed in the Documents tab — see UNLISTED
-below. The files have to keep existing because other parts of the app deep-link
-them by path.
+NOTE: everything here is always COPIED into docs/; UNLISTED below decides what
+is advertised in the Documents tab. The files have to keep existing either way,
+because other parts of the app deep-link them by path.
+
+  2026-08-18  datasheets and CS standards unlisted, at Simon's request.
+  2026-08-26  datasheets listed again, at Simon's request. Shop Printables
+              unlisted the same day. Standards stay unlisted.
 """
 import json, re, shutil, subprocess
 from pathlib import Path
@@ -28,15 +31,19 @@ manifest = []
 
 # Categories that are copied into docs/ but NOT advertised in the app.
 #
-# Simon asked for the reference docs and the standards off the app on
-# 2026-08-18. They are unlisted rather than deleted, and the distinction
-# matters: resins.js hardcodes six `docs/datasheets/*.pdf` paths for its TDS
-# citations, and CS-000 requires a standard to stay retrievable once it has
-# been issued. Removing the files would break the first and violate the second,
-# so the manifest entry is what goes — the bytes stay exactly where they were.
+# Unlisted rather than deleted, and the distinction matters: resins.js
+# hardcodes six `docs/datasheets/*.pdf` paths for its TDS citations, and CS-000
+# requires a standard to stay retrievable once it has been issued. Removing the
+# files would break the first and violate the second, so the manifest entry is
+# what goes — the bytes stay exactly where they were.
 #
-# Empty the set to put them back; nothing else needs changing.
-UNLISTED = {"Datasheets", "Standards"}
+# Add or remove a category name to change what the tab shows; nothing else
+# needs changing.
+#
+# "Guides" is only ever Shop Printables (section 4 below). If a second guide is
+# ever added it will be unlisted too, silently — split the category before
+# adding one, rather than wondering later why it never appeared.
+UNLISTED = {"Standards", "Guides"}
 
 
 def add(entry):
@@ -125,12 +132,14 @@ if pp_md.exists():
     add(entry)
 
 # 4. Printables (HTML)
+# Through add(), not straight onto the manifest: this used to bypass UNLISTED
+# entirely, so "stop showing it" had no switch and meant deleting the block.
 pr = RES / "05 Printables" / "printables.html"
 if pr.exists():
     shutil.copy2(pr, DOCS / "printables.html")
-    manifest.append({"category": "Guides", "title": "Shop Printables",
-                     "kind": "html", "src": "docs/printables.html",
-                     "size": pr.stat().st_size})
+    add({"category": "Guides", "title": "Shop Printables",
+         "kind": "html", "src": "docs/printables.html",
+         "size": pr.stat().st_size})
 
 # stable order: category then title
 order = {"Datasheets": 0, "Standards": 1, "Guides": 2}

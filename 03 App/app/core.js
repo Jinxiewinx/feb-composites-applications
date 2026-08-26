@@ -31,7 +31,8 @@ var APP_VERSION = "2.1.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "The Season tab is marked work in progress at the top. It is still being built and its columns will change — what you enter is saved, so it is safe to fill in.",
+  "All 25 manufacturer datasheets are back on the Documents tab — TDS and SDS for everything we actually buy, searchable, opening in the app.",
+  "The shop printables guide has come off that tab.",
 ];
 
 /* ---------- config/release ----------

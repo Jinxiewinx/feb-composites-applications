@@ -4,7 +4,7 @@
    app logic across all tabs is tested without a browser or Firebase. Rules
    enforcement is tested separately against the emulator (test_wo_rules.mjs).
    Run from SN6 Resources/:  node tools/test_app.mjs */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -2739,16 +2739,35 @@ await t("markdown renderer: headings, tables, lists, bold", () => {
   assert(html.includes("<li>one</li>"), "list");
   assert(html.includes("<strong>bold</strong>") && html.includes("<code>code</code>"), "inline");
 });
-await t("the shipped manifest lists no datasheets and no standards", async () => {
-  /* The unlisting is a data change, not a code change, so this reads the real
-     docs/manifest.json rather than a fixture. The FILES stay on disk on
-     purpose (resins.js deep-links six datasheet PDFs by path); what must be
-     absent is the advertisement. */
+await t("the shipped manifest lists the datasheets, and nothing that is unlisted", async () => {
+  /* What is listed is a data change, not a code change, so this reads the real
+     docs/manifest.json rather than a fixture. The FILES stay on disk whatever
+     is listed — resins.js deep-links six datasheet PDFs by path, and CS-000
+     requires an issued standard to stay retrievable — so what changes is the
+     advertisement, never the bytes.
+
+     As of 2026-08-26: datasheets in, CS standards and Shop Printables out. */
   const real = JSON.parse(readFileSync(join(root, "docs/manifest.json"), "utf8"));
-  const bad = real.filter(d => d.category === "Datasheets" || d.category === "Standards");
-  assert(!bad.length, "unlisted categories are back in the manifest: " +
+  const bad = real.filter(d => d.category === "Standards" || d.category === "Guides");
+  assert(!bad.length, "unlisted categories are in the manifest: " +
     bad.map(d => d.category + "/" + d.title).join(", "));
-  assert(real.some(d => d.category === "Guides"), "the printables guide is still listed");
+
+  const sheets = real.filter(d => d.category === "Datasheets");
+  assert(sheets.length === 25, "all 25 datasheets should be listed, got " + sheets.length);
+
+  /* Every listed entry has to resolve to a file that is actually shipped, at
+     the size claimed. A manifest naming a missing PDF is a row that opens a
+     blank viewer, which is worse than not listing it at all. */
+  for (const d of real) {
+    const p = join(root, d.src);
+    assert(existsSync(p), d.title + " is listed but " + d.src + " is not on disk");
+    assert(statSync(p).size === d.size,
+      d.title + " has a stale size in the manifest: " + d.size + " vs " + statSync(p).size);
+  }
+
+  // The bytes that were unlisted are still served, which is the whole point.
+  assert(existsSync(join(root, "docs/printables.html")), "printables.html stays on disk");
+  assert(readdirSync(join(root, "docs/standards")).length > 0, "the standards stay on disk");
 });
 
 await t("documents tab loads manifest + lists categories", async () => {
