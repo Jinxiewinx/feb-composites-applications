@@ -3943,23 +3943,43 @@ await t("adding another board this size starts from that size", async () => {
   closeModal();
 });
 
-await t("the rack shows one row per size, and escapes labels where they appear", async () => {
+await t("the rack shows one row per BOARD, and escapes labels where they appear", async () => {
+  /* Simon: "Each board should have its own entry (line) and number... even if
+     they are stacked on top of each other we want to differentiate them."
+     The list used to collapse identical sizes into "BRD-1 +3 more", which is a
+     fair summary of the rack and no use for tracking a particular sheet. */
   DB.stock = [];
   // The rack lives in Inventory now, not on the Molds rail.
   view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null, q: "", invDens: "", fSub: "" }; render();
   assert(main.innerHTML.includes("No board stock recorded yet"), "empty state should explain what to do");
-  // Two boards, same size, different labels: one list row, quantity two.
+  // Two boards, same size, different labels: two rows, each named.
   fillBoard({ label: "rack A" }); await submitBoard(null);
   fillBoard({ label: '<img src=x onerror=alert(1)>' }); await submitBoard(null);
+  const ids = DB.stock.map(b => b.id);
+  assert(ids.length === 2, "two records for two sheets");
+  // Grouping by size still exists and is still right — it just is not the row.
   const g = groupBoards(DB.stock);
-  assert(g.length === 1 && g[0].qty === 2, "same size is one row, got " + g.length + " rows");
+  assert(g.length === 1 && g[0].qty === 2, "the two are still one SIZE, got " + g.length);
+
   view = { ...view, tab: "inventory", invView: "boards", mode: "list", id: null }; render();
-  assert(!main.innerHTML.includes("rack A"), "the list shows sizes, not individual boards");
-  // The labels come back on the size pane, and must still be inert there.
-  view = { ...view, mode: "detail", id: g[0].id }; render();
-  assert(main.innerHTML.includes("rack A"), "the boards themselves are one click away");
-  assert(!main.innerHTML.includes("<img src=x"), "board labels must never produce a live tag");
-  assert(main.innerHTML.includes("&lt;img"), "the label should render as escaped text");
+  const h = main.innerHTML;
+  ids.forEach(id => assert(h.includes(id), id + " should have its own line"));
+  assert(!/\+\d+ more/.test(h), "and nothing should be hiding behind a +N more");
+  assert(h.includes("rack A"), "a board's own label reads on its own row");
+  /* Labels reach the LIST now, not only the detail pane, so this is where the
+     escaping has to hold — a live tag here would run on the page everyone
+     lands on rather than one they had to click into. */
+  assert(!h.includes("<img src=x"), "board labels must never produce a live tag");
+  assert(h.includes("&lt;img"), "the label should render as escaped text");
+
+  // A row opens that board, not its size.
+  selectInvRec(ids[0]);
+  assert(main.innerHTML.includes(ids[0]) && main.innerHTML.includes("editBoard"),
+    "a row opens the board's own pane, where the modal is still the editor");
+  // The size view — and its "+ Board this size" shortcut — is reached from there.
+  assert(/other board this size|others this size|other boards this size/i.test(main.innerHTML),
+    "with a way through to the others of its size: " + main.innerHTML.slice(0, 200));
+  view = { ...view, mode: "list", id: null };
 });
 await t("a size is one row however the board was measured, and density splits it", async () => {
   /* Tooling board has no grain and the packer turns blanks freely, so a 48x96
@@ -4629,6 +4649,19 @@ await t("the Boards list groups and sorts, and does nothing at all until asked",
   assert(def.indexOf("BRD-SN6-002") < def.indexOf("BRD-SN6-001"),
     "the 1in row precedes the 2in row inside the 30lb card, as it always did");
   assert(!def.includes("<th>Grade</th>"), "a grouped view does not repeat the grade in every row");
+
+  /* Identical sizes stay separate lines. This is the tracking requirement: two
+     sheets stacked on each other are two boards with two labels, and the list
+     has to be able to say which is which. */
+  DB.stock.push({ id: "BRD-SN6-004", density: 30, qty: 1, location: "BIN-SN6-001",
+    len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" } });
+  render();
+  const twinned = main.innerHTML;
+  assert(twinned.includes("BRD-SN6-001") && twinned.includes("BRD-SN6-004"),
+    "two boards of one size are two rows, not one row with a count");
+  assert(!/\+\d+ more/.test(twinned), "nothing hides behind a +N more any more");
+  assert(twinned.indexOf("BRD-SN6-001") < twinned.indexOf("BRD-SN6-004"),
+    "and they sit next to each other in id order");
 
   // Reversing the direction reverses the cards too, not just the rows in them.
   toggleBoardSortDir();

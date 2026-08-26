@@ -307,9 +307,17 @@ function delBoard(id) {
    substitute across silently (CS-004), so it is the one that decides whether a
    job can be cut at all.
 
-   ROWS ARE SIZE GROUPS, not boards. So a key that lives on the individual board
-   — index, location, id, when it was added — needs a REPRESENTATIVE, and which
-   one is a real choice, written out per key below.
+   ONE ROW IS ONE BOARD. Simon: "Each board should have its own entry (line) and
+   number... even if they are stacked on top of each other we want to
+   differentiate them. This will aid in tracking."
+
+   The list used to collapse same-size records into one row reading
+   "BRD-SN6-020 +3 more", which is a fair summary of the rack and useless for
+   tracking a specific sheet: four boards with four printed labels and four
+   distinct ids showed as one line, and there was no way to say which of them
+   was on which shelf, which had the soft corner, or which one a mold was cut
+   from. Sizes are still summarised — the card headers count them, and the
+   by-thickness panel is unchanged — but the row is the board.
    ========================================================================== */
 
 /* Partition functions: raw board record -> the card it belongs on. Grade and
@@ -326,20 +334,35 @@ const BOARD_GROUP_LABEL = {
   thickness: v => `${fmtMm(Number(v))} board`,
   location: v => v ? shopRefChip(v) : `<span class="muted">No location</span>`,
 };
+/* One board, with everything the list sorts or prints already worked out — so
+   the comparator never calls toMm() and the row markup never re-derives. */
+function boardRow(b) {
+  const l = toMm(b.len), w = toMm(b.wid);
+  return {
+    rec: b, id: b.id,
+    // Face dims sorted, same as boardSizeKey: board has no grain, so a 48x96
+    // and a 96x48 are one size and must print as one.
+    lenMm: Math.max(l, w), widMm: Math.min(l, w), thkMm: toMm(b.thk),
+    density: canonDensity(b.density) ?? 30,
+    qty: b.qty || 1, ft3: boardVolumeFt3(b),
+    location: b.location || "", index: BOARD_INDEX.get(b.id) ?? 0, ts: b.ts || "",
+  };
+}
 const BOARD_SORT_COLS = {
-  grade: g => g.density,
-  thickness: g => g.thkMm,
+  grade: r => r.density,
+  thickness: r => r.thkMm,
   // Longest dimension first: it is what decides whether a big blank fits at all.
-  size: g => -Math.max(g.lenMm, g.widMm),
-  /* MIN index across the row's boards — "which of these can I reach soonest".
-     Max would answer "how buried is the worst one", which nobody asks. */
-  index: g => Math.min(...g.members.map(b => BOARD_INDEX.get(b.id) ?? 0)),
-  location: g => (g.members.map(b => b.location).filter(Boolean).sort()[0] || "~").toLowerCase(),
-  id: g => g.members.map(b => b.id).sort(cmpId)[0] || "",
-  // Newest member first, because "what did we just put on the rack" is the
-  // question, and a row is as new as its newest board.
-  recent: g => g.members.map(b => b.ts || "").sort().reverse()[0] || "",
+  size: r => -Math.max(r.lenMm, r.widMm),
+  // How many boards sit on top of this one, in its own pile.
+  index: r => r.index,
+  location: r => (r.location || "~").toLowerCase(),
+  id: r => r.id,
+  recent: r => r.ts,
 };
+/* Keys whose natural order is not string order. Ids are PREFIX-SNx-NNN and the
+   padding stops at 999, so plain comparison puts BRD-SN6-1000 before
+   BRD-SN6-999 — the same trap cmpId exists for. */
+const BOARD_SORT_CMP = { id: (a, b) => cmpId(a.id, b.id) };
 const BOARD_SORT_LABELS = {
   grade: "Group: grade", thickness: "Group: thickness", location: "Group: location",
   index: "Sort: rack order", size: "Sort: size", id: "Sort: board id", recent: "Sort: newest",
@@ -353,18 +376,23 @@ function sortBoardsBy(key) {
   render();
 }
 function toggleBoardSortDir() { view.sortDir = view.sortDir === "desc" ? "asc" : "desc"; render(); }
-/* Ties always break the way groupBoards already ordered them — thickness up,
-   then face area down, then key. That is not decoration: without a total order
-   the rows reshuffle whenever a Firestore snapshot re-renders, and with grade
-   selected it is what makes the default identical to the old hard-coded list. */
-function sortedBoardGroups(groups, key) {
+/* Ties break thickness up, then face area down, then id. That is not
+   decoration: without a total order the rows reshuffle whenever a Firestore
+   snapshot re-renders. It is also what keeps the default view reading the way
+   it always did — same sizes in the same order, with the boards that used to
+   hide behind "+3 more" now listed under each other in id order. */
+function sortedBoardRows(rows, key) {
   const get = BOARD_SORT_COLS[key];
+  const cmp = BOARD_SORT_CMP[key];
   const mul = view.sortDir === "desc" ? -1 : 1;
-  return groups.slice().sort((a, b) => {
-    const av = get(a), bv = get(b);
-    if (av < bv) return -mul;
-    if (av > bv) return mul;
-    return (a.thkMm - b.thkMm) || (b.lenMm * b.widMm - a.lenMm * a.widMm) || a.key.localeCompare(b.key);
+  return rows.slice().sort((a, b) => {
+    if (cmp) { const c = cmp(a, b); if (c) return c * mul; }
+    else {
+      const av = get(a), bv = get(b);
+      if (av < bv) return -mul;
+      if (av > bv) return mul;
+    }
+    return (a.thkMm - b.thkMm) || (b.lenMm * b.widMm - a.lenMm * a.widMm) || cmpId(a.id, b.id);
   });
 }
 /* Recomputed per render and read by BOARD_SORT_COLS.index. A module-level slot
@@ -374,16 +402,20 @@ let BOARD_INDEX = new Map();
 
 function renderBoardsList() {
   const q = (view.q || "").toLowerCase();
-  const all = groupBoards(DB.stock || []);
-  const dens = view.invDens ? canonDensity(view.invDens) : null;
-  const groups = all
-    .filter(g => dens == null || (canonDensity(g.density) ?? 30) === dens)
-    .filter(g => !q || (groupLabel(g) + " " + g.density + " " + JSON.stringify(g.members)).toLowerCase().includes(q));
   BOARD_INDEX = boardIndexById();
+  const dens = view.invDens ? canonDensity(view.invDens) : null;
+  /* Filtered per BOARD, not per size row. The old haystack was
+     JSON.stringify(members), which matched raw JSON keys as well as values;
+     this names the fields somebody would actually search on. */
+  const rows = (DB.stock || []).map(boardRow)
+    .filter(r => dens == null || r.density === dens)
+    .filter(r => !q || [r.id, r.rec.label, r.rec.notes, r.rec.origin, r.rec.location,
+      r.density, groupLabel(r)].join(" ").toLowerCase().includes(q));
   const sortKey = boardSortKey();
 
-  const boards = groups.reduce((n, g) => n + g.qty, 0);
-  const ft3 = groups.reduce((n, g) => n + g.ft3, 0);
+  const boards = rows.reduce((n, r) => n + r.qty, 0);
+  const sizes = new Set(rows.map(r => boardSizeKey(r.rec))).size;
+  const ft3 = rows.reduce((n, r) => n + r.ft3, 0);
   const homeless = (DB.stock || []).filter(b => !b.location).length;
   const tile = (n, label, cls) => `<div class="stat-tile"><div class="bignum ${cls || ""}">${n}</div><div class="stat-label">${esc(label)}</div></div>`;
 
@@ -396,7 +428,7 @@ function renderBoardsList() {
 
   return `
   <div class="stat-row">
-    ${tile(groups.length, "Sizes")}${tile(boards, "Boards")}${tile(ft3.toFixed(1), "ft³ on hand")}${
+    ${tile(boards, "Boards")}${tile(sizes, "Sizes")}${tile(ft3.toFixed(1), "ft³ on hand")}${
       /* Amber, not red: a board nobody has given a shelf is a gap to close, not
          a thing that is wrong. Same reading as the dashboard's Unassigned. */
       homeless ? tile(homeless, homeless === 1 ? "board with no location" : "boards with no location", "warn") : ""}
@@ -413,10 +445,10 @@ function renderBoardsList() {
     <button class="sm sortdir" title="Reverse order" onclick="toggleBoardSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
     ${view.q || view.invDens ? `<button class="sm" onclick="view.q='';view.invDens='';render()">Clear</button>` : ""}
   </div>
-  ${!groups.length ? `<div class="card"><span class="muted">${
+  ${!rows.length ? `<div class="card"><span class="muted">${
     (DB.stock || []).length ? "Nothing matches these filters."
     : `No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS.`}</span></div>` : ""}
-  ${boardSections(groups, sortKey)}
+  ${boardSections(rows, sortKey)}
   ${Object.keys(buckets).length ? `<div class="card">
     <h3>Board on hand, by thickness</h3>
     <div class="grid">
@@ -429,63 +461,67 @@ function renderBoardsList() {
    than a grouping. Sections are ordered by the same comparator as the rows
    inside them, so reversing the direction reverses the whole list rather than
    flipping rows inside frozen cards. */
-function boardSections(groups, key) {
+function boardSections(rows, key) {
   const part = BOARD_GROUPS[key];
-  if (!part) return boardCard("", groups, key, true);
-  /* Regroup from the RAW boards that survived the filters, not from the size
-     rows: a size can span two shelves, and on a location card it has to appear
-     on each of them with only the boards that are actually there. */
+  if (!part) return boardCard("", rows, key, true);
   const buckets = new Map();
-  for (const g of groups) for (const b of g.members) {
-    const v = part(b);
+  for (const r of rows) {
+    const v = part(r.rec);
     if (!buckets.has(v)) buckets.set(v, []);
-    buckets.get(v).push(b);
+    buckets.get(v).push(r);
   }
-  const sections = [...buckets.entries()].map(([v, boards]) => ({ v, gs: groupBoards(boards) }));
+  const sections = [...buckets.entries()].map(([v, rs]) => ({ v, rs }));
   /* Order the cards by the same key, using each card's first row as its
      representative — so "grade, descending" walks the grades downward, and the
      no-location card lands where an empty value sorts rather than in a special
      place. */
   const mul = view.sortDir === "desc" ? -1 : 1;
+  const rep = s => sortedBoardRows(s.rs, key)[0];
   sections.sort((a, b) => {
-    const av = BOARD_SORT_COLS[key](sortedBoardGroups(a.gs, key)[0]);
-    const bv = BOARD_SORT_COLS[key](sortedBoardGroups(b.gs, key)[0]);
-    return av < bv ? -mul : av > bv ? mul : String(a.v).localeCompare(String(b.v));
+    const ra = rep(a), rb = rep(b);
+    const cmp = BOARD_SORT_CMP[key];
+    if (cmp) { const c = cmp(ra, rb); if (c) return c * mul; }
+    else {
+      const av = BOARD_SORT_COLS[key](ra), bv = BOARD_SORT_COLS[key](rb);
+      if (av < bv) return -mul;
+      if (av > bv) return mul;
+    }
+    return String(a.v).localeCompare(String(b.v));
   });
-  return sections.map(s => boardCard(BOARD_GROUP_LABEL[key](s.v), s.gs, key, false)).join("");
+  return sections.map(s => boardCard(BOARD_GROUP_LABEL[key](s.v), s.rs, key, false)).join("");
 }
-function boardCard(label, gs, key, flat) {
-  const rows = sortedBoardGroups(gs, key);
+function boardCard(label, rs, key, flat) {
+  const rows = sortedBoardRows(rs, key);
   if (!rows.length) return "";
-  const boards = rows.reduce((n, g) => n + g.qty, 0);
+  const boards = rows.reduce((n, r) => n + r.qty, 0);
+  const sizes = new Set(rows.map(r => boardSizeKey(r.rec))).size;
   // The rack-order column earns its width only when that is what you asked for.
   const showIndex = key === "index";
   return `<div class="card">
     ${flat ? "" : `<div class="pgrouphd"><span class="pg-name">${label}</span>
       <span class="pg-n">${boards} board${boards === 1 ? "" : "s"}</span>
-      <span class="pg-n">${rows.length} size${rows.length === 1 ? "" : "s"}</span>
-      <span class="pg-n">${rows.reduce((n, g) => n + g.ft3, 0).toFixed(1)} ft³</span></div>`}
+      <span class="pg-n">${sizes} size${sizes === 1 ? "" : "s"}</span>
+      <span class="pg-n">${rows.reduce((n, r) => n + r.ft3, 0).toFixed(1)} ft³</span></div>`}
     <table class="list">
       <tr><th>Board</th><th>Size</th>${flat ? "<th>Grade</th>" : ""}${showIndex ? "<th>Rack order</th>" : ""}<th>Qty</th><th>Volume</th><th>Where</th></tr>
-      ${rows.map(g => {
-        const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
+      ${rows.map(r => {
+        const b = r.rec;
         /* The id leads, because that is what is printed on the label stuck to
-           the sheet and what anybody standing at the rack reads off it. A row
-           is still a SIZE, so it names the id when the size is one record —
-           which it nearly always is — and says how many records otherwise. */
-        const ids = g.members.map(b => b.id);
-        const lead = ids.length === 1 ? esc(ids[0])
-          : `${esc(ids[0])} <span class="muted tny">+${ids.length - 1} more</span>`;
-        const note = g.members.map(b => b.notes).filter(Boolean)[0] || "";
-        const idx = Math.min(...g.members.map(b => BOARD_INDEX.get(b.id) ?? 0));
-        return `<tr onclick="selectInvRec('${esc(g.id)}')">
-          <td><b>${lead}</b>${note ? `<div class="tny muted">${esc(note.length > 46 ? note.slice(0, 45) + "…" : note)}</div>` : ""}</td>
-          <td>${esc(groupLabel(g))}</td>
-          ${flat ? `<td>${esc(g.density)} lb/ft³</td>` : ""}
-          ${showIndex ? `<td class="tny">${where.length ? (idx === 0 ? "on top" : `${idx} deep`) : `<span class="muted">unfiled</span>`}</td>` : ""}
-          <td>${esc(g.qty)}</td>
-          <td>${g.ft3.toFixed(2)} ft³</td>
-          <td class="tny">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : `<span class="muted">—</span>`}</td>
+           this sheet and what anybody standing at the rack reads off it. One
+           row, one label, one board. */
+        const note = b.notes || b.label || "";
+        return `<tr onclick="selectInvRec('${esc(b.id)}')">
+          <td><b>${esc(b.id)}</b>${note ? `<div class="tny muted">${esc(note.length > 46 ? note.slice(0, 45) + "…" : note)}</div>` : ""}</td>
+          <td>${esc(groupLabel(r))}</td>
+          ${flat ? `<td>${esc(r.density)} lb/ft³</td>` : ""}
+          ${showIndex ? `<td class="tny">${r.location ? (r.index === 0 ? "on top" : `${r.index} deep`) : `<span class="muted">unfiled</span>`}</td>` : ""}
+          ${/* A record covering several identical sheets is the one thing left
+                that this list cannot tell apart — they share one id and one
+                label. Say so on the row rather than letting a bare "4" read
+                like the old grouping. */""}
+          <td>${esc(r.qty)}${r.qty > 1 ? ` <span class="muted tny" title="One record, ${esc(r.qty)} sheets — they share this id, so they cannot be tracked apart. Edit it to qty 1 and add the others as their own boards.">not tracked apart</span>` : ""}</td>
+          <td>${r.ft3.toFixed(2)} ft³</td>
+          <td class="tny">${r.location ? shopRefChip(String(r.location)) : `<span class="muted">—</span>`}</td>
         </tr>`;
       }).join("")}
     </table>
@@ -572,6 +608,15 @@ function boardPane(b) {
         ${b.origin ? `<div class="f"><label>From</label><div class="ro">${esc(b.origin)}</div></div>` : ""}
       </div>
       ${b.notes ? `<h3>Notes</h3><p class="ro">${esc(b.notes)}</p>` : ""}
+      ${/* The list is one row per board now, so the size view — and the
+            "+ Board this size" shortcut on it — is reached from here. */""}
+      <div class="muted tny">${(() => {
+        const key = boardSizeKey(b);
+        const n = (DB.stock || []).filter(x => boardSizeKey(x) === key).length;
+        return n > 1
+          ? `<a href="#/${esc("SZ:" + key)}" onclick="event.preventDefault();selectInvRec('${esc("SZ:" + key)}')">${n - 1} other board${n === 2 ? "" : "s"} this size</a>`
+          : `<a href="#/${esc("SZ:" + key)}" onclick="event.preventDefault();selectInvRec('${esc("SZ:" + key)}')">Only board this size</a>`;
+      })()}</div>
       ${usedBy.length ? `<h3>Molds cut from this board</h3>
         <div class="stagerow">${usedBy.map(m => `<span class="chip" onclick="openRecord('molds','${esc(m.id)}')">${esc(m.name || m.id)}</span>`).join("")}</div>` : ""}
     </div>

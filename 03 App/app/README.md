@@ -519,12 +519,14 @@ The fourth toggle is the tooling rack, which used to be a third group on the
 Molds rail. A board is a thing on a shelf, and this is where the shelves are.
 
 A full 4×8 sheet and an offcut are the same kind of record, so remnants come
-back into stock instead of piling up. Rows lead with the **board id** — that is
-what the printed label on the sheet says, and what you read off it standing at
-the rack — followed by the size. A row is still one **size**, so where two
-records happen to share a size it names the first and says how many more; open
-it and the individual boards are listed, because a BRD- label is stuck to a
-physical board and a mold points at the one it was cut from. Sizes are grouped
+back into stock instead of piling up. **One row is one board.** Rows lead with
+the **board id** — that is what the printed label on the sheet says, and what
+you read off it standing at the rack — followed by the size. Two identical
+sheets stacked on each other are two lines with two ids, because a BRD- label
+is stuck to a physical board and a mold points at the one it was cut from, so
+collapsing them into "+3 more" made a specific sheet impossible to track. Sizes
+are still counted in the card headers, and a board page links through to the
+others of its size, which is where **+ Board this size** lives. Sizes are grouped
 by **grade** by default, since that is the axis the packer will not substitute
 across unless a mold says it may (CS-004 — 60lb seals better, and you cannot
 swap it in silently), which makes it the axis that decides whether a job can be
