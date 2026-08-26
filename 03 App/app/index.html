@@ -2004,8 +2004,11 @@
   .sr-main { min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .srow-meta { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .srow-meta .status { font-size: 11px; padding: 1px 8px; margin-right: 4px; vertical-align: middle; }
-  /* Severity dots exist only in Shop status; only there do rows indent. */
-  .b-shop .srow { padding-left: 16px; }
+  /* Severity dots exist only in the two shop modules; only there do rows
+     indent. Shop status kept the dots when the housekeeping counters moved out
+     to .b-ref, so this selector has to name both — .sdot is positioned at
+     left: 0, and without the indent a chip sits on top of its own dot. */
+  .b-shop .srow, .b-ref .srow { padding-left: 16px; }
   .sdot { position: absolute; left: 0; top: 12px; width: 8px; height: 8px; border-radius: 50%; }
   .sdot.bad { background: var(--bad); }
   .sdot.warn { background: var(--amber); }
@@ -2068,20 +2071,26 @@
      ticket pane's kanban navy. Dashboard rules stay under .dboard only. */
   .dboard { display: grid; gap: 14px;
     grid-template-columns: minmax(0, 1fr);
-    /* Phone order is the day's order: what's wrong, what's mine, what's
-       booked, what's physically happening. Reference blocks sink. */
-    grid-template-areas: "alerts" "work" "week" "shop" "season" "activity" "count" "budget" "launch" "fact"; }
+    /* Phone order is the day's order: what's wrong, what is stopping work right
+       now, what's mine, what's booked. Reference sinks — and `ref` is second
+       from the bottom because it is the one module that is a monthly habit
+       rather than a daily read. */
+    grid-template-areas: "alerts" "shop" "work" "week" "season" "activity" "count" "budget" "launch" "ref" "fact"; }
   @media (min-width: 701px) and (max-width: 1100px) {
     .dboard { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "alerts alerts" "work shop" "work season" "work week" "count activity" "budget launch" "fact fact"; }
+      grid-template-areas: "alerts alerts" "shop shop" "work season" "work week" "work activity" "count budget" "launch ref" "fact fact"; }
   }
   @media (min-width: 1101px) {
     .dboard { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "alerts alerts alerts" "work shop count" "work season week" "work season activity" "launch budget fact"; }
+      grid-template-areas: "alerts alerts alerts" "work shop season" "work count season" "work week activity" "launch budget ref" "fact fact fact"; }
   }
   .b-work { grid-area: work; } .b-shop { grid-area: shop; } .b-season { grid-area: season; }
   .b-week { grid-area: week; } .b-activity { grid-area: activity; } .b-count { grid-area: count; }
   .b-budget { grid-area: budget; } .b-launch { grid-area: launch; } .b-fact { grid-area: fact; }
+  /* Stock & housekeeping. Returns "" when there is nothing to say, and every
+     breakpoint puts it on the bottom edge so the collapsed row's gap is
+     adjacent to `fact` rather than a hole in the middle of the board. */
+  .b-ref { grid-area: ref; }
 
   /* One module surface: the app's ordinary white card, on its own class
      because the theme-proof audit samples .card and this page's markup stays
@@ -2146,7 +2155,6 @@
   /* Countdown and streaks. The T-minus numeral is the biggest thing on the
      page after the alert strip; streak rows read like a pit wall column. */
   .b-count .bnum { font-size: 44px; }
-  .b-tmin { padding: 2px 0 4px; }
   .b-streak { display: flex; align-items: baseline; gap: 9px; padding: 6px 0; border-top: 1px solid var(--line); }
   .b-streak .sn { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--brand-ink); flex: none; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
   .b-streak .sn.bad { color: var(--bad); }

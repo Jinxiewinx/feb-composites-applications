@@ -2544,6 +2544,49 @@ await t("curing shows a clock time, never a countdown", () => {
   assert(!/\d+\s*h\s*\d+\s*m left/.test(html), "and not as a countdown that goes stale between renders");
   assert(!/class="step"/.test(html), "and never inside .step, which would arm the 60s re-render interval");
 });
+await t("an issue folds into the run it holds up, and carries a flag rather than a second row", () => {
+  const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  DB.parts = [];
+  DB.workOrders = [
+    { id: "WO-MRG-1", partName: "MERGE ME", status: "InWork", dueDate: soon, moldEngineer: "Dana Chen", steps: [] },
+    { id: "WO-MRG-2", partName: "CLEAN", status: "InWork", dueDate: soon, moldEngineer: "Dana Chen", steps: [] },
+  ];
+  DB.projects = [
+    { id: "TKT-MA", kind: "issue", title: "Delam", status: "To Do", workOrderId: "WO-MRG-1", resolutionMethod: "", assignees: ["simon@berkeley.edu"], dueDate: "" },
+    { id: "TKT-MB", kind: "issue", title: "Pinhole", status: "To Do", workOrderId: "WO-MRG-1", resolutionMethod: "", assignees: [], dueDate: "" },
+    { id: "TKT-MC", kind: "issue", title: "Closed one", status: "Done", workOrderId: "WO-MRG-1", resolutionMethod: "UAI (Use As Is)", assignees: [], dueDate: "" },
+    // No work order in the list: an orphan must keep its own row rather than vanish.
+    { id: "TKT-MD", kind: "issue", title: "Orphan", status: "To Do", workOrderId: "WO-GONE", resolutionMethod: "", assignees: [], dueDate: soon },
+  ];
+  const rows = mergedDeadlineItems();
+  assert(!rows.some(r => ["TKT-MA", "TKT-MB", "TKT-MC"].includes(r.id)), "no issue keeps a row beside the run it belongs to");
+  const one = rows.find(r => r.id === "WO-MRG-1");
+  assert(one && one.issues === 2, "the run counts its OPEN issues, not its closed one: " + (one && one.issues));
+  assert(one.mine === true, "an issue assigned to you makes the run yours");
+  const clean = rows.find(r => r.id === "WO-MRG-2");
+  assert(clean && !clean.issues, "a run with no issues carries no flag");
+  assert(rows.some(r => r.id === "TKT-MD"), "an issue whose work order is not listed keeps its own row");
+  assert(dashRow(one).includes("⚑"), "and the flag renders on the row: " + dashRow(one));
+  assert(!dashRow(clean).includes("⚑"), "but not on a clean one");
+});
+
+await t("merging an issue never hides a date, and never absorbs a row into itself", () => {
+  const soon = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+  const sooner = new Date(Date.now() + 1 * 86400000).toISOString().slice(0, 10);
+  // The part pass can rewrite a surviving row's coll and id to the part's when
+  // the work order is Complete. byWoId still points at the same object, so the
+  // issue pass must still find it — this is the archive-shaped case.
+  DB.parts = [{ id: "P-MRG", partName: "ADOPTED", layupDeadline: soon, layupProgress: "In Layup", moldEngineer: "Dana Chen" }];
+  DB.workOrders = [{ id: "WO-MRG-3", partName: "ADOPTED", status: "Complete", dueDate: soon, moldEngineer: "Dana Chen", steps: [] }];
+  DB.projects = [{ id: "TKT-ME", kind: "issue", title: "Late issue", status: "To Do", workOrderId: "WO-MRG-3", resolutionMethod: "", assignees: [], dueDate: sooner }];
+  const rows = mergedDeadlineItems();
+  assert(!rows.some(r => r.id === "TKT-ME"), "the issue merged even though the row had adopted the part's identity");
+  const row = rows.find(r => r.coll === "parts" && r.id === "P-MRG");
+  assert(row, "the surviving row is still the part's, as the Complete-WO rule says");
+  assert(row.date === sooner, "the earliest date wins, so merging can only report MORE urgency: " + row.date);
+  assert(row.issues === 1, "and it carries the flag");
+});
+
 await t("the dashboard carries issues only — a shelved project never reaches the deadline list", () => {
   const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   DB.parts = []; DB.workOrders = [];

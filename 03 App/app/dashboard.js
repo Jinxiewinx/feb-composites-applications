@@ -115,6 +115,33 @@ function mergedDeadlineItems() {
     if (row.done && !it.done) { row.coll = "parts"; row.id = it.id; row.kind = it.kind; row.label = it.label; }
     row.done = row.done && it.done;         // not finished until both are
   });
+  /* Same argument again, one type down. Every issue REQUIRES a workOrderId
+     (v1.0.0 put issues on the run they hold up), so an issue row was always a
+     second line for a run already on this list — the exact double-count the
+     part/work-order merge above exists to undo, and the reason that one was
+     worth 40% of "behind schedule".
+
+     Also: an issue filed from a work order carries no due date, so today it
+     sinks into the "No date" fold where nobody looks. Folded into its run it
+     surfaces on a row that HAS a date, which is strictly more visible.
+
+     Snapshotted before the loop and absorbed by identity for the two reasons
+     the part pass documents. The row it merges into may already have adopted
+     the part's coll and id up there — byWoId still holds the same object, so
+     the lookup keeps working, and the flag belongs on it either way because it
+     is the same physical run. */
+  const issueItems = items.filter(i => i.coll === "projects");
+  issueItems.forEach(it => {
+    const iss = recById("projects", it.id);
+    const row = iss && iss.workOrderId ? byWoId.get(iss.workOrderId) : null;
+    if (!row || row === it || absorbed.has(row)) return;   // orphan, itself, or already merged away
+    absorbed.add(it);
+    if (it.date && (!row.date || it.date < row.date)) row.date = it.date;
+    row.mine = row.mine || it.mine;
+    // Only what is still open: a disposed issue is history, and a flag counting
+    // it would never go back down.
+    if (!it.done && projStatus(iss) !== "Cancelled") row.issues = (row.issues || 0) + 1;
+  });
   return items.filter(i => !absorbed.has(i));
 }
 
@@ -209,7 +236,10 @@ function dashRow(it) {
     ? `<span class="${dd != null && dd < 0 ? "warn" : ""}">${esc(it.date)}${dd != null ? ` (${paren})` : ""}</span>`
     : "no date";
   return `<div class="srow">
-    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}</span>
+    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${
+      // The run is held up by something. Not a count of everything ever filed:
+      // undisposed issues are what stop it closing.
+      it.issues ? ` <span class="warn tny" title="${it.issues} open issue${it.issues > 1 ? "s" : ""}">⚑ ${it.issues}</span>` : ""}</span>
     <span class="srow-meta">${esc(it.who || "—")} · ${when}</span>
   </div>`;
 }
@@ -256,6 +286,7 @@ function renderDashboard() {
       }</button>` : ""}
     </div>
     ${dashShopStatus(blocked, curing)}
+    ${dashShopRef()}
     ${dashSeason()}
     ${dashWeek()}
     ${dashFeed(watched)}
@@ -334,14 +365,14 @@ function dashCount(items, open) {
 
   let head;
   if (s && s.compDate) {
-    const dd = daysUntil(s.compDate);
+    // No day count here: the alert strip prints it, larger, above this module,
+    // and its tile scrolls HERE. Printing it twice made the scroll land on a
+    // copy of the thing you just clicked. What this owns is what the strip
+    // cannot say — which milestone is next, and how the season has gone.
     const next = (s.milestones || [])
       .filter(m => m.date && daysUntil(m.date) != null && daysUntil(m.date) >= 0)
       .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
-    head = `<div class="b-tmin">
-      <span class="bnum">${dd == null ? "?" : Math.abs(dd)}</span>
-      <span class="bl">${dd != null && dd < 0 ? "days since" : "days to"} <b>${esc(s.compName || "competition")}</b> · ${esc(s.compDate)}</span>
-    </div>
+    head = `<div class="srow-meta"><b>${esc(s.compName || "competition")}</b> · ${esc(s.compDate)}</div>
     ${next ? `<div class="srow-meta">next: ${esc(next.label)} · ${esc(next.date)} (${daysUntil(next.date)}d)</div>` : ""}`;
   } else {
     head = `<p class="muted tny">No competition date set.</p>
@@ -462,12 +493,23 @@ function dashBudget() {
   </div>`;
 }
 
-/* Shop status: everything wrong in the physical shop, one severity-dotted
-   list. Blocked gates (red), cure clocks (amber, clock time never countdown —
-   see curingNow), and the Inventory tab's own warning arithmetic (expired,
-   chemical rule violations, running low, unhoused). The flagship is the empty
-   state: a clean shop renders ONE line, because "the shop is fine" is real
-   information at a Monday meeting, and never a missing box. */
+/* Shop status: what is stopping work RIGHT NOW. Blocked gates (red) and cure
+   clocks (amber, clock time never a countdown — see curingNow), and nothing
+   else.
+
+   It used to also carry the Inventory tab's warning arithmetic, which made one
+   module answer two unrelated questions: "can the shop work" is a thing on a
+   clock that someone must act on today, and "is the store tidy" is a monthly
+   habit. They now sit apart — see dashShopRef — because the strip above counts
+   blocked and curing, so this module's job is the DETAIL behind those counts,
+   and four inventory chips buried under them were the reason nobody read it.
+
+   The flagship is still the empty state: a clean shop renders ONE line, because
+   "the shop is fine" is real information at a Monday meeting, and never a
+   missing box. That also lets this module sit high in the grid without
+   violating the rule that nothing which renders empty on the team's own archive
+   sits above the fold — blockedNow and curingNow are both structurally empty on
+   the SN5 records, and this line is what stands in their place. */
 function dashShopStatus(blocked, curing) {
   const rows = [];
   const dot = c => `<span class="sdot ${c}"></span>`;
@@ -479,6 +521,28 @@ function dashShopStatus(blocked, curing) {
     <span class="srow-meta">${c.hold.resin ? esc(c.hold.resin.label) : "resin not recorded"}${
       typeof holdIsCold === "function" && holdIsCold(c.hold) ? " · shop is cold, it will run long" : ""}</span></div>`));
 
+  const body = rows.length
+    ? rows.join("")
+    : `<div class="srow">${dot("ok")}<span class="sr-main">All clear — nothing blocked or curing</span></div>`;
+  return `<div class="bmod b-shop" id="dash-status">
+    <div class="bmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
+    ${body}
+  </div>`;
+}
+
+/* The store, and the habits that keep it honest: expired lots, the CS-011 §6
+   chemical-storage rule, what is running low, what has no shelf, and how long
+   since anyone walked the stock. Reference, not an alarm — every row here is a
+   count that links into Inventory, and none of it changes what can be built
+   this afternoon. That is why it sits at the bottom of every breakpoint.
+
+   Returns "" when there is nothing to say. Unlike Shop status it has no
+   defensible empty state — "0 expired, 0 low, 0 unhoused" is a row of zeroes,
+   not the news that the store is fine — so it collapses instead, which is safe
+   precisely because of where it sits. */
+function dashShopRef() {
+  const rows = [];
+  const dot = c => `<span class="sdot ${c}"></span>`;
   let footer = "";
   if (typeof invIndex === "function") {
     const idx = invIndex();
@@ -507,12 +571,10 @@ function dashShopStatus(blocked, curing) {
     }
   }
 
-  const body = rows.length
-    ? rows.join("")
-    : `<div class="srow">${dot("ok")}<span class="sr-main">All clear — nothing blocked, curing or flagged</span></div>`;
-  return `<div class="bmod b-shop" id="dash-status">
-    <div class="bmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
-    ${body}${footer}
+  if (!rows.length && !footer) return "";
+  return `<div class="bmod b-ref" id="dash-ref">
+    <div class="bmod-hd"><span>Stock &amp; housekeeping</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
+    ${rows.join("")}${footer}
   </div>`;
 }
 
