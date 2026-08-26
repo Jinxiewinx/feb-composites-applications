@@ -20,24 +20,22 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v1.0.0 is committed on main and NOT YET PUSHED OR DEPLOYED.** Two commits:
-`d96c1c6` (Tickets shelved, Issues onto the work order) and `aa5401f`
-(version, release script, splash). Live is still the previous build.
+**v1.0.0 is live and tagged.** Pushed, deployed, and verified by curling the
+changed files off the host: `APP_VERSION = "1.0.0"`, the `projects` TABS row
+carrying `hidden: true`, the splash markup, no "Load SN5 archive" anywhere,
+and `SHELVED.md` answering 404 rather than serving.
 
-- The release is v1.0.0, so `tools/release.mjs` is **not** the tool that cuts
-  it — the script bumps to a *new* version, and `APP_VERSION` and the
-  `CHANGELOG.md` section for 1.0.0 are already written. Push, deploy, then
-  `git tag -a v1.0.0`. Every release after this one uses the script.
-- Nobody sees the reload banner until a lead opens the deployed app and hits
-  ⋯ → "Announce this release", which writes `config/release`. That is
-  deliberate: it cannot be announced before it has actually landed.
-- The `#composites` note is printed by the release script and needs Simon's
-  ask before anyone sends it.
+- **Nobody sees the reload banner yet.** It needs a lead to open the deployed
+  app and hit ⋯ → "Announce this release", which writes `config/release`.
+  Deliberate: it cannot announce a version before that version has landed.
+- **The #composites note has not been sent** — that needs Simon.
+- Every release after this one is `node tools/release.mjs <version>`. This one
+  was cut by hand because the script bumps to a *new* version and 1.0.0 was
+  already written into core.js and CHANGELOG.md.
 - The issue fixtures in `tools/lib/fixtures.mjs` had **no `workOrderId`** until
-  now, so `issuesForWO()` matched nothing and every browser suite and mockup
-  had been photographing an empty Issues section. Both now point at
-  WO-SN6-002. If a populated-content suite starts asserting on issue counts,
-  that is where they come from.
+  this release, so `issuesForWO()` matched nothing and every browser suite and
+  mockup had been photographing an empty Issues section. Both now point at
+  WO-SN6-002.
 
 ---
 
