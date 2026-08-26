@@ -19,6 +19,16 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.1.0 — 2026-08-25
+
+- What's New for the board and work-order release
+- A shelf card reads top of the pile down
+- One row per board on the rack, not one row per size
+- Sort the rack, plan molds across a density range, and delete work orders cleanly
+- Write down what v2.0.0 actually was, and what shipping it taught
+
+---
+
 ## v2.0.2 — 2026-08-25
 
 - The release script stops writing the team's release note for them. It bumps
