@@ -31,11 +31,11 @@ var APP_VERSION = "2.0.2";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "The Season tab is the master tracker, in the app. One row per part we mean to make — add a row and name it, and fill in the rest whenever you know it.",
-  "Every cell on it edits in place, and the stage columns still ask for evidence before they move.",
-  "The dashboard stopped saying things twice: shop status is now just what is blocked and curing, and an issue shows as a flag on the run it is holding up.",
-  "You can add photos to an issue after raising it, straight from the work order.",
-  "Creating or editing a part opens on Details instead of below the steps.",
+  "Every board on the rack has its own line and its own BRD- number. Two identical sheets stacked together are two rows now, so you can say which one you cut.",
+  "The board list groups by grade, thickness or shelf, and sorts by rack order, size, id or newest. A shelf reads top of the pile down and says how deep each board is, so you know what you have to move first.",
+  "A mold can be planned across a range of board densities instead of one — say 30 to 45 — and the planner will use anything on the rack inside that range, which means fewer jobs blocked on the one grade being out.",
+  "Because a mold can now come off two grades, the cut list and every drawing sheet say the highest density used. Machine the whole stack at that feed rate.",
+  "Deleting a work order now takes its issues, photos and uploads with it instead of leaving them behind, and leads can tick off several runs and clear them in one go.",
 ];
 
 /* ---------- config/release ----------
