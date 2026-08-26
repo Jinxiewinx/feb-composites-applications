@@ -4692,6 +4692,42 @@ await t("the Boards list groups and sorts, and does nothing at all until asked",
   view = { ...view, sortKey: null, sortDir: "asc", mode: "list", id: null };
 });
 
+await t("a shelf card is in pile order, top of the stack first", () => {
+  /* Inside a group card the primary key is constant, so the tie-break IS the
+     order. On a shelf that has to be the pile: the card is a picture of a
+     physical stack, and rack order is the one key that only means anything
+     within a shelf. Ordering it by thickness there — which is what every other
+     card does — left the one view built around a shelf unable to say what was
+     on top. */
+  seedInventory();
+  const mk = (id, len, wid, thk) => ({ id, density: 30, qty: 1, location: "BIN-SN6-001",
+    len: { value: len, unit: "in" }, wid: { value: wid, unit: "in" }, thk: { value: thk, unit: "in" } });
+  // Deliberately jumbled: ids, thicknesses and sizes all disagree with each other.
+  DB.stock = [mk("BRD-SN6-030", 96, 48, 2), mk("BRD-SN6-011", 33, 19, 1),
+    mk("BRD-SN6-025", 96, 48, 1), mk("BRD-SN6-007", 96, 48, 1), mk("BRD-SN6-019", 48, 24, 1)];
+  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "boards", q: "", invDens: "",
+    sortKey: null, sortDir: "asc" };
+  render();
+  sortBoardsBy("location");
+  const order = [...main.innerHTML.matchAll(/<b>(BRD-[A-Z0-9-]+)<\/b>/g)].map(m => m[1]);
+  /* Index is rank by id within the location, so the pile top-down is
+     007, 011, 019, 025, 030 — which is NOT thickness order (030 is the only
+     2in board and would otherwise sort last, not fourth). */
+  assert(order.join(",") === "BRD-SN6-007,BRD-SN6-011,BRD-SN6-019,BRD-SN6-025,BRD-SN6-030",
+    "shelf card should read top of pile down, got " + order.join(","));
+  assert(main.innerHTML.includes("Rack order"),
+    "and it shows the depth, because an order the reader cannot check is worse than no order");
+  assert(/on top/.test(main.innerHTML) && /4 deep/.test(main.innerHTML), "in words, not raw indexes");
+
+  // Unfiled boards have no pile, so they fall through to the size chain.
+  DB.stock = DB.stock.map(b => ({ ...b, location: "" }));
+  render();
+  const unfiled = [...main.innerHTML.matchAll(/<b>(BRD-[A-Z0-9-]+)<\/b>/g)].map(m => m[1]);
+  assert(unfiled[0] === "BRD-SN6-007" && unfiled[unfiled.length - 1] === "BRD-SN6-030",
+    "thinnest-largest first, thickest last — the ordinary chain, got " + unfiled.join(","));
+  view = { ...view, sortKey: null, sortDir: "asc", mode: "list", id: null };
+});
+
 await t("one definition of rack order, shared by the list and the packer", () => {
   /* Two definitions would drift, and the whole feature is these two agreeing
      about which board is easiest to get at. */

@@ -376,14 +376,32 @@ function sortBoardsBy(key) {
   render();
 }
 function toggleBoardSortDir() { view.sortDir = view.sortDir === "desc" ? "asc" : "desc"; render(); }
-/* Ties break thickness up, then face area down, then id. That is not
-   decoration: without a total order the rows reshuffle whenever a Firestore
-   snapshot re-renders. It is also what keeps the default view reading the way
-   it always did — same sizes in the same order, with the boards that used to
-   hide behind "+3 more" now listed under each other in id order. */
+/* INSIDE A GROUP CARD THE TIE-BREAK *IS* THE ORDER. Every row on a card shares
+   the card's value, so the primary key cannot separate them and the chain below
+   decides everything the reader sees. Worth saying plainly, because it means a
+   tie-break is not a detail here — and because the direction toggle only
+   applies to the primary key, so ▲/▼ reverses the CARDS and not the rows in
+   them.
+
+   Grouped by SHELF, that order has to be the pile: a location card is a picture
+   of a physical stack, and rack order is the one key that only means anything
+   within a shelf, so leaving it unused on the one view built around a shelf was
+   backwards. Simon, asked which he wanted: "pile order".
+
+   Everywhere else the chain is thickness up, then face area down, then id —
+   which is what keeps the default grade view reading the way it always did,
+   with the boards that used to hide behind "+3 more" listed under each other in
+   id order. A total order is not decoration either way: without one the rows
+   reshuffle whenever a Firestore snapshot re-renders. */
+const BOARD_ROW_TIES = {
+  // Top of the pile first. Unfiled boards are all index 0, so they tie here and
+  // fall through to the size chain, which is right — there is no pile to read.
+  location: (a, b) => a.index - b.index,
+};
 function sortedBoardRows(rows, key) {
   const get = BOARD_SORT_COLS[key];
   const cmp = BOARD_SORT_CMP[key];
+  const tie = BOARD_ROW_TIES[key];
   const mul = view.sortDir === "desc" ? -1 : 1;
   return rows.slice().sort((a, b) => {
     if (cmp) { const c = cmp(a, b); if (c) return c * mul; }
@@ -392,7 +410,8 @@ function sortedBoardRows(rows, key) {
       if (av < bv) return -mul;
       if (av > bv) return mul;
     }
-    return (a.thkMm - b.thkMm) || (b.lenMm * b.widMm - a.lenMm * a.widMm) || cmpId(a.id, b.id);
+    return (tie ? tie(a, b) : 0)
+      || (a.thkMm - b.thkMm) || (b.lenMm * b.widMm - a.lenMm * a.widMm) || cmpId(a.id, b.id);
   });
 }
 /* Recomputed per render and read by BOARD_SORT_COLS.index. A module-level slot
@@ -495,8 +514,10 @@ function boardCard(label, rs, key, flat) {
   if (!rows.length) return "";
   const boards = rows.reduce((n, r) => n + r.qty, 0);
   const sizes = new Set(rows.map(r => boardSizeKey(r.rec))).size;
-  // The rack-order column earns its width only when that is what you asked for.
-  const showIndex = key === "index";
+  /* The rack-order column earns its width when that is what you asked for, and
+     on a shelf card, where it is what the rows are ordered by — an order the
+     reader cannot check is worse than no order. */
+  const showIndex = key === "index" || key === "location";
   return `<div class="card">
     ${flat ? "" : `<div class="pgrouphd"><span class="pg-name">${label}</span>
       <span class="pg-n">${boards} board${boards === 1 ? "" : "s"}</span>

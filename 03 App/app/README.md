@@ -540,7 +540,9 @@ in its own pile, so a row says "on top" or "3 deep", and it is the same number
 the planner spends when it decides which board to open — the list and the
 packer share one definition rather than two that could drift. A shelf card
 regroups from the boards themselves, so a size that lives on two shelves shows
-on each with only what is actually there. Touch nothing and the order is what
+on each with only what is actually there, and reads **top of the pile down**
+with each board saying how deep it is — a shelf card is a picture of a stack,
+and rack order is the one thing that only means anything within a shelf. Touch nothing and the order is what
 it always was: grades ascending, thinnest first inside each.
 
 Quantities are **volume in ft³**, not area. A mold is cut out of a solid and
