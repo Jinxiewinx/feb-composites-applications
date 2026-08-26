@@ -96,6 +96,9 @@ it should be tightened.
 
 ## Next up (not started)
 
+- Remove the "Work in progress" banner at the top of the Season tab (top of
+  `renderSeason` in `season.js`, plus its test) once the tab settles. It is a
+  `.gate` strip added in v2.1.1 and it is meant to be temporary.
 - Decide the four app-only families (Receiving, Export, Storage map, Search
   results, plus `table.sub`): lift them into `components.css` or drop them from
   `conventions.md`. 24 classes, roughly 73 selectors, and a real call rather
