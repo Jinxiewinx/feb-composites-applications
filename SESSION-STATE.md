@@ -20,10 +20,9 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.0.2 is live and tagged**, and the app is v2.0.0's feature set plus two
-patches to the release process itself. Verified against the host each time:
-`APP_VERSION`, `season.js` answering 200, and What's New reading in the team's
-words.
+**v2.1.0 is live and tagged** — the rack and work-order release. Verified
+against the host: `APP_VERSION` reads 2.1.0 and What's New is the hand-written
+copy, not commit subjects.
 
 - **Nobody sees the reload banner or What's New yet.** A lead has to open the
   deployed app and hit ⋯ → "Announce this release", which writes
@@ -31,16 +30,16 @@ words.
 - **The #composites note has not been sent** — that needs Simon. The script
   prints it and never posts.
 
-**Three board/work-order changes are landed on main but NOT released** — no tag,
-no deploy, so nothing is live. They want one minor version between them:
+**The Slack note the release script prints is built from commit subjects**, so
+v2.1.0's included "What's New for the board and work-order release" and "Write
+down what v2.0.0 actually was" — internal sentences, in front of the whole team.
+This is the exact failure that got subject-generation removed from WHATS_NEW;
+the Slack note still has it. Rewrite the note by hand before sending, or fix the
+script to reuse WHATS_NEW.
 
-- The Boards list gained a group/sort control, default order unchanged.
-- A mold is planned against a density RANGE; inside it the packer mixes grades
-  freely, and the highest grade cut is surfaced everywhere because it sets the
-  CNC feed. `min == max` is asserted byte-identical to the old packer — that
-  test is the rollback story, so do not let it drift.
-- Deleting work orders now takes child issues, storage objects and
-  back-pointers with it.
+**`min == max` is asserted byte-identical to the pre-range packer.** That test in `test_packer.mjs` is the rollback story
+for the whole density-range feature — a mold planned at one grade must pack
+exactly as it did before ranges existed. Do not let it drift.
 
 **Adding a method to `fb` means adding it to seven dev shims too.** `fb.js` is
 the real one, but `tools/serve_populated.mjs`, `tools/lib/browser.mjs`,
