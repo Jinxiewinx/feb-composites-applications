@@ -18,14 +18,19 @@
  *   9. verifies the new version is actually live, by fetching it
  *  10. prints the Slack note and STOPS
  *
- * WHAT IT CANNOT DO FOR YOU:
+ * WHAT IT REFUSES TO GUESS:
  *
- * Commit subjects here are written for the next engineer reading git log, and
- * they make good CHANGELOG lines. They are NOT always the sentence to put on
- * fifteen people's screens — "Release notes skip the handoff file's own
- * commits" is a true and useless thing to interrupt somebody with. Read
- * WHATS_NEW in core.js before this deploys and rewrite it in the team's words.
- * The CHANGELOG keeps the subjects either way.
+ * WHATS_NEW. Commit subjects are written for the next engineer reading git log
+ * and they make good CHANGELOG lines, but they are not the sentences to put on
+ * fifteen people's screens — v2.0.0 nearly shipped "Release notes skip the
+ * handoff file's own commits" as the first thing the team would read, which is
+ * true and useless to somebody standing at a layup table.
+ *
+ * This script used to generate WHATS_NEW from the subjects, which meant it
+ * silently overwrote hand-written copy on the next release. Now it does not
+ * touch it: it CHECKS that you changed it since the last tag, prints the
+ * subjects as raw material, and refuses to ship if you did not. The CHANGELOG
+ * keeps the subjects either way.
  *
  * WHAT IT DELIBERATELY DOES NOT DO:
  *
@@ -113,10 +118,6 @@ if (subjects.length > HIGHLIGHT_CAP) {
   say(`\n  Note: WHATS_NEW takes the first ${HIGHLIGHT_CAP}. Edit core.js before you deploy`);
   say("  if those are not the ones the team cares about.");
 }
-say("\n  WHATS_NEW now reads as below. These interrupt the whole team on their next");
-say("  reload — rewrite them in core.js in the team's words if they read like a");
-say("  changelog rather than a note to a person:");
-highlights.forEach(h => say("    • " + h));
 
 /* ---- 4. the version in the app ----------------------------------------- */
 let core = readFileSync(CORE, "utf8");
@@ -127,10 +128,30 @@ if (!nRe.test(core)) die("Couldn't find the `var WHATS_NEW = [ … ];` block in 
 const from = core.match(vRe)[0].match(/"([^"]*)"/)[1];
 say(`\n  core.js: v${from} → v${version}`);
 
+/* WHATS_NEW is a human's job. What this does is make sure the human did it:
+   if the block is byte-identical to the one at the previous tag, it is last
+   release's copy and would go out describing the wrong version. */
+if (prev) {
+  let prevCore = "";
+  try { prevCore = run("git", ["show", `${prev}:03 App/app/core.js`]); } catch { /* file is new */ }
+  const prevNotes = (prevCore.match(nRe) || [])[0];
+  const nowNotes = (core.match(nRe) || [])[0];
+  if (prevNotes && nowNotes && prevNotes === nowNotes) {
+    die("WHATS_NEW in core.js has not changed since " + prev + ", so it still\n" +
+        "describes that release. It is what interrupts the whole team on their next\n" +
+        "reload, so write it in their words before shipping.\n\n" +
+        "This release's commit subjects, as raw material:\n\n" +
+        highlights.map(h => "  - " + h).join("\n") + "\n");
+  }
+}
 core = core.replace(vRe, `var APP_VERSION = "${version}";`);
-core = core.replace(nRe, "var WHATS_NEW = [\n" +
-  highlights.map(h => `  ${JSON.stringify(h)},`).join("\n") + "\n];");
-act("write core.js", () => writeFileSync(CORE, core));
+act("write core.js (APP_VERSION only — WHATS_NEW is yours)", () => writeFileSync(CORE, core));
+
+/* Printed AFTER the stale check, so what is shown is what will ship. */
+say("\n  WHATS_NEW, which is what the team reads on their next reload:");
+((core.match(nRe) || [""])[0].match(/"(?:[^"\\]|\\.)*"/g) || []).forEach(q => {
+  try { say("    • " + JSON.parse(q)); } catch { say("    • " + q); }
+});
 
 /* ---- 5. the changelog --------------------------------------------------- */
 const today = run("git", ["log", "-1", "--format=%cs"]).trim();

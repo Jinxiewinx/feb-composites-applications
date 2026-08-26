@@ -31,8 +31,11 @@ var APP_VERSION = "2.0.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "What's New reads like a note to a person, not a changelog",
-  "The release check stops crying wolf",
+  "The Season tab is the master tracker, in the app. One row per part we mean to make — add a row and name it, and fill in the rest whenever you know it.",
+  "Every cell on it edits in place, and the stage columns still ask for evidence before they move.",
+  "The dashboard stopped saying things twice: shop status is now just what is blocked and curing, and an issue shows as a flag on the run it is holding up.",
+  "You can add photos to an issue after raising it, straight from the work order.",
+  "Creating or editing a part opens on Details instead of below the steps.",
 ];
 
 /* ---------- config/release ----------
