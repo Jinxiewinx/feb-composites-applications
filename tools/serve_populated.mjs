@@ -43,6 +43,9 @@ window.fb = {
   roster: { role: "lead", name: "Simon Starbuck", email: "starbuck@berkeley.edu" },
   rosterCheckFailed: false,
   save: async () => {}, del: async () => {}, mutateField: async () => {}, appendTo: async () => {},
+  // The bulk delete path. Present here because the app calls it: a shim missing
+  // it turns "delete these work orders" into a TypeError in every local run.
+  delMany: async () => {}, deleteFiles: async (p) => ({ ok: (p || []).length, failed: [] }),
   upload: async (path, file) => ({ url: "icon-192.png", path: "p", name: (file && file.name) || "uploaded.png", size: 1, type: "image/png" }),
   deleteFile: async () => {},
   allocId: async () => "X-1", importMany: async () => {},

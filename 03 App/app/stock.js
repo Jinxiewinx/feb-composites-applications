@@ -39,6 +39,32 @@ function densityStockCounts() {
   }
   return m;
 }
+/* How much board there is inside a DECLARED RANGE, and which grades make it up.
+   The mold modal needs both: the total says whether the plan is buildable at
+   all, and the breakdown says what feed rate you are letting yourself in for,
+   because the densest board in a stack sets the CNC feed for the whole thing. */
+function densityRangeStock(dMin, dMax) {
+  const lo = canonDensity(dMin);
+  const hi = canonDensity(dMax) ?? lo;
+  const grades = [];
+  let boards = 0;
+  for (const [d, n] of densityStockCounts()) {
+    if (lo != null && (d < lo || d > hi)) continue;
+    boards += n; grades.push([d, n]);
+  }
+  grades.sort((a, b) => a[0] - b[0]);
+  return { boards, grades, max: grades.length ? grades[grades.length - 1][0] : null };
+}
+/* Read the mold modal's density pair. A BLANK MAX MEANS MAX = MIN, so the
+   one-grade case — which is every mold anybody planned before ranges existed —
+   is still reachable by typing one number and ignoring the second field. */
+function readMoldDensityRange(val) {
+  const min = canonDensity(val("ml-density-min"));
+  const rawMax = String(val("ml-density-max") ?? "").trim();
+  const max = rawMax === "" ? min : canonDensity(rawMax);
+  return { min, max };
+}
+
 /* One datalist, one call site shape. The id has to be unique per rendered
    input, because two datalists sharing an id is the silently-wrong-suggestions
    bug nobody reports. */
@@ -267,18 +293,84 @@ function delBoard(id) {
    differently depending on which segment you happened to press.
    ========================================================================== */
 
-/* Grouped by GRADE, because that is the axis the packer refuses to substitute
-   across (CS-004 — 60lb seals better, and you cannot swap it in silently), so
-   it is the one that decides whether a job can be cut at all. */
-function boardsByGrade(groups) {
-  const m = new Map();
-  for (const g of groups) {
-    const d = canonDensity(g.density) ?? 30;
-    if (!m.has(d)) m.set(d, []);
-    m.get(d).push(g);
-  }
-  return [...m.entries()].sort((a, b) => a[0] - b[0]);
+/* ==========================================================================
+   GROUPING AND SORTING THE RACK
+
+   Same shape as WO_GROUPS / WO_SORT_COLS in workorders.js, and for the same
+   reason: some questions about the rack are "show me it broken up by X" and
+   some are "put it in order by X", and one control should answer both. A key in
+   BOARD_GROUPS draws a card per value; anything else flattens to one table.
+
+   THE DEFAULT IS GRADE, and grade-grouped output is byte-for-byte what this
+   list printed before the control existed — so nobody who never touches it sees
+   anything move. Grade leads because it is the axis the packer refuses to
+   substitute across silently (CS-004), so it is the one that decides whether a
+   job can be cut at all.
+
+   ROWS ARE SIZE GROUPS, not boards. So a key that lives on the individual board
+   — index, location, id, when it was added — needs a REPRESENTATIVE, and which
+   one is a real choice, written out per key below.
+   ========================================================================== */
+
+/* Partition functions: raw board record -> the card it belongs on. Grade and
+   thickness are already inside boardSizeKey, so partitioning by them can never
+   split a size row. Location is not, and splitting there is correct: a card is
+   then a shelf, and "what is on this shelf" is the question being asked. */
+const BOARD_GROUPS = {
+  grade: b => String(canonDensity(b.density) ?? 30),
+  thickness: b => String(Math.round(toMm(b.thk) * 10) / 10),
+  location: b => String(b.location || ""),
+};
+const BOARD_GROUP_LABEL = {
+  grade: v => `${v} lb/ft³`,
+  thickness: v => `${fmtMm(Number(v))} board`,
+  location: v => v ? shopRefChip(v) : `<span class="muted">No location</span>`,
+};
+const BOARD_SORT_COLS = {
+  grade: g => g.density,
+  thickness: g => g.thkMm,
+  // Longest dimension first: it is what decides whether a big blank fits at all.
+  size: g => -Math.max(g.lenMm, g.widMm),
+  /* MIN index across the row's boards — "which of these can I reach soonest".
+     Max would answer "how buried is the worst one", which nobody asks. */
+  index: g => Math.min(...g.members.map(b => BOARD_INDEX.get(b.id) ?? 0)),
+  location: g => (g.members.map(b => b.location).filter(Boolean).sort()[0] || "~").toLowerCase(),
+  id: g => g.members.map(b => b.id).sort(cmpId)[0] || "",
+  // Newest member first, because "what did we just put on the rack" is the
+  // question, and a row is as new as its newest board.
+  recent: g => g.members.map(b => b.ts || "").sort().reverse()[0] || "",
+};
+const BOARD_SORT_LABELS = {
+  grade: "Group: grade", thickness: "Group: thickness", location: "Group: location",
+  index: "Sort: rack order", size: "Sort: size", id: "Sort: board id", recent: "Sort: newest",
+};
+/* Grade is the default, and "the default" has to mean the pre-existing order —
+   see the header note. */
+function boardSortKey() { return BOARD_SORT_COLS[view.sortKey] ? view.sortKey : "grade"; }
+function sortBoardsBy(key) {
+  if (view.sortKey === key) view.sortDir = view.sortDir === "desc" ? "asc" : "desc";
+  else { view.sortKey = key; view.sortDir = "asc"; }
+  render();
 }
+function toggleBoardSortDir() { view.sortDir = view.sortDir === "desc" ? "asc" : "desc"; render(); }
+/* Ties always break the way groupBoards already ordered them — thickness up,
+   then face area down, then key. That is not decoration: without a total order
+   the rows reshuffle whenever a Firestore snapshot re-renders, and with grade
+   selected it is what makes the default identical to the old hard-coded list. */
+function sortedBoardGroups(groups, key) {
+  const get = BOARD_SORT_COLS[key];
+  const mul = view.sortDir === "desc" ? -1 : 1;
+  return groups.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    if (av < bv) return -mul;
+    if (av > bv) return mul;
+    return (a.thkMm - b.thkMm) || (b.lenMm * b.widMm - a.lenMm * a.widMm) || a.key.localeCompare(b.key);
+  });
+}
+/* Recomputed per render and read by BOARD_SORT_COLS.index. A module-level slot
+   rather than a threaded argument because the comparator signature is fixed by
+   the pattern this copies; renderBoardsList fills it before it sorts anything. */
+let BOARD_INDEX = new Map();
 
 function renderBoardsList() {
   const q = (view.q || "").toLowerCase();
@@ -287,6 +379,8 @@ function renderBoardsList() {
   const groups = all
     .filter(g => dens == null || (canonDensity(g.density) ?? 30) === dens)
     .filter(g => !q || (groupLabel(g) + " " + g.density + " " + JSON.stringify(g.members)).toLowerCase().includes(q));
+  BOARD_INDEX = boardIndexById();
+  const sortKey = boardSortKey();
 
   const boards = groups.reduce((n, g) => n + g.qty, 0);
   const ft3 = groups.reduce((n, g) => n + g.ft3, 0);
@@ -313,45 +407,89 @@ function renderBoardsList() {
       <option value="">All grades</option>
       ${grades.map(d => `<option value="${d}" ${String(view.invDens) === String(d) ? "selected" : ""}>${d} lb/ft³</option>`).join("")}
     </select>
+    <select title="Group or sort by" onchange="sortBoardsBy(this.value)">
+      ${Object.keys(BOARD_SORT_LABELS).map(k => `<option value="${k}" ${sortKey === k ? "selected" : ""}>${esc(BOARD_SORT_LABELS[k])}</option>`).join("")}
+    </select>
+    <button class="sm sortdir" title="Reverse order" onclick="toggleBoardSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
     ${view.q || view.invDens ? `<button class="sm" onclick="view.q='';view.invDens='';render()">Clear</button>` : ""}
   </div>
   ${!groups.length ? `<div class="card"><span class="muted">${
     (DB.stock || []).length ? "Nothing matches these filters."
     : `No board stock recorded yet. <b>+ Board</b> for each sheet and offcut on the rack at RFS.`}</span></div>` : ""}
-  ${boardsByGrade(groups).map(([d, gs]) => `
-    <div class="card">
-      <div class="pgrouphd"><span class="pg-name">${d} lb/ft³</span>
-        <span class="pg-n">${gs.reduce((n, g) => n + g.qty, 0)} board${gs.reduce((n, g) => n + g.qty, 0) === 1 ? "" : "s"}</span>
-        <span class="pg-n">${gs.length} size${gs.length === 1 ? "" : "s"}</span>
-        <span class="pg-n">${gs.reduce((n, g) => n + g.ft3, 0).toFixed(1)} ft³</span></div>
-      <table class="list">
-        <tr><th>Board</th><th>Size</th><th>Qty</th><th>Volume</th><th>Where</th></tr>
-        ${gs.map(g => {
-          const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
-          /* The id leads, because that is what is printed on the label stuck to
-             the sheet and what anybody standing at the rack reads off it. A row
-             is still a SIZE, so it names the id when the size is one record —
-             which it nearly always is — and says how many records otherwise. */
-          const ids = g.members.map(b => b.id);
-          const lead = ids.length === 1 ? esc(ids[0])
-            : `${esc(ids[0])} <span class="muted tny">+${ids.length - 1} more</span>`;
-          const note = g.members.map(b => b.notes).filter(Boolean)[0] || "";
-          return `<tr onclick="selectInvRec('${esc(g.id)}')">
-            <td><b>${lead}</b>${note ? `<div class="tny muted">${esc(note.length > 46 ? note.slice(0, 45) + "…" : note)}</div>` : ""}</td>
-            <td>${esc(groupLabel(g))}</td>
-            <td>${esc(g.qty)}</td>
-            <td>${g.ft3.toFixed(2)} ft³</td>
-            <td class="tny">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : `<span class="muted">—</span>`}</td>
-          </tr>`;
-        }).join("")}
-      </table>
-    </div>`).join("")}
+  ${boardSections(groups, sortKey)}
   ${Object.keys(buckets).length ? `<div class="card">
     <h3>Board on hand, by thickness</h3>
     <div class="grid">
       ${Object.keys(buckets).sort().map(k => `<div class="f"><label>${esc(k)}</label><div class="ro">${buckets[k].toFixed(2)} ft³</div></div>`).join("")}
     </div>
   </div>` : ""}`;
+}
+
+/* One card per group value, or one flat table when the key is a sort rather
+   than a grouping. Sections are ordered by the same comparator as the rows
+   inside them, so reversing the direction reverses the whole list rather than
+   flipping rows inside frozen cards. */
+function boardSections(groups, key) {
+  const part = BOARD_GROUPS[key];
+  if (!part) return boardCard("", groups, key, true);
+  /* Regroup from the RAW boards that survived the filters, not from the size
+     rows: a size can span two shelves, and on a location card it has to appear
+     on each of them with only the boards that are actually there. */
+  const buckets = new Map();
+  for (const g of groups) for (const b of g.members) {
+    const v = part(b);
+    if (!buckets.has(v)) buckets.set(v, []);
+    buckets.get(v).push(b);
+  }
+  const sections = [...buckets.entries()].map(([v, boards]) => ({ v, gs: groupBoards(boards) }));
+  /* Order the cards by the same key, using each card's first row as its
+     representative — so "grade, descending" walks the grades downward, and the
+     no-location card lands where an empty value sorts rather than in a special
+     place. */
+  const mul = view.sortDir === "desc" ? -1 : 1;
+  sections.sort((a, b) => {
+    const av = BOARD_SORT_COLS[key](sortedBoardGroups(a.gs, key)[0]);
+    const bv = BOARD_SORT_COLS[key](sortedBoardGroups(b.gs, key)[0]);
+    return av < bv ? -mul : av > bv ? mul : String(a.v).localeCompare(String(b.v));
+  });
+  return sections.map(s => boardCard(BOARD_GROUP_LABEL[key](s.v), s.gs, key, false)).join("");
+}
+function boardCard(label, gs, key, flat) {
+  const rows = sortedBoardGroups(gs, key);
+  if (!rows.length) return "";
+  const boards = rows.reduce((n, g) => n + g.qty, 0);
+  // The rack-order column earns its width only when that is what you asked for.
+  const showIndex = key === "index";
+  return `<div class="card">
+    ${flat ? "" : `<div class="pgrouphd"><span class="pg-name">${label}</span>
+      <span class="pg-n">${boards} board${boards === 1 ? "" : "s"}</span>
+      <span class="pg-n">${rows.length} size${rows.length === 1 ? "" : "s"}</span>
+      <span class="pg-n">${rows.reduce((n, g) => n + g.ft3, 0).toFixed(1)} ft³</span></div>`}
+    <table class="list">
+      <tr><th>Board</th><th>Size</th>${flat ? "<th>Grade</th>" : ""}${showIndex ? "<th>Rack order</th>" : ""}<th>Qty</th><th>Volume</th><th>Where</th></tr>
+      ${rows.map(g => {
+        const where = [...new Set(g.members.map(b => b.location).filter(Boolean))];
+        /* The id leads, because that is what is printed on the label stuck to
+           the sheet and what anybody standing at the rack reads off it. A row
+           is still a SIZE, so it names the id when the size is one record —
+           which it nearly always is — and says how many records otherwise. */
+        const ids = g.members.map(b => b.id);
+        const lead = ids.length === 1 ? esc(ids[0])
+          : `${esc(ids[0])} <span class="muted tny">+${ids.length - 1} more</span>`;
+        const note = g.members.map(b => b.notes).filter(Boolean)[0] || "";
+        const idx = Math.min(...g.members.map(b => BOARD_INDEX.get(b.id) ?? 0));
+        return `<tr onclick="selectInvRec('${esc(g.id)}')">
+          <td><b>${lead}</b>${note ? `<div class="tny muted">${esc(note.length > 46 ? note.slice(0, 45) + "…" : note)}</div>` : ""}</td>
+          <td>${esc(groupLabel(g))}</td>
+          ${flat ? `<td>${esc(g.density)} lb/ft³</td>` : ""}
+          ${showIndex ? `<td class="tny">${where.length ? (idx === 0 ? "on top" : `${idx} deep`) : `<span class="muted">unfiled</span>`}</td>` : ""}
+          <td>${esc(g.qty)}</td>
+          <td>${g.ft3.toFixed(2)} ft³</td>
+          <td class="tny">${where.length ? where.map(l => shopRefChip(String(l))).join(" ") : `<span class="muted">—</span>`}</td>
+        </tr>`;
+      }).join("")}
+    </table>
+  </div>`;
 }
 
 /* ---------- size pane ----------
@@ -485,7 +623,8 @@ function runSliceInline(msg) {
   const opts = { ...(msg.opts || {}) };
   if (msg.supply) opts.supply = msg.supply;
   if (msg.boards && msg.boards.length) {
-    opts.score = layers => moldCost(layers, msg.boards, { density: msg.density }).cost;
+    opts.score = layers => moldCost(layers, msg.boards,
+      { densityMin: msg.densityMin, densityMax: msg.densityMax }).cost;
   }
   const r = (msg.thicknesses && msg.thicknesses.length)
     ? sliceMold(tris, msg.thicknesses, opts)
@@ -552,12 +691,16 @@ function fitPlanForStorage(plan) {
 }
 
 /* Distinct thicknesses actually on the rack, in mm — what the planner is
-   allowed to choose from. No point offering a 3in stack we do not own. */
-function stockThicknessesMm(density) {
-  const d = density == null ? null : canonDensity(density);
+   allowed to choose from. No point offering a 3in stack we do not own.
+
+   Takes a RANGE. No arguments still means every grade; one argument means that
+   grade only, which is what min == max is. */
+function stockThicknessesMm(dMin, dMax) {
+  const lo = dMin == null ? null : canonDensity(dMin);
+  const hi = dMax == null ? lo : canonDensity(dMax);
   const set = new Map();
   for (const b of (DB.stock || [])) {
-    if (d != null && canonDensity(b.density) !== d) continue;
+    if (lo != null) { const d = canonDensity(b.density); if (d == null || d < lo || d > hi) continue; }
     const mm = toMm(b.thk);
     if (Number.isFinite(mm) && mm > 0) set.set(Math.round(mm * 10) / 10, true);
   }
@@ -602,13 +745,18 @@ async function loadSampleMold(file) {
 function uploadMold(existing) {
   const avail = stockThicknessesMm();
   const e = existing || {};
-  const dens = canonDensity(e.density) ?? 30;
+  const dMin = canonDensity(e.densityMin ?? e.density) ?? 30;
+  const dMax = canonDensity(e.densityMax ?? e.densityMin ?? e.density) ?? dMin;
   const counts = densityStockCounts();
   openModal(`
     <h2>${existing ? "Re-plan " + esc(e.name || e.id) : "New mold"}</h2>
     <div class="field"><label>Name</label><input id="ml-name" value="${esc(e.name || "")}" placeholder="e.g. UT nose plug"></div>
-    <div class="field"><label>Board density (lb/ft³)</label>${densityInput("ml-density", dens)}
-      <span class="muted tny">Cut lists pack blanks onto boards of this density.
+    <div class="field"><label>Board density, min (lb/ft³)</label>${densityInput("ml-density-min", dMin)}</div>
+    <div class="field"><label>Board density, max (lb/ft³)</label>${densityInput("ml-density-max", dMax === dMin ? "" : dMax, `placeholder="same as min"`)}
+      <span class="muted tny">Leave max blank to hold the mold to one grade, which is what
+        every mold did before ranges existed. Give a range and <b>any board inside it may
+        supply any blank</b> — including two grades glued edge to edge in one layer — so the
+        <b>highest</b> grade in the range is the feed rate the whole mold gets machined at.
         ${counts.size ? `On the rack: ${[...counts].sort((a, b) => a[0] - b[0]).map(([d, n]) => `${d} lb (${n})`).join(" · ")}.`
                       : "Nothing on the rack yet."}</span></div>
     <div class="field"><label>Start from</label><select id="ml-src" onchange="moldSrcChanged()">
@@ -684,7 +832,11 @@ async function submitMold() {
     if (!name) { toast("Give the mold a name.", "error"); return; }
     const id = await allocId("molds");
     if (!id) return;
-    const m = { id, name, stage: "Designed", density: String(canonDensity(val("ml-density")) ?? 30), createdBy: myEmail() };
+    const nd = readMoldDensityRange(val);
+    const nlo = nd.min ?? 30, nhi = nd.max ?? nlo;
+    // `density` stays, equal to min, so every reader that wants one number keeps working.
+    const m = { id, name, stage: "Designed", density: String(nlo),
+      densityMin: String(nlo), densityMax: String(nhi), createdBy: myEmail() };
     (DB.molds = DB.molds || []).push(m);
     save("molds", m);
     closeModal();
@@ -695,8 +847,10 @@ async function submitMold() {
   }
   const isBox = val("ml-src") !== "stl";
   const auto = val("ml-mode") !== "manual";
-  const density = canonDensity(val("ml-density"));
-  if (density == null) { toast("Board density is a plain number in lb/ft³ — 30, 45, 60.", "error"); return; }
+  const { min: dLo, max: dHi } = readMoldDensityRange(val);
+  if (dLo == null || dHi == null) { toast("Board density is a plain number in lb/ft³ — 30, 45, 60.", "error"); return; }
+  if (dHi < dLo) { toast(`The maximum density has to be at least the minimum — you asked for ${dLo} to ${dHi}.`, "error"); return; }
+  const density = dLo;   // the one number every downstream reader still wants
 
   let thkMm = null;
   if (!auto) {
@@ -707,14 +861,17 @@ async function submitMold() {
     }
     thkMm = list.map(v => toMm({ value: v, unit: tUnit }));
   }
-  const available = stockThicknessesMm(density);
+  const available = stockThicknessesMm(dLo, dHi);
   /* The rack itself, not just the distinct thicknesses on it. Two things need
      it: compositionCandidates must not propose four 3in layers against one 3in
      sheet, and moldCost scores a candidate by actually packing it. Filtered to
-     the chosen density because CS-004 says the grades are not interchangeable.
+     the DECLARED RANGE. CS-004 still says grades are not interchangeable
+     silently — the range is where somebody says so out loud, and inside it the
+     boards are one pool, which is why `supply` below sums across grades rather
+     than per grade.
      Empty (nobody has entered stock yet) means neither is applied and planning
      falls back to the volume heuristic. */
-  const rack = boardsForPacking().filter(b => b.density === density);
+  const rack = boardsForPacking().filter(b => b.density >= dLo && b.density <= dHi);
   const supply = {};
   for (const b of rack) {
     const k = Math.round(b.thk * 10) / 10;
@@ -724,8 +881,9 @@ async function submitMold() {
     // Name the grades that DO have board. "pick the other density" was fine
     // when there were two; density is typed now, so say what is actually there.
     const have = [...densityStockCounts().keys()].sort((a, b) => a - b);
-    toast(`No ${density} lb board stock on the rack — the planner picks thicknesses from what you actually have. ${
-      have.length ? `Add boards, or plan at ${have.join(" or ")} lb.` : "Add boards first."}`, "error");
+    const asked = dLo === dHi ? `${dLo} lb` : `${dLo}–${dHi} lb`;
+    toast(`No ${asked} board stock on the rack — the planner picks thicknesses from what you actually have. ${
+      have.length ? `Add boards, widen the range, or plan at ${have.join(" or ")} lb.` : "Add boards first."}`, "error");
     return;
   }
 
@@ -739,7 +897,7 @@ async function submitMold() {
     for (const [r, label] of [[L, "Length"], [W, "Width"], [H, "Height"]]) {
       if (r.err) { toast(`${label} ${r.err}.`, "error"); return; }
     }
-    msg = { cmd: "slice", box: { len: toMm(L.dim), wid: toMm(W.dim), hgt: toMm(H.dim) }, thicknesses: thkMm, available, boards: rack, supply, density, opts: {} };
+    msg = { cmd: "slice", box: { len: toMm(L.dim), wid: toMm(W.dim), hgt: toMm(H.dim) }, thicknesses: thkMm, available, boards: rack, supply, densityMin: dLo, densityMax: dHi, opts: {} };
     sourceName = `block ${fmtDim(L.dim)} x ${fmtDim(W.dim)} x ${fmtDim(H.dim)}`;
   } else {
     const fileEl = document.getElementById("ml-file");
@@ -780,7 +938,7 @@ async function submitMold() {
     msg = {
       cmd: "slice", buffer: MOLD_BUF.buffer, unit, cacheKey: MOLD_BUF.key,
       bodyIndex: Number((document.getElementById("ml-body") || {}).value || 0),
-      thicknesses: thkMm, available, boards: rack, supply, density, opts: {},
+      thicknesses: thkMm, available, boards: rack, supply, densityMin: dLo, densityMax: dHi, opts: {},
     };
     sourceName = MOLD_BUF.name; sourceBytes = MOLD_BUF.size;
   }
@@ -792,7 +950,8 @@ async function submitMold() {
     if (!id) return;
     const raw = {
       id, name: name || sourceName, source: sourceName, sourceBytes,
-      density,
+      // `density` is min, kept so the grade grouping and the SZ: key read one number.
+      density, densityMin: dLo, densityMax: dHi,
       unit: isBox ? "mm" : (val("ml-unit") === "in" ? "in" : "mm"),
       thicknessesMm: result.composition || thkMm, bounds: result.bounds,
       layers: result.layers, sections: result.sections || [],
@@ -848,7 +1007,7 @@ async function submitMold() {
         if (moldId) {
           const m = {
             id: moldId, name: plan.name, stage: "Designed",
-            density: String(density),
+            density: String(dLo), densityMin: String(dLo), densityMax: String(dHi),
             layers: (plan.thicknessesMm || []).length ? `${plan.thicknessesMm.length} layers` : "",
             createdBy: myEmail(),
           };
@@ -895,19 +1054,67 @@ function delStackPlan(id) {
    of board and spending the offcut pile first. */
 function blanksFromPlans(plans) {
   const out = [];
-  plans.forEach(p => (p.layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
-    id: `${p.name} L${i + 1}${L.blanks.length > 1 ? String.fromCharCode(97 + k) : ""}`,
-    planId: p.id, w: b.x1 - b.x0, h: b.y1 - b.y0,
-    thickness: L.thickness, density: canonDensity(p.density) ?? 30,
-  }))));
+  plans.forEach(p => {
+    /* A plan written before ranges existed carries only `density`, and falls
+       through to lo === hi — the behaviour it was planned under. No migration. */
+    const lo = canonDensity(p.densityMin ?? p.density) ?? 30;
+    const hi = canonDensity(p.densityMax ?? p.densityMin ?? p.density) ?? lo;
+    (p.layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
+      id: `${p.name} L${i + 1}${L.blanks.length > 1 ? String.fromCharCode(97 + k) : ""}`,
+      // `layer` rides along so the commit can record which grade each LAYER was
+      // actually cut from — the layer sheet is the one that sits on the machine.
+      planId: p.id, layer: i, w: b.x1 - b.x0, h: b.y1 - b.y0,
+      thickness: L.thickness, density: lo, densityMin: lo, densityMax: hi,
+    })));
+  });
   return out;
 }
+/* The trailing number of a BRD- id. NOT cmpId: we need the number itself to
+   rank by, not an ordering. An id with no trailing digits sorts last, and
+   deterministically. */
+function boardIdTail(id) {
+  const m = /(\d+)\s*$/.exec(String(id || ""));
+  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+}
 function boardsForPacking() {
+  const idx = boardIndexById();
   return (DB.stock || []).map(b => ({
-    id: b.id, label: b.label,
+    id: b.id, label: b.label, location: b.location || "",
     len: toMm(b.len), wid: toMm(b.wid), thk: toMm(b.thk),
     density: canonDensity(b.density) ?? 30, qty: b.qty || 1,
+    index: idx.get(b.id) ?? 0,
   })).filter(b => Number.isFinite(b.len) && Number.isFinite(b.wid) && Number.isFinite(b.thk));
+}
+
+/* ONE definition of "index", because two would drift and the whole feature is
+   the packer and the rack list agreeing about which board is easiest to get at.
+
+   INDEX — the board's rank within its OWN storage location, which is what the
+     packer spends in boardCost(). A stack lives on one shelf, so a board on a
+     different shelf is not "under" anything here; ranking globally would price a
+     walk across the container as if it were a lift.
+
+     Derived from the id, because ids are minted in order and a rack is only ever
+     added to from the top — so "entered earlier" reads as "further down the
+     pile". It is a proxy, and a soft one: it goes wrong the first time somebody
+     restacks a shelf, which is exactly why DIG_WORTH_BLANK is small.
+
+     A board with NO location is index 0, and that is the DEFINED behaviour, not
+     a fallback — you cannot be buried in a pile nobody has written down. It also
+     makes the whole preference a no-op on a rack nobody has filed, which is what
+     sn5-stock.json is. */
+function boardIndexById() {
+  const out = new Map(), byLoc = new Map();
+  for (const b of (DB.stock || [])) {
+    if (!b.location) { out.set(b.id, 0); continue; }
+    if (!byLoc.has(b.location)) byLoc.set(b.location, []);
+    byLoc.get(b.location).push(b);
+  }
+  for (const list of byLoc.values()) {
+    list.sort((a, b) => (boardIdTail(a.id) - boardIdTail(b.id)) || cmpId(a.id, b.id));
+    list.forEach((b, i) => out.set(b.id, i));
+  }
+  return out;
 }
 function renderCutList() {
   const plans = (DB.stackplans || []).filter(p => !view.cutSel || view.cutSel === p.id);
@@ -930,12 +1137,17 @@ function renderCutList() {
   <div class="card">
     <h2>Cut list</h2>
     <div class="muted">${blanks.length} blanks from ${plans.length} mold${plans.length > 1 ? "s" : ""} · ${res.boardsUsed} board${res.boardsUsed === 1 ? "" : "s"} opened · ${(util * 100).toFixed(0)}% of opened board used · kerf ${KERF_MM}mm</div>
+    ${feedRateBand(res)}
     ${res.shortfall.length ? `<div class="warn">${icon("warning", 14)} <b>Short ${res.shortfall.length} blank${res.shortfall.length > 1 ? "s" : ""}.</b> Nothing on the rack fits these — order board before starting:
       <ul>${res.shortfall.map(s => `<li>${esc(s.id)} — ${mmIn(s.w)} &times; ${mmIn(s.h)} at ${mmIn(s.thickness)} thick</li>`).join("")}</ul></div>` : ""}
+    ${res.degraded ? `<div class="warn">${icon("warning", 14)} <b>Narrowed search.</b> This batch is large enough that the planner scored only the smallest few boards that could hold the biggest blank, rather than every board on the rack. The plan is valid; it may not be the cheapest one.</div>` : ""}
   </div>
   ${res.plans.map((pl, i) => `<div class="card">
     <h3>Board ${i + 1} — ${esc(pl.board.src.id)}${pl.board.src.label ? " · " + esc(pl.board.src.label) : ""}</h3>
-    <div class="muted tny">${mmIn(pl.board.w)} &times; ${mmIn(pl.board.h)} &times; ${mmIn(pl.thickness)} · ${pl.density} lb/ft³</div>
+    <div class="muted tny">${mmIn(pl.board.w)} &times; ${mmIn(pl.board.h)} &times; ${mmIn(pl.thickness)} · ${
+      // Bold the board that sets the feed rate for everything glued to it.
+      pl.density === res.maxDensity && res.densitiesUsed.length > 1
+        ? `<b>${pl.density} lb/ft³ — sets the feed</b>` : `${pl.density} lb/ft³`}</div>
     ${cutDiagram(pl)}
     <table class="list">
       <tr><th>#</th><th>Cut</th></tr>
@@ -944,6 +1156,22 @@ function renderCutList() {
     <div class="muted tny">Yields: ${pl.placed.map(p => esc(p.part.id) + (p.rotated ? " (turned 90°)" : "")).join(", ")}${pl.leftover.length ? ` · keeps ${pl.leftover.length} reusable offcut${pl.leftover.length > 1 ? "s" : ""}` : ""}</div>
   </div>`).join("")}`;
 }
+/* WHAT FEED RATE DOES THIS GET MACHINED AT?
+   The densest board in a stack sets the ShopSabre feed for the whole thing —
+   you cannot run the 30lb layers fast and the 45lb layer slow when they are one
+   glued block. Now that a mold can be planned against a RANGE of grades, that
+   number is no longer whatever the user typed, so it has to be said out loud
+   wherever the cut is about to happen. One line, its own band, never appended
+   to the run-on muted line above it. */
+function feedRateBand(res) {
+  if (!res || res.maxDensity == null) return "";
+  const many = res.densitiesUsed.length > 1;
+  return `<div class="warn">${icon("warning", 14)}
+    <b>Machine at the ${res.maxDensity} lb/ft³ feed.</b>
+    ${many ? `Boards opened: ${res.densitiesUsed.join(", ")} lb/ft³. The densest board in a stack
+      sets the feed for the whole thing.` : `Every board opened is ${res.maxDensity} lb/ft³.`}</div>`;
+}
+
 /* Top-down view of one board. Black and white only — this gets printed on the
    laser at RFS, same rule as the traveler. */
 function cutDiagram(pl) {
@@ -985,6 +1213,11 @@ function openCommitCutsModal() {
     boardId: pl.board.src.id, label: pl.board.src.label || "",
     w: pl.board.w, h: pl.board.h, thickness: pl.thickness, density: pl.density,
     yields: pl.placed.map(p => p.part.id),
+    /* Which mold and which layer each blank off this board belongs to, so the
+       commit can write back what grade each one actually got cut from — the
+       planned range says what was allowed, only the commit says what happened. */
+    refs: pl.placed.map(p => ({ planId: p.part.planId, layer: p.part.layer }))
+      .filter(r => r.planId),
     leftovers: pl.leftover.map(o => ({ w: o.w, h: o.h })),
   }));
   const nOff = CUT_PROPOSAL.reduce((s, p) => s + p.leftovers.length, 0);
@@ -993,6 +1226,7 @@ function openCommitCutsModal() {
     <p class="muted tny">${CUT_PROPOSAL.length} board${CUT_PROPOSAL.length === 1 ? " leaves" : "s leave"} the rack;
       ${nOff ? `${nOff} reusable offcut${nOff === 1 ? "" : "s"} go${nOff === 1 ? "es" : ""} back on it as new stock.` : "nothing reusable comes back."}
       Untick anything you did not actually cut.</p>
+    ${feedRateBand(res)}
     ${CUT_PROPOSAL.map((p, i) => `<label class="cutrow"><input type="checkbox" id="cc-${i}" checked>
       <span><b>${esc(p.boardId)}</b>${p.label ? " · " + esc(p.label) : ""} — ${mmIn(p.w)} &times; ${mmIn(p.h)} &times; ${mmIn(p.thickness)}
         <span class="muted tny">yields ${p.yields.map(esc).join(", ")}${p.leftovers.length ? ` · keeps ${p.leftovers.length} offcut${p.leftovers.length === 1 ? "" : "s"}` : ""}</span></span>
@@ -1053,6 +1287,38 @@ async function submitCommitCuts() {
       undo.nOff++;
     }
   }
+  /* WHAT GRADE DID THIS MOLD ACTUALLY GET? The plan records the range that was
+     allowed; this is the point where it stops being advice, so this is where
+     the answer gets written down. The mold carries the max on its own record
+     because "what feed rate does this want" is asked at the machine, standing
+     nowhere near the cut list. */
+  const cutDens = new Map();     // planId -> { all: Set, byLayer: Map(layer -> Set) }
+  for (const p of checked) for (const r of (p.refs || [])) {
+    if (!cutDens.has(r.planId)) cutDens.set(r.planId, { all: new Set(), byLayer: new Map() });
+    const e = cutDens.get(r.planId);
+    e.all.add(p.density);
+    if (r.layer == null) continue;
+    if (!e.byLayer.has(r.layer)) e.byLayer.set(r.layer, new Set());
+    e.byLayer.get(r.layer).add(p.density);
+  }
+  undo.densityCut = [];
+  for (const [pid, e] of cutDens) {
+    const plan = planById(pid);
+    if (!plan) continue;
+    const used = [...e.all].sort((a, b) => a - b);
+    const max = used[used.length - 1];
+    /* Per layer, the grade that layer is machined at — its own max, because a
+       layer glued from two grades runs at the higher one just as the stack does. */
+    const byLayer = {};
+    for (const [L, set] of e.byLayer) byLayer[L] = Math.max(...set);
+    const mold = plan.moldId ? moldRecById(plan.moldId) : null;
+    undo.densityCut.push({ planId: pid, prevPlan: plan.densityCut ?? null,
+      moldId: mold ? mold.id : null, prevMold: mold ? (mold.densityCutMax ?? null) : null });
+    plan.densityCut = { used, max, byLayer, ts: new Date().toISOString(), by: myEmail() };
+    save("stackplans", plan, "densityCut");
+    if (mold) { mold.densityCutMax = String(max); save("molds", mold, "densityCutMax"); }
+  }
+
   CUTS_UNDO = undo; CUT_PROPOSAL = null;
   closeModal();
   toast(`${undo.nBoards} board${undo.nBoards === 1 ? "" : "s"} marked cut${undo.nOff ? ` — ${undo.nOff} offcut${undo.nOff === 1 ? "" : "s"} added` : ""}.`);
@@ -1067,6 +1333,20 @@ async function submitCommitCuts() {
 function undoCuts() {
   const u = CUTS_UNDO; CUTS_UNDO = null;
   if (!u) { render(); return; }
+  /* The as-cut grade goes back to whatever it was too — including back to
+     "never cut", which is `undefined`, not 0 and not the planned range. */
+  (u.densityCut || []).forEach(d => {
+    const plan = planById(d.planId);
+    if (plan) {
+      if (d.prevPlan == null) delete plan.densityCut; else plan.densityCut = d.prevPlan;
+      save("stackplans", plan, "densityCut");
+    }
+    const mold = d.moldId ? moldRecById(d.moldId) : null;
+    if (mold) {
+      if (d.prevMold == null) delete mold.densityCutMax; else mold.densityCutMax = d.prevMold;
+      save("molds", mold, "densityCutMax");
+    }
+  });
   u.created.forEach(id => { del("stock", id); DB.stock = (DB.stock || []).filter(x => x.id !== id); });
   u.decremented.forEach(d => {
     if (d.deleted) {
@@ -1157,7 +1437,43 @@ function whyTheseBoards(p) {
         <td class="tny">${a.cost > (p.cost || 0) ? "+" : ""}${(((a.cost - (p.cost || 0)) / (p.cost || 1)) * 100).toFixed(0)}%</td>
       </tr>`).join("")}
     </table>
+    ${whyTheseLifts(p)}
     <p class="muted tny">Costed as if this were the only mold being cut. The cut list packs every planned mold together and is the authority on how much board actually gets opened.</p>`;
+}
+
+/* THE SECOND EXCHANGE RATE, AND WHETHER IT EVER DECIDES ANYTHING.
+   boardCost prices a lift at DIG_WORTH_BLANK per board dug through, and the
+   whole argument for the number being 0.05 is that it is too small to buy a
+   worse nest. That argument is only worth making if somebody can check it, so
+   the last column says, per board, how much the winner beat the next-best
+   candidate by — and therefore whether the lift charge changed the answer or
+   merely rode along. If it never decides anything, the constant is too small
+   and this table is the evidence for saying so. */
+function whyTheseLifts(p) {
+  const boards = boardsForPacking();
+  if (!boards.length) return "";
+  const res = packAll(blanksFromPlans([p]), boards, {});
+  if (!res.plans.length) return "";
+  const anyLift = res.plans.some(pl => pl.digCost > 0);
+  return `<p class="muted tny">Beside board and glue joints, the planner prefers the board nearest the
+      top of its own pile, priced at <b>5% of the blank</b> per board it has to be dug out from under.
+      Deliberately small: on this rack the gap between two genuine board choices is around 0.65 in the
+      same units, so a board would have to be about thirteen down before this could pick a worse nest.
+      Nesting first, lifting second — but not never.</p>
+    <table class="list">
+      <tr><th>Board</th><th>Where</th><th>Index</th><th>Lift charge</th><th>Beat next by</th></tr>
+      ${res.plans.map(pl => {
+        const decided = pl.margin != null && pl.digCost > 0 && pl.margin < pl.digCost;
+        return `<tr>
+        <td>${esc(pl.board.src.id)}</td>
+        <td class="tny">${pl.board.src.location ? shopRefChip(String(pl.board.src.location)) : `<span class="muted">unfiled</span>`}</td>
+        <td>${pl.index}</td>
+        <td class="tny">${pl.digCost ? "+" + pl.digCost.toFixed(2) : "—"}</td>
+        <td class="tny">${pl.margin == null ? "only candidate"
+          : pl.margin.toFixed(2) + (decided ? " — the lift decided this" : "")}</td>
+      </tr>`; }).join("")}
+    </table>
+    ${anyLift ? "" : `<p class="muted tny">Nothing on this plan was dug for: every board opened was already on top of its pile, so the lift charge changed nothing here.</p>`}`;
 }
 
 function renderStackPlan() {

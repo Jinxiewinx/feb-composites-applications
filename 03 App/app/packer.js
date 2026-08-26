@@ -197,12 +197,18 @@ function packBoard(board, parts, opts) {
    the small board is OPTION VALUE. A big board is the only thing that can hold
    a big blank; spending one on small blanks destroys that.
 
-   That is the whole cost function, and it needs no tuning constants:
+   That used to be the whole cost function, with no tuning constants at all, and
+   that was a property worth having. It now has exactly one — DIG_WORTH_BLANK,
+   below — and the rule for keeping it honest is the one JOINT_WORTH_SHEETS
+   follows: a unit somebody can argue with over a table, and a calibration
+   against the real rack rather than a feel.
 
      consumedArea = boardArea - (usable leftover)   material actually spent
      optionLoss   = boardArea - (biggest leftover)  largest blank it could
                                                     still have held, destroyed
-     cost         = (consumedArea + optionLoss) / placedArea
+     digCost      = DIG_WORTH_BLANK * board.index   what it costs to lift the
+                                                    boards stacked on top of it
+     cost         = (consumedArea + optionLoss) / placedArea + digCost
 
    Everything is mm², so cost reads as "millimetres of board burned per
    millimetre of blank delivered". A 300x200 blank costs 7.3 on a 4x8 sheet and
@@ -214,8 +220,53 @@ function packBoard(board, parts, opts) {
    Consumed area alone, without the option term, says opening a 4x8 for one
    blank is nearly free — true on paper, because guillotine cuts do leave two
    big usable rectangles, and false on the rack, where those offcuts are
-   awkward and multiply. */
-function boardCost(board, r) {
+   awkward and multiply.
+
+   ============================================================================
+   PREFER THE BOARD ON TOP OF THE PILE
+   ============================================================================
+   Simon: "It is more important to have good nesting of the molds and have
+   little offcuts, but if possible have lower index number." A board's `index`
+   is its rank within its OWN storage location — see boardsForPacking() in
+   stock.js, which is the only place that can see the rack. Lower index means
+   nearer the top, which means fewer boards to lift to get at it.
+
+     DIG_WORTH_BLANK = 0.05 — digging one board deeper into its stack is worth
+     5% of the blank you get off it.
+
+   The cost above is already denominated in "board burned per blank delivered",
+   so the term reads directly in that unit and needs no exchange rate.
+
+   THE CALIBRATION IS A CEILING, NOT A TARGET. The question is not "how much do
+   we like short lifts", it is "how big can this get before it buys a worse
+   nest". On the real rack (sn5-stock.json), one 300 x 200 blank scores:
+
+     BRD-SN5-007  22x14   2.832
+     BRD-SN5-006  33x19   3.480     <- gap between two real choices: 0.648
+     BRD-SN5-005  46x30   4.907
+     BRD-SN5-001  96x48   7.241
+
+   At 0.05 a board would have to be THIRTEEN rungs down before the preference
+   could pull the 33x19 ahead of the 22x14. No stack in the RFS container is
+   thirteen boards deep, so this cannot buy a worse nest.
+
+   It is still large enough to do something. Two boards that nest a stack
+   equally well score within about 0.002 of each other — noise, settled today by
+   whichever id sorts first — and one rung flips that. It is also the ONLY
+   tiebreak available now that a density RANGE can put a 30lb and a 60lb sheet
+   of identical size in the same bucket at identical cost; "the one on top" is a
+   better answer there than "the one whose id sorts first".
+
+   The index is a proxy: it is derived from id order, so it reads "added
+   earlier" as "further down the pile". That is right for a stack only ever
+   added to from the top, and wrong the first time somebody restacks a shelf.
+   The magnitude is chosen partly because the proxy is soft — it must never be
+   strong enough to be worth being wrong about.
+
+   Move it if somebody has spent a season lifting boards and disagrees. */
+const DIG_WORTH_BLANK = 0.05;
+
+function boardCost(board, r, digWorth) {
   const placedArea = r.placed.reduce((n, p) => n + p.w * p.h, 0);
   if (placedArea <= 0) return Infinity;
   const boardArea = board.w * board.h;
@@ -225,7 +276,59 @@ function boardCost(board, r) {
     leftoverArea += a;
     if (a > biggest) biggest = a;
   }
-  return ((boardArea - leftoverArea) + (boardArea - biggest)) / placedArea;
+  /* `board.index` is absent on a bare { w, h } board — every caller that does
+     not care about the rack, and every test that packs a rectangle — so the
+     term is zero and the cost is exactly what it was before this existed. */
+  const dig = (digWorth == null ? DIG_WORTH_BLANK : digWorth) * (board.index || 0);
+  return ((boardArea - leftoverArea) + (boardArea - biggest)) / placedArea + dig;
+}
+
+/* ============================================================================
+   DENSITY IS A RANGE THE USER DECLARES, NOT A FIXED GRADE
+   ============================================================================
+   CS-004 says 60lb board is not interchangeable with 30lb and that you cannot
+   swap it in silently. The operative word is SILENTLY. A blank now carries the
+   interval its mold was planned against, and inside that interval — which
+   somebody typed, on purpose, looking at the rack — any board will do,
+   including two grades glued edge to edge in one layer.
+
+   The consequence is that a mold no longer has "a density", it has a set and a
+   maximum, and the maximum is the one that matters: the densest board in a
+   stack sets the CNC feed rate for the whole thing. densityRollup() below is
+   what every reporting surface reads, and it is why none of them print one
+   number.
+
+   A blank with no range declared is a blank at one grade — lo === hi — which is
+   exactly the old behaviour, and is what every record written before this
+   existed falls back to. */
+const DENSITY_TOL = 0.05;   // half canonDensity's 0.1 rounding: a float guard, not a policy knob
+
+function blankDensityRange(b) {
+  const d = b.density == null ? 30 : b.density;
+  const lo = b.densityMin == null ? d : b.densityMin;
+  const hi = b.densityMax == null ? d : b.densityMax;
+  return lo <= hi ? [lo, hi] : [hi, lo];
+}
+
+/* Which grades a set of plans actually opened, and the highest of them.
+   `keyOf` is optional and groups the per-blank breakdown by whatever the caller
+   can see — pass `p => p.planId` for a per-mold answer. */
+function densityRollup(plans, keyOf) {
+  const all = new Set(), by = new Map();
+  for (const pl of plans || []) {
+    all.add(pl.density);
+    if (!keyOf) continue;
+    for (const p of pl.placed) {
+      const k = keyOf(p.part);
+      if (k == null) continue;
+      if (!by.has(k)) by.set(k, new Set());
+      by.get(k).add(pl.density);
+    }
+  }
+  const asc = s => [...s].sort((a, b) => a - b);
+  const out = { used: asc(all), max: all.size ? Math.max(...all) : null, by: {} };
+  for (const [k, s] of by) out.by[k] = { used: asc(s), max: Math.max(...s) };
+  return out;
 }
 
 /* Trial-packing every board against every blank is O(boards x blanks^2). Fine
@@ -248,16 +351,19 @@ function packAll(blanks, boards, opts) {
   const plans = [];
   const shortfall = [];
   let degraded = false;
-  // Bucket by what can physically substitute for what: a blank can only come
-  // from a board of the same thickness, and density is not interchangeable
-  // (CS-004 — 60lb seals better, and you cannot swap it in silently).
+  // Bucket by what can physically substitute for what. Thickness is still a
+  // hard bucket — a blank can only come from a board of the same thickness.
+  // Density is now the RANGE the blank declares: two blanks with the same range
+  // share a pool, two blanks with different ranges are different jobs and stay
+  // apart, which is also what keeps this deterministic.
   const buckets = new Map();
   for (const b of blanks) {
     // No coercion here on purpose: this file is importScripts()'d into the
     // worker without core.js, so canonDensity is out of reach. It does not
     // need to be — blanksFromPlans and boardsForPacking in stock.js both
     // canonicalise, so both sides of the key below are already one form.
-    const k = `${Math.round(b.thickness / tol)}|${b.density || 30}`;
+    const [dlo, dhi] = blankDensityRange(b);
+    const k = `${Math.round(b.thickness / tol)}|${dlo}|${dhi}`;
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(b);
   }
@@ -266,7 +372,10 @@ function packAll(blanks, boards, opts) {
   const pool = [];
   for (const bd of boards) {
     for (let i = 0; i < (bd.qty || 1); i++) {
-      pool.push({ src: bd, w: bd.len, h: bd.wid, thk: bd.thk, density: bd.density || 30, unit: i });
+      pool.push({ src: bd, w: bd.len, h: bd.wid, thk: bd.thk, density: bd.density || 30,
+        // Rank within this board's own storage location; 0 when the rack has no
+        // locations recorded, which makes the whole preference a no-op there.
+        index: bd.index || 0, unit: i });
     }
   }
   pool.sort((a, b) => (a.w * a.h - b.w * b.h)
@@ -278,9 +387,10 @@ function packAll(blanks, boards, opts) {
 
   for (const [k, wanted] of buckets) {
     let todo = wanted.slice();
-    const [thkKey, densKey] = k.split("|");
+    const [thkKey, loKey, hiKey] = k.split("|");
     const usable = () => pool.filter(bd => !bd.used
-      && Math.round(bd.thk / tol) === +thkKey && String(bd.density) === densKey);
+      && Math.round(bd.thk / tol) === +thkKey
+      && bd.density >= +loKey - DENSITY_TOL && bd.density <= +hiKey + DENSITY_TOL);
 
     while (todo.length) {
       /* Identical units are interchangeable, so only one of each SIZE is worth
@@ -289,8 +399,17 @@ function packAll(blanks, boards, opts) {
          set to a handful. */
       const reps = new Map();
       for (const bd of usable()) {
-        const key = `${Math.round(bd.w * 10)}x${Math.round(bd.h * 10)}`;
-        if (!reps.has(key)) reps.set(key, bd);
+        /* Density is in the key now: inside a range a 30lb and a 60lb sheet of
+           the same size are both allowed, and they are NOT interchangeable —
+           they cost the same but they hand the shop different feed rates, so
+           both have to be scored. */
+        const key = `${Math.round(bd.w * 10)}x${Math.round(bd.h * 10)}|${bd.density}`;
+        const cur = reps.get(key);
+        /* Lowest index represents its size: identical boards are still
+           interchangeable to the packer, but not to the person lifting them. A
+           tie keeps the incumbent, and pool order (area, then id, then unit)
+           settles that — so two runs pick the same representative. */
+        if (!cur || (bd.index || 0) < (cur.index || 0)) reps.set(key, bd);
       }
       let cands = [...reps.values()];
       if (!cands.length) break;
@@ -302,17 +421,23 @@ function packAll(blanks, boards, opts) {
         cands = (canHold.length ? canHold : cands).slice(0, TRIAL_FALLBACK);
       }
 
-      let best = null;
+      /* `runnerUp` is telemetry, not policy: the best cost that did NOT win. It
+         is what lets whyTheseBoards() say, per board, whether the lift charge
+         actually decided anything — so a constant that never changes an outcome
+         can be argued down with the evidence on screen. */
+      let best = null, runnerUp = Infinity;
+      const beaten = c => { if (c < runnerUp) runnerUp = c; };
       for (const bd of cands) {
         const r = packBoard(bd, todo, opts);
         if (!r.placed.length) continue;
-        const cost = boardCost(bd, r);
+        const cost = boardCost(bd, r, opts.digWorthBlank);
         // Strictly better only, then the tiebreaks, so two runs agree. `cands`
         // is already in smallest-then-id order, which settles the last one.
         if (!best) { best = { bd, r, cost }; continue; }
         const d = cost - best.cost;
-        if (d < -1e-9) best = { bd, r, cost };
-        else if (d <= 1e-9 && r.cuts.length < best.r.cuts.length) best = { bd, r, cost };
+        if (d < -1e-9) { beaten(best.cost); best = { bd, r, cost }; }
+        else if (d <= 1e-9 && r.cuts.length < best.r.cuts.length) { beaten(best.cost); best = { bd, r, cost }; }
+        else beaten(cost);
       }
       // Nothing on the rack fits what is left: this is a purchase, not a failure.
       if (!best) break;
@@ -325,11 +450,18 @@ function packAll(blanks, boards, opts) {
         // into inventory knows which board each came off.
         leftover: best.r.leftover.map(o => ({ ...o, boardId: best.bd.src.id })),
         thickness: best.bd.thk, density: best.bd.density, cost: best.cost,
+        index: best.bd.index || 0,
+        digCost: (opts.digWorthBlank == null ? DIG_WORTH_BLANK : opts.digWorthBlank) * (best.bd.index || 0),
+        // How much the winner beat the next-best board by. null when it was the
+        // only candidate that placed anything.
+        margin: Number.isFinite(runnerUp) ? runnerUp - best.cost : null,
       });
     }
     for (const p of todo) shortfall.push(p);
   }
-  return { plans, shortfall, boardsUsed: plans.length, degraded };
+  const roll = densityRollup(plans);
+  return { plans, shortfall, boardsUsed: plans.length, degraded,
+    densitiesUsed: roll.used, maxDensity: roll.max };
 }
 
 /* Human-readable cut sequence for one board. The saw operator reads this top to
@@ -397,12 +529,17 @@ const SHEET_REF_MM3 = SHEET_AREA_MM2 * 25.4;   // a 4x8 sheet of 1in board
 /* Flatten a sliced stack into the blanks a cut list would ask for. Same shape
    and the same L1a / L1b naming as stock.js's blanksFromPlans, which is what
    drawings.js's blankLabel matches. */
-function blanksFromLayers(layers, density, tag) {
+function blanksFromLayers(layers, dens, tag) {
+  /* `dens` is a number (one grade) or { min, max } (a declared range). `density`
+     is still emitted, equal to min, so every caller that only ever wanted one
+     number keeps working and no stored record needs migrating. */
+  const lo = (dens && dens.min != null) ? dens.min : (dens || 30);
+  const hi = (dens && dens.max != null) ? dens.max : lo;
   const out = [];
   (layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
     id: `${tag ? tag + " " : ""}L${i + 1}${(L.blanks.length > 1 ? String.fromCharCode(97 + k) : "")}`,
     w: b.x1 - b.x0, h: b.y1 - b.y0,
-    thickness: L.thickness, density: density || 30,
+    thickness: L.thickness, density: lo, densityMin: lo, densityMax: hi,
   })));
   return out;
 }
@@ -413,11 +550,12 @@ function blanksFromLayers(layers, density, tag) {
    rack — which is the state every new season starts in. */
 function moldCost(layers, boards, opts) {
   opts = opts || {};
-  const density = opts.density || 30;
+  const dLo = opts.densityMin != null ? opts.densityMin : (opts.density || 30);
+  const dHi = opts.densityMax != null ? opts.densityMax : dLo;
   const jointRate = opts.jointWorthSheets == null ? JOINT_WORTH_SHEETS : opts.jointWorthSheets;
   const joints = Math.max(0, (layers || []).length - 1);
   const jointCost = joints * jointRate * SHEET_REF_MM3;
-  const blanks = blanksFromLayers(layers, density);
+  const blanks = blanksFromLayers(layers, { min: dLo, max: dHi });
 
   if (!boards || !boards.length) {
     let vol = 0;
@@ -443,10 +581,13 @@ function moldCost(layers, boards, opts) {
   return {
     usedRack: true, boardsOpened: r.boardsUsed, joints,
     shortfall: r.shortfall, mustBuySheets, cost: spent + jointCost,
+    densitiesUsed: r.densitiesUsed, maxDensity: r.maxDensity,
   };
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { packBoard, packAll, cutSequence, utilisation, fitIn, boardCost,
-    blanksFromLayers, moldCost, KERF_MM, MIN_REMNANT_MM, JOINT_WORTH_SHEETS, SHEET_AREA_MM2, SHEET_REF_MM3 };
+    blanksFromLayers, moldCost, blankDensityRange, densityRollup,
+    KERF_MM, MIN_REMNANT_MM, JOINT_WORTH_SHEETS, SHEET_AREA_MM2, SHEET_REF_MM3,
+    DIG_WORTH_BLANK, DENSITY_TOL };
 }

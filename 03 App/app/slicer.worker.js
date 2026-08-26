@@ -9,7 +9,7 @@
    pure and therefore testable under node; a Worker is not.
 
    Protocol
-     in : { cmd:"slice", buffer, unit, thicknesses, boards, supply, density, opts }
+     in : { cmd:"slice", buffer, unit, thicknesses, boards, supply, densityMin, densityMax, opts }
      out: { type:"progress", value 0..1 }
           { type:"done", result, meshStl? }
           { type:"error", message, region? }
@@ -81,7 +81,8 @@ self.onmessage = function (e) {
     const opts = { ...(msg.opts || {}), onProgress: v => self.postMessage({ type: "progress", value: v }) };
     if (msg.supply) opts.supply = msg.supply;
     if (msg.boards && msg.boards.length) {
-      opts.score = layers => moldCost(layers, msg.boards, { density: msg.density }).cost;
+      opts.score = layers => moldCost(layers, msg.boards,
+        { densityMin: msg.densityMin, densityMax: msg.densityMax }).cost;
     }
     // thicknesses null => choose them from what the rack actually holds.
     const result = msg.thicknesses && msg.thicknesses.length

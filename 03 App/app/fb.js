@@ -229,6 +229,52 @@ const fb = {
     trackerSync(coll);
   },
 
+  /* Delete many records at once. `items` is [{ coll, id }], mixed collections
+     welcome — a work order and the issues that hang off it go in one call.
+
+     Chunked at 400 because a Firestore batch caps at 500, which is the same
+     number importMany and pubPublish already chunk at.
+
+     The `pub` mirrors go in their OWN batch, and its failure is swallowed. That
+     is deliberate and matches del(): /pub is a looser collection with its own
+     rule, and a nameplate that outlives its record is bad, but it is not worth
+     failing the real delete over — whereas putting it in the main batch would
+     mean one rules hiccup abandons every record delete in the chunk. */
+  async delMany(items) {
+    const list = (items || []).filter(x => x && x.coll && x.id);
+    if (!list.length) return;
+    for (let i = 0; i < list.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const it of list.slice(i, i + 400)) batch.delete(doc(db, it.coll, it.id));
+      await batch.commit();
+    }
+    for (let i = 0; i < list.length; i += 400) {
+      try {
+        const batch = writeBatch(db);
+        for (const it of list.slice(i, i + 400)) batch.delete(doc(db, "pub", it.id));
+        await batch.commit();
+      } catch (e) { pubWarn(e); }
+    }
+    [...new Set(list.map(x => x.coll))].forEach(c => trackerSync(c));
+  },
+
+  /* deleteFile swallows every error, because "already gone" is the usual one and
+     is the desired state anyway. A bulk delete needs to know the difference, so
+     this counts instead of guessing — the caller can then say how many uploads
+     it could NOT remove rather than claiming a clean sweep. */
+  async deleteFiles(paths) {
+    let ok = 0; const failed = [];
+    for (const p of (paths || [])) {
+      if (!p) continue;
+      try { await deleteObject(sRef(storage, p)); ok++; }
+      catch (e) {
+        // A missing object is the outcome we wanted, not a failure.
+        if (e && (e.code === "storage/object-not-found")) ok++; else failed.push(p);
+      }
+    }
+    return { ok, failed };
+  },
+
   // Concurrency-safe edit of one field via a transaction: reads the CURRENT
   // server value, applies mutator(freshValue) → newValue, writes it. Two people
   // buying off different steps of the same WO both land (the loser retries on

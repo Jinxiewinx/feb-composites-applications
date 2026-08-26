@@ -1441,6 +1441,11 @@
   .pitem .pi-who .avatar:first-child { margin-left: 0; }
   .pitem.isdone .pi-name { font-weight: 500; color: var(--muted); }
   .pitem.sel { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  /* Multi-select on the rail. A picked row reads as picked without borrowing
+     .sel: selection means "this is the record in the pane beside you", and
+     during a bulk delete that is a different question. */
+  .pitem .wopick { margin-right: 6px; vertical-align: -1px; accent-color: var(--accent); }
+  .pitem.picked { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--bad, var(--accent)); }
   .pitem.sel .pi-name { color: var(--brand-ink); }
   /* A sub-ticket in the Tickets rail, drawn under its parent. The indent plus
      a hairline guide is the whole genealogy at rail altitude; the lineage bar

@@ -1030,10 +1030,33 @@ function sheetIso(plan, ctx) {
   const callouts = layers.map((L, i) =>
     `L${i + 1} · ${fmtDwg(L.thickness).primary}${ctx.splits.some(z => Math.abs(L.z1 - z) < 1e-6) ? "  ◂ SPLIT" : ""}`);
   const gutter = Math.ceil(Math.max(...callouts.map(c => estTextW(c, DW.font)))) + 26;
-  /* t clears the overall-size box drawn at the top left: that box has a white
-     fill (it has to, or the geometry behind it makes it unreadable), so the
-     drawing area must not reach under it. */
-  const M = { l: 76, r: Math.max(90, gutter), t: 84, b: 40 };
+
+  /* The note box is built HERE, above M, and not where it is drawn — because
+     M.t has to clear it. That box has a white fill (it has to, or the geometry
+     behind it makes it unreadable), so a drawing area reaching under it hides
+     geometry rather than overlapping it visibly. It used to be four rows
+     against a hard-coded t: 84, which happened to fit; BOARD made it five, and
+     a fifth row is 95 tall. Derive it, so the next row somebody adds cannot
+     silently swallow part of the drawing. */
+  const h0 = ctx.stock ? ctx.stock.z1 - ctx.stock.z0 : 0;
+  const moldH = plan.bounds ? plan.bounds.z1 - plan.bounds.z0 : 0;
+  const nBlocks = layers.reduce((n2, L) => n2 + (L.blanks || []).length, 0);
+  const note = [
+    ["OVERALL STOCK", `${fmtDwg(ctx.stock ? ctx.stock.x1 - ctx.stock.x0 : 0).primary} × ${fmtDwg(ctx.stock ? ctx.stock.y1 - ctx.stock.y0 : 0).primary} × ${fmtDwg(h0).primary}`],
+    ["MOLD HEIGHT", fmtDwgLine(moldH)],
+    ["BOARD", ctx.board.noteText],
+    ["BOARDS", `${layers.length} layer${layers.length === 1 ? "" : "s"}, ${nBlocks} block${nBlocks === 1 ? "" : "s"}`],
+    ["MACHINE SETUPS", String(ctx.sectionCount)],
+  ];
+  /* Sized from its contents. A fixed-width box was fine until a 30in stack made
+     the overall-size string long enough to run back into its own label. */
+  const nbLab = Math.max(...note.map(r => estTextW(r[0], DW.tiny)));
+  const nbVal = Math.max(...note.map(r => estTextW(r[1], DW.font)));
+  const nbW = Math.min(DWG_SHEET_W - 12, Math.ceil(nbLab + nbVal + 26));
+  const nbRow = 15;
+  const nbH = note.length * nbRow + 12;
+
+  const M = { l: 76, r: Math.max(90, gutter), t: Math.max(84, nbH + 14), b: 40 };
   const pts = isoCornersOf(plan).concat(...ctx.art.iso.loops);
   const box = pts.length ? bboxOf(pts) : { x0: 0, y0: 0, x1: 1, y1: 1 };
   const s = dwgFit(box, DWG_SHEET_W - M.l - M.r, DWG_ISO_H - M.t - M.b);
@@ -1135,21 +1158,7 @@ function sheetIso(plan, ctx) {
     }));
   });
 
-  const h0 = ctx.stock ? ctx.stock.z1 - ctx.stock.z0 : 0;
-  const moldH = plan.bounds ? plan.bounds.z1 - plan.bounds.z0 : 0;
-  const note = [
-    ["OVERALL STOCK", `${fmtDwg(ctx.stock ? ctx.stock.x1 - ctx.stock.x0 : 0).primary} × ${fmtDwg(ctx.stock ? ctx.stock.y1 - ctx.stock.y0 : 0).primary} × ${fmtDwg(h0).primary}`],
-    ["MOLD HEIGHT", fmtDwgLine(moldH)],
-    ["BOARDS", `${layers.length} layer${layers.length === 1 ? "" : "s"}, ${layers.reduce((n2, L) => n2 + (L.blanks || []).length, 0)} block${layers.reduce((n2, L) => n2 + (L.blanks || []).length, 0) === 1 ? "" : "s"}`],
-    ["MACHINE SETUPS", String(ctx.sectionCount)],
-  ];
-  /* Sized from its contents. A fixed-width box was fine until a 30in stack made
-     the overall-size string long enough to run back into its own label. */
-  const nbLab = Math.max(...note.map(r => estTextW(r[0], DW.tiny)));
-  const nbVal = Math.max(...note.map(r => estTextW(r[1], DW.font)));
-  const nbW = Math.min(DWG_SHEET_W - 12, Math.ceil(nbLab + nbVal + 26));
-  const nbRow = 15;
-  const nb = [`<rect x="6" y="8" width="${nbW}" height="${note.length * nbRow + 12}" fill="#fff" stroke="currentColor" stroke-width="${DW.thin}"/>`];
+  const nb = [`<rect x="6" y="8" width="${nbW}" height="${nbH}" fill="#fff" stroke="currentColor" stroke-width="${DW.thin}"/>`];
   note.forEach((row, i) => {
     nb.push(dwgText(13, 23 + i * nbRow, row[0], DW.tiny, { track: "0.06em" }));
     nb.push(dwgText(nbW - 7, 23 + i * nbRow, row[1], DW.font, { anchor: "end", bold: true }));
@@ -1354,6 +1363,14 @@ function sheetLayer(plan, ctx, i) {
 
   const nB = (L.blanks || []).length;
   const notes = [];
+  /* A mold planned across a range can be glued from two grades, and the whole
+     block then has to be machined at the higher feed. Said on the layer sheet
+     as well as the title block, because this is the one somebody works from. */
+  if (ctx.board.mixed && ctx.board.max != null) {
+    notes.push(ctx.board.asCut
+      ? `This stack was cut from ${(ctx.board.used || []).join(" and ")} lb board — machine every setup at the ${ctx.board.max} lb feed.`
+      : `Planned across ${ctx.board.min}–${ctx.board.max} lb board, so a layer may be glued from two grades — machine at the ${ctx.board.max} lb feed unless the cut list says otherwise.`);
+  }
   (L.blanks || []).forEach((b, k) => {
     const tag = blankLabel(i, k, nB);
     /* Above the board's LEFT corner. Outside, because inside it lands on the
@@ -1467,7 +1484,13 @@ function sheetLayer(plan, ctx, i) {
     </div>
     ${notes.length ? `<div class="dwg-notes">${notes.map(n => `<div>${esc(n)}</div>`).join("")}</div>` : ""}`;
 
-  const title = `LAYER ${i + 1} OF ${layers.length} — ${esc(fmtDwg(L.thickness).primary)} BOARD · SETUP ${(L.section || 0) + 1}`;
+  /* The grade goes in the layer title because this is the sheet that sits on
+     the machine for this setup. When the commit recorded which board this layer
+     actually came off, say that; otherwise say the planned range and do not
+     pretend to know. */
+  const lg = layerBoardGrade(ctx.board, i);
+  const gradeTxt = lg != null ? `${lg} LB` : ctx.board.cellText;
+  const title = `LAYER ${i + 1} OF ${layers.length} — ${esc(fmtDwg(L.thickness).primary)} ${esc(gradeTxt)} BOARD · SETUP ${(L.section || 0) + 1}`;
   return dwgPage(plan, ctx, 3 + i, title, dwgRatio(s), body, legend);
 }
 
@@ -1497,7 +1520,13 @@ function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
             asked for it. Both are resolved by the caller (openDrawings) and
             passed through opts, so this file stays pure and testable under
             node. Eight cells, two rows — see the grid note in print.css. */""}
-      <div class="tb-c"><span class="lab">Mold</span><span class="val sm">${esc(plan.name || "—")}</span></div>
+      ${/* The Mold cell used to live here and said plan.name, which .dwg-top
+            already prints two inches above it on this same sheet. Board grade
+            is not printed anywhere else and reaches the machine, so it takes
+            the slot. .val, not .val sm: the biggest type in the block, because
+            the highest grade in the stack is the feed rate for all of it.
+            Eight cells, two rows — if you add one here, remove one. */""}
+      <div class="tb-c"><span class="lab">Board · max density</span><span class="val">${esc(ctx.board.cellText)}</span></div>
       <div class="tb-c"><span class="lab">Plan</span><span class="val sm">${esc(plan.id || "—")}</span></div>
       <div class="tb-c"><span class="lab">Part</span><span class="val sm">${esc(ctx.partName || "—")}</span></div>
       <div class="tb-c"><span class="lab">Work order</span><span class="val sm">${esc(ctx.woId || "—")}</span></div>
@@ -1517,6 +1546,50 @@ function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
    Pure: plan in, string out, no DOM anywhere. That is what lets
    tools/test_app.mjs assert on the whole set under node, and it is the same
    split slicer.js and meshview.js already use. */
+/* WHAT GRADE OF BOARD IS THIS MOLD, FOR THE SHEET THAT REACHES THE MACHINE.
+   A mold is planned against a RANGE now, and inside that range the packer mixes
+   grades freely — so "the density" is a set, and the number that matters is the
+   HIGHEST, because the densest board in a glued stack sets the ShopSabre feed
+   rate for the whole thing.
+
+   Reads the AS-CUT record first (plan.densityCut, written by submitCommitCuts
+   when the cut list stopped being advice) and the declared range second. Pure:
+   plan in, strings out, no DOM — which is what lets test_drawings.mjs assert on
+   a whole set under node. */
+function planBoardGrades(plan) {
+  const p = plan || {};
+  const cut = p.densityCut;
+  const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+  const lo = num(p.densityMin ?? p.density);
+  const hi = num(p.densityMax ?? p.densityMin ?? p.density) ?? lo;
+  if (cut && cut.max != null) {
+    const used = (cut.used || [cut.max]).slice().sort((a, b) => a - b);
+    return {
+      asCut: true, min: used[0], max: cut.max, used, byLayer: cut.byLayer || null,
+      // Title-block cell: narrow, so the qualifier is short and unambiguous.
+      cellText: `${cut.max} LB AS CUT`,
+      noteText: used.length > 1 ? `${used.join(" / ")} LB · MAX ${cut.max} LB (AS CUT)` : `${cut.max} LB (AS CUT)`,
+      mixed: used.length > 1,
+    };
+  }
+  if (lo == null) return { asCut: false, min: null, max: null, used: null, byLayer: null,
+    cellText: "—", noteText: "—", mixed: false };
+  const range = lo !== hi;
+  return {
+    asCut: false, min: lo, max: hi, used: null, byLayer: null,
+    cellText: range ? `${lo}–${hi} LB MAX ${hi}` : `${lo} LB`,
+    noteText: range ? `${lo}–${hi} LB · MAX ${hi} LB` : `${lo} LB`,
+    mixed: range,
+  };
+}
+/* The grade of one layer, when the commit recorded it. null when this plan has
+   not been cut yet — in which case the sheet says the planned range and does
+   not pretend to know which board the layer will come off. */
+function layerBoardGrade(board, i) {
+  const v = board && board.byLayer ? board.byLayer[i] : null;
+  return v == null ? null : v;
+}
+
 function drawingSetHtml(plan, opts) {
   opts = opts || {};
   const layers = dwgLayers(plan);
@@ -1531,6 +1604,7 @@ function drawingSetHtml(plan, opts) {
   const frame = padBox(foot, Math.max(2, Math.max(foot.x1 - foot.x0, foot.y1 - foot.y0) * 0.05));
   const ctx = {
     art, stock, frame,
+    board: planBoardGrades(plan),
     datum: planDatum(plan),
     layerMargins: M,
     layerScale: dwgFit(frame, DWG_SHEET_W - M.l - M.r, DWG_LAYER_H - M.t - M.b),

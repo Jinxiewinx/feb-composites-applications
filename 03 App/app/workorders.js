@@ -243,13 +243,148 @@ function resetSteps(wo) {
   });
 }
 
-function delWO(id) {
-  confirmModal("Delete " + id + " from the team database for everyone? Back up first if unsure.", () => {
-    del("workOrders", id);
-    DB.workOrders = DB.workOrders.filter(w => w.id !== id);
-    view = { ...view, mode: "list", id: null }; render();
+/* ==========================================================================
+   DELETING WORK ORDERS, AND EVERYTHING THAT ONLY EXISTS BECAUSE OF THEM
+
+   Deleting one document used to be the whole story, and Firestore has no
+   cascade, so it left a trail every time: issues whose workOrderId no longer
+   resolved (and an issue CANNOT exist without one — newIssue refuses), every
+   photo and CAD file still sitting in Storage under projects/<woId>/, and
+   back-pointers on parts, molds and test panels aimed at nothing.
+
+   So there is one delete path now and it takes a LIST. delWO() is that path
+   with one id in it, which is the point — the single delete had the same bug.
+
+   WHAT IS NOT REVERSED, and the confirm says so: consuming a BOM line already
+   decremented stock and flipped lots to opened. Deleting the run that consumed
+   them does not put material back on the shelf, because it was really used.
+
+   NO UNDO. A deleted Storage object cannot be restored, so an Undo bar here
+   would be the lying button firestore.rules already warns about — the offer is
+   a backup export beforehand instead. */
+
+/* Firebase download URLs carry their own object path, percent-encoded, between
+   /o/ and the query string. Recovering it is the only way to delete an image
+   that was pasted into a note: those carry a url and no path, and Storage
+   LISTING is denied by rule, so an unreferenced object is unreachable forever. */
+function storagePathFromUrl(url) {
+  const m = /\/o\/([^?]+)/.exec(String(url || ""));
+  if (!m) return "";
+  try { return decodeURIComponent(m[1]); } catch (e) { return ""; }
+}
+/* Every Storage object this record is the only reason for. Walks fields rather
+   than the bucket, because the bucket cannot be walked. */
+function recStoragePaths(rec) {
+  const out = [];
+  const add = p => { if (p) out.push(p); };
+  const fromRef = p => add(typeof p === "string" ? storagePathFromUrl(p) : (p.path || storagePathFromUrl(p.url)));
+  (rec.files || []).forEach(fromRef);
+  (rec.steps || []).forEach(s => {
+    (s.photoRefs || []).forEach(fromRef);
+    htmlImgSrcs(s.noteHtml).forEach(u => add(storagePathFromUrl(u)));
+  });
+  (rec.noteLog || []).forEach(c => htmlImgSrcs(c.html).forEach(u => add(storagePathFromUrl(u))));
+  (rec.comments || []).forEach(c => htmlImgSrcs(c.html).forEach(u => add(storagePathFromUrl(u))));
+  return [...new Set(out)];
+}
+/* Everything that goes, and everything that merely loses a pointer. Pure, so
+   the confirm text and the delete itself are computed from one answer rather
+   than from two walks that could disagree. */
+function woDeletionSet(ids) {
+  const set = new Set(ids || []);
+  const wos = (DB.workOrders || []).filter(w => set.has(w.id));
+  // An issue's workOrderId is required, so an orphan is not a record with a
+  // dangling field — it is a record the app considers impossible.
+  const issues = (DB.projects || []).filter(p => set.has(p.workOrderId));
+  const paths = [...new Set([].concat(
+    ...wos.map(recStoragePaths), ...issues.map(recStoragePaths)))];
+  /* Cleared, not deleted: a part and a mold outlive the run that made them.
+     A pointer to a deleted run is the lingering artifact, so it goes. */
+  const parts = (DB.parts || []).filter(p => set.has(p.workOrderId));
+  const molds = (DB.molds || []).filter(m => set.has(m.wo));
+  const items = (DB.items || []).filter(i => set.has(i.wo));
+  return { wos, issues, paths, parts, molds, items };
+}
+function woDeletionSummary(d) {
+  const n = (k, one, many) => `${k} ${k === 1 ? one : (many || one + "s")}`;
+  // "1 part, 1 mold and 2 test panels" — a comma list ending in "and", because
+  // this sentence is read once, under a red button, by somebody deciding.
+  const list = a => a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+  const also = [];
+  if (d.issues.length) also.push(n(d.issues.length, "issue"));
+  if (d.paths.length) also.push(n(d.paths.length, "uploaded file"));
+  const links = [];
+  if (d.parts.length) links.push(n(d.parts.length, "part"));
+  if (d.molds.length) links.push(n(d.molds.length, "mold"));
+  if (d.items.length) links.push(n(d.items.length, "test panel or jig"));
+  return `Delete ${n(d.wos.length, "work order")} from the team database for everyone?`
+    + (also.length ? ` This also deletes ${also.join(" and ")}.` : "")
+    + (links.length ? ` It clears the work-order link on ${list(links)}.` : "")
+    + ` Material already consumed by these runs stays consumed. There is no undo —`
+    + ` export a backup first if unsure.`;
+}
+async function woBulkDelete(ids) {
+  if (!isLead()) { toast("Only a lead can delete work orders.", "error"); return; }
+  const d = woDeletionSet(ids);
+  if (!d.wos.length) { toast("Nothing selected.", "info"); return; }
+  confirmModal(woDeletionSummary(d), async () => {
+    const gone = new Set(d.wos.map(w => w.id));
+    const issueIds = new Set(d.issues.map(p => p.id));
+    try {
+      await fb.delMany(
+        d.wos.map(w => ({ coll: "workOrders", id: w.id }))
+          .concat(d.issues.map(p => ({ coll: "projects", id: p.id }))));
+    } catch (e) { toast("Delete failed: " + e.message, "error"); return; }
+
+    // Records are gone; now the bytes they were the only reason for.
+    let failed = [];
+    if (d.paths.length) {
+      try { failed = (await fb.deleteFiles(d.paths)).failed; }
+      catch (e) { failed = d.paths; }
+    }
+    /* Back-pointers, one field each. Not batched with the deletes: these are a
+       handful of records and save() is the path that stamps updatedAt and keeps
+       the pub mirror right. */
+    d.parts.forEach(p => { p.workOrderId = ""; save("parts", p, "workOrderId"); });
+    d.molds.forEach(m => { m.wo = ""; save("molds", m, "wo"); });
+    d.items.forEach(i => { i.wo = ""; save("items", i, "wo"); });
+
+    DB.workOrders = (DB.workOrders || []).filter(w => !gone.has(w.id));
+    DB.projects = (DB.projects || []).filter(p => !issueIds.has(p.id));
+    view = { ...view, woPick: null, mode: "list", id: null };
+    toast(`${d.wos.length} work order${d.wos.length === 1 ? "" : "s"} deleted`
+      + (d.issues.length ? `, with ${d.issues.length} issue${d.issues.length === 1 ? "" : "s"}` : "")
+      + (d.paths.length ? ` and ${d.paths.length - failed.length} of ${d.paths.length} uploaded file${d.paths.length === 1 ? "" : "s"}` : "")
+      + ".", failed.length ? "error" : "info");
+    if (failed.length) toast(`${failed.length} upload${failed.length === 1 ? "" : "s"} could not be removed from storage — the records are gone but the bytes are still there.`, "error");
+    render();
   });
 }
+// One id is a list of one. The single delete had exactly the same trail.
+function delWO(id) { woBulkDelete([id]); }
+
+/* ---- picking several off the rail ----
+   Modelled on the label builder's picker: a map of ids, Select all / None, a
+   live count, and a primary action that stays disabled until something is
+   ticked. `view.woPick` being null is "not picking" — an explicit state rather
+   than inferring it from whether a checkbox happens to be in the DOM. */
+function woPickOn() { return !!view.woPick; }
+function startWOPick() { view = { ...view, woPick: {} }; render(); }
+function cancelWOPick() { view = { ...view, woPick: null }; render(); }
+function toggleWOPick(id) {
+  const p = view.woPick; if (!p) return;
+  if (p[id]) delete p[id]; else p[id] = true;
+  render();
+}
+function woPickAll(on) {
+  const p = {};
+  // Only what is on screen: ticking "all" while a filter is on must not quietly
+  // select the runs the filter is hiding.
+  if (on) woIndexRows().forEach(w => { p[w.id] = true; });
+  view = { ...view, woPick: p }; render();
+}
+function woPickedIds() { return Object.keys(view.woPick || {}); }
+function deletePickedWOs() { woBulkDelete(woPickedIds()); }
 
 /* Two ways to be a blocker, and both have to keep working. The rule field is
    how new templates say it. The title match is how every record already saved
@@ -728,10 +863,19 @@ function woIndexItem(w, opts) {
   // the other is something to wait for.
   const flag = fl.blocked ? `<span class="wflag blocked">blocked</span>`
     : fl.curing ? `<span class="wflag curing">curing</span>` : "";
-  return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""}" id="pi-${esc(w.id)}"
-      role="option" aria-selected="${sel}" title="${esc(w.id)} · ${esc(w.processType || "")} · ${esc(w.status || "")}"
-      onclick="selectWO('${esc(w.id)}')">
-    <span class="pi-name">${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}</span>
+  /* In pick mode the whole row toggles, because a checkbox is a small target on
+     the tablet this is used from. The box lives INSIDE .pi-name rather than as a
+     fifth child of .pitem, which is a grid with four named columns. */
+  const picking = woPickOn();
+  const ticked = picking && !!view.woPick[w.id];
+  const box = picking
+    ? `<input type="checkbox" class="wopick" ${ticked ? "checked" : ""} aria-label="Select ${esc(w.id)}"
+        onclick="event.stopPropagation();toggleWOPick('${esc(w.id)}')"> `
+    : "";
+  return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""} ${ticked ? "picked" : ""}" id="pi-${esc(w.id)}"
+      role="option" aria-selected="${picking ? ticked : sel}" title="${esc(w.id)} · ${esc(w.processType || "")} · ${esc(w.status || "")}"
+      onclick="${picking ? `toggleWOPick('${esc(w.id)}')` : `selectWO('${esc(w.id)}')`}">
+    <span class="pi-name">${box}${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}</span>
     <span class="pi-due ${late ? "warn" : ""}">${w.dueDate ? shortDate(w.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${woProgBar(pr)}${flag || `<span class="tny">${esc(opts.hidePart ? (w.processType || "") : (w.subteam || ""))}</span>`}</span>
     <span class="pi-who">${engs.map(e => avatar(e, 20)).join("")}</span>
@@ -834,9 +978,20 @@ function renderWOIndex() {
   <aside class="mdindex" aria-label="Work orders index">
     <div class="pindex-head no-print">
       <div class="toolbar">
-        <button class="primary ib" onclick="newWO()">${icon("plus", 15)} New WO</button>
+        ${woPickOn() ? (() => {
+          const n = woPickedIds().length;
+          return `<button class="sm" onclick="woPickAll(true)">All ${rows.length}</button>
+            <button class="sm" onclick="woPickAll(false)">None</button>
+            <span class="muted tny">${n} selected</span>
+            <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedWOs()">Delete ${n || ""}</button>
+            <button class="sm ib" onclick="cancelWOPick()">${icon("x", 14)}</button>`;
+        })() : `<button class="primary ib" onclick="newWO()">${icon("plus", 15)} New WO</button>
         <button class="sm" onclick="openBlankTraveler()">Blank traveler</button>
-        <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} work orders</span>
+        ${/* Lead-only, because firestore.rules allows a workOrders delete to
+              leads only and there is no mine() clause — a member's bulk delete
+              would fail server-side, one record at a time, after the confirm. */""}
+        ${isLead() ? `<button class="sm" onclick="startWOPick()">Select…</button>` : ""}
+        <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} work orders</span>`}
       </div>
       <div class="psum">
         ${summaryChip("open", s.open, !!view.woOpen, "view.woOpen=!view.woOpen;view.woDone=false;render()")}

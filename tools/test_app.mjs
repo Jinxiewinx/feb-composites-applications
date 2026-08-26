@@ -83,6 +83,8 @@ globalThis.fb = {
   async appendTo(coll, id, field, el) { calls.push(["appendTo", coll, id, field]); },
   async upload(path, file) { calls.push(["upload", path]); return { url: "https://x/" + path, path, name: (file && file.name) || "f", size: 100, type: (file && file.type) || "" }; },
   async deleteFile(path) { calls.push(["deleteFile", path]); },
+  async deleteFiles(paths) { (paths || []).forEach(p => calls.push(["deleteFile", p])); return { ok: (paths || []).length, failed: [] }; },
+  async delMany(items) { (items || []).forEach(it => calls.push(["del", it.coll, it.id])); },
   async del(coll, id) { calls.push(["del", coll, id]); },
   async allocId(coll, cls) { const key = cls || coll; counters[key] = (counters[key] || 0) + 1; const pfx = cls || ({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]; const id = `${pfx}-SN6-${String(counters[key]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
   async allocIdBlock(coll, cls, n) {
@@ -3765,6 +3767,101 @@ await t("mark cut: stock decremented, offcuts written back in mm with provenance
   assert(boardById("BRD-CUT-1") && boardById("BRD-CUT-1").qty === 1, "undo re-creates the deleted board exactly");
   assert(!DB.stock.some(b => /offcut of/.test(b.label || "")), "and withdraws the offcuts it wrote");
 });
+await t("a mold can be planned across a range of grades, and one grade still means one grade", async () => {
+  /* Simon: pick a range you are happy with (say 20–40) and let the packer use
+     anything inside it. Leaving max blank is the old behaviour, which is what
+     every mold planned before this existed was planned under. */
+  DB.stock = [
+    { id: "BRD-R-1", len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 1, unit: "in" }, qty: 3, density: 30 },
+    { id: "BRD-R-2", len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" }, qty: 2, density: 45 },
+  ];
+  DB.stackplans = []; DB.molds = [];
+  fillMold({ src: "box", box: [400, 300, 50.8], density: "30", densityMax: "" });
+  await submitMold();
+  assert(DB.stackplans.length === 1, "one grade should still plan: " + lastToast);
+  let p = DB.stackplans[DB.stackplans.length - 1];
+  assert(p.densityMin === 30 && p.densityMax === 30, "a blank max means max = min: " + JSON.stringify([p.densityMin, p.densityMax]));
+  assert(p.density === 30, "and `density` still carries the one number every other reader wants");
+  const oneGrade = new Set(stockThicknessesMm(30, 30));
+  assert(oneGrade.has(25.4) && !oneGrade.has(50.8), "at one grade the 2in 45lb board is not on offer");
+
+  // Widen the range and the 45lb board joins the same pool.
+  fillMold({ src: "box", box: [400, 300, 50.8], density: "30", densityMax: "45" });
+  await submitMold();
+  assert(DB.stackplans.length === 2, "a range should plan too: " + lastToast);
+  p = DB.stackplans[DB.stackplans.length - 1];
+  assert(p.densityMin === 30 && p.densityMax === 45, "the range is stored as given");
+  const both = new Set(stockThicknessesMm(30, 45));
+  assert(both.has(25.4) && both.has(50.8), "across the range both thicknesses are available to the planner");
+  const m = DB.molds[DB.molds.length - 1];
+  assert(m.densityMin === "30" && m.densityMax === "45", "and the mold record carries it too");
+  const rs = densityRangeStock(30, 45);
+  assert(rs.boards === 5 && rs.max === 45, "the modal can say how much board is inside the range, and its highest grade");
+
+  fillMold({ src: "box", box: [400, 300, 50.8], density: "45", densityMax: "30" });
+  await submitMold();
+  assert(/at least the minimum/.test(lastToast), "a backwards range is refused, not silently sorted: " + lastToast);
+});
+
+await t("the cut list says what feed rate to machine at, and the commit writes it down", async () => {
+  /* The densest board in a glued stack sets the ShopSabre feed for the whole
+     thing — you cannot run the 30lb layers fast and the 45lb layer slow. Now
+     that a mold can be cut from two grades, that number is no longer whatever
+     the user typed, so it has to be said where the cut happens. */
+  DB.stackplans = [{ id: "STK-FEED", name: "FEED", moldId: "MOLD-FEED", density: 30, densityMin: 30, densityMax: 45,
+    layers: [{ thickness: 25.4, blanks: [{ x0: 0, x1: 700, y0: 0, y1: 500 }, { x0: 0, x1: 700, y0: 0, y1: 500 }] }] }];
+  DB.molds = [{ id: "MOLD-FEED", name: "FEED", stage: "Designed" }];
+  DB.stock = [
+    { id: "BRD-F-30", len: { value: 760, unit: "mm" }, wid: { value: 560, unit: "mm" }, thk: { value: 25.4, unit: "mm" }, qty: 1, density: 30 },
+    { id: "BRD-F-45", len: { value: 760, unit: "mm" }, wid: { value: 560, unit: "mm" }, thk: { value: 25.4, unit: "mm" }, qty: 1, density: 45 },
+  ];
+  view = { ...view, tab: "molds", mode: "cuts", cutSel: "", id: null };
+  const h = renderCutList();
+  assert(/Machine at the 45 lb\/ft³ feed/.test(h), "the band names the feed rate: " + h.slice(0, 400));
+  assert(/Boards opened: 30, 45/.test(h), "and which grades it opened");
+
+  openCommitCutsModal();
+  assert(/Machine at the 45/.test(document.getElementById("modal").innerHTML),
+    "said again at the moment it stops being advice");
+  for (let i = 0; i < 2; i++) { const el = document.getElementById("cc-" + i); if (el) el.checked = true; }
+  await submitCommitCuts();
+  const p = planById("STK-FEED");
+  assert(p.densityCut && p.densityCut.max === 45, "the as-cut max lands on the plan: " + JSON.stringify(p.densityCut));
+  assert(p.densityCut.used.join() === "30,45", "with the full set, not just the max");
+  assert(p.densityCut.byLayer && p.densityCut.byLayer[0] === 45,
+    "and per layer, because the layer sheet is what sits on the machine");
+  assert(moldRecById("MOLD-FEED").densityCutMax === "45",
+    "the mold carries it, because that is where the question gets asked");
+  undoCuts();
+  assert(planById("STK-FEED").densityCut === undefined && moldRecById("MOLD-FEED").densityCutMax === undefined,
+    "undo puts it back to never-cut, not to zero and not to the planned range");
+});
+
+await t("the drawings carry the board grade on every sheet, and the title block still fits", async () => {
+  const plan = { id: "STK-DWG", name: "DWG", density: 30, densityMin: 30, densityMax: 45,
+    bounds: { x0: 0, y0: 0, z0: 0, x1: 700, y1: 500, z1: 50.8 },
+    layers: [{ thickness: 25.4, z0: 0, z1: 25.4, blanks: [{ x0: 0, x1: 700, y0: 0, y1: 500 }], islands: [] },
+             { thickness: 25.4, z0: 25.4, z1: 50.8, blanks: [{ x0: 0, x1: 600, y0: 0, y1: 400 }], islands: [] }] };
+  const planned = drawingSetHtml(plan, {});
+  const sheets = (planned.match(/dwg-tb/g) || []).length;
+  assert(sheets === 4, "two overview sheets plus one per layer, got " + sheets);
+  assert((planned.match(/Board · max density/g) || []).length === sheets,
+    "the grade is in the title block of every sheet, because any one of them can reach the machine alone");
+  assert(/30–45 LB MAX 45/.test(planned), "the planned range, and its max");
+  assert(/machine at the 45 lb feed/i.test(planned), "a mixed range warns on the layer sheets");
+  /* print.css fixes the title block at eight cells in two rows and says so in a
+     comment. Asserting it means the next person to add a field finds out here
+     rather than on paper. */
+  const perSheet = (planned.match(/tb-c/g) || []).length / sheets;
+  assert(perSheet === 8, "eight title-block cells per sheet, got " + perSheet);
+
+  // Once cut, the sheets stop saying what was allowed and say what happened.
+  const cut = drawingSetHtml({ ...plan, densityCut: { used: [30, 45], max: 45, byLayer: { 0: 30, 1: 45 } } }, {});
+  assert(/45 LB AS CUT/.test(cut), "as-cut beats planned");
+  assert(/30 LB BOARD/.test(cut) && /45 LB BOARD/.test(cut),
+    "and each layer sheet names the grade that layer actually came off");
+});
+
 await t("mark cut: an unticked unit stays, and a rack changed under the plan aborts whole", async () => {
   DB.stackplans = [{ id: "STK-CUT-2", name: "TWO", density: 30, layers: [
     { thickness: 25.4, blanks: [{ x0: 0, x1: 762, y0: 0, y1: 508 }, { x0: 0, x1: 762, y0: 0, y1: 508 }] }] }];
@@ -3961,12 +4058,16 @@ function plugTris(hb, ht, z0, z1) {
   }
   return out;
 }
-function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "", thkU = "mm", size = null, src = "stl", mode = "auto", body = null, box = null, density = "30" } = {}) {
+function fillMold({ tris = plugTris(200, 80, 0, 100), name = "test plug", unit = "mm", thk = "", thkU = "mm", size = null, src = "stl", mode = "auto", body = null, box = null, density = "30", densityMax = "" } = {}) {
   el("ml-name").value = name; el("ml-unit").value = unit;
   // The real modal renders this prefilled (canonDensity(mold.density) ?? 30);
   // the stub renders nothing, so say what the browser would have shown. Blank
   // is a user who deliberately cleared the field, and the planner refuses it.
-  el("ml-density").value = density;
+  // `densityMax` defaults to blank, which the modal reads as "same as min" — so
+  // every caller that passes one density exercises the min == max path, which is
+  // the behaviour every one of these tests was written against.
+  el("ml-density-min").value = density;
+  el("ml-density-max").value = densityMax;
   el("ml-thk").value = thk; el("ml-thk-u").value = thkU;
   el("ml-src").value = src; el("ml-mode").value = mode;
   if (box) {
@@ -4418,6 +4519,165 @@ await t("the chemical and freshness warnings fire where CS-011 says they should"
   assert(/1 expired/.test(texts), "expiry: " + texts);
   const w2 = invLocWarnings(shopById("items", "BIN-SN6-002"), idx.by.get("BIN-SN6-002"));
   assert(w2.length === 0, "the clean bin stays clean");
+});
+
+await t("deleting a work order takes its issues and its uploads with it", async () => {
+  /* Firestore has no cascade, so this used to leave a trail every time: issues
+     whose required workOrderId no longer resolved, and every photo still sitting
+     in Storage where nothing could ever find it again — Storage LISTING is
+     denied by rule, so an unreferenced object is unreachable forever. */
+  DB.workOrders = [
+    { id: "WO-SN6-001", partName: "Nose", status: "Draft",
+      files: [{ id: "F1", name: "nose.step", url: "https://x/o/projects%2FWO-SN6-001%2F1-nose.step", path: "projects/WO-SN6-001/1-nose.step" }],
+      steps: [{ title: "Layup", photoRefs: [{ url: "https://x/o/p", path: "projects/WO-SN6-001/2-a.jpg" }],
+        noteHtml: '<img src="https://fs.googleapis.com/v0/b/b/o/projects%2FWO-SN6-001%2F3-note.jpg?alt=media&token=z">' }],
+      noteLog: [{ html: '<img src="data:image/png;base64,AAA">' }] },
+    { id: "WO-SN6-002", partName: "Panel", status: "Draft" },
+  ];
+  DB.projects = [
+    { id: "PROJ-SN6-001", title: "Void", workOrderId: "WO-SN6-001",
+      files: [{ id: "F2", name: "x.jpg", url: "https://x/o/q", path: "projects/PROJ-SN6-001/9-x.jpg" }] },
+    { id: "PROJ-SN6-002", title: "Unrelated", workOrderId: "WO-SN6-002" },
+  ];
+  DB.parts = [{ id: "P-SN6-001", partName: "Nose", workOrderId: "WO-SN6-001" }];
+  DB.molds = [{ id: "MOLD-SN6-001", name: "Nose plug", wo: "WO-SN6-001" }];
+  DB.items = [{ id: "PNL-SN6-001", wo: "WO-SN6-001" }];
+
+  const d = woDeletionSet(["WO-SN6-001"]);
+  assert(d.issues.length === 1 && d.issues[0].id === "PROJ-SN6-001",
+    "the issue that names this run goes; the one that names another stays");
+  assert(d.paths.includes("projects/WO-SN6-001/1-nose.step"), "an attached file's own path");
+  assert(d.paths.includes("projects/WO-SN6-001/2-a.jpg"), "a step photo's path");
+  assert(d.paths.includes("projects/WO-SN6-001/3-note.jpg"),
+    "an image pasted into a note has only a URL — the path is recovered from it, or it lingers forever");
+  assert(d.paths.includes("projects/PROJ-SN6-001/9-x.jpg"), "and the child issue's uploads too");
+  assert(d.paths.every(p => !p.startsWith("data:")), "an inline data: image is not a Storage object");
+  assert(d.parts.length === 1 && d.molds.length === 1 && d.items.length === 1,
+    "the records that merely point at it are found, separately from the ones that go");
+
+  const msg = woDeletionSummary(d);
+  assert(/1 issue/.test(msg) && /4 uploaded files/.test(msg), "the confirm counts the collateral: " + msg);
+  assert(/no undo/i.test(msg) && /stays consumed/.test(msg),
+    "and says what cannot be taken back: " + msg);
+
+  fb.roster = { name: "Simon", role: "lead" };
+  calls.length = 0;
+  await woBulkDelete(["WO-SN6-001"]);
+  await confirmProceed();
+  await new Promise(r => setTimeout(r, 0));
+
+  const deleted = calls.filter(c => c[0] === "del").map(c => c[1] + "/" + c[2]);
+  assert(deleted.includes("workOrders/WO-SN6-001"), "the run is gone");
+  assert(deleted.includes("projects/PROJ-SN6-001"), "and the issue that could not exist without it");
+  assert(!deleted.includes("projects/PROJ-SN6-002"), "but not the issue belonging to another run");
+  assert(calls.filter(c => c[0] === "deleteFile").length === 4, "every upload it was the only reason for");
+  assert(DB.workOrders.length === 1 && DB.projects.length === 1, "and the in-memory copy agrees");
+  assert(DB.parts[0].workOrderId === "" && DB.molds[0].wo === "" && DB.items[0].wo === "",
+    "a part outlives its run, but a pointer to a deleted run is exactly the artifact this removes");
+});
+
+await t("a member cannot bulk-delete, and the rail does not offer it", async () => {
+  /* firestore.rules allows a workOrders delete to leads only, with no mine()
+     clause, so a member's bulk delete would fail server-side one record at a
+     time — after the confirm, having already said it would work. */
+  DB.workOrders = [{ id: "WO-SN6-001", partName: "Nose", status: "Draft" }];
+  DB.projects = []; DB.parts = []; DB.molds = []; DB.items = [];
+  fb.roster = { name: "Nobody", role: "member" };
+  calls.length = 0;
+  await woBulkDelete(["WO-SN6-001"]);
+  assert(!calls.some(c => c[0] === "del"), "nothing was deleted");
+  assert(/only a lead/i.test(lastToast), "and it said why: " + lastToast);
+
+  view = { ...view, tab: "workorders", mode: "list", id: null, woPick: null };
+  render();
+  assert(!main.innerHTML.includes("startWOPick()"), "a member is not offered the picker");
+  fb.roster = { name: "Simon", role: "lead" };
+  render();
+  assert(main.innerHTML.includes("startWOPick()"), "a lead is");
+
+  // Picking mode swaps the rail's toolbar and puts a box on every row.
+  startWOPick();
+  assert(main.innerHTML.includes("wopick"), "rows carry a checkbox in pick mode");
+  assert(main.innerHTML.includes("deletePickedWOs()"), "and the danger button appears");
+  assert(/Delete\s*<\/button>|disabled/.test(main.innerHTML), "disabled until something is ticked");
+  toggleWOPick("WO-SN6-001");
+  assert(woPickedIds().length === 1, "ticking one selects one");
+  cancelWOPick();
+  assert(!main.innerHTML.includes("wopick"), "and cancelling puts the rail back");
+});
+
+await t("the Boards list groups and sorts, and does nothing at all until asked", () => {
+  /* view.sortKey is reset on every tab switch (core.js), so "nobody touched the
+     control" is the state everybody lands in — and it has to be the order this
+     list printed before the control existed. */
+  seedInventory();
+  DB.stock = [
+    { id: "BRD-SN6-001", density: 30, qty: 1, location: "BIN-SN6-001",
+      len: { value: 96, unit: "in" }, wid: { value: 48, unit: "in" }, thk: { value: 2, unit: "in" } },
+    { id: "BRD-SN6-002", density: 30, qty: 1, location: "BIN-SN6-001",
+      len: { value: 48, unit: "in" }, wid: { value: 24, unit: "in" }, thk: { value: 1, unit: "in" } },
+    { id: "BRD-SN6-003", density: 60, qty: 1, location: "BIN-SN6-002",
+      len: { value: 33, unit: "in" }, wid: { value: 19, unit: "in" }, thk: { value: 1, unit: "in" } },
+  ];
+  view = { ...view, tab: "inventory", mode: "list", id: null, invView: "boards", q: "", invDens: "",
+    sortKey: null, sortDir: "asc" };
+  render();
+  const def = main.innerHTML;
+  const card = (h, d) => h.indexOf(`pg-name">${d} lb/ft³`);
+  assert(card(def, 30) > -1 && card(def, 30) < card(def, 60), "grade cards, lightest first — the old order");
+  // Thickness ascending inside a card is groupBoards' comparator, unchanged.
+  assert(def.indexOf("BRD-SN6-002") < def.indexOf("BRD-SN6-001"),
+    "the 1in row precedes the 2in row inside the 30lb card, as it always did");
+  assert(!def.includes("<th>Grade</th>"), "a grouped view does not repeat the grade in every row");
+
+  // Reversing the direction reverses the cards too, not just the rows in them.
+  toggleBoardSortDir();
+  assert(card(main.innerHTML, 60) < card(main.innerHTML, 30), "▼ walks the grades downward");
+  view.sortDir = "asc";
+
+  // A sort key flattens: one table, and the grade becomes a column.
+  sortBoardsBy("size");
+  const flat = main.innerHTML;
+  assert(flat.includes("<th>Grade</th>"), "flat rows have to say which grade they are");
+  assert(!flat.includes("pg-name"), "and there are no group headers left");
+  assert(flat.indexOf("BRD-SN6-001") < flat.indexOf("BRD-SN6-003"),
+    "biggest longest-dimension first — the 96in sheet leads");
+
+  // Rack order: the index the packer spends, shown in the words a person uses.
+  sortBoardsBy("index");
+  const byIdx = main.innerHTML;
+  assert(byIdx.includes("Rack order"), "the rack-order column appears only when that is the sort");
+  assert(byIdx.includes("on top") && byIdx.includes("1 deep"),
+    "a board's depth in its own pile, in words rather than an index number");
+  assert(byIdx.indexOf("BRD-SN6-002") > byIdx.indexOf("BRD-SN6-001"),
+    "BRD-002 sits on BRD-001 in the same bin, so it is the one you have to dig for");
+
+  // Grouping by location regroups from the boards, so a shelf card is a shelf.
+  sortBoardsBy("location");
+  const byLoc = main.innerHTML;
+  assert((byLoc.match(/pg-name/g) || []).length === 2, "one card per shelf that has board on it");
+  view = { ...view, sortKey: null, sortDir: "asc", mode: "list", id: null };
+});
+
+await t("one definition of rack order, shared by the list and the packer", () => {
+  /* Two definitions would drift, and the whole feature is these two agreeing
+     about which board is easiest to get at. */
+  seedInventory();
+  DB.stock = [
+    { id: "BRD-SN6-010", density: 30, qty: 1, location: "BIN-SN6-001",
+      len: { value: 48, unit: "in" }, wid: { value: 24, unit: "in" }, thk: { value: 1, unit: "in" } },
+    { id: "BRD-SN6-004", density: 30, qty: 1, location: "BIN-SN6-001",
+      len: { value: 48, unit: "in" }, wid: { value: 24, unit: "in" }, thk: { value: 1, unit: "in" } },
+    { id: "BRD-SN6-007", density: 30, qty: 1, location: "",
+      len: { value: 48, unit: "in" }, wid: { value: 24, unit: "in" }, thk: { value: 1, unit: "in" } },
+  ];
+  const idx = boardIndexById();
+  assert(idx.get("BRD-SN6-004") === 0 && idx.get("BRD-SN6-010") === 1,
+    "ranked by the number in the id, not the order the array happened to be in");
+  assert(idx.get("BRD-SN6-007") === 0,
+    "a board with no shelf is on top by definition — you cannot be under an unrecorded pile");
+  const packing = boardsForPacking();
+  packing.forEach(b => assert(b.index === idx.get(b.id), b.id + " disagrees with the list"));
 });
 
 await t("Boards is the fourth Inventory list, beside items and materials", () => {

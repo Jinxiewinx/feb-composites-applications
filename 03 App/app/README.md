@@ -217,6 +217,20 @@ Material colour is a swatch beside a short text tag (CF, Spread, Core, Mesh), so
 the distinction survives greyscale, a colour-blind reader and the black-and-white
 laser. Hue is never the only thing carrying the meaning.
 
+**Deleting a run takes everything that only existed because of it.** Firestore
+has no cascade, so deleting the document used to leave a trail every time:
+issues whose work order no longer resolved — and an issue cannot exist without
+one, the app refuses to make one — every photo and CAD file still sitting in
+storage where nothing could find it again, and links on parts, molds and test
+panels pointing at nothing. There is one delete path now and it takes a list,
+so the single delete gets the same cleanup. **Select…** on the rail (leads
+only, because the database rules allow the delete to leads only) ticks as many
+runs as you like; the confirm counts exactly what goes — so many issues, so
+many uploaded files — and what merely loses a link, since a part outlives the
+run that made it. Material a run already consumed stays consumed, because it
+really was used, and the confirm says so. There is **no undo**: a deleted file
+cannot be brought back, so the offer is a backup export first instead.
+
 ### Parts
 
 ![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260826.png)
@@ -297,6 +311,33 @@ own page. Only a plan with no mold to be reached through gets a row of its own.
 refused to say so — a mold set to 45 matched no board at all and silently
 re-prefilled as 30. Entry is free, with the catalogue plus whatever is actually
 on the rack offered as suggestions.
+
+**Grade is a range, and leaving the max blank means one grade.** A mold that
+only ever gets planned at 30 is planned exactly the way it always was. Give a
+range — say 30 to 45 — and any board inside it may supply any blank, including
+two grades glued edge to edge in one layer, which is what lets the planner use
+the rack it has instead of reporting a shortfall while standing in front of a
+full shelf. CS-004 has not moved: the grades are still not interchangeable
+*silently*, and the range is where somebody says so out loud.
+
+The cost of saying so is that the mold no longer has "a density" — it has a set
+and a **maximum**, and the maximum is the number that matters, because the
+densest board in a glued stack sets the ShopSabre feed rate for the whole
+thing. So the app says it wherever the cut is about to happen: a band on the
+cut list and again in the "mark cut" modal, a column on the molds list, and the
+title block of **every drawing sheet**, in the largest type in that block.
+Before the cut it reads as the planned range; after it, as what actually came
+off the rack, per layer as well as overall.
+
+The planner also prefers the board **nearest the top of its own pile**, priced
+at 5% of the blank you get off it per board it has to be dug out from under.
+That is deliberately small — nesting and offcuts matter more, and on the real
+rack a board would have to be about thirteen down before the preference could
+pick a worse nest. It earns its place among near-equal candidates, which a
+density range creates a lot of: two sheets of the same size at different grades
+cost exactly the same, and "the one on top" is a better tiebreak than "the one
+whose id sorts first". The plan page shows what each board was charged and
+whether the lift actually decided anything, so the number can be argued with.
 
 **Plan a mold** takes an STL (or a typed rectangular block), picks board
 thicknesses that waste the least, splits tall molds at the ShopSabre's
@@ -484,9 +525,21 @@ the rack — followed by the size. A row is still one **size**, so where two
 records happen to share a size it names the first and says how many more; open
 it and the individual boards are listed, because a BRD- label is stuck to a
 physical board and a mold points at the one it was cut from. Sizes are grouped
-by **grade**, since that is the one axis the packer refuses to substitute
-across (CS-004 — 60lb seals better, and you cannot swap it in silently), which
-makes it the axis that decides whether a job can be cut at all.
+by **grade** by default, since that is the axis the packer will not substitute
+across unless a mold says it may (CS-004 — 60lb seals better, and you cannot
+swap it in silently), which makes it the axis that decides whether a job can be
+cut at all.
+
+One control does **grouping and sorting**, the same one Work Orders has. Group
+by grade, thickness or shelf and you get a card each; sort by **rack order**,
+size, board id or newest and the cards flatten into one table with the grade as
+a column. Rack order is the one worth knowing about: it is where a board sits
+in its own pile, so a row says "on top" or "3 deep", and it is the same number
+the planner spends when it decides which board to open — the list and the
+packer share one definition rather than two that could drift. A shelf card
+regroups from the boards themselves, so a size that lives on two shelves shows
+on each with only what is actually there. Touch nothing and the order is what
+it always was: grades ascending, thinnest first inside each.
 
 Quantities are **volume in ft³**, not area. A mold is cut out of a solid and
 eats thickness, so a 3in and a 1in sheet of the same face are not the same

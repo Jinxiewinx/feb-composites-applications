@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const src = readFileSync(join(root, "packer.js"), "utf8").replace(/"use strict";\n/, "");
 globalThis.__P = {};
-(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,boardCost,blanksFromLayers,moldCost,KERF_MM,MIN_REMNANT_MM,SHEET_REF_MM3});");
+(0, eval)(src + "\n;Object.assign(globalThis.__P,{packBoard,packAll,cutSequence,utilisation,fitIn,boardCost,blanksFromLayers,moldCost,blankDensityRange,densityRollup,KERF_MM,MIN_REMNANT_MM,SHEET_REF_MM3,DIG_WORTH_BLANK});");
 const P = globalThis.__P;
 
 const IN = 25.4;
@@ -198,7 +198,10 @@ t("leftovers say which board they came off", () => {
   assert(r.plans[0].leftover.length > 0, "a 1000x800 board minus a 300x200 blank leaves usable board");
   assert(r.plans[0].leftover.every(o => o.boardId === "PARENT"), "every leftover names its parent");
 });
-t("a blank only comes from a board of matching thickness and density", () => {
+t("a blank declaring one grade is never given another", () => {
+  /* CS-004 now attaches to the RANGE a mold declares, not to a hard-wired
+     bucket. A blank that names one grade has declared min == max, so this is
+     still the old rule and still the default. */
   const boards = [
     { id: "thin", len: 2000, wid: 1000, thk: IN, density: 30, qty: 1 },
     { id: "thick", len: 2000, wid: 1000, thk: 2 * IN, density: 30, qty: 1 },
@@ -207,7 +210,7 @@ t("a blank only comes from a board of matching thickness and density", () => {
   const want = [{ id: "a", w: 300, h: 200, thickness: 2 * IN, density: 60 }];
   const r = P.packAll(want, boards, {});
   assert(r.plans.length === 1 && r.plans[0].board.src.id === "dense",
-    "60lb board is not interchangeable with 30lb — CS-004");
+    "60lb board is not interchangeable with 30lb unless somebody said so");
 });
 t("running short produces a purchase list, not a crash", () => {
   const boards = [sheet(600, 400)];
@@ -220,6 +223,126 @@ t("leftovers below the minimum useful remnant are scrap, not ledger entries", ()
   const r = P.packBoard({ w: 1000, h: 1000 }, [blank("a", 960, 960)], {});
   assert(r.leftover.every(o => o.w >= P.MIN_REMNANT_MM && o.h >= P.MIN_REMNANT_MM),
     "a 20mm sliver is not an offcut anybody will retrieve");
+});
+
+console.log("density ranges:");
+/* A rack holding the same size in three grades. Nothing here varies but density,
+   so any difference in what gets opened is the range doing its job. */
+const graded = () => [
+  { id: "d30", len: 700, wid: 400, thk: IN, density: 30, qty: 1 },
+  { id: "d45", len: 700, wid: 400, thk: IN, density: 45, qty: 1 },
+  { id: "d60", len: 700, wid: 400, thk: IN, density: 60, qty: 1 },
+];
+const ranged = (id, lo, hi) => ({ id, w: 650, h: 350, thickness: IN, density: lo, densityMin: lo, densityMax: hi });
+/* Everything that decides whether two plans are the same plan. Board identity,
+   placements, cuts, leftovers and the order they came in — not object identity,
+   which would always differ, and not cost alone, which can collide. */
+const shape = (r) => JSON.stringify({
+  plans: r.plans.map(p => ({ id: p.board.src.id, thk: p.thickness, d: p.density,
+    placed: p.placed.map(x => [x.part.id, x.x, x.y, x.w, x.h, x.rotated]),
+    cuts: p.cuts, leftover: p.leftover })),
+  shortfall: r.shortfall.map(s => s.id), used: r.boardsUsed, degraded: r.degraded,
+});
+
+t("CRITICAL min == max plans exactly what a bare density planned before ranges existed", () => {
+  /* The no-regression guarantee, asserted rather than asserted about. If this
+     fails, every record written before ranges existed just changed meaning. */
+  const boards = graded();
+  const bare = [{ id: "a", w: 650, h: 350, thickness: IN, density: 45 },
+                { id: "b", w: 300, h: 200, thickness: IN, density: 45 }];
+  const spelt = bare.map(b => ({ ...b, densityMin: 45, densityMax: 45 }));
+  assert(shape(P.packAll(bare, boards, {})) === shape(P.packAll(spelt, graded(), {})),
+    "spelling out min == max must change nothing at all");
+});
+t("a blank declaring a range takes any grade inside it", () => {
+  const r = P.packAll([ranged("w1", 30, 45), ranged("w2", 30, 45)], graded(), {});
+  assert(r.shortfall.length === 0, "two boards inside the range can hold two blanks");
+  const opened = r.plans.map(p => p.density).sort((a, b) => a - b);
+  assert(opened.join() === "30,45", "opened " + opened.join() + ", expected the 30 and the 45");
+});
+t("a blank declaring a range still refuses a grade outside it", () => {
+  const r = P.packAll([ranged("x", 30, 45)], [graded()[2]], {});
+  assert(r.boardsUsed === 0 && r.shortfall.length === 1,
+    "a 60lb rack cannot supply a 30–45 mold — that is a purchase, not a substitution");
+});
+t("one layer may be glued from two grades inside the range", () => {
+  /* Simon asked for this explicitly: inside a declared range, boards mix freely,
+     including two blanks of the same layer coming off different grades. Stated
+     as a test, because otherwise the feature is only the absence of a check. */
+  const r = P.packAll([ranged("L1a", 30, 60), ranged("L1b", 30, 60)], graded(), {});
+  assert(r.plans.length === 2, "two blanks that do not share a board");
+  assert(r.plans[0].density !== r.plans[1].density, "and they came off different grades");
+});
+t("the pack says which grades it opened, and which is the highest", () => {
+  // The highest is the one that matters: it sets the CNC feed for the whole stack.
+  const r = P.packAll([ranged("a", 30, 60), ranged("b", 30, 60), ranged("c", 30, 60)], graded(), {});
+  assert(r.densitiesUsed.join() === "30,45,60", "got " + r.densitiesUsed.join());
+  assert(r.maxDensity === 60, "the densest board opened sets the feed rate");
+  const roll = P.densityRollup(r.plans, p => p.id === "a" ? "MOLD" : null);
+  assert(roll.by.MOLD && roll.by.MOLD.max === roll.by.MOLD.used[roll.by.MOLD.used.length - 1],
+    "the per-mold breakdown reports its own max");
+});
+t("a mixed-grade range is deterministic, whatever order the rack arrives in", () => {
+  const want = () => [ranged("a", 30, 60), ranged("b", 30, 60), ranged("c", 30, 60)];
+  const once = shape(P.packAll(want(), graded(), {}));
+  assert(once === shape(P.packAll(want(), graded(), {})), "two runs of the same pack must agree");
+  assert(once === shape(P.packAll(want(), graded().reverse(), {})),
+    "the pool sort carries determinism, not the caller's array order");
+});
+t("a blank with no density at all still means 30", () => {
+  const [lo, hi] = P.blankDensityRange({});
+  assert(lo === 30 && hi === 30, "the documented default, unchanged");
+  const [a, b] = P.blankDensityRange({ densityMin: 45, densityMax: 30 });
+  assert(a === 30 && b === 45, "a backwards range is read the only way it can mean anything");
+});
+
+console.log("the board on top of the pile:");
+/* `index` is a board's rank within its own storage location — 0 is the top.
+   boardsForPacking() in stock.js computes it; the packer only spends it. */
+const twin = (id, index) => ({ id, len: 700, wid: 400, thk: IN, density: 30, qty: 1, index });
+
+t("among equally good nests, the board on top of the pile wins", () => {
+  const r = P.packAll([blank("t", 650, 350)], [twin("DEEP", 3), twin("TOP", 0)], {});
+  assert(r.plans[0].board.src.id === "TOP", "opened " + r.plans[0].board.src.id);
+  assert(r.plans[0].digCost === 0, "and the board on top is charged nothing to lift");
+});
+t("two identical sizes at different grades are both scored, and the top one wins", () => {
+  /* The case the density range creates: same size, same cost, different grade.
+     Before this, the size dedupe would have kept whichever arrived first. */
+  const rack = [{ id: "d60deep", len: 700, wid: 400, thk: IN, density: 60, qty: 1, index: 4 },
+                { id: "d30top", len: 700, wid: 400, thk: IN, density: 30, qty: 1, index: 0 }];
+  const r = P.packAll([ranged("a", 30, 60)], rack, {});
+  assert(r.plans[0].board.src.id === "d30top", "opened " + r.plans[0].board.src.id);
+});
+t("the size dedupe keeps the lowest-index board, not the first one seen", () => {
+  const rack = [twin("z", 2), twin("y", 0), twin("x", 1)];
+  const r = P.packAll([blank("t", 650, 350)], rack, {});
+  assert(r.plans[0].board.src.id === "y", "opened " + r.plans[0].board.src.id + ", expected the index-0 board");
+  assert(shape(r) === shape(P.packAll([blank("t", 650, 350)], [twin("z", 2), twin("y", 0), twin("x", 1)], {})),
+    "and it agrees with itself on a second run");
+});
+t("CRITICAL the lift charge never buys a worse nest", () => {
+  /* Calibration, pinned. On the real rack the gap between two genuine board
+     choices for one 300x200 blank is 0.648 cost units, and DIG_WORTH_BLANK is
+     0.05 — so the good nest has to be about thirteen boards down before the
+     preference can override it. No stack in the RFS container is that deep.
+     If somebody changes the constant without meaning to, this says so. */
+  const pair = (i) => [{ id: "SMALL", len: 22 * IN, wid: 14 * IN, thk: IN, density: 30, qty: 1, index: i },
+                       { id: "BIG", len: 33 * IN, wid: 19 * IN, thk: IN, density: 30, qty: 1, index: 0 }];
+  const opens = (i) => P.packAll([blank("b", 300, 200)], pair(i), {}).plans[0].board.src.id;
+  assert(opens(0) === "SMALL", "the tight nest wins when nothing is stacked on it");
+  assert(opens(10) === "SMALL", "and still wins ten boards down — nesting first");
+  assert(opens(20) === "BIG", "but a twenty-deep dig is genuinely not worth it");
+  assert(P.DIG_WORTH_BLANK === 0.05, "the calibration above is written for 0.05");
+});
+t("a rack with no locations recorded prices no lifts at all", () => {
+  /* Every board on an unfiled rack is index 0 by definition — you cannot be
+     buried in a pile nobody has written down. This is what keeps the SN5
+     regression below pinned exactly where it was. */
+  const rack = [sheet(1000, 800, { id: "A" }), { id: "B", len: 600, wid: 400, thk: IN, density: 30, qty: 1 }];
+  const want = [blank("a", 300, 200)];
+  assert(shape(P.packAll(want, rack, {})) === shape(P.packAll(want, rack, { digWorthBlank: 0 })),
+    "with no index anywhere, the lift term is not merely small — it is absent");
 });
 
 console.log("the real rack:");

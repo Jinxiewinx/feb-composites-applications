@@ -52,13 +52,18 @@ const SHOP = {
     tab: "molds", label: "Molds", icon: "layers", coll: "molds", cls: null, prefix: "MOLD",
     noun: "mold", nounPlural: "molds",
     stage: { key: "stage", vals: MOLD_STAGE },
-    list: ["name", "stage", "location", "uses"],
+    list: ["name", "stage", "location", "densityCutMax", "uses"],
     f: [
       ["name", "Name", "text"],
       ["stage", "Stage", "select", MOLD_STAGE],
       ["location", "Home location", "rec:BIN"],
       ["wo", "Work order", "rec:workOrders"],
-      ["density", "Board density (lb/ft³)", "dens"],
+      // A mold is planned against a RANGE now; `density` (== min) stays for every
+      // reader that wants one number. densityCutMax is the as-cut answer, written
+      // by submitCommitCuts, and it is the one that sets the CNC feed rate.
+      ["densityMin", "Board density, min (lb/ft³)", "dens"],
+      ["densityMax", "Board density, max (lb/ft³)", "dens"],
+      ["densityCutMax", "Highest density cut (lb/ft³)", "dens"],
       ["layers", "Board layers", "text"],
       ["sealingType", "Sealing system", "select", ["XCR", "S120", "Resin", "Other"]],
       ["sealedDate", "Sealed on", "date"],

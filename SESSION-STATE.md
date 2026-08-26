@@ -31,18 +31,27 @@ words.
 - **The #composites note has not been sent** — that needs Simon. The script
   prints it and never posts.
 
-**Two things the release process taught in its first real use**, both now fixed
-and both worth not relearning:
+**Three board/work-order changes are landed on main but NOT released** — no tag,
+no deploy, so nothing is live. They want one minor version between them:
 
-- The live-check fetched once, immediately after the CLI returned, and failed on
-  a deploy that was fine — the edge lags the CLI by seconds. Six tries over 25s,
-  cache-busted per attempt so a proxy ignoring no-store cannot make all six
-  agree on a stale answer.
-- The script GENERATED What's New from commit subjects, which put "Release notes
-  skip the handoff file's own commits" in front of the whole team, and then
-  silently overwrote the hand-written replacement on the next release. It no
-  longer writes that block at all: it refuses to ship if the block is unchanged
-  since the previous tag, and prints what will ship before the suites run.
+- The Boards list gained a group/sort control, default order unchanged.
+- A mold is planned against a density RANGE; inside it the packer mixes grades
+  freely, and the highest grade cut is surfaced everywhere because it sets the
+  CNC feed. `min == max` is asserted byte-identical to the old packer — that
+  test is the rollback story, so do not let it drift.
+- Deleting work orders now takes child issues, storage objects and
+  back-pointers with it.
+
+**Adding a method to `fb` means adding it to seven dev shims too.** `fb.js` is
+the real one, but `tools/serve_populated.mjs`, `tools/lib/browser.mjs`,
+`test_appui`, `test_detailui`, `test_safearea`, `shoot_ui` and `make_mockups`
+each define their own `window.fb`, and a missing method is a TypeError in every
+local run and screenshot while production is fine. `fb.delMany` was written and
+the app called it before any shim had it. Grep `window.fb = {` for the list.
+
+**`tools/test_q_landing.mjs` fails intermittently** — seen once as 31/1, then
+32/0 on three straight re-runs, with `q.html` untouched. Re-run before believing
+it.
 
 **Fixture gaps, found twice, same shape.** The fixtures described records the
 app considers impossible, and nothing failed because nothing asserted on a count
