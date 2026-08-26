@@ -20,26 +20,37 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.0.0 is live and tagged.** Cut with `node tools/release.mjs 2.0.0` — the
-first real run of the script. Verified against the host: `APP_VERSION` is
-"2.0.0", `season.js` answers 200, and the Season row is in TABS.
+**v2.0.2 is live and tagged**, and the app is v2.0.0's feature set plus two
+patches to the release process itself. Verified against the host each time:
+`APP_VERSION`, `season.js` answering 200, and What's New reading in the team's
+words.
 
-- **Nobody sees the reload banner yet.** A lead has to open the deployed app and
-  hit ⋯ → "Announce this release", which writes `config/release`.
+- **Nobody sees the reload banner or What's New yet.** A lead has to open the
+  deployed app and hit ⋯ → "Announce this release", which writes
+  `config/release`. Until then everyone stays on whatever they loaded last.
 - **The #composites note has not been sent** — that needs Simon. The script
-  printed it; it never posts.
-- The release script's live-check **failed the first time on a deploy that was
-  fine**: the CLI returns when the release is finalised and the edge can serve
-  the old file for a few more seconds. Now retried six times over 25s, with a
-  cache-busted URL per attempt so a proxy ignoring no-store cannot make all six
-  agree on the same stale answer.
+  prints it and never posts.
 
-**Fixture gaps, found twice now, same shape both times.** The fixtures described
-records the app considers impossible, and nothing failed because nothing
-asserted on a count that was always zero:
+**Two things the release process taught in its first real use**, both now fixed
+and both worth not relearning:
 
-- v1.0.0: neither issue carried a `workOrderId`, so every browser suite and
-  mockup photographed an empty Issues section.
+- The live-check fetched once, immediately after the CLI returned, and failed on
+  a deploy that was fine — the edge lags the CLI by seconds. Six tries over 25s,
+  cache-busted per attempt so a proxy ignoring no-store cannot make all six
+  agree on a stale answer.
+- The script GENERATED What's New from commit subjects, which put "Release notes
+  skip the handoff file's own commits" in front of the whole team, and then
+  silently overwrote the hand-written replacement on the next release. It no
+  longer writes that block at all: it refuses to ship if the block is unchanged
+  since the previous tag, and prints what will ship before the suites run.
+
+**Fixture gaps, found twice, same shape.** The fixtures described records the
+app considers impossible, and nothing failed because nothing asserted on a count
+that was always zero:
+
+- v1.0.0: neither issue carried a `workOrderId`, so `issuesForWO()` matched
+  nothing and every browser suite and mockup photographed an empty Issues
+  section.
 - v2.0.0: all 33 parts in `sn5-parts.json` are `retro: true`, and both the
   Season tab and the tracker feed exclude retro — so the blueprint photographed
   empty. `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix.

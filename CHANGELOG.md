@@ -21,23 +21,63 @@ to learn**, not about API compatibility:
 
 ## v2.0.2 — 2026-08-25
 
-- The release script stops writing the team's release note for them
+- The release script stops writing the team's release note for them. It bumps
+  the version and checks that a human rewrote What's New since the last tag,
+  rather than generating it from commit subjects and overwriting the rewrite on
+  the next release.
 
 ---
 
 ## v2.0.1 — 2026-08-25
 
-- What's New reads like a note to a person, not a changelog
-- The release check stops crying wolf
+- What's New reads like a note to a person rather than a changelog.
+- The deploy's live-check retries instead of failing on a good deploy that the
+  CDN had not finished serving yet.
 
 ---
 
 ## v2.0.0 — 2026-08-25
 
-- Release notes skip the handoff file's own commits
-- Season: the master tracker comes into the app
-- The board stops saying things twice
-- Details leads on a part too, and an issue's photos stop being write-once
+The season plan moves into the app, and the board is rebuilt around the app that
+exists after v1.0.0.
+
+### Added
+
+- **The Season tab** — the blueprint, and the end of running the season off the
+  Composites Master Tracker spreadsheet. One row per part the team means to
+  make, thirteen columns, most cells empty by design: a row that exists with
+  nothing in it is a commitment to build the thing. A row **is** a real part
+  from the moment it exists, so there is no promotion step — "making the real
+  part file" just means filling the row in. Every cell edits in place; the three
+  stage columns are colour-coded and still go through the evidence gate and the
+  skip-ahead confirm; the part name stays pinned while the other twelve columns
+  scroll. This season only, and the Google Sheet is downstream now.
+- **Photos on an issue after it is raised**, from the work order — a thumb strip
+  and a camera button on each row, joining the run's lightbox set.
+
+### Changed
+
+- **The dashboard stopped saying things twice.** Shop status is now only what is
+  blocked and what is curing; the inventory counters became Stock & housekeeping
+  at the bottom, where a monthly habit belongs. The alert strip owns the T-minus
+  outright. And an issue folds into the run it holds up, leaving a flag with the
+  count still open — every issue has a work order, so the board had been listing
+  the same run twice, the same double-count that once overstated "behind
+  schedule" by about 40% for parts and work orders.
+- **Creating or editing a part opens on Details**, instead of below Progress,
+  the layup stack, the materials plan and the runs. The same fix work orders got
+  in v1.0.0.
+- The dashboard's Season module is now **Build progress**, which is what its
+  three bars show. The tab took the word.
+
+### Fixed
+
+- The three stage columns carried their state class on the `<select>` rather
+  than on a wrapper, which matched no rule in the stylesheet — so the colour
+  coding rendered plain white while looking entirely correct in the DOM.
+- Test fixtures described a part list with no current season in it (all 33 are
+  `retro`), so the Season tab and the Google Sheet feed — which both exclude
+  retro — were photographed empty by every screenshot and browser suite.
 
 ---
 
