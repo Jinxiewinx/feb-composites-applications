@@ -82,7 +82,15 @@ if (prev === "v" + version) die(`v${version} is already the latest tag.`);
    member would want. */
 const subjects = run("git", ["log", "--no-merges", "--format=%s", range])
   .split("\n").map(l => l.trim()).filter(Boolean)
-  .filter(l => !/^(chore|wip|fixup|squash)[:!( ]/i.test(l));
+  /* Housekeeping this repo does under its own name. SESSION-STATE.md is the
+     internal handoff; a release note telling the team it was pruned is noise on
+     a screen that interrupts them. Four such commits in the first 250.
+
+     Deliberately NOT filtering a leading "docs" — this repo writes prose
+     subjects, not prefixes, so "Docs and mockups for the inventory work" is a
+     real change and the space after the word would have swallowed it. */
+  .filter(l => !/^session state[:!( ]/i.test(l))
+  .filter(l => !/^(chore|wip|fixup|squash)[:!(]/i.test(l));
 
 if (!subjects.length && !DRY) die("No commits since " + prev + " — nothing to release.");
 say(`  ${subjects.length} commit${subjects.length === 1 ? "" : "s"} to describe\n`);
