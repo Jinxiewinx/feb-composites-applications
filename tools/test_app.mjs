@@ -3314,7 +3314,7 @@ const rndSeed = () => {
     { id: "P-SN6-951", partName: "COUPON SET", subteam: "BERGO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
   ];
   DB.workOrders = [];
-  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null, fRnd: false };
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null, onlyRnd: false };
 };
 
 await t("retro and R&D are two filters, not one — the both-flags record fails an && by design", () => {
@@ -3355,24 +3355,48 @@ await t("R&D is set on the part page, never as a column in a thirteen-wide grid"
     "a mis-click in a scrolling table must not silently remove a part from the season");
 });
 
-await t("R&D is out of the Parts rail by default, and the chip lets it back in", () => {
+await t("the Season tab's R&D count is a working way to GET to them", () => {
+  /* This is the one cross-tab handoff in the feature, and it broke silently
+     once already: the button carried the old flag name after a rename, so it
+     landed on Parts showing the season list — the exact list it had just told
+     you did not contain them. Assert the wiring, not just that a button
+     exists. */
   rndSeed();
-  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", onlyRnd: false };
+  render();
+  const m = main.innerHTML.match(/onclick="([^"]*onlyRnd[^"]*)"/);
+  assert(m, "the count is a button that sets onlyRnd — got: " +
+    (main.innerHTML.match(/\d+ R&amp;D/) || ["no R&D count at all"])[0]);
+  assert(/setTab\('parts'\)/.test(m[1]), "and it goes to Parts");
+  // Run it the way the browser would, then check where it actually landed.
+  eval(m[1].replace(/&quot;/g, '"'));
+  assert(view.tab === "parts", "we are on Parts");
+  assert(view.onlyRnd === true, "showing the R&D list");
+  render();
+  assert(main.innerHTML.includes("VG TRIAL"), "and the trials the Season tab was holding back are on screen");
+  assert(!main.innerHTML.includes("NOSECONE"), "and only those");
+});
+
+await t("the Parts rail is the season list OR the R&D list, and the chip swaps between them", () => {
+  rndSeed();
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false };
   render();
   let html = main.innerHTML;
-  assert(html.includes("NOSECONE"), "season parts are on the rail");
-  assert(!html.includes("VG TRIAL"), "and R&D is not — it is real work, but it is not what this list is for");
+  assert(html.includes("NOSECONE"), "off is the season list, which is what this tab is for on an ordinary day");
+  assert(!html.includes("VG TRIAL"), "and R&D is not in it");
   assert(/<b>2<\/b> R&amp;D/.test(html),
     "the chip says how many are being held back. A rail that hides work without saying so is the failure this whole feature exists to avoid");
-  view.showRnd = true; render(); html = main.innerHTML;
-  assert(html.includes("VG TRIAL") && html.includes("NOSECONE"),
-    "the chip WIDENS — R&D joins the season parts rather than replacing them, because the question is 'and the trials?', not 'only the trials'");
-  assert(/tpill rnd/.test(html), "and the rows that came in are badged");
+  view.onlyRnd = true; render(); html = main.innerHTML;
+  assert(html.includes("VG TRIAL"), "on is the R&D list");
+  assert(!html.includes("NOSECONE"),
+    "and ONLY the R&D list — the chip SWAPS the rail rather than adding to it, so there is exactly one question on screen at a time");
+  assert(/tpill rnd/.test(html), "the rows are still badged, because these records also exist in a list that has none of them");
+  assert(/<b>2<\/b> R&amp;D/.test(html), "and the chip is still there, lit, to swap back");
 });
 
 await t("an R&D part you navigated to stays put even while the rail is hiding its kind", () => {
   rndSeed();
-  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-950", edit: false, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-950", edit: false, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false };
   render();
   assert(main.innerHTML.includes("VG TRIAL"),
     "arriving from a dashboard row or a Cmd-K hit must not open onto a rail that refuses to show the record you opened");
@@ -3381,7 +3405,7 @@ await t("an R&D part you navigated to stays put even while the rail is hiding it
 
 await t("the R&D chip only exists when there is R&D work to point at", () => {
   DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" }];
-  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false };
   render();
   // Match the CHIP specifically. The "R&D part" create button is always there
   // and carries the same word, which is exactly the false pass this guards.
@@ -3390,10 +3414,10 @@ await t("the R&D chip only exists when there is R&D work to point at", () => {
 });
 
 await t("resetPartFilters puts R&D back out of sight", () => {
-  view = { ...view, showRnd: true };
+  view = { ...view, onlyRnd: true };
   DB.parts = [];
   resetPartFilters();
-  assert(view.showRnd === false, "the clear-filters button returns the rail to its default, which is R&D hidden");
+  assert(view.onlyRnd === false, "the clear-filters button returns the rail to its default, which is R&D hidden");
 });
 
 await t("a run inherits its part's programme — nobody marks it and nobody can forget to", () => {
@@ -3480,21 +3504,22 @@ await t("the R&D flag is an ordinary field until real work exists, then it locks
   assert(!calls.some(c => c[0] === "save"), "with nothing written");
 });
 
-await t("R&D runs are out of the Work Orders rail by default, and its chip lets them back in", () => {
+await t("the Work Orders rail is the season runs OR the R&D runs, and the chip swaps", () => {
   DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
   DB.workOrders = [
     { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", dueDate: "2026-11-02", steps: [] },
     { id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", dueDate: "2026-11-01", steps: [] },
   ];
-  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woOnlyRnd: false, sortKey: null, sortDir: null };
   render();
   let html = main.innerHTML;
-  assert(html.includes("NOSECONE"), "season runs are on the rail");
-  assert(!html.includes("VG TRIAL"), "and R&D runs are not, the same bargain the Parts rail strikes");
+  assert(html.includes("NOSECONE"), "off is the season runs");
+  assert(!html.includes("VG TRIAL"), "and R&D runs are not");
   assert(/<b>1<\/b> R&amp;D/.test(html), "with the chip saying how many are held back");
-  view.woShowRnd = true; render(); html = main.innerHTML;
-  assert(html.includes("VG TRIAL") && html.includes("NOSECONE"), "the chip widens rather than narrows");
-  assert(/tpill rnd/.test(html), "and the run that came in is badged");
+  view.woOnlyRnd = true; render(); html = main.innerHTML;
+  assert(html.includes("VG TRIAL"), "on is the R&D runs");
+  assert(!html.includes("NOSECONE"), "and only those — the same swap the Parts rail does, not a widening");
+  assert(/tpill rnd/.test(html), "still badged");
 });
 
 await t("the open run stays on the rail even while the chip is hiding its kind", () => {
@@ -3503,7 +3528,7 @@ await t("the open run stays on the rail even while the chip is hiding its kind",
     { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", steps: [] },
     { id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] },
   ];
-  view = { ...view, tab: "workorders", mode: "detail", id: "WO-SN6-950", q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-SN6-950", q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woOnlyRnd: false, sortKey: null, sortDir: null };
   assert(woIndexRows().some(w => w.id === "WO-SN6-950"),
     "a deep link or a dashboard click must not open onto a rail that refuses to list the run you opened");
 });
@@ -3511,7 +3536,7 @@ await t("the open run stays on the rail even while the chip is hiding its kind",
 await t("the R&D chip is not offered when every run is a season run", () => {
   DB.parts = [];
   DB.workOrders = [{ id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] }];
-  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woOnlyRnd: false, sortKey: null, sortDir: null };
   render();
   assert(!/<b>\d+<\/b> R&amp;D/.test(main.innerHTML), "a chip that can only ever reveal nothing is noise");
 });
@@ -3572,7 +3597,7 @@ await t("a record written before R&D existed is a season record", () => {
   assert(!seed.some(isRnd), "undefined reads as false, everywhere");
   DB.parts = seed;
   DB.workOrders = woSeed.slice();
-  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false };
   render();
   assert(!/tpill rnd/.test(main.innerHTML), "and nothing in the archive is badged");
   assert(pubProjection("parts", seed[0]).note === "", "the mirror writes an empty string, never undefined — a Firestore write of undefined throws");

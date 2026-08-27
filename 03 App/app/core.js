@@ -31,8 +31,8 @@ var APP_VERSION = "2.2.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "Coupons, test panels, layup trials and mold shakedowns can now be marked R&D. They are real parts with real deadlines, they just are not going on the car — so they stay off the Season blueprint, out of the Master Tracker, and out of your parts and work-order lists until you ask for them.",
-  "The R&D chip above those lists says how many are being held back and brings them in. The dashboard never hides them, so a trial that is late or blocked still finds you.",
+  "Coupons, test panels, layup trials and mold shakedowns can now be marked R&D. They are real parts with real deadlines, they just are not going on the car — so they stay off the Season blueprint and out of the Master Tracker.",
+  "Your Parts and Work Orders lists are now the season list or the R&D list, never both. The R&D chip above each one swaps between them and carries the count, so you can see how many trials are running without them cluttering the parts you are actually building. The dashboard never hides them, so a trial that is late or blocked still finds you.",
   "An R&D part says so everywhere it matters: a black R&D badge on screen, a stamp on its printed traveler, a boxed R&D on its 4x1 label, and a line on the page you get when you scan its QR.",
   "Start one with the R&D part button beside New Part, or R&D run beside New WO. A run started from an R&D part is already marked — there is nothing to remember.",
   "Got it wrong? While a part has no work order against it, R&D is a checkbox anyone can flip. Once work has started, only a lead can move it into the season, only once, and it keeps the same ID — so its label and its traveler stay valid.",
@@ -2052,7 +2052,7 @@ function setTab(id) {
   // and friends are NOT reset here, and a "late only" toggle left on in Parts
   // would otherwise silently filter a different tab's rail.
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
-    woOpen: false, woLate: false, woMine: false, woDone: false, woShowRnd: false };
+    woOpen: false, woLate: false, woMine: false, woDone: false, woOnlyRnd: false };
   closeDrawer();
   render(); syncUrl();
 }

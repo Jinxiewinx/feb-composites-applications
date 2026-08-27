@@ -437,12 +437,17 @@ function partIndexRows() {
     .filter(p => (!view.fLate || partLate(p)))
     .filter(p => (!view.fMine || isMine([p.moldEngineer, p.manufacturingEngineer])))
     .filter(p => (!view.fEng || partHasEngineer(p, view.fEng)))
-    /* R&D is OUT by default and the chip lets it back in. This is the opposite
-       of every other flag on this rail — fLate, fMine and fDone all narrow TO
-       something, showRnd widens — which is why it is named differently.
+    /* THE RAIL IS EITHER THE SEASON LIST OR THE R&D LIST, never both. The chip
+       swaps between them rather than adding R&D to what is already there, so
+       there is exactly one question on screen at a time: "what are we building
+       for the car" or "what are we trying out".
 
-       The worry with hiding work that carries a real deadline is that a
-       deadline nobody sees is a deadline nobody meets. Three things answer it,
+       Off is the default and shows season parts only, which is what this tab is
+       for on an ordinary day. `onlyRnd` rather than `fRnd`: fLate, fMine and
+       fDone all narrow the same list, and this one REPLACES it.
+
+       The worry with a default that hides work carrying a real deadline is that
+       a deadline nobody sees is a deadline nobody meets. Three things answer it,
        and all three have to stay true:
          - the chip is always there when R&D exists, carrying its count, so the
            rail says how many it is holding back rather than just holding them;
@@ -450,8 +455,10 @@ function partIndexRows() {
            late trial still surfaces on the landing page, which is where
            lateness is supposed to be found;
          - the selected part is re-added below, so arriving from a dashboard row
-           or a ⌘K hit opens the record even while the rail is hiding its kind. */
-    .filter(p => (view.showRnd || !isRnd(p)))
+           or a ⌘K hit opens the record even while the rail is showing the other
+           list. That is the one time both kinds appear at once, and it is the
+           existing "never falls out from under you" rule doing its job. */
+    .filter(p => (view.onlyRnd ? isRnd(p) : !isRnd(p)))
     .filter(p => !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
   // The selected part never falls out from under you — a filter that would hide
   // what you are reading keeps it in place instead (this is the whole point of
@@ -582,7 +589,7 @@ function renderPartIndex() {
         <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>
       </div>
       <div class="psum">
-        ${summaryChip("open", s.open, !view.fLate && !view.fMine && !view.fDone, "resetPartFilters()")}
+        ${summaryChip("open", s.open, !view.fLate && !view.fMine && !view.fDone && !view.onlyRnd, "resetPartFilters()")}
         ${summaryChip("late", s.late, !!view.fLate, "view.fLate=!view.fLate;view.fMine=false;render()", s.late ? "bad" : "")}
         ${summaryChip("mine", s.mine, !!view.fMine, "view.fMine=!view.fMine;view.fLate=false;render()")}
         ${summaryChip("done", s.done, !!view.fDone, "view.fDone=!view.fDone;render()")}
@@ -593,7 +600,7 @@ function renderPartIndex() {
               while it is off that number is exactly what the rail is not
               showing you — which is the thing worth saying. */""}
         ${(() => { const n = (DB.parts || []).filter(isRnd).length;
-          return n ? summaryChip("R&D", n, !!view.showRnd, "view.showRnd=!view.showRnd;render()") : ""; })()}
+          return n ? summaryChip("R&D", n, !!view.onlyRnd, "view.onlyRnd=!view.onlyRnd;render()") : ""; })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search part / id…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -1579,7 +1586,7 @@ function partsKeydown(e) {
 }
 document.addEventListener("keydown", partsKeydown);
 
-function resetPartFilters() { view = { ...view, fLate: false, fMine: false, fDone: false, showRnd: false, fEng: "", fSub: "", q: "" }; render(); }
+function resetPartFilters() { view = { ...view, fLate: false, fMine: false, fDone: false, onlyRnd: false, fEng: "", fSub: "", q: "" }; render(); }
 
 /* Every write is single-field, and the whole tab re-renders afterwards: the old
    version only re-rendered for four keys, so renaming a part left a stale <h2>

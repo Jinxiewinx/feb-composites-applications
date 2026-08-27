@@ -796,12 +796,13 @@ function woIndexRows() {
     .filter(w => (!view.woLate || isWoLate(w)))
     .filter(w => (!view.woMine || isMine([w.moldEngineer, w.manufacturingEngineer])))
     .filter(w => (!view.woIssues || openIssuesForWO(w.id).length))
-    /* R&D runs are out by default, the same bargain the Parts rail strikes —
-       see the note on its filter. A run is hidden here only; the dashboard,
-       the deadline lists, Reports and the printed traveler never filter R&D,
-       so a blocked or late trial still surfaces where lateness is looked for.
-       The open run is re-added below, so a deep link or a ⌘K hit still opens. */
-    .filter(w => (view.woShowRnd || !woIsRnd(w)))
+    /* Season runs or R&D runs, never both — the same switch the Parts rail
+       has, and the note on its filter carries the reasoning. Off by default.
+       A run is swapped out HERE only: the dashboard, the deadline lists,
+       Reports and the printed traveler never filter R&D, so a blocked or late
+       trial still surfaces where lateness is looked for. The open run is
+       re-added below, so a deep link or a ⌘K hit still opens. */
+    .filter(w => (view.woOnlyRnd ? woIsRnd(w) : !woIsRnd(w)))
     .filter(w => !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q));
   // The open run never falls out from under you — a filter that would hide what
   // you are reading keeps it in place instead. This is the whole point of a
@@ -823,7 +824,7 @@ function woSummary() {
     curing, blocked, issues,
   };
 }
-function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, fStatus: "", fSub: "", q: "" }; render(); }
+function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woOnlyRnd: false, fStatus: "", fSub: "", q: "" }; render(); }
 
 /* ---------- selection ----------
    view.mode === "detail" stays the switch, exactly as it was when this tab was
@@ -1018,7 +1019,7 @@ function renderWOIndex() {
               are R&D runs, counting what exists rather than what is on screen,
               because while it is off that is the number being held back. */""}
         ${(() => { const n = (DB.workOrders || []).filter(woIsRnd).length;
-          return n ? summaryChip("R&D", n, !!view.woShowRnd, "view.woShowRnd=!view.woShowRnd;render()") : ""; })()}
+          return n ? summaryChip("R&D", n, !!view.woOnlyRnd, "view.woOnlyRnd=!view.woOnlyRnd;render()") : ""; })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">

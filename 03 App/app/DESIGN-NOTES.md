@@ -273,10 +273,16 @@ Two are absolute and are the point of the feature: `seasonRows()` and
 site twice — see below). A season blueprint that lists trials is overstating
 what the season is, and the Sheet mirrors the blueprint.
 
-Two are a DEFAULT the user can turn off: `partIndexRows()` and `woIndexRows()`,
-via `view.showRnd` / `view.woShowRnd`. The rails hide R&D until you ask,
-because in practice a season's worth of coupons buries the parts you are
-actually building.
+Two are a SWITCH: `partIndexRows()` and `woIndexRows()`, via `view.onlyRnd` /
+`view.woOnlyRnd`. Each rail is the season list **or** the R&D list, never both,
+and the chip swaps between them. Off is the default, because in practice a
+season's worth of coupons buries the parts you are actually building.
+
+The switch is exclusive rather than additive on purpose: there is exactly one
+question on screen at a time — *what are we building for the car* or *what are
+we trying out* — and a merged list answers neither cleanly. It is also why the
+flags are `onlyRnd` and not `fRnd`: `fLate`, `fMine` and `fDone` all narrow the
+same list, and this one REPLACES it.
 
 That default is a real risk — a deadline nobody sees is a deadline nobody meets
 — and three things pay for it. All three have to stay true:
@@ -290,7 +296,9 @@ That default is a real risk — a deadline nobody sees is a deadline nobody meet
    those; it is what makes hiding it on the rails survivable.
 3. Both rails re-add the **selected/open record** after filtering, so arriving
    from a dashboard row, a ⌘K hit or a deep link opens the thing you clicked
-   even while the rail is hiding its kind.
+   even while the rail is showing the other list. That is the one moment both
+   kinds appear together, and it is the existing "never falls out from under
+   you" rule doing its job rather than an exception to the switch.
 
 Anything beyond those five is building a second archive. Search, the CSVs,
 People, the schedule, inventory and budget all stay unfiltered.
@@ -300,10 +308,10 @@ denominator and the toolbar reports parts it is not showing, which is the quiet
 sibling of the release where the blueprint photographed empty because every
 fixture was retro and nothing asserted on a count that was always zero.
 
-**`showRnd` and `woShowRnd` are named differently from `fLate`/`fMine`/`fDone`
-on purpose.** Every other flag on those rails NARROWS to something; these two
-WIDEN. A reader who assumes `fRnd` behaves like `fLate` gets it exactly
-backwards, so they do not get an `f` prefix.
+**`onlyRnd` and `woOnlyRnd` are named differently from `fLate`/`fMine`/`fDone`
+on purpose.** Every other flag on those rails narrows the same list; these two
+swap it for a different one. A reader who assumes `fRnd` behaves like `fLate`
+gets it wrong, so they do not get an `f` prefix.
 
 **Never encode R&D in a part's name.** `"R&D — NOSECONE"` is the obvious
 workaround and it breaks three things at once: `Sync.gs` matches rows on the

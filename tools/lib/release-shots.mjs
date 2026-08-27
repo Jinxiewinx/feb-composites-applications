@@ -31,17 +31,17 @@ export const RELEASE_SHOTS = [
   {
     id: "rnd-parts",
     vh: 1000,
-    /* showRnd ON for the picture, because the honest default is OFF and a
+    /* onlyRnd ON for the picture: the honest default is the season list, and a
        screenshot of the default is a screenshot of nothing new. What the
-       picture has to show is what the chip reveals. */
+       picture has to show is the other half of the switch. */
     js: `view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "",
-                 fLate: false, fMine: false, fDone: false, showRnd: true }; render();`,
-    title: "Trials and coupons have a home, and they stay out of your way",
+                 fLate: false, fMine: false, fDone: false, onlyRnd: true }; render();`,
+    title: "Trials and coupons have a list of their own",
     note: "An R&D part is a real part — real carbon, a real cost, a real deadline — that is not " +
-          "something we promised to put on the car. Your parts list does not show them by default; " +
-          "the R&D chip says how many are being held back and brings them in, marked with a black " +
-          "R&D capsule. The Work Orders rail works the same way, and the dashboard never hides them, " +
-          "so a late trial still finds you.",
+          "something we promised to put on the car. Your parts list is now either the season parts " +
+          "or the trials, and the R&D chip swaps between them, carrying the count so you always know " +
+          "how many are running. The Work Orders rail works the same way, and the dashboard never " +
+          "hides them, so a late trial still finds you.",
   },
   {
     id: "rnd-season",

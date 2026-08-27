@@ -119,12 +119,13 @@ What changes:
   of 20 parts · 8 R&D` — and the R&D number takes you to them, so nothing ever
   just disappears.
 - **It is not in the Google Sheet mirror**, for the same reason.
-- **Your Parts and Work Orders lists do not show it by default.** A season's
-  worth of coupons buries the parts you are actually building, so the rails keep
-  them out until you ask. The **R&D** chip above each list says how many are
-  being held back and brings them in; press it again to put them away. Open one
-  from the dashboard or from search and it stays on the rail while you are
-  looking at it, whatever the chip says.
+- **Your Parts and Work Orders lists are the season list or the R&D list, never
+  both.** The **R&D** chip above each one swaps between them: off, you see the
+  parts going on the car, which is what those tabs are for on an ordinary day;
+  on, you see only the trials. The chip carries the count, so the list always
+  says how many it is holding back rather than just holding them back. Open a
+  record from the dashboard or from search and it stays on the rail while you
+  are looking at it, whichever list is showing.
 - **The dashboard, the deadline lists and Reports never hide it.** That is
   deliberate and it is what makes the rails safe to filter: a trial that is late
   or blocked still finds you on the landing page.
