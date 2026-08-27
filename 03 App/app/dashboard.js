@@ -793,11 +793,18 @@ function dashFoot() {
       ${pinned.map(d => ext(d.url, d.title || d.id)).join("")}
     </div>
     <div class="dfoot-band">${feed}</div>
+    ${/* Its own surface, inside the same ruled band. Stacked straight under the
+          activity feed with nothing between them, the fact read as the last row
+          of it — one more thing that happened in the shop, rather than the one
+          thing here that is not news. */""}
     ${raceday
-      ? `<p class="fq">It's race day. Everything on this board already happened. Go run the car.</p>`
-      : f ? `<p class="fq">${esc(f.t)}</p>
-        <div class="fmeta"><span class="gh-n tny">${f.src === "lore" ? "team lore" : "the wider world"}</span>
-        <button class="dg-more" onclick="view={...view,factN:(view.factN||0)+1};render()">Another one</button></div>` : ""}
+      ? `<div class="dlore"><div class="dlore-hd">Race day</div>
+        <p class="fq">It's race day. Everything on this board already happened. Go run the car.</p></div>`
+      : f ? `<div class="dlore">
+        <div class="dlore-hd">${f.src === "lore" ? "Team lore" : "Shop knowledge · the wider world"}</div>
+        <p class="fq">${esc(f.t)}</p>
+        <div class="fmeta"><button class="dg-more" onclick="view={...view,factN:(view.factN||0)+1};render()">Another one</button></div>
+      </div>` : ""}
   </div>`;
 }
 

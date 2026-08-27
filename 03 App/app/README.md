@@ -63,11 +63,22 @@ deadline" has no honest answer, and inventing one is how a board starts lying
 quietly. There is an order inside *Waiting on you*, where everything is the same
 kind of thing, and nowhere else.
 
-Below the lanes, **the program**: build progress, molds, money, this week's RFS
-bookings, the store, and the all-season counters — the facts that are a monthly
-read rather than a daily one, one line each. A fact with no value prints a
-labelled dash instead of disappearing. Then **around the shop**: the filtered
-jumps, what has been touched lately, and the fact of the day.
+Below the lanes, **the program** and **around the shop** sit side by side. The
+program carries build progress, molds, money, this week's RFS bookings, the
+store and the all-season counters — the facts that are a monthly read rather
+than a daily one — and a fact with no value prints a labelled dash instead of
+disappearing. Around the shop carries the filtered jumps and what has been
+touched lately.
+
+Side by side rather than stacked because each is then half the board's width,
+and its contents read as a list down a column instead of a line strung across
+1,300px. Four bars and six numbers spread over the full width are a sentence you
+sweep your eye along; the same six stacked in 650px are a thing you read.
+
+**Team lore keeps its own surface** inside that footer, below the rule. Stacked
+straight under the activity feed with nothing between them it read as the last
+row of it — one more thing that happened in the shop, rather than the one thing
+down there that is not news.
 
 A **guest** gets a different page rather than an emptier one — see below.
 

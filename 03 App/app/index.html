@@ -2221,7 +2221,7 @@
     grid-template-areas: "stopped" "you" "due" "clock" "prog" "foot"; }
   @media (min-width: 701px) and (max-width: 1300px) {
     .dboard { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "stopped you" "due clock" "prog prog" "foot foot"; }
+      grid-template-areas: "stopped you" "due clock" "prog foot"; }
   }
   /* 1300, not the house 1100. Four lanes at 1101px get about 211px each, and
      .srow was designed against 304px — the rail-overflow lesson written down
@@ -2229,7 +2229,7 @@
      shoots 900/1440/1920, which lands 2x2 / 4-across / 4-across. */
   @media (min-width: 1301px) {
     .dboard { grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-template-areas: "stopped you due clock" "prog prog prog prog" "foot foot foot foot"; }
+      grid-template-areas: "stopped you due clock" "prog prog foot foot"; }
   }
   .l-stopped { grid-area: stopped; } .l-you { grid-area: you; }
   .l-due { grid-area: due; } .l-clock { grid-area: clock; }
@@ -2254,11 +2254,19 @@
      disappearing, so the strip is the same height whatever the data says —
      which is the whole difference between this and the five modules it
      replaced. */
-  .dprog-bars { display: grid; gap: 6px; margin-bottom: 10px; }
-  @media (min-width: 901px) { .dprog-bars { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; } }
-  @media (min-width: 1301px) { .dprog-bars { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-  .dprog-row { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--muted);
+  /* ONE COLUMN, both of them. The program and the footer are half the board's
+     width each now, so their contents read as a list down a column rather than
+     a line strung across the page — which is the whole reason for putting the
+     two windows in parallel: four bars and six facts spread over 1,300px are a
+     sentence you have to sweep your eye along, and the same six stacked in
+     650px are a thing you read. */
+  .dprog-bars { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); margin-bottom: 10px; }
+  .dprog-row { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--muted);
     padding-top: 7px; border-top: 1px solid var(--line); margin-top: 7px; }
+  /* Wraps rather than ellipsises. Each fact is its own row in a column now, so
+     a long one has somewhere to go — and a truncated fact hides the number,
+     which is the only part of it worth reading. */
+  .dprog-i { min-width: 0; }
   .dprog-i b { color: var(--ink); font-family: var(--font-display); font-size: 14px; }
   .dfoot-band { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
 
@@ -2336,9 +2344,18 @@
   /* Race day: the one day the board wears gold. */
   .dboard.raceday { border-top: 3px solid var(--gold); padding-top: 10px; }
   /* Fact of the day: prose, one size up, with a gold open-quote garnish. */
-  .dfoot .fq { position: relative; margin: 10px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+  /* The fact is not one of the shop's errands, and stacked under the activity
+     feed with nothing between them it read as the last row of it. Its own
+     surface inside the same ruled band: still the footer, plainly not the
+     launchpad. */
+  .dlore { margin-top: 10px; padding: 10px 12px 11px; border: 1px solid var(--line);
+    border-radius: var(--r-md); background: var(--surface-2); }
+  .dlore-hd { font-family: var(--font-display); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 5px; }
+  .dfoot .fq { position: relative; margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
   .dfoot .fq::before { content: "\201C"; position: absolute; left: 0; top: -4px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
-  .dfoot .fmeta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .dfoot .fmeta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .dfoot .fmeta .dg-more { width: auto; margin-top: 0; padding: 5px 10px; font-size: 11.5px; }
 
   /* Phone: the strip becomes one scrollable chip row so four numerals do not
      spend the first screen. The row is the scroller, never the document. */
