@@ -20,17 +20,14 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.2.1 is live and tagged** — the R&D build. Verified against the host by
-fetch, not by "Deploy complete": `APP_VERSION` reads 2.2.1, both rails carry
-their R&D filters and `.plistfade` carries `margin: 0`.
+**v2.2.2 is live and tagged, and main matches it.** The R&D build. Verified
+against the host by fetch, not by "Deploy complete": `APP_VERSION` reads 2.2.2,
+both rails carry the exclusive R&D switch, the Season tab's count-button sets
+`onlyRnd`, and `.plistfade` carries `margin: 0`.
 
-**MAIN IS AHEAD OF LIVE, ON PURPOSE.** After v2.2.1 shipped, the R&D chip was
-changed from additive (season + R&D) to an exclusive SWITCH (season list OR
-R&D list), and `showRnd`/`woShowRnd` became `onlyRnd`/`woOnlyRnd`. Simon is
-holding to batch any further tweaks into one release rather than cutting a
-third version in an afternoon for a feature nobody has been told about yet.
-So: **do not paste the v2.2.1 #composites note** — `WHATS_NEW` has moved on
-since it was printed. Cut the next version and use the note that run prints.
+v2.2.0 and v2.2.1 were cut and superseded the same day and were never
+announced, so the team only ever sees this one. The note v2.2.2 printed is the
+only accurate one; the earlier two describe behaviour that no longer exists.
 
 - **Nobody sees the reload banner or What's New yet.** A lead has to open the
   deployed app and hit ⋯ → "Announce this release", which writes
