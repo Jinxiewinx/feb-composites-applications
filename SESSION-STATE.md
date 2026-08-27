@@ -20,21 +20,32 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**All five items of the pass are written and green. NOTHING IS DEPLOYED**, and
-`config/release` is untouched, so the team is still on v2.2.2. The approved plan
-is at `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+**All five items of the pass are LIVE.** Rules went first and alone, then
+hosting, and both were verified off the host rather than from "Deploy complete".
+`APP_VERSION` is still 2.2.2 and `config/release` is untouched, so nobody has
+been told: no reload banner, no What's New. Announcing is a lead pressing
+`⋯ → Announce this release`, and the version bump is `tools/release.mjs`.
+The plan is at `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
 
-**DEPLOYING THIS IS TWO STEPS, NOT ONE, AND THE ORDER IS LOAD-BEARING.**
-`firebase deploy --only firestore:rules,storage:rules` FIRST and alone, then
-`--only hosting`. An old client under new rules is fine; a new client under old
-rules is a guest who signs in anonymously and is refused every collection, which
-looks exactly like the app being broken. This is the first rules change in this
-repo for months — every other deploy has been hosting only.
+**GUEST MODE IS DEPLOYED AND SWITCHED OFF, and that is one toggle, not a bug.**
+Anonymous auth is disabled on the project, so "View as guest" answers
+*"Guest access is not switched on for this project yet — ask a composites
+lead."* Everything behind it is live and tested; the console switch is
+Authentication → Sign-in method → Anonymous. Turn on the 30-day auto-cleanup for
+anonymous accounts in the same visit, or every visit mints a permanent Auth
+record that never goes away.
 
-**Anonymous auth has to be enabled in the Firebase console** before "View as
-guest" does anything at all, and it is not on. Turn on the console's 30-day
-auto-cleanup for anonymous accounts at the same time, or every visit mints a
-permanent Auth record that never goes away.
+**That switch is what actually opens the data**, so it is worth pressing
+deliberately rather than as housekeeping: the rules already grant an anonymous
+caller read on all eleven collections and the roster, and nothing gates it
+behind a link or a token.
+
+**The deploy order was load-bearing and stays that way.** Rules alone first,
+then hosting. An old client under new rules is fine; a new client under old
+rules is a guest refused every collection, which looks exactly like the app
+being broken. Note the CLI selector for storage is `storage`, NOT
+`storage:rules` — the latter is parsed as a deploy target and fails with
+"Could not find rules for the following storage targets: rules".
 
 **Guest read costs eleven full-collection snapshots per visitor.** The whole
 database, per person, from a public URL, on Blaze. Simon's call was to ship and
