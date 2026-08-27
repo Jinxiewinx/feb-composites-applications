@@ -161,3 +161,36 @@ export async function openApp(ctx, port, path) {
   if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
   return { page, errors };
 }
+
+/* Seal a page off the internet.
+
+   Written after tools/test_q_landing.mjs was found to have never once tested
+   the thing it is named for. It routed on a glob of the form star-star-slash
+   gstatic.com-slash-star-star, and that matches nothing: the URL is
+   https://WWW.gstatic.com/..., and the leading star-star-slash wants a slash
+   where "www." actually sits. All six routes in that file matched zero
+   requests, so every "with no network" assertion in it ran with a perfectly
+   good network — loading the real Firebase SDK, opening a channel to
+   PRODUCTION Firestore, and rendering four rows of real data. The offline path
+   the suite exists to defend had never executed, and the assertions raced real
+   network latency, which is the documented flake.
+
+   So: seal by origin rather than by naming hosts. A new CDN dependency cannot
+   quietly re-open the hole, and the returned array is evidence — assert on it
+   when a test needs to prove it stayed off-box.
+
+   mode "abort" — the request is refused (wifi off, captive portal).
+   mode "hang"  — the request never answers. This is the RFS case: the wifi
+                  associates and nothing ever comes back. */
+export async function sealNetwork(page, { mode = "abort", allow } = {}) {
+  const blocked = [];
+  await page.route(/^https?:\/\//, route => {
+    const url = route.request().url();
+    if (/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(url)) return route.continue();
+    if (allow && allow.test(url)) return route.continue();
+    blocked.push(url);
+    if (mode === "hang") return;            // deliberately never settled
+    route.abort();
+  });
+  return blocked;
+}

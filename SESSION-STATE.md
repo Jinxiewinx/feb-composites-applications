@@ -47,9 +47,20 @@ each define their own `window.fb`, and a missing method is a TypeError in every
 local run and screenshot while production is fine. `fb.delMany` was written and
 the app called it before any shim had it. Grep `window.fb = {` for the list.
 
-**`tools/test_q_landing.mjs` fails intermittently** — seen once as 31/1, then
-32/0 on three straight re-runs, with `q.html` untouched. Re-run before believing
-it.
+**`test_q_landing.mjs` was never testing offline, and that was both the flake
+and the four failures.** All six of its routes blocked a glob of the form
+star-star-slash gstatic.com-slash-star-star, which matches NOTHING: the URL is
+https://WWW.gstatic.com/..., and the leading star-star-slash wants a slash where
+"www." sits. Zero requests matched. Every "with no network" assertion in the file
+ran with a perfectly good network — real Firebase SDK, a live channel to
+PRODUCTION Firestore, four rows of real data on the page. The offline watchdog it
+exists to defend had never executed once, and the assertions raced real network
+latency, which is exactly what the intermittency was.
+
+Fixed by `sealNetwork()` in `tools/lib/browser.mjs`, which seals BY ORIGIN rather
+than by naming hosts, so a new CDN dependency cannot quietly re-open the hole.
+32 passed 0 failed, four consecutive runs. **Never block a host by glob** — use
+`sealNetwork`.
 
 **Fixture gaps, found twice, same shape — and now guarded.** The fixtures
 described records the app considers impossible, and nothing failed because
@@ -91,10 +102,20 @@ already had and for the same reason. `shoot_release.mjs` DIES without Chromium
 rather than skipping: a skipped picture is a release announced without one and
 nobody finding out. `--no-shots` is the deliberate way past it; patches skip it.
 
-**Two suites fail at HEAD, and did before this work** — verified by stashing.
-`test_q_landing`: 4 failures on the hanging/refused paths ("no detail rows are
-invented", got 4 want 0) — this is NOT the known flake, which was the timing
-assertion. `test_safearea`: `wo-detail` at landscape-max. Both want a look.
+**`test_safearea` is RED ON PURPOSE — it found a real app bug.** At landscape-max
+(932x430, 59px side insets) two step-action buttons on `wo-detail` sit past the
+safe area, which ends at x=873:
+
+    "Add photos to step 1"      rect 876,389,910,429
+    "Report an issue on step 1" rect 916,389,945,429
+
+The second extends to 945 — beyond the 932px viewport edge entirely. On an
+iPhone held sideways the camera and flag buttons on a work-order step are under
+the rounded corner. The test is correct; the CSS is not. Left failing so it stays
+visible. Fixing it is an app change on the detail screen and needs Simon.
+
+(`test_q_landing`'s four failures at HEAD had the same root cause as its flake —
+see above. Both are fixed.)
 
 **The Python tools mangled every non-ASCII character on Windows, and now do
 not.** `build_docx.py` and friends called `read_text()` / `write_text()` with no
@@ -268,10 +289,11 @@ pixels.
 
 ### The test harness
 
-**`tools/test_app.mjs` concatenates the app's classic scripts into one indirect
-`eval`.** Adding a new app file means adding it to `FILES` too, or the harness
-silently cannot see it. Top-level `const` stays lexical and is invisible to the
-tests, which is why a named list gets rewritten into implicit globals.
+**App files load per-file from `index.html`'s `<script>` tags** via
+`tools/lib/appload.mjs`, each as its own `vm.Script` with its real path. There is
+no `FILES` list to forget and no regex allowlist. Coverage attributes by file as
+a result. The gotcha: top-level `const`/`let` are global-LEXICAL, so bare `DB`
+works and `globalThis.DB` is `undefined`.
 
 **Never assert sanitizer allowlist policy in `test_app.mjs`** — it cannot see
 it. `tools/test_sanitize.mjs` runs the real vendored DOMPurify in Chromium. The

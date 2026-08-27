@@ -20,7 +20,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { serveApp, loadChromium, skipMessage, APP_ROOT } from "./lib/browser.mjs";
+import { serveApp, loadChromium, skipMessage, APP_ROOT, sealNetwork } from "./lib/browser.mjs";
 
 let pass = 0, fail = 0;
 function ok(cond, msg, detail) {
@@ -55,9 +55,9 @@ async function open(id, { mode }) {
 
   if (mode === "hang") {
     // A request that never answers. This is the RFS case.
-    await page.route("**/gstatic.com/**", () => { /* never fulfilled */ });
+    await sealNetwork(page, { mode: "hang" });
   } else if (mode === "offline") {
-    await page.route("**/gstatic.com/**", r => r.abort());
+    await sealNetwork(page, { mode: "abort" });
   }
 
   const t0 = Date.now();
@@ -69,7 +69,7 @@ async function open(id, { mode }) {
 console.log("\noffline-first");
 {
   const page = await browser.newPage({ viewport: { width: 393, height: 850 } });
-  await page.route("**/gstatic.com/**", () => { /* hangs forever */ });
+  await sealNetwork(page, { mode: "hang" });
   await page.goto(`http://127.0.0.1:${port}/Q/MOLD-SN6-004`, { waitUntil: "commit" });
 
   const seen = await page.waitForFunction(
@@ -87,7 +87,7 @@ console.log("\noffline-first");
 console.log("\nspeed");
 {
   const page = await browser.newPage();
-  await page.route("**/gstatic.com/**", () => { /* hangs */ });
+  await sealNetwork(page, { mode: "hang" });
   const t0 = Date.now();
   await page.goto(`http://127.0.0.1:${port}/Q/WO-SN6-118`, { waitUntil: "commit" });
   await page.waitForFunction(() => document.getElementById("id")?.textContent.trim() === "WO-SN6-118",
@@ -133,7 +133,7 @@ for (const [mode, id, why] of [
 console.log("\nleaks");
 {
   const page = await browser.newPage();
-  await page.route("**/gstatic.com/**", () => { /* hangs; we call render ourselves */ });
+  await sealNetwork(page, { mode: "hang" }); // we call render() ourselves below
   await page.goto(`http://127.0.0.1:${port}/Q/P-SN6-007`, { waitUntil: "commit" });
   await page.waitForFunction(() => document.getElementById("id")?.textContent.trim() === "P-SN6-007");
 
@@ -217,7 +217,7 @@ console.log("\nlayout");
 {
   for (const w of [320, 393, 430]) {
     const page = await browser.newPage({ viewport: { width: w, height: 800 } });
-    await page.route("**/gstatic.com/**", () => {});
+    await sealNetwork(page, { mode: "hang" });
     // A long ID and a long name are the two things that can widen the layout
     // viewport, which zooms the whole page out on mobile Safari.
     await page.goto(`http://127.0.0.1:${port}/Q/PNL-SN6-006-C03`, { waitUntil: "commit" });
