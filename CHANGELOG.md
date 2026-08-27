@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.2.1 — 2026-08-27
+
+- release.mjs: --shots, for a patch that does have something to look at
+- R&D is out of the rails by default, and the list fade stops eating the last row
+- The two v2.2.0 release pictures
+
+---
+
 ## v2.2.0 — 2026-08-27
 
 - What's New for v2.2.0: the R&D build, in the team's words

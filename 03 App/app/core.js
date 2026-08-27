@@ -27,7 +27,7 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "2.2.0";
+var APP_VERSION = "2.2.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
