@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.2.0 — 2026-08-27
+
+- What's New for v2.2.0: the R&D build, in the team's words
+- Rebuild the CS docx, and fix the encoding bug that made it unsafe
+- R&D parts: real work that is not a season deliverable
+
+---
+
 ## v2.1.2 — 2026-08-26
 
 - Datasheets back on the Documents tab, printables guide off
