@@ -58,6 +58,8 @@ if (!chromium) { console.log(skipMessage("the app's layout")); process.exit(0); 
 
 const STUB = `
 window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },
   state: "ready",
   user: { uid: "u1", email: "starbuck@berkeley.edu", name: "Simon Starbuck" },
   roster: { role: "lead", name: "Simon Starbuck", email: "starbuck@berkeley.edu" },

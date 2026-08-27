@@ -116,6 +116,8 @@ const states = SWEEP ? STATES.filter(s => s.id === "list") : STATES;
    feature and call it a design. */
 const STUB = `
 window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },
   state: "ready",
   user: { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" },
   roster: { role: "lead", name: "Simon Starbuck", email: "simon@berkeley.edu" },

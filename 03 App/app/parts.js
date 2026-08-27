@@ -584,7 +584,7 @@ function renderPartIndex() {
               case, so the reflex gesture is the safe one — and both paths land
               on the detail page in edit mode, where the <h2> badge is the first
               thing on screen. */""}
-        <button class="primary ib" onclick="newPart()">${icon("plus", 15)} New Part</button>
+        <button class="primary ib"${gx("Sign in to add a part.")} onclick="newPart()">${icon("plus", 15)} New Part</button>
         <button class="ib" onclick="newPart(true)">${icon("plus", 15)} R&amp;D part</button>
         <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>
       </div>

@@ -191,6 +191,8 @@ const SHOTS = [
 /* ---------- the fb.js stand-in (same shape as shoot_ui.mjs) ---------- */
 const STUB = `
 window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },
   state: "ready",
   user: { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" },
   roster: { role: "lead", name: "Simon Starbuck", email: "simon@berkeley.edu" },

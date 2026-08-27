@@ -151,7 +151,71 @@ document.addEventListener("focusout", function () {
 /* ---------- generic data helpers ---------- */
 // Pass the field you changed and only that field is written, so concurrent or
 // stale-cache edits to other fields of the same record can't clobber it.
+/* SHOWN, DISABLED, WITH A REASON — and NOT with the disabled attribute.
+
+   Chrome dispatches no click and shows no title tooltip on a disabled control,
+   so the reason would be unreachable on exactly the device this gets demoed
+   from. This app has written that down twice already, independently: the part
+   stage steps in parts.js keep themselves live because "the click is how you
+   find out what is missing", and the buy-off button in workorders.js says a
+   dead grey button with a tooltip nobody on a phone can hover is the version of
+   this that fails.
+
+   So: aria-disabled for the screen reader, title for the mouse, and a click
+   that explains itself for the finger. gx() emits the whole set, and returns
+   nothing at all when the person can edit — so a call site reads the same in
+   both states:
+
+     <button ${gx("Sign in to sign off on a step.")} onclick="buyoff(3)">buy off</button>
+
+   gx() adds no handler of its own. The element keeps whatever onclick it always
+   had, and the capture-phase listener below is what stops it running — which is
+   why the order of the attributes on the tag does not matter, and why a control
+   wired up from JS rather than from markup is caught too. The listener is the
+   mechanism; the attributes are the label and the reason. */
+function gx(why) {
+  if (canEdit()) return "";
+  const w = esc(why || "Guest view — sign in to change anything.");
+  /* NO class attribute, and that is not a style preference. Half these controls
+     already carry one — class="primary" on the buy-off button, class="ib" on
+     every toolbar action — and an element with two class attributes keeps the
+     FIRST and silently drops the second, so a class here would be applied to
+     exactly the plain buttons and to none of the ones that matter.
+
+     The attribute pair is the hook instead: [aria-disabled][data-why] is what
+     the stylesheet targets and what the listener matches, it cannot collide
+     with anything, and it works on any element.
+
+     The leading space belongs to gx() so a call site can write `<button${gx()}`
+     and emit no stray whitespace when the person can edit — which keeps the
+     markup identical to what it was for everybody who is not a guest. */
+  return ` aria-disabled="true" title="${w}" data-why="${w}"`;
+}
+/* One delegated listener, on DOCUMENT and in the CAPTURE phase.
+
+   Document, not #app: #modal and #toasts are siblings of it, and every submit
+   button in this app lives in a modal. Capture, so it runs before the element's
+   own inline handler and can stop it. */
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("click", (e) => {
+    const t = e.target && e.target.closest && e.target.closest('[aria-disabled="true"][data-why]');
+    if (!t) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof toast === "function") toast(t.getAttribute("data-why"), "info");
+  }, true);
+}
+
+/* LAYER 1 OF THREE. fb.js refuses a guest's write outright and the rules refuse
+   it again on the server; this exists so that a path nobody thought to disable
+   produces a sentence a person can act on instead of a raw exception toast. */
+function guestBlocked(what) {
+  if (canEdit()) return false;
+  if (window.fb && fb.guest) toast(what || "Guest view — sign in to change anything.", "info");
+  return true;
+}
 function save(coll, obj, field) {
+  if (guestBlocked()) return;
   if (obj) fb.save(coll, obj, field).catch(e => toast("Save failed: " + e.message,"error"));
 }
 // Concurrency-safe edit of one array/object field: apply `mutator` to the
@@ -161,14 +225,19 @@ function save(coll, obj, field) {
 // back to a plain field write. Use this for buy-offs and any in-place array
 // item edit; use fb.appendTo for pure append (project updates).
 function saveField(coll, obj, field, mutator) {
+  if (guestBlocked()) return;
   if (!obj) return;
   fb.mutateField(coll, obj.id, field, mutator).catch(() => fb.save(coll, obj, field).catch(e => toast("Save failed: " + e.message,"error")));
 }
-function del(coll, id) { return fb.del(coll, id).catch(e => toast("Delete failed: " + e.message,"error")); }
+function del(coll, id) {
+  if (guestBlocked()) return Promise.resolve();
+  return fb.del(coll, id).catch(e => toast("Delete failed: " + e.message,"error"));
+}
 // Every caller reads its whole form BEFORE awaiting this, because the offline
 // fallback below opens a modal, and openModal() replaces whatever modal was on
 // screen — including the create form the caller is still reading fields from.
 async function allocId(coll, cls) {
+  if (guestBlocked()) return null;
   try { return await fb.allocId(coll, cls); }
   catch (e) {
     const ok = await confirmAsync("Couldn't reach the shared ID counter (offline?). Assign a local ID now — it could collide with one made on another laptop. Continue?",
@@ -187,6 +256,7 @@ async function allocId(coll, cls) {
    refuses every block write, and a delivery that cannot be received is a far
    worse outcome than a slow one. */
 async function allocIds(coll, cls, n) {
+  if (guestBlocked()) return [];
   if (!(n > 0)) return [];
   if (n === 1) { const id = await allocId(coll, cls); return id ? [id] : []; }
   try {
@@ -368,7 +438,27 @@ function cmpId(a, b) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
-function isLead() { return !!(window.fb && fb.roster && fb.roster.role === "lead"); }
+/* MAY THIS PERSON CHANGE ANYTHING AT ALL.
+
+   Guest mode is a second point on the permission axis this app already had,
+   rather than a new one beside it, and almost all of its reach comes from that
+   one decision. isLead() gains a canEdit() clause, so every one of its
+   forty-nine call sites — the Roster and Restore buttons, role selects,
+   training grants, resetSteps, the tracker feed setup, every lead-only delete —
+   stops offering itself to a guest with no edit anywhere else in the app. That
+   is the correct render, not a trick: a guest is not a lead.
+
+   The second cascade is in render(), which forces view.edit off. Every detail
+   page's field() helper already returns a read-only <div class="ro"> when that
+   flag is down, so roughly a hundred and thirty of the app's inputs go quiet on
+   one line.
+
+   What is left after those two is the bench buttons — buy off, delete, upload,
+   comment — and those are treated by hand with gx(). */
+function canEdit() {
+  return !!(window.fb && fb.state === "ready" && !fb.guest && fb.roster);
+}
+function isLead() { return canEdit() && fb.roster.role === "lead"; }
 function signerName() {
   if (!window.fb) return "?";
   return (fb.roster && fb.roster.name) || (fb.user && fb.user.name) || "?";
@@ -1569,6 +1659,13 @@ function renderLogin() {
       <button onclick="view.authMode='${up ? "in" : "up"}';render()">${up ? "Have an account? Sign in" : "New here? Create account"}</button>
       ${up ? "" : `<button onclick="doReset()">Forgot password</button>`}
     </div>
+    ${/* Under a rule, not beside Sign in: it is a different act, and the
+          sentence is the same reason the name field above gives for existing. */""}
+    <div class="row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:12px">
+      <button onclick="fb.signInGuest()">View as guest</button>
+      <span class="muted tny">See the whole app. You won't be able to change anything —
+        every buy-off carries a name.</span>
+    </div>
   </div>`;
 }
 function renderPending() {
@@ -2086,6 +2183,7 @@ function renderTopbar() {
   const st = window.fb ? fb.state : "loading";
   if (st !== "ready") { el.innerHTML = ""; return; }
   const unread = (DB.notifications || []).filter(n => !n.read).length;
+  const guest = !!(window.fb && fb.guest);
   el.innerHTML = `
     <button class="hamburger no-print" title="Menu" aria-label="Menu" onclick="toggleDrawer()">${icon("menu", 22)}</button>
     <h1>${esc(view.mode === "roster" ? "Roster" : tabLabel())}</h1>
@@ -2095,15 +2193,24 @@ function renderTopbar() {
             from a physical object to its record. */""}
       <button class="icon-btn" title="Scan a label" aria-label="Scan a label" onclick="scanToOpen()">${icon("scan", 19)}</button>
       <button class="icon-btn" title="Search (⌘K)" aria-label="Search" onclick="openSearch()">${icon("search", 19)}</button>
-      <button class="icon-btn" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>
+      ${/* No bell for a guest: notifications are per-person and a guest is
+            nobody, so the query does not even run. */""}
+      ${guest ? "" : `<button class="icon-btn" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>`}
       ${themeToggleBtn()}
       <span class="tb-desktop">
+        ${guest ? `<span class="muted">Guest · read-only</span>
+        <button class="primary" onclick="leaveGuest()">Sign in</button>`
+        : `${/* Backup is not a new capability given the read rules — but a
+                one-click JSON of the whole database is a very different thing to
+                hand a stranger than it is to offer a member, and hiding it costs
+                a guest nothing they came for. Same for the avatar button, which
+                is a write. */""}
         <button onclick="exportAll()">Backup</button>
         ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
         <button onclick="openRoster()">Roster</button>` : ""}
         <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
         <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
-        <button onclick="fb.signOut()">Sign out</button>
+        <button onclick="fb.signOut()">Sign out</button>`}
       </span>
       <button class="icon-btn tb-morebtn" title="More" aria-label="More" onclick="openMoreMenu()">${icon("more", 20)}</button>
     </div>`;
@@ -2112,19 +2219,25 @@ function renderTopbar() {
 // Reuses the same global handlers the desktop buttons call.
 function openMoreMenu() {
   const lead = isLead();
+  const guest = !!(window.fb && fb.guest);
   openModal(`
     <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px">
-      ${avatar(myEmail(), 40)}
-      <div><div style="font-weight:600">${esc(signerName())}</div>
-        <div class="muted tny">${esc(myEmail())}${lead ? " · lead" : ""}</div></div>
+      ${guest ? "" : avatar(myEmail(), 40)}
+      <div><div style="font-weight:600">${guest ? "Guest" : esc(signerName())}</div>
+        <div class="muted tny">${guest ? "read-only" : esc(myEmail()) + (lead ? " · lead" : "")}</div></div>
     </div>
     <div class="menu-actions">
       <button onclick="toggleTheme();closeModal()">${icon(currentTheme() === "dark" ? "sun" : "moon", 18)}${currentTheme() === "dark" ? "Light theme" : "Dark theme"}</button>
-      <button onclick="closeModal();setMyAvatar()">${icon("edit", 18)}Change photo</button>
+      ${/* The same three swaps as the desktop topbar, for the same reasons:
+            the photo is a write, and the backup is the whole database in one
+            tap. Signing out is what lets a guest reach the login screen at all,
+            so it becomes the primary action rather than the dangerous one. */""}
+      ${guest ? `<button class="primary" onclick="closeModal();leaveGuest()">${icon("logout", 18)}Sign in</button>`
+      : `<button onclick="closeModal();setMyAvatar()">${icon("edit", 18)}Change photo</button>
       <button onclick="closeModal();exportAll()">${icon("download", 18)}Backup database</button>
       ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>
       <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
-      <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>
+      <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>`}
     </div>
     <div class="muted tny" style="margin-top:14px;text-align:center">
       v${esc(APP_VERSION)} · <button class="link" onclick="closeModal();openWhatsNew()">What's new</button>${
@@ -2497,6 +2610,25 @@ function splashGo() {
   el.classList.add("press");
 }
 
+/* Says which mode you are in, once, at the top — rather than making somebody
+   infer it from a page full of greyed controls. .gate is the app's existing
+   amber notice strip (the reload banner and the bad-link hint both use it), so
+   this needs no new CSS and no design-system entry. */
+function guestBanner() {
+  if (!(window.fb && fb.guest)) return "";
+  return `<div class="gate no-print"><span class="gi">&#128065;</span><div>
+    <b>Viewing as a guest.</b> Everything is visible and nothing is editable — every
+    buy-off carries a name, so changing anything needs one.
+    <button class="link" onclick="leaveGuest()">Sign in</button></div></div>`;
+}
+/* Firebase persists an anonymous session in IndexedDB, so a guest who taps once
+   is auto-signed-in as that same anonymous user on every future visit and never
+   sees the login screen again. Signing out is what makes the door work. */
+async function leaveGuest() {
+  try { await fb.signOut(); } catch (e) { /* already gone */ }
+  view = { ...view, authMode: "in" };
+}
+
 function render() {
   /* Stock merged into Molds (2026-08): the `stock` tab id keeps resolving —
      old #/stock links, notification links and BRD-/STK- routing all pass
@@ -2515,6 +2647,13 @@ function render() {
   // "you're not on the roster yet" note. The splash has done its job.
   hideSplash();
   if (st === "signedout") { el.innerHTML = renderLogin(); return; }
+  /* THE SECOND CASCADE. Every detail page's field() helper renders a read-only
+     <div class="ro"> when view.edit is down, so this one line turns roughly a
+     hundred and thirty inputs across workorders, parts, budget, projects, shop
+     and inventory into text — without any of those files knowing what a guest
+     is. setTab() already clears the flag on every tab change; this covers the
+     case where a guest arrives on a page somebody left in edit mode. */
+  if (window.fb && fb.guest && view.edit) view = { ...view, edit: false };
   if (st === "pending") { el.innerHTML = renderPending(); return; }
   /* A scan link waiting since page load, redeemed the first time we get here
      with data. It has to be here and not at boot: on first paint fb.state is
@@ -2525,7 +2664,7 @@ function render() {
   // Explicit dashboard fallback, kept even now Dashboard is TABS[0] again:
   // the landing behavior should never depend on array order.
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
-  el.innerHTML = releaseBanner() + tab.render();
+  el.innerHTML = guestBanner() + releaseBanner() + tab.render();
   maybeShowWhatsNew();
   labelListTables();
   // Release a GL context whose canvas this paint removed. See mvSweep.

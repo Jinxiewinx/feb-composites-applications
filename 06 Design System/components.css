@@ -310,6 +310,25 @@ button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; backg
 /* ---- gate (blocking notice) ----
    The visible form of a requirement that isn't met. Amber warns;
    `.blocked` (red) means work can't proceed. */
+/* ---- guest mode ----
+   A control a guest may SEE but not press. Not [disabled]: Chrome dispatches
+   no click and shows no title tooltip on a disabled control, so the reason
+   would be unreachable on exactly the phone this gets demoed from — the same
+   judgement already written down at the buy-off button in workorders.js and
+   the part-stage steps in parts.js, both of which deliberately stay live so
+   that pressing them teaches you something.
+
+   aria-disabled carries it for a screen reader, title for a mouse, and a
+   delegated capture-phase click turns the tap itself into the explanation.
+
+   Keyed on the ATTRIBUTES rather than on a class, because half these controls
+   already carry one and an element with two class attributes keeps the first
+   and drops the second. */
+[aria-disabled="true"][data-why] { opacity: .5; cursor: not-allowed; }
+[aria-disabled="true"][data-why]:hover,
+[aria-disabled="true"][data-why]:focus-visible { opacity: .72; }
+[aria-disabled="true"][data-why]:active { transform: none; }
+
 .gate {
   display: flex; gap: 10px; align-items: flex-start;
   background: var(--warn-bg); border: 1px solid var(--warn-border);

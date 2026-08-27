@@ -12,7 +12,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import {
   getAuth, connectAuthEmulator, onAuthStateChanged,
-  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously,
   sendPasswordResetEmail, signOut, updateProfile,
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
@@ -131,6 +131,7 @@ const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY
    app's point of view, and listing it would open a full-collection snapshot at
    boot for no benefit. */
 function pubSync(coll, obj) {
+  if (fb.guest) return;   // layer 0: a guest never writes a mirror either
   try {
     if (typeof pubProjection !== "function") return;   // labels.js not loaded
     const p = pubProjection(coll, obj);
@@ -156,6 +157,7 @@ function pubWarn(e) { console.warn("pub mirror not updated (the record itself sa
    script and its top-level declarations become globals, but the test harness
    and any future page that loads fb.js without it must still save records. */
 function trackerSync(coll) {
+  if (fb.guest) return;   // layer 0: a guest never writes a mirror either
   if (coll !== "parts") return;
   if (typeof trackerQueue !== "function") return;   // tracker.js not loaded
   try { trackerQueue(); } catch (e) { pubWarn(e); }
@@ -169,6 +171,7 @@ function trackerSync(coll) {
    thing that must never appear on a public URL. The mirror is written exactly
    as the projection produces it and with nothing added. */
 async function pubPublish(recs) {
+  if (fb.guest) return;   // layer 0: a guest never writes a mirror either
   for (let i = 0; i < recs.length; i += 400) {
     const batch = writeBatch(db);
     for (const p of recs.slice(i, i + 400)) batch.set(doc(db, "pub", p.id), p);
@@ -178,11 +181,38 @@ async function pubPublish(recs) {
 
 const unsubs = {}; // collection name -> onSnapshot unsub
 
+/* LAYER 0 OF THREE. The rules are the real boundary and deny a guest every
+   write regardless of what this file does; core.js catches the common paths so
+   a person gets a sentence rather than an exception; and this is the floor
+   under both, in the one file that holds the SDK. Every mutating method calls
+   it first. A client bug now has to defeat all three.
+
+   Deliberately NOT on signIn / signUp / resetPassword: those are the way out. */
+function noWrites() {
+  if (!fb.guest) return;
+  throw Object.assign(
+    new Error("You're viewing as a guest. Sign in with your team account to change anything."),
+    { code: "guest/read-only" });
+}
+
 const fb = {
   state: "loading", // loading | signedout | pending (no roster entry) | ready
   user: null,       // { uid, email, name }
   roster: null,     // this user's roster entry { name, role }
   rosterCheckFailed: false, // network died mid-check → pending screen says so
+
+  /* A GUEST IS "ready", AND A FLAG — not a fifth state.
+
+     Eight places gate on fb.state === "ready" before they load anything:
+     loadRelease, loadSeason, loadBudgetCfg, loadRestockRules,
+     loadResinOverrides, loadTrainingCatalog, the Cmd-K search gate, and the
+     three renderers. tools/lib/browser.mjs blocks every Playwright suite on it
+     too. A "guest" state would mean the countdown, the budget config, the resin
+     overrides, the restock rules and the training catalog all going dark for
+     the one visitor who is only ever going to read them — for nothing, since
+     what makes a guest read-only is the rules and the switch below, not which
+     string this holds. */
+  guest: false,
 
   /* ---- auth ---- */
   async signIn(email, pass) {
@@ -196,6 +226,11 @@ const fb = {
     await sendPasswordResetEmail(auth, email.trim().toLowerCase());
   },
   async signOut() { await signOut(auth); },
+  /* View as guest. Anonymous auth rather than no auth at all, because
+     firestore.rules has to be able to TELL — an unauthenticated caller stays
+     403 on everything, which is what keeps the public scan page's contract
+     unchanged. */
+  async signInGuest() { await signInAnonymously(auth); },
 
   // Pending screen "check again" button: re-read my roster entry.
   async refreshRoster() { await resolveUser(auth.currentUser); },
@@ -205,6 +240,7 @@ const fb = {
      stale-cache edits to *other* fields of the same record can't be clobbered.
      Without it (record creation), the whole doc is written. */
   async save(coll, obj, field) {
+    noWrites();
     const stamp = { updatedAt: serverTimestamp(), updatedBy: fb.user ? fb.user.email : "?" };
     const ref = doc(db, coll, obj.id);
     if (field) {
@@ -221,6 +257,7 @@ const fb = {
     trackerSync(coll);
   },
   async del(coll, id) {
+    noWrites();
     await deleteDoc(doc(db, coll, id));
     // A public nameplate outliving its record is worse than a missed delete.
     deleteDoc(doc(db, "pub", id)).catch(pubWarn);
@@ -241,6 +278,7 @@ const fb = {
      failing the real delete over — whereas putting it in the main batch would
      mean one rules hiccup abandons every record delete in the chunk. */
   async delMany(items) {
+    noWrites();
     const list = (items || []).filter(x => x && x.coll && x.id);
     if (!list.length) return;
     for (let i = 0; i < list.length; i += 400) {
@@ -263,6 +301,7 @@ const fb = {
      this counts instead of guessing — the caller can then say how many uploads
      it could NOT remove rather than claiming a clean sweep. */
   async deleteFiles(paths) {
+    noWrites();
     let ok = 0; const failed = [];
     for (const p of (paths || [])) {
       if (!p) continue;
@@ -281,6 +320,7 @@ const fb = {
   // fresh data) instead of one silently clobbering the other. Needs a
   // connection — callers fall back to save() when offline.
   async mutateField(coll, id, field, mutator) {
+    noWrites();
     await runTransaction(db, async (tx) => {
       const ref = doc(db, coll, id);
       const snap = await tx.get(ref);
@@ -292,6 +332,7 @@ const fb = {
   // Atomic append to an array field (project update log). arrayUnion merges
   // concurrent appends server-side — no read, no clobber.
   async appendTo(coll, id, field, el) {
+    noWrites();
     await updateDoc(doc(db, coll, id), {
       [field]: arrayUnion(JSON.parse(JSON.stringify(el))),
       updatedAt: serverTimestamp(), updatedBy: fb.user ? fb.user.email : "?",
@@ -312,6 +353,7 @@ const fb = {
      Re-keying it would reset the counter to 1 and start minting duplicate WO
      ids over the top of real records. */
   async allocId(coll, cls) {
+    noWrites();
     const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
     const counterKey = cls || coll;
     return runTransaction(db, async (tx) => {
@@ -338,6 +380,7 @@ const fb = {
      is fine and deliberate: ids are opaque handles, nothing counts or sums
      them, and cmpId() sorts by the number so a gap is invisible. */
   async allocIdBlock(coll, cls, n) {
+    noWrites();
     if (!(n > 0)) return [];
     if (n > 50) throw new Error("id block too large: " + n);
     const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
@@ -355,7 +398,7 @@ const fb = {
 
   // Republish every public scan nameplate. See pubPublish() above for why this
   // is not importMany().
-  async publishPub(recs) { await pubPublish(recs); },
+  async publishPub(recs) { noWrites(); await pubPublish(recs); },
 
   /* Write the Google Sheet mirror feed to tracker/<token>.
 
@@ -366,12 +409,14 @@ const fb = {
      never appear on a URL that needs no login. The snapshot is written exactly
      as tracker.js builds it, with nothing added. */
   async publishTracker(token, snap) {
+    noWrites();
     await setDoc(doc(db, "tracker", token), snap);
   },
 
   // Bulk write (seed load / JSON import). Overwrites by id; chunked under the
   // 500-writes-per-batch limit.
   async importMany(coll, arr) {
+    noWrites();
     for (let i = 0; i < arr.length; i += 400) {
       const batch = writeBatch(db);
       arr.slice(i, i + 400).forEach((obj) => {
@@ -391,6 +436,7 @@ const fb = {
      the owning doc (project files[], avatar url, etc.). Paths are namespaced so
      storage.rules can scope them. */
   async upload(path, file, opts = {}) {
+    noWrites();
     let blob = file;
     if (file.type && file.type.startsWith("image/")) {
       blob = await downscaleImage(file, opts.maxDim || 1600).catch(() => file);
@@ -400,7 +446,7 @@ const fb = {
     const url = await getDownloadURL(r);
     return { url, path, name: file.name || "file", size: blob.size || 0, type: blob.type || file.type || "" };
   },
-  async deleteFile(path) { try { await deleteObject(sRef(storage, path)); } catch (e) { /* already gone */ } },
+  async deleteFile(path) { noWrites(); try { await deleteObject(sRef(storage, path)); } catch (e) { /* already gone */ } },
 
   /* ---- callable functions ----
      The functions SDK loads lazily on first use: exactly one feature calls a
@@ -408,6 +454,7 @@ const fb = {
      Throws to the caller — the UI's job is to degrade to the manual editor,
      not this file's job to pretend it worked. */
   async call(name, data) {
+    noWrites();
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js");
     const res = await httpsCallable(getFunctions(app, "us-central1"), name)(data);
     return res.data;
@@ -422,6 +469,7 @@ const fb = {
   },
   // Lead-only per rules. merge:true so a member's self-set avatar/name survive.
   async rosterSet(email, name, role) {
+    noWrites();
     email = email.trim().toLowerCase();
     await setDoc(doc(db, "roster", email), {
       name: name.trim(), role,
@@ -429,28 +477,32 @@ const fb = {
       addedAt: serverTimestamp(),
     }, { merge: true });
   },
-  async rosterDelete(email) { await deleteDoc(doc(db, "roster", email)); },
+  async rosterDelete(email) { noWrites(); await deleteDoc(doc(db, "roster", email)); },
   /* Trainings live on the roster doc as trainings.<id> = {by, at}. Lead-only
      per rules (member self-edit is restricted to avatar/name, so a member
      granting themselves a training is rejected server-side). Dot-path writes
      so a grant can't clobber the rest of the map. */
   async rosterGrant(email, trainingId) {
+    noWrites();
     await updateDoc(doc(db, "roster", email.trim().toLowerCase()), {
       ["trainings." + trainingId]: { by: fb.user ? fb.user.email : "?", at: new Date().toISOString() },
     });
   },
   async rosterRevoke(email, trainingId) {
+    noWrites();
     await updateDoc(doc(db, "roster", email.trim().toLowerCase()), {
       ["trainings." + trainingId]: deleteField(),
     });
   },
   // Any member editing their OWN roster doc — rules allow avatar/name only.
   async rosterUpdateSelf(fields) {
+    noWrites();
     await updateDoc(doc(db, "roster", fb.user.email), fields);
   },
 
   /* ---- notifications (per-user; read scoped to `to` by rules) ---- */
   async notify(toEmail, type, text, link) {
+    noWrites();
     if (!toEmail || toEmail === fb.user.email) return; // don't notify yourself
     const id = "N" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     await setDoc(doc(db, "notifications", id), {
@@ -458,7 +510,7 @@ const fb = {
       from: fb.user.email, ts: serverTimestamp(), read: false,
     });
   },
-  async markNotifRead(id) { await updateDoc(doc(db, "notifications", id), { read: true }); },
+  async markNotifRead(id) { noWrites(); await updateDoc(doc(db, "notifications", id), { read: true }); },
 
   /* ---- config (small roster-readable, lead-only-writable settings docs) ----
      Live outside COLLECTIONS: these are single keyed docs (e.g. "slack"), not
@@ -479,6 +531,7 @@ const fb = {
       () => { /* a config the roster can't read is not worth a console error */ });
   },
   async setConfig(key, data) {
+    noWrites();
     await setDoc(doc(db, "config", key), {
       ...data, updatedAt: serverTimestamp(), updatedBy: fb.user ? fb.user.email : "?",
     }, { merge: true });
@@ -500,7 +553,19 @@ function startSync() {
       if (window.onFbData) window.onFbData(name, arr);
     }, (err) => {
       console.error(name + " sync error", err);
-      if (err.code === "permission-denied") { fb.state = "pending"; stopSync(); notify(); }
+      if (err.code !== "permission-denied") return;
+      if (fb.guest) {
+        /* A collection a guest cannot see is an EMPTY TAB, not an eviction.
+           Drop this one listener, publish an empty array so the tab renders its
+           own empty state rather than whatever seed data was there, and leave
+           the other ten alone. Without this the first denied collection would
+           throw a guest off the whole app — and the rules deliberately keep
+           some things closed, so that is the expected case, not a failure. */
+        if (unsubs[name]) { unsubs[name](); delete unsubs[name]; }
+        if (window.onFbData) window.onFbData(name, []);
+        return;
+      }
+      fb.state = "pending"; stopSync(); notify();
     });
   });
   // Live roster → DB.users (avatars, names) for pickers/comments everywhere,
@@ -513,9 +578,14 @@ function startSync() {
       if (window.onFbData) window.onFbData("users", arr);
     }, () => { /* roster read denied only for non-roster users, already handled */ });
   }
-  // My notifications only — a filtered query (rules scope reads to `to == me`),
-  // so this can't be part of the whole-collection COLLECTIONS loop.
-  if (!unsubs.__notifs && fb.user) {
+  /* My notifications only — a filtered query (rules scope reads to `to == me`),
+     so this cannot be part of the whole-collection COLLECTIONS loop.
+
+     A guest has no email, and without the extra test this would subscribe to
+     where("to", "==", "") — a query for notifications addressed to nobody. The
+     rules refuse it, which would land in the error path above; and even if they
+     did not, it could never match anything. */
+  if (!unsubs.__notifs && fb.user && fb.user.email) {
     unsubs.__notifs = onSnapshot(query(collection(db, "notifications"), where("to", "==", fb.user.email)), (snap) => {
       const arr = snap.docs.map((d) => {
         const o = d.data();
@@ -532,9 +602,27 @@ function stopSync() {
 
 async function resolveUser(user) {
   if (!user) {
-    fb.user = null; fb.roster = null; fb.state = "signedout";
+    fb.user = null; fb.roster = null; fb.guest = false; fb.state = "signedout";
     stopSync(); notify(); return;
   }
+
+  /* The anonymous branch comes BEFORE the roster read, because a guest has no
+     email to look one up with — and "pending" is the wrong answer for somebody
+     who is never going to be on the roster.
+
+     name: "Guest" is not decoration. signerName() falls back to "?" without it,
+     so every buy-off button on every step would read "buy off as ?" — which
+     looks like a bug rather than like the reason the button is disabled. */
+  if (user.isAnonymous) {
+    fb.user = { uid: user.uid, email: "", name: "Guest" };
+    fb.roster = null; fb.guest = true; fb.rosterCheckFailed = false;
+    fb.state = "ready"; startSync(); notify(); return;
+  }
+
+  /* MUST be reset here. Guest to a real sign-in happens in the same tab and
+     the same page load — leaving it set would give a signed-in member a
+     read-only app with no way to tell why. */
+  fb.guest = false;
   const email = (user.email || "").toLowerCase();
   fb.user = { uid: user.uid, email, name: user.displayName || email };
   fb.rosterCheckFailed = false;

@@ -109,6 +109,8 @@ export function skipMessage(what) {
    fb.js drives it — so this stubs the boundary rather than reaching past it. */
 export const FB_STUB = `
 window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },
   state: "ready",
   user: { uid: "u1", email: "simon@example.com", name: "Simon" },
   roster: { role: "lead", name: "Simon", email: "simon@example.com" },

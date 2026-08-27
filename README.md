@@ -44,6 +44,10 @@ and access is controlled by the roster inside it.
 
 ## The app
 
+Anyone can open it and press **View as guest**: the whole app, read-only, with no
+account and nothing to ask a lead for. Editing needs a name, because every
+buy-off carries one.
+
 `03 App/app/` is the team's shared workspace for a season, running on Firebase
 with an email allowlist for the roster. It updates live for everyone and works
 on phones and tablets as well as desktop. The full manual and setup live in

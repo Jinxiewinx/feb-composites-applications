@@ -54,7 +54,9 @@ if (RELEASE_SHOTS.length > 2) die("Two pictures at most; release-shots.mjs has "
    make_mockups drive — including the R&D records, so a release picture can only
    ever show a state the suites also cover.
    Extending the exported stub rather than writing another one on purpose: there
-   are already seven copies of `window.fb = {` in this repo and every one of them
+   are already seven copies of `window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },` in this repo and every one of them
    has to learn about a new fb method. This adds an eighth CONSUMER, not an
    eighth shim. */
 const STUB = FB_STUB.replace(/window\.onFbChange\("ready"\);\s*$/, `

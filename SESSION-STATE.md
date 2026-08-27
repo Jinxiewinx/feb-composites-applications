@@ -20,27 +20,38 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**A five-item pass is in flight. Three of the five are written and green; two
-are not started.** Nothing here is deployed, and `config/release` is untouched,
-so the team is still on v2.2.2.
+**All five items of the pass are written and green. NOTHING IS DEPLOYED**, and
+`config/release` is untouched, so the team is still on v2.2.2. The approved plan
+is at `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
 
-Done and tested: the **boot splash** takes a floor and a Continue affordance;
-the **Season tab** is a read (the muster line, and a bulk "lay out the season"
-form in place of + Row); **cut sheets** land on a mold's drawing set and as
-their own batch document off the Molds tab; the **dashboard** is the four-lane
-pit board.
+**DEPLOYING THIS IS TWO STEPS, NOT ONE, AND THE ORDER IS LOAD-BEARING.**
+`firebase deploy --only firestore:rules,storage:rules` FIRST and alone, then
+`--only hosting`. An old client under new rules is fine; a new client under old
+rules is a guest who signs in anonymously and is refused every collection, which
+looks exactly like the app being broken. This is the first rules change in this
+repo for months — every other deploy has been hosting only.
 
-Not started: **guest mode** — anonymous auth, a `canEdit()` role beside
-`isLead()`, and the only rules deploy in the whole pass. The approved plan is at
-`C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+**Anonymous auth has to be enabled in the Firebase console** before "View as
+guest" does anything at all, and it is not on. Turn on the console's 30-day
+auto-cleanup for anonymous accounts at the same time, or every visit mints a
+permanent Auth record that never goes away.
 
-**The showcase is written but has never been seen by a real guest.**
-`renderShowcase()` is reachable today only by setting `fb.guest` by hand, which
-is how it is tested. It becomes real when the auth work lands.
+**Guest read costs eleven full-collection snapshots per visitor.** The whole
+database, per person, from a public URL, on Blaze. Simon's call was to ship and
+watch the bill. If it moves, the fix is a lazy per-tab sync for guests rather
+than the boot-time `COLLECTIONS.forEach`; App Check is the real answer and is
+its own project.
 
 **The one thing in the plan that is a rules deploy is guest mode, and it is
 deliberately last.** Rules go alone and first; everything else in this pass is
 hosting only.
+
+**Guest read discloses team email addresses, and no roster rule prevents it.**
+`createdBy` and `updatedBy` are stamped on every record, and every buy-off,
+override and comment carries an `email`. Closing `roster/` would have cost names
+and photos and withheld nothing. Accepted deliberately; the alternative is a
+curated public mirror of every collection, which is the `pub/` pattern at ten
+times the size.
 
 **A dashboard lane cannot ship without an empty state, and that is enforced.**
 `laneShell()` is the only thing that renders a lane and `emptyFn` is a required

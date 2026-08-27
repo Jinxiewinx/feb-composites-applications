@@ -375,7 +375,7 @@ function renderSeason() {
 
   return `
   <div class="toolbar no-print">
-    <button class="primary" onclick="openSeasonLayout()">Lay out the season</button>
+    <button class="primary"${gx("Sign in to lay out the season.")} onclick="openSeasonLayout()">Lay out the season</button>
     ${/* R&D is stated, not silently subtracted. A row that disappears with
           nothing on screen to explain it reads as data loss; a count that names
           it and offers the way to it reads as a decision. */""}

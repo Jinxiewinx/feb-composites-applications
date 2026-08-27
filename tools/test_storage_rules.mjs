@@ -15,6 +15,15 @@ const BUCKET = `${PID}.appspot.com`;
 const STORAGE = `http://127.0.0.1:9199/v0/b/${BUCKET}/o`;
 const AUTH = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake`;
 
+/* An ANONYMOUS session, which is what "view as guest" mints. The auth emulator
+   speaks the same endpoint as signUp, minus the credentials. */
+async function signUpAnon() {
+  const r = await fetch(AUTH, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ returnSecureToken: true }) });
+  const j = await r.json();
+  if (!j.idToken) throw new Error("auth emulator anonymous signUp failed");
+  return j.idToken;
+}
 async function signUp(email) {
   const r = await fetch(AUTH, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "password123", returnSecureToken: true }) });
   const j = await r.json();
@@ -29,6 +38,7 @@ async function write(token, path) {
 }
 
 const token = await signUp("smoke@feb.test");
+const anon = await signUpAnon();
 let pass = 0, fail = 0;
 async function denied(label, tok, path) {
   const s = await write(tok, path);
@@ -36,6 +46,27 @@ async function denied(label, tok, path) {
   ok ? pass++ : fail++;
   console.log(`${ok ? "  ok" : "FAIL"}  ${label}  → ${s} (want 403)`);
 }
+
+/* ---------- the guest ----------
+   THE HOLE THIS CLOSES IS ON WRITE, AND IT IS WORTH SAYING WHY THE READ SIDE IS
+   NOT THE SCARY ONE. fb.upload() returns getDownloadURL() and every caller
+   stores that token URL on the record — and a download-token URL bypasses these
+   rules entirely. So an attachment reachable through a record a guest can read
+   is fetchable whatever this file says; the RECORD read is the real boundary,
+   which is why "allow read: if signedIn()" is left exactly as it was.
+
+   What genuinely opened the moment anonymous auth was switched on is write:
+   signedIn() is satisfied by an anonymous session, so every one of these trees
+   would have accepted 10 MB — 50 MB for CAD — from anyone on the internet, with
+   no rules change and nothing in the app to notice it. accountOf() is the same
+   condition these rules always MEANT. */
+console.log("storage boundary — a guest may not write anywhere:");
+await denied("anonymous write to documents/", anon, "documents/x.pdf");
+await denied("anonymous write to projects/", anon, "projects/P-1/x.pdf");
+await denied("anonymous write to parts/", anon, "parts/P-SN6-001/photo.jpg");
+await denied("anonymous write to budget/", anon, "budget/BUY-1/receipt.jpg");
+await denied("anonymous write to stackplans/", anon, "stackplans/STK-1/mesh.stl");
+await denied("anonymous write to its OWN avatar path", anon, "avatars/uid-guest");
 
 console.log("storage boundary (deny-critical):");
 await denied("unauthenticated write to documents/", null, "documents/x.pdf");

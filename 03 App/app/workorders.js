@@ -1000,7 +1000,7 @@ function renderWOIndex() {
             <span class="muted tny">${n} selected</span>
             <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedWOs()">Delete ${n || ""}</button>
             <button class="sm ib" onclick="cancelWOPick()">${icon("x", 14)}</button>`;
-        })() : `<button class="primary ib" onclick="newWO()">${icon("plus", 15)} New WO</button>
+        })() : `<button class="primary ib"${gx("Sign in to start a run.")} onclick="newWO()">${icon("plus", 15)} New WO</button>
         <button class="ib" onclick="newWO(true)">${icon("plus", 15)} R&amp;D run</button>
         <button class="sm" onclick="openBlankTraveler()">Blank traveler</button>
         ${/* Lead-only, because firestore.rules allows a workOrders delete to
@@ -1012,7 +1012,9 @@ function renderWOIndex() {
       <div class="psum">
         ${summaryChip("open", s.open, !!view.woOpen, "view.woOpen=!view.woOpen;view.woDone=false;render()")}
         ${summaryChip("late", s.late, !!view.woLate, "view.woLate=!view.woLate;view.woMine=false;render()", s.late ? "bad" : "")}
-        ${summaryChip("mine", s.mine, !!view.woMine, "view.woMine=!view.woMine;view.woLate=false;render()")}
+        ${/* Not for a guest: myEmail() is "" so isMine() matches nothing, and
+              this would be a chip that can only ever filter to an empty list. */""}
+        ${(window.fb && fb.guest) ? "" : summaryChip("mine", s.mine, !!view.woMine, "view.woMine=!view.woMine;view.woLate=false;render()")}
         ${summaryChip("done", s.done, !!view.woDone, "view.woDone=!view.woDone;view.woOpen=false;render()")}
         ${summaryChip("issues", s.issues, !!view.woIssues, "view.woIssues=!view.woIssues;view.woDone=false;render()", s.issues ? "bad" : "")}
         ${/* Same shape and same reasoning as the Parts rail's: only when there
@@ -1566,6 +1568,11 @@ function woSecSteps(wo, E) {
                 quietly on the row so you know before you walk over to sign,
                 never as a disabled button. */
             const tr = stepTraining(s);
+            /* A guest holds no trainings, so without the guard this prints on
+               every gated step in the app — reading as a fact about the step
+               rather than about who is looking at it. The banner at the top of
+               the page has already said why nothing here can be signed. */
+            if (window.fb && fb.guest) return "";
             return tr && state !== "done" && state !== "failed" && !wo.retro && !s.trainingOverride && !hasTraining(myEmail(), tr)
               ? `<div class="meta no-print">Needs ${esc(trainingById(tr).name)} training to sign.</div>` : ""; })()}
           ${held ? holdBanner(hold, i) : ""}
@@ -1597,7 +1604,7 @@ function woSecSteps(wo, E) {
                        fixes it. A dead grey button with a tooltip nobody on a
                        phone can hover is the version of this that fails. The
                        up-next row's button is the section's one primary. */
-                    `<button ${isNow ? 'class="primary"' : ""} onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
+                    `<button ${isNow ? 'class="primary"' : ""}${gx("Sign in to sign off on a step — a buy-off carries your name.")} onclick="buyoff(${i})" ${blocked ? "disabled title='blocked by unfinished blocker: " + esc(blocked.title) + "'" : ""}>buy off as ${esc(signerName())}</button>`)}
           ${stepActions(wo, i, s)}
         </div>
       </div>`;

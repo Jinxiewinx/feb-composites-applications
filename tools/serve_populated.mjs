@@ -38,6 +38,8 @@ const PORT = i >= 0 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 0;
    hand renders a thumbnail rather than a broken-image box. */
 const STUB = `
 window.fb = {
+  guest: false,
+  async signInGuest() { fb.guest = true; },
   state: "ready",
   user: { uid: "u1", email: "starbuck@berkeley.edu", name: "Simon Starbuck" },
   roster: { role: "lead", name: "Simon Starbuck", email: "starbuck@berkeley.edu" },

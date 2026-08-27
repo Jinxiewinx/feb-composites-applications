@@ -980,6 +980,53 @@ choice is remembered. Printing always comes out black-on-white regardless.
 Roster, Sign out) move into a ⋯ menu next to search and the bell. The wide list
 tables turn into one card per row.
 
+## Viewing as a guest
+
+Anyone can open the app, press **View as guest** on the sign-in screen, and read
+the whole thing. No account, no roster entry, nothing to ask a lead for.
+
+**Nothing is editable, and the reason is the one the sign-up form has always
+given**: a buy-off carries a name. So does a comment, a stage change, a
+consumption log and a purchase. Read-only is not a limitation bolted onto guest
+mode — it is what makes guest mode possible without breaking the thing this app
+exists to do.
+
+**Controls are shown, not hidden.** A guest sees the buy-off button, greyed, and
+pressing it says *"Sign in to sign off on a step — a buy-off carries your
+name."* That is deliberate: a hidden control teaches nothing, and the point of
+handing somebody the app is to show them what it does. It is also deliberately
+**not** the `disabled` attribute — Chrome dispatches no click and shows no
+tooltip on a disabled control, so the reason would be unreachable on exactly the
+phone this gets demoed from. The same judgement is already written down at two
+other gated controls in this app, for the same reason.
+
+**The dashboard is a different page**, not an emptier one: the season, the build
+progress, and what the team is making. A work queue with everything filtered out
+would be a blank apology.
+
+**The rules are the boundary, not the buttons.** A guest signs in anonymously, so
+`firestore.rules` can tell them apart: `read` is widened to them on the eleven
+data collections and the roster, and every `create`/`update`/`delete` clause is
+untouched — those all test `onRoster()`, which fails for a guest on its email
+clause without ever mentioning guests. Two independent predicates say no. The
+client refuses too, in `fb.js` and again in `core.js`, so a bug in any one of
+the three still writes nothing.
+
+Two things a guest cannot read, and both are credentials rather than data:
+`config/slack` holds a live webhook URL, and `config/tracker` holds the token
+that IS the security on the public feed. Config is an allowlist for that reason —
+a key added next season is private until somebody decides otherwise.
+
+**What this discloses, said out loud.** Team email addresses. Not through the
+roster — through the records: `createdBy`, `updatedBy`, and every buy-off,
+override and comment carries an address inside a document a guest can now read.
+Closing the roster would not have withheld them; it would only have cost the app
+names and photos. That was Simon's call, taken knowing this.
+
+**Leaving.** Firebase persists an anonymous session, so a guest who taps once
+would otherwise be auto-signed-in as that same anonymous user forever and never
+see the login screen again. **Sign in** in the header signs out first.
+
 ## How access works
 
 Anyone can create an account at the login page, but a new account can't see or

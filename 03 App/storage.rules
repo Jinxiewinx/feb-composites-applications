@@ -22,6 +22,24 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() { return request.auth != null; }
+    /* A signed-in HUMAN WITH AN ACCOUNT, which is what every write rule below
+       has always meant. Guests are signed in anonymously and are not that.
+
+       THE HOLE THIS CLOSES IS ON WRITE, NOT READ, and that is worth stating
+       because the read side looks like the scary one and is not. fb.upload()
+       returns getDownloadURL() and every caller stores that token URL on the
+       record — and a download-token URL bypasses these rules entirely. So any
+       attachment reachable through a record a guest can read is already
+       fetchable whatever this file says; the record read is the real boundary,
+       and tightening read here would change nothing observable.
+
+       What genuinely opens the moment anonymous auth is switched on is write:
+       "allow write: if signedIn()" would mean anyone on the internet pushing
+       10 MB — 50 MB for CAD — into a Blaze bucket. */
+    function accountOf() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
     function sizeOk() { return request.resource.size < 10 * 1024 * 1024; }
 
     /* ---- native CAD ----
@@ -63,7 +81,7 @@ service firebase.storage {
     // avatars/{uid} — owner writes only; anyone signed in can read (getDownloadURL).
     match /avatars/{uid} {
       allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == uid
+      allow write: if accountOf() && request.auth.uid == uid
         && sizeOk() && request.resource.contentType.matches('image/.*');
     }
 
@@ -72,7 +90,7 @@ service firebase.storage {
     // surface it. Images + common doc types only.
     match /projects/{projId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && (
+      allow write: if accountOf() && (
         (sizeOk() && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)'))
         || cadOk(file));
     }
@@ -85,7 +103,7 @@ service firebase.storage {
     // evidence on the "Mold CAD/CAM Done" stage is attached here.
     match /parts/{partId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && (
+      allow write: if accountOf() && (
         (sizeOk() && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)'))
         || cadOk(file));
     }
@@ -94,7 +112,7 @@ service firebase.storage {
     // (its record lands in the roster-gated `documents` Firestore collection).
     match /documents/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && sizeOk()
+      allow write: if accountOf() && sizeOk()
         && request.resource.contentType.matches('(image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|text/.*)');
     }
 
@@ -103,7 +121,7 @@ service firebase.storage {
     // receipt is always a photo (unlike documents/projects, no PDF/doc types).
     match /budget/{purchaseId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && sizeOk()
+      allow write: if accountOf() && sizeOk()
         && request.resource.contentType.matches('image/.*');
     }
 
@@ -116,7 +134,7 @@ service firebase.storage {
     // neither carries the stored-XSS risk an image/* or text/html upload would.
     match /stackplans/{planId}/{file} {
       allow read: if signedIn();
-      allow write: if signedIn() && sizeOk()
+      allow write: if accountOf() && sizeOk()
         && request.resource.contentType.matches('(model/stl|application/octet-stream)');
     }
 

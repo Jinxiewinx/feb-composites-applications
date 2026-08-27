@@ -35,11 +35,24 @@ function token(email, uid) {
     firebase: { sign_in_provider: "password", identities: { email: [email] } },
   }) + ".";
 }
+/* A GUEST: Firebase anonymous auth. No email claim at all, and a provider of
+   "anonymous" — which is what firestore.rules keys on, deliberately, rather
+   than on the absent email. */
+function anonToken(uid) {
+  const now = Math.floor(Date.now() / 1000);
+  return b64url({ alg: "none", typ: "JWT" }) + "." + b64url({
+    sub: uid, user_id: uid, email_verified: false,
+    aud: PID, iss: `https://securetoken.google.com/${PID}`,
+    iat: now, exp: now + 3600, auth_time: now,
+    firebase: { sign_in_provider: "anonymous", identities: {} },
+  }) + ".";
+}
 const AUTH = {
   owner: "Bearer owner",                                   // emulator admin, for seeding
   lead: "Bearer " + token("lead@feb.test", "uid-lead"),
   member: "Bearer " + token("member@feb.test", "uid-member"),
   rando: "Bearer " + token("rando@feb.test", "uid-rando"), // signed in, NOT on the roster
+  guest: "Bearer " + anonToken("uid-guest"),               // "view as guest"
   none: null,                                              // the phone that scanned the label
 };
 
@@ -52,6 +65,9 @@ async function req(as, method, path, fields) {
   return res.status;
 }
 const S = v => ({ stringValue: v });
+// meta/<coll>.next is an int, and the rule tests `is int` — a stringValue here
+// would be refused for the wrong reason and prove nothing about the guest.
+const I = v => ({ integerValue: String(v) });
 
 let pass = 0, fail = 0;
 async function expect(status, as, method, path, fields, why) {
@@ -76,6 +92,14 @@ await expect(200, "owner", "PATCH", "/pub/MOLD-SN6-004", NAMEPLATE);
 await expect(200, "owner", "PATCH", "/workOrders/WO-SN6-031", { id: S("WO-SN6-031"), partName: S("UT INLET") });
 await expect(200, "owner", "PATCH", "/parts/P-SN6-007", { id: S("P-SN6-007"), partName: S("UT INLET") });
 await expect(200, "owner", "PATCH", "/budget/BUY-SN6-001", { id: S("BUY-SN6-001"), cost: S("412") });
+/* Four config keys, seeded so the guest allowlist below is tested against
+   documents that EXIST. Without them an allowed read returns 404 and a denied
+   one returns 403 — which happens to prove the rule, and proves it by accident.
+   Seeded, a pass is a real read and a real refusal. */
+await expect(200, "owner", "PATCH", "/config/season", { compName: S("FSAE Michigan"), compDate: S("2027-05-12") });
+await expect(200, "owner", "PATCH", "/config/release", { version: S("2.2.2") });
+await expect(200, "owner", "PATCH", "/config/slack", { webhookUrl: S("https://hooks.example/T/B/XXX") });
+await expect(200, "owner", "PATCH", "/config/tracker", { token: S("0123456789abcdef0123456789abcdef") });
 
 console.log("\nthe hole, which is supposed to be there:");
 await expect(200, "none", "GET", "/pub/MOLD-SN6-004", null, "a scanned label resolves with no account");
@@ -197,6 +221,42 @@ console.log("\nand nothing else opened up alongside it:");
    whole risk of adding a second public hole is that it widens the first. */
 await expect(403, "none", "GET", "/parts/P-SN6-007", null, "still closed");
 await expect(403, "none", "GET", "/config/tracker", null, "the token's home is roster-only");
+
+/* ---------- the guest ----------
+   THE OTHER TWO NEGATIVE IDENTITIES STAY NEGATIVE, and that is the first thing
+   to check. A caller with no token at all is not a guest — it is the phone that
+   scanned a label, and the public scan page's contract is that it reads exactly
+   two documents by id. A signed-in caller with an email who is not on the
+   roster is not a guest either; that is the "pending" screen. Every 403 above
+   is still a 403, which is why this section ADDS to that file rather than
+   revising it. */
+console.log("\n-- guest (anonymous auth): reads everything, writes nothing --");
+await expect(200, "guest", "GET", "/workOrders/WO-SN6-031", null, "the whole app is readable");
+await expect(200, "guest", "GET", "/parts/P-SN6-007");
+await expect(200, "guest", "GET", "/budget/BUY-SN6-001", null, "money included — Simon's call");
+await expect(200, "guest", "GET", "/roster/lead@feb.test", null,
+  "and the roster, so buy-offs show names rather than initials");
+
+/* Not one write, anywhere. onRoster() fails for a guest on its email clause, so
+   every create/update/delete clause in the file refuses without ever having
+   heard of guest() — which is the point of putting guest() in read only. */
+await expect(403, "guest", "PATCH", "/workOrders/WO-SN6-031", { id: S("WO-SN6-031") }, "no write");
+await expect(403, "guest", "PATCH", "/parts/P-SN6-007", { id: S("P-SN6-007") });
+await expect(403, "guest", "PATCH", "/roster/lead@feb.test", { name: S("Hacked") },
+  "and certainly not the roster");
+await expect(403, "guest", "DELETE", "/parts/P-SN6-007");
+await expect(403, "guest", "PATCH", "/meta/parts", { next: I(99) },
+  "nor the id counter — a guest cannot mint an id to hang a record on");
+
+/* The two live credentials in config/. Opening this collection to a guest would
+   hand out a Slack webhook and the token that IS the security on /tracker. */
+await expect(200, "guest", "GET", "/config/season", null, "the countdown renders");
+await expect(200, "guest", "GET", "/config/release");
+await expect(403, "guest", "GET", "/config/slack", null, "but not a live webhook URL");
+await expect(403, "guest", "GET", "/config/tracker", null,
+  "and NOT the feed token, which is the whole security on /tracker/{token}");
+await expect(403, "guest", "GET", "/notifications/N1", null, "notifications are addressed to somebody");
+await expect(403, "guest", "GET", "/pub", null, "and pub still cannot be enumerated by anyone");
 
 console.log("\ndeleting the feed is a lead's call:");
 await expect(403, "member", "DELETE", `/tracker/${TOKEN}`, null, "unlike pub, this is not member-deletable");

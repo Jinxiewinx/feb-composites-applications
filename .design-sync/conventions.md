@@ -40,6 +40,7 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Storage map | `.loccard` (+ `.alert`, + `.isempty` for a shelf with nothing on it) with `.lc-open` as a stretched-link button on the name — its `::after` covers the whole card, so a click anywhere opens it — and `.lc-act` as a sibling above it on the z-axis; `.inv-nowhere-bar` sits above the shelves. |
 | Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
 | Season blueprint | `.seasongrid` is a multi-column FLOW (`columns`, not `grid`) holding one `.sline` per part — `.sl-open` (a stretched-link button on the name, the `.lc-open` idiom), `.sl-sub`, `.sl-stat`, `.sl-due` (+ `.warn`), `.sl-who`. `.sline.late` is an inset spine, `.sline.unnamed` a dashed border. Grouped, each subteam is a `.sgroup` with its own flow so a heading cannot strand at the foot of a column. |
+| Guest mode | A control a read-only viewer may see but not press carries `aria-disabled="true"` and a `data-why` sentence, and the stylesheet keys on that PAIR rather than on a class — an element with two `class` attributes keeps the first and drops the second, and most of these already have one. NEVER the `disabled` attribute: it swallows the click that is meant to explain it. |
 | Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip), `.w110` (a 110px width utility for a narrow cell). |
 
 **Five of those families are app-only.** Receiving, Export, Storage map,

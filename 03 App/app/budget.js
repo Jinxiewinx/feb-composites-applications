@@ -388,7 +388,7 @@ function renderBuyList() {
     <div class="stat-tile"><div class="bignum">${unapproved}</div><div class="stat-label">Over $50, unapproved</div></div>
   </div>
   ${budgetBoardsHtml(total)}
-  <div class="toolbar no-print"><button class="primary" onclick="newBuy()">+ New Purchase</button></div>
+  <div class="toolbar no-print"><button class="primary"${gx("Sign in to log a purchase — it is recorded against you.")} onclick="newBuy()">+ New Purchase</button></div>
   <div class="filters no-print">
     <select onchange="view.fStatus=this.value;render()">
       <option value="">All statuses</option>

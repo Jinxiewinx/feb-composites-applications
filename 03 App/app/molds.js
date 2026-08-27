@@ -227,7 +227,7 @@ function renderMoldsRail() {
   <aside class="mdindex" aria-label="Molds index">
     <div class="pindex-head no-print">
       <div class="toolbar">
-        <button class="primary ib" onclick="uploadMold()">+ Mold</button>
+        <button class="primary ib"${gx("Sign in to plan a mold.")} onclick="uploadMold()">+ Mold</button>
       </div>
       <div class="toolbar">
         ${(DB.stackplans || []).length ? `<button class="ib" onclick="view={...view,mode:'cuts',cutSel:''};render()">${icon("print", 15)} Cut list</button>` : ""}

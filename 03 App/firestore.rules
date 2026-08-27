@@ -13,6 +13,23 @@ service cloud.firestore {
         && exists(/databases/$(db)/documents/roster/$(request.auth.token.email));
     }
 
+    /* A GUEST: Firebase anonymous auth. No email, no roster entry, read only.
+       Gated on the SIGN-IN PROVIDER rather than on "token.email == null",
+       because the provider is the fact we actually mean — a future custom-token
+       or federated login that happens to arrive without an email must not
+       silently become a guest.
+
+       guest() appears in exactly one verb, read, and nowhere else in this file.
+       Every create/update/delete clause below is unchanged and still says
+       onRoster(), which already fails for a guest on its email clause — so
+       read-only is enforced twice over, by two independent predicates. */
+    function guest() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    // Anyone allowed to READ a record: a roster member, or a guest.
+    function reader() { return onRoster() || guest(); }
+
     function isLead() {
       return onRoster()
         && get(/databases/$(db)/documents/roster/$(request.auth.token.email)).data.role == "lead";
@@ -37,18 +54,18 @@ service cloud.firestore {
         && resource.data.createdBy == request.auth.token.email;
     }
 
-    match /workOrders/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /parts/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /projects/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /schedule/{id}   { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /budget/{id}     { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /workOrders/{id} { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    match /parts/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    match /projects/{id}   { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    match /schedule/{id}   { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    match /budget/{id}     { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
     // stock (BRD-###) = tooling-board inventory: full sheets and offcuts alike.
     // stackplans (STK-###) = a mold's sliced layer geometry, saved so the CS-003
     // §7.2 reviewer can reopen and initial it without re-slicing the mesh.
-    match /stock/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
-    match /stackplans/{id} { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /stock/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    match /stackplans/{id} { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
     // Documents: any member can upload/edit; only a lead prunes the library.
-    match /documents/{id}  { allow read, create, update: if onRoster(); allow delete: if isLead(); }
+    match /documents/{id}  { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
 
     /* The physical world, added with printed labels (2026-08-03).
        molds (MOLD-SN6-###) = a real mold, which outlives the work orders that
@@ -61,9 +78,9 @@ service cloud.firestore {
                panel" answerable.
        Both multi-class collections carry a `cls` field; same access shape as
        every other record collection. */
-    match /molds/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead(); }
-    match /items/{id}      { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
-    match /lots/{id}       { allow read, create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    match /molds/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    match /items/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    match /lots/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
 
     // Notifications: any member can create one (for a teammate); you can only
     // read/update/delete notifications addressed to YOU (a lead can prune any).
@@ -81,7 +98,14 @@ service cloud.firestore {
     // A member may edit ONLY their own doc, and only avatar/name (never role) —
     // so people set their own photo without being able to promote themselves.
     match /roster/{email} {
-      allow read: if onRoster();
+      /* A guest reads the roster, and that is a DISCLOSURE DECISION rather than
+         a convenience: doc ids are email addresses. It was taken knowing that
+         closing it would not have withheld them anyway — createdBy, updatedBy,
+         every buy-off, override and comment carries an address inside the
+         records a guest can already read, so the only thing a closed roster
+         costs is names, photos and training grants. An app that shows initials
+         where a name belongs, for no protection. */
+      allow read: if reader();
       allow create, delete: if isLead();
       allow update: if isLead() || (
         onRoster()
@@ -119,7 +143,18 @@ service cloud.firestore {
     // only a lead configures it — a webhook URL is a live credential, so
     // writing it is not the same trust level as an ordinary record edit.
     match /config/{key} {
-      allow read: if onRoster();
+      /* NOT reader(). Two keys here are live credentials: config/slack holds an
+         incoming-webhook URL, and config/tracker holds the 32-character token
+         that IS the entire security on /tracker/{token} below — a guest who
+         could read it could read the public feed's document directly, and hand
+         the token to anybody.
+
+         So an ALLOWLIST and not a denylist: a config key added next season is
+         private until somebody decides otherwise, which is the safe direction
+         for a default to fail in. These six are the ones the UI needs to render
+         a page at all. */
+      allow read: if onRoster()
+        || (guest() && key in ['season', 'release', 'resins', 'restock', 'trainings', 'budget']);
       allow create, update: if isLead();
     }
 

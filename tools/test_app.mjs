@@ -172,6 +172,12 @@ function signInAsLead() {
   fb.state = "ready";
   fb.user = { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" };
   fb.roster = { name: "Simon", role: "lead" };
+  /* Signing in CLEARS guest, exactly as resolveUser does on the non-anonymous
+     path — guest to a real account happens in the same tab and the same page
+     load, and a member left holding the flag gets a read-only app with no way
+     to tell why. Leaving it out of this helper would let a test pass while the
+     app it stands for was broken. */
+  fb.guest = false;
 }
 
 /* ================= tests ================= */
@@ -8252,6 +8258,149 @@ await t("Start fresh from the modal produces exactly the plain new run", async (
   assert(wo.stackSource === "spec" && !(wo.files || []).length && !(wo.bom || []).length && !wo.moldRef,
     "no carries leak into a fresh start");
 });
+
+/* ---------- guest mode ----------
+   Anyone can open the app, choose "view as guest" and read the whole thing.
+   Editing stays tied to a named person, because a buy-off carries one — which
+   is not a policy invented for this feature; the sign-up form has always said
+   so, in those words, above the name field.
+
+   The rules are the real boundary and are tested against the emulator in
+   tools/test_pub_rules.mjs. What is here is the client: that it never tries,
+   that it says why, and that nothing about a signed-in member changed. */
+console.log("guest mode:");
+
+function signInAsGuest() {
+  fb.state = "ready";
+  fb.user = { uid: "anon1", email: "", name: "Guest" };
+  fb.roster = null;
+  fb.guest = true;
+}
+
+await t("a guest is not a lead, and is not a member either", () => {
+  signInAsGuest();
+  assert(canEdit() === false, "cannot edit");
+  assert(isLead() === false, "and is not a lead — which is the correct render, not a trick");
+  signInAsLead();
+  assert(canEdit() === true && isLead() === true, "a real lead is unaffected");
+  fb.roster = { name: "Member", role: "member" };
+  assert(canEdit() === true && isLead() === false, "and so is a member");
+});
+
+await t("every write path refuses, and says why rather than throwing", () => {
+  signInAsGuest();
+  DB.parts = [{ id: "P-G9", partName: "BEFORE" }];
+  calls.length = 0;
+  save("parts", DB.parts[0], "partName");
+  saveField("parts", DB.parts[0], "layupStack", a => a);
+  del("parts", "P-G9");
+  assert(calls.length === 0, "nothing reached Firestore at all: " + JSON.stringify(calls));
+  assert(/guest/i.test(lastToast), "and the person is told why: " + lastToast);
+});
+
+await t("an id cannot be minted either — a half-made record is worse than none", async () => {
+  signInAsGuest();
+  calls.length = 0;
+  const one = await allocId("parts");
+  const many = await allocIds("parts", null, 4);
+  assert(one === null && many.length === 0, "no ids");
+  assert(!calls.some(c => String(c[0]).startsWith("allocId")), "and the counter was never touched");
+});
+
+await t("view.edit is forced down, which is what turns ~130 inputs into text", () => {
+  /* The second cascade, and the reason this feature is small. Every detail
+     page's field() helper already renders a read-only div when the flag is
+     down; none of those files needs to know what a guest is. */
+  signInAsGuest();
+  view = { ...view, tab: "parts", mode: "detail", id: "P-G9", edit: true };
+  DB.parts = [{ id: "P-G9", partName: "BEFORE", layupStack: [], commentLog: [] }];
+  render();
+  assert(view.edit === false, "edit mode cannot survive a render as a guest");
+});
+
+await t("the banner says which mode you are in, once, rather than making you infer it", () => {
+  signInAsGuest();
+  DB.parts = []; DB.workOrders = []; DB.projects = [];
+  setTab("dashboard");
+  const html = main.innerHTML;
+  assert(/Viewing as a guest/.test(html), "it says so");
+  assert(/class="gate no-print"/.test(html), "on the existing amber strip, and off the printed page");
+  assert(/leaveGuest\(\)/.test(html), "with the way out on it");
+  signInAsLead();
+  setTab("dashboard");
+  assert(!/Viewing as a guest/.test(main.innerHTML), "and a member never sees it");
+});
+
+await t("gx() marks a control without ever colliding with its class", () => {
+  /* THE BUG THIS SHAPE AVOIDS. Half these controls already carry a class —
+     class="primary" on the buy-off button, class="ib" on every toolbar action —
+     and an element with two class attributes keeps the FIRST and silently drops
+     the second. A .guest-off class would have styled the plain buttons and none
+     of the ones that matter. */
+  signInAsGuest();
+  const out = gx("Sign in to sign off on a step.");
+  assert(!/class=/.test(out), "no class attribute: " + out);
+  assert(/aria-disabled="true"/.test(out) && /data-why="Sign in/.test(out), "the pair the stylesheet keys on");
+  assert(out.startsWith(" "), "carrying its own leading space, so a member's markup is byte-identical");
+  signInAsLead();
+  assert(gx("anything") === "", "and it emits nothing at all for somebody who can edit");
+});
+
+await t("the buy-off button is shown, marked, and explains itself — never [disabled]", () => {
+  /* Chrome dispatches no click and shows no tooltip on a disabled control, so
+     the reason would be unreachable on the phone this gets demoed from. The
+     same judgement is already written down at this very button. */
+  signInAsGuest();
+  DB.workOrders = [{ id: "WO-G1", partName: "GUESTWO", status: "InWork", createdBy: "x@y.z",
+    steps: [{ seq: 1, title: "Layup", status: "", buyoff: { name: "", date: "" } }] }];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-G1", edit: false };
+  render();
+  const html = main.innerHTML;
+  assert(/buy off as Guest/.test(html), "the button is still there, so a guest can see what the app does");
+  assert(/data-why="Sign in to sign off/.test(html), "carrying its reason");
+  assert(!/buy off as \?/.test(html), "and it says Guest, not '?' — which would read as a bug");
+});
+
+await t("the topbar swaps the account actions for a way in", () => {
+  signInAsGuest();
+  renderTopbar();
+  const html = topbar.innerHTML;
+  assert(/Guest · read-only/.test(html), "it says what you are");
+  assert(/leaveGuest\(\)/.test(html), "and offers the way out");
+  assert(!/exportAll\(\)/.test(html), "no one-click backup of the whole database for a stranger");
+  assert(!/setMyAvatar\(\)/.test(html), "and no photo button, which is a write");
+  assert(!/openNotifs\(\)/.test(html), "no bell: notifications are per-person and a guest is nobody");
+  signInAsLead();
+  renderTopbar();
+  assert(/exportAll\(\)/.test(topbar.innerHTML), "a member's topbar is untouched");
+});
+
+await t("the login screen offers the door, and says what is behind it", () => {
+  fb.state = "signedout"; fb.guest = false;
+  const html = renderLogin();
+  assert(/signInGuest\(\)/.test(html), "the button exists");
+  assert(/every buy-off carries a name/.test(html),
+    "and gives the same reason the name field above it gives for existing");
+});
+
+await t("leaving guest signs out first, or the door never opens again", () => {
+  /* Firebase persists an anonymous session in IndexedDB. Without the sign-out
+     a guest who tapped once is auto-signed-in as that same anonymous user on
+     every future visit and never sees the login screen again. */
+  assert(/signOut/.test(leaveGuest.toString()), "leaveGuest signs out");
+});
+
+await t("fb refuses a guest write even if every client check above is bypassed", () => {
+  /* Layer 0. The rules are the real boundary; this is the floor under the
+     client, in the one file that holds the SDK. */
+  const src = readFileSync(join(root, "fb.js"), "utf8");
+  assert(/function noWrites\(\)/.test(src), "the guard exists");
+  const guarded = (src.match(/noWrites\(\);/g) || []).length;
+  assert(guarded >= 20, "and every mutating method calls it: " + guarded);
+  assert(!/async signIn\([^)]*\) \{\s*noWrites/.test(src), "except the auth methods, which are the way out");
+});
+
+fb.guest = false;
 
 /* ---------- what can I actually do right now? ----------
    The data behind the new dashboard, tested before any of it is drawn. These
