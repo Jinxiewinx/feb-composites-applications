@@ -31,8 +31,8 @@ var APP_VERSION = "3.0.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "The Season tab is one part per line again, and the lines now sit in real columns — subteam under subteam, deadline under deadline, all the way down. It went out last week two abreast, which fitted more parts and made every one of them harder to read, because no two lines put the same field in the same place. Half as many parts, in columns you can scan, is the better read.",
-  "The width that bought back paid for two more fields on the line: LAYUP TYPE and MOLD LOC. So \"which of these are wet layups\" and \"what is still sitting in Etcheverry\" are now questions you answer by looking down a column, instead of opening eleven parts. There is a row of column names across the top, and both new columns drop out on a narrow screen before anything else does.",
+  "The Season tab is one part per line again, and the lines now sit in real columns — subteam under subteam, deadline under deadline, all the way down. It went out in v3.0.0 two abreast, which fitted more parts and made every one of them harder to read, because no two lines put the same field in the same place. Half as many parts, in columns you can scan, is the better read.",
+  "The width one line got back paid for two more fields on it: LAYUP TYPE and MOLD LOC. So \"which of these are wet layups\" and \"what is still sitting in Etcheverry\" are now questions you answer by looking down a column, instead of opening eleven parts. There is a row of column names across the top, and both new columns drop out on a narrow screen before anything else does.",
   "On a laptop or a tablet the line folds into two rows, and those two rows line up now too — the subteam and the C/M/L marks used to land in a different place on every row, and on the narrowest screens the subteam printed underneath the stage rail.",
 ];
 
