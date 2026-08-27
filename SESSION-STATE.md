@@ -27,18 +27,22 @@ been told: no reload banner, no What's New. Announcing is a lead pressing
 `⋯ → Announce this release`, and the version bump is `tools/release.mjs`.
 The plan is at `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
 
-**GUEST MODE IS DEPLOYED AND SWITCHED OFF, and that is one toggle, not a bug.**
-Anonymous auth is disabled on the project, so "View as guest" answers
-*"Guest access is not switched on for this project yet — ask a composites
-lead."* Everything behind it is live and tested; the console switch is
-Authentication → Sign-in method → Anonymous. Turn on the 30-day auto-cleanup for
-anonymous accounts in the same visit, or every visit mints a permanent Auth
-record that never goes away.
+**GUEST MODE IS ON, AND THE APP IS PUBLICLY READABLE.** Anonymous sign-in is
+enabled on the project and `autodeleteAnonymousUsers` is on, so a visit no
+longer mints a permanent Auth record. Anyone with the URL can press "View as
+guest" and read the whole app — parts, runs, molds, stock, budget, the roster.
+That is the agreed design, not an accident, and it is the one thing in this repo
+that cannot be walked back quietly: anything read in the meantime is read.
 
-**That switch is what actually opens the data**, so it is worth pressing
-deliberately rather than as housekeeping: the rules already grant an anonymous
-caller read on all eleven collections and the roster, and nothing gates it
-behind a link or a token.
+Verified against PRODUCTION with a real anonymous token, not against the
+emulator: every collection reads 200, every write and delete is 403, storage
+upload is 403, and the three client layers refuse independently (core.js toasts,
+fb.js throws `guest/read-only`, the rules refuse the transport). All eleven tabs
+render with no console errors and nothing editable.
+
+**Turning it off again is the same switch**, Authentication → Sign-in method →
+Anonymous. The rules can stay as they are: `guest()` matches nothing when the
+provider is disabled, so the predicate is inert rather than wrong.
 
 **The deploy order was load-bearing and stays that way.** Rules alone first,
 then hosting. An old client under new rules is fine; a new client under old
