@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v3.1.0 — 2026-08-27
+
+- What's New: v3.0.0 was an hour ago, not last week
+- Season: one part per line, on columns you can scan down
+- SESSION-STATE: v3.0.0 is live, and nobody has been told yet
+
+---
+
 ## v3.0.0 — 2026-08-27
 
 - Write the v3.0.0 What's New and shot list
