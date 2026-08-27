@@ -2128,7 +2128,6 @@
      survives them is the stacked row, the bucket headings and the fold, all
      reused by round four's board. The count badge in a module header. */
   .gh-n { font-size: 11px; color: var(--faint); white-space: nowrap; }
-  .gmod-foot { padding-top: 7px; margin-top: 4px; border-top: 1px solid var(--line); }
 
   /* The stacked row every module shares. One min-content (the longest word),
      a meta line that ellipsises — the shape that CANNOT overflow a narrow
@@ -2138,22 +2137,16 @@
   .sr-main { min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .srow-meta { font-size: 12px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .srow-meta .status { font-size: 11px; padding: 1px 8px; margin-right: 4px; vertical-align: middle; }
-  /* Severity dots exist only in the two shop modules; only there do rows
-     indent. Shop status kept the dots when the housekeeping counters moved out
-     to .b-ref, so this selector has to name both — .sdot is positioned at
-     left: 0, and without the indent a chip sits on top of its own dot. */
-  .b-shop .srow, .b-ref .srow { padding-left: 16px; }
+  /* .sdot is positioned at left: 0, so a row carrying one has to indent or the
+     chip sits on top of its own dot. Every lane row can carry one. */
+  .dlane .srow { padding-left: 16px; }
   .sdot { position: absolute; left: 0; top: 12px; width: 8px; height: 8px; border-radius: 50%; }
   .sdot.bad { background: var(--bad); }
   .sdot.warn { background: var(--amber); }
   .sdot.ok { background: var(--ok); }
-  .ds-molds { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
 
   /* The group heading IS the count: the biggest number in the work column,
      because it is the one attached to the thing it counts. */
-  .dgrouphd { display: flex; align-items: baseline; gap: 10px; margin: 12px 0 4px; }
-  .dgrouphd:first-child { margin-top: 4px; }
-  .dgrouphd .dg-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   /* Kept in the DOM for labelListTables() and for screen readers. */
   .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
   /* A full-width row, so it clears a thumb without a bespoke control. */
@@ -2166,24 +2159,13 @@
   /* The folded group. The marker sits on the summary, and the heading inside it
      keeps its own baseline — so it reads as the same group header as the rest,
      with a triangle. */
-  .dg-fold > summary { list-style: none; cursor: pointer; }
-  .dg-fold > summary::-webkit-details-marker { display: none; }
-  .dg-fold > summary .dgrouphd::after {
-    content: "▸"; font-size: 13px; color: var(--faint); margin-left: 2px;
-    transition: transform var(--t-fast) var(--ease);
-  }
-  .dg-fold[open] > summary .dgrouphd::after { content: "▾"; }
-  .dg-fold > summary:hover .dg-label { color: var(--ink); }
 
-  .curerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 0; border-top: 1px solid var(--line); }
-  .curerow:first-of-type { border-top: none; }
   .cure-at { font-family: var(--font-display); font-weight: 700; color: var(--brand-ink); }
 
   /* Seven stations, two columns on a laptop. */
   /* Two columns, never four. At auto-fit a wide screen gave four narrow ones,
      which wrapped "ShopSabre slot 1" onto two lines and put a 118px label next
      to a 60px value. Seven stations read as 4 + 3 down two columns. */
-  .stn-l { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); flex: none; width: 110px; }
 
 
   .glance { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -2203,35 +2185,85 @@
      .dboard, NOT .board: that name has belonged to the Tickets kanban since
      the tab existed, and round four briefly stole it, which painted the
      ticket pane's kanban navy. Dashboard rules stay under .dboard only. */
+  /* Round five: four lanes, a program strip, a footer.
+
+     Round four was eleven modules on an eleven-area grid, and five of those
+     areas could render nothing — so on a quiet week, or on the SN5 archive
+     where every run is retro, the board had holes in the middle of it. No
+     amount of repacking fixes that; what fixes it is that a lane always has
+     something to say, because "nothing is blocked" is an answer. */
   .dboard { display: grid; gap: 14px;
     grid-template-columns: minmax(0, 1fr);
-    /* Phone order is the day's order: what's wrong, what is stopping work right
-       now, what's mine, what's booked. Reference sinks — and `ref` is second
-       from the bottom because it is the one module that is a monthly habit
-       rather than a daily read. */
-    grid-template-areas: "alerts" "shop" "work" "week" "season" "activity" "count" "budget" "launch" "ref" "fact"; }
-  @media (min-width: 701px) and (max-width: 1100px) {
+    /* Phone order is the day's order: what is stopped, what is mine, what is
+       due, what is running without me. The program and the footer are a
+       monthly and an idle read, so they sink. */
+    grid-template-areas: "stopped" "you" "due" "clock" "prog" "foot"; }
+  @media (min-width: 701px) and (max-width: 1300px) {
     .dboard { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "alerts alerts" "shop shop" "work season" "work week" "work activity" "count budget" "launch ref" "fact fact"; }
+      grid-template-areas: "stopped you" "due clock" "prog prog" "foot foot"; }
   }
-  @media (min-width: 1101px) {
-    .dboard { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "alerts alerts alerts" "work shop season" "work count season" "work week activity" "launch budget ref" "fact fact fact"; }
+  /* 1300, not the house 1100. Four lanes at 1101px get about 211px each, and
+     .srow was designed against 304px — the rail-overflow lesson written down
+     beside it. At 1440 they are 296px and at the 1600 cap 390px. test_appui
+     shoots 900/1440/1920, which lands 2x2 / 4-across / 4-across. */
+  @media (min-width: 1301px) {
+    .dboard { grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-areas: "stopped you due clock" "prog prog prog prog" "foot foot foot foot"; }
   }
-  .b-work { grid-area: work; } .b-shop { grid-area: shop; } .b-season { grid-area: season; }
-  .b-week { grid-area: week; } .b-activity { grid-area: activity; } .b-count { grid-area: count; }
-  .b-budget { grid-area: budget; } .b-launch { grid-area: launch; } .b-fact { grid-area: fact; }
-  /* Stock & housekeeping. Returns "" when there is nothing to say, and every
-     breakpoint puts it on the bottom edge so the collapsed row's gap is
-     adjacent to `fact` rather than a hole in the middle of the board. */
-  .b-ref { grid-area: ref; }
+  .l-stopped { grid-area: stopped; } .l-you { grid-area: you; }
+  .l-due { grid-area: due; } .l-clock { grid-area: clock; }
+  .dprog { grid-area: prog; } .dfoot { grid-area: foot; }
+  /* Four lanes read as one board only if they are the same height. */
+  .dlane.bmod { align-self: stretch; }
+  /* The header IS the numeral. The alert strip counted these same things one
+     row above the module that listed them — one fact drawn twice, in two places
+     that could disagree. */
+  .dlane-hd { display: flex; align-items: baseline; gap: 9px; margin: 0 0 9px; flex-wrap: wrap; }
+  .dlane-hd .bnum { font-size: 30px; line-height: 1; }
+  .dlane-lbl { font-family: var(--font-display); font-size: 12.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  /* Never a bare "nothing here": an empty lane is information, and a number in
+     it is what makes it worth reading. */
+  .dlane-empty { font-size: 12.5px; color: var(--muted); line-height: 1.5; padding: 4px 0; }
+  .dlane-empty b { color: var(--ink); }
+  .dlane-tminus { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 4px 0; }
+
+  /* The program: the facts that are a monthly read rather than a daily one, one
+     line each. A fact with no value prints a labelled dash rather than
+     disappearing, so the strip is the same height whatever the data says —
+     which is the whole difference between this and the five modules it
+     replaced. */
+  .dprog-bars { display: grid; gap: 6px; margin-bottom: 10px; }
+  @media (min-width: 901px) { .dprog-bars { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; } }
+  @media (min-width: 1301px) { .dprog-bars { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .dprog-row { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--muted);
+    padding-top: 7px; border-top: 1px solid var(--line); margin-top: 7px; }
+  .dprog-i b { color: var(--ink); font-family: var(--font-display); font-size: 14px; }
+  .dfoot-band { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
+
+  /* The guest showcase: a different page, not an emptier one. One column at
+     every width — it is a thing to read, not a board to work from. */
+  .sc-head { grid-area: head; display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap; }
+  .sc-prog { grid-area: prog; } .sc-parts { grid-area: parts; } .sc-nums { grid-area: nums; }
+  .showcase, .showcase.dboard { grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "prog" "parts" "nums"; }
+  .sc-team { font-family: var(--font-display); font-size: 14px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .sc-tminus { text-align: right; }
+  .sc-tminus .bnum { font-size: 44px; }
+  .sc-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+  .sc-card { display: grid; gap: 2px; padding: 9px 11px; border: 1px solid var(--line);
+    border-radius: var(--radius); background: var(--surface-2); }
+  .sc-name { font-weight: 600; font-size: 13.5px; }
+  .sc-sub { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .sc-card .stage { justify-self: start; margin-top: 3px; }
 
   /* One module surface: the app's ordinary white card, on its own class
      because the theme-proof audit samples .card and this page's markup stays
      out of that sample. Rhythm comes from the headers and the numerals. */
   .bmod { min-width: 0; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
     border-radius: var(--r-md); padding: 13px 15px; font-size: 13px; align-self: start; }
-  .b-work.bmod { align-self: stretch; font-size: 13.5px; }
   /* Module header: Saira, uppercase, and the sidebar's gold speed slash so
      every module carries the register. Count sits at the right, quiet. */
   .bmod-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 9px; }
@@ -2241,15 +2273,10 @@
     border-radius: 0 2px 2px 0; background: var(--gold); transform: skewX(-12deg); }
   .bmod-hd .gh-n { opacity: .85; }
 
-  /* The alert strip: the page's one-second read. Bare numerals straight on
-     the canvas, separated by hairlines, no cards. Red only when nonzero. */
-  .b-alerts { grid-area: alerts; display: flex; align-items: stretch; min-width: 0; }
-  .b-alert { display: block; flex: 0 1 auto; margin: 0; padding: 4px 22px; text-align: left; cursor: pointer;
-    background: none; border: none; border-left: 1px solid var(--border-2); border-radius: var(--radius); color: var(--ink); font: inherit; }
-  .b-alert:first-child { border-left: none; padding-left: 6px; }
-  .b-alert:hover { background: var(--hover); }
-  .b-tminus { margin-left: auto; border-left: none; text-align: right; cursor: pointer; background: none; border: none;
-    border-radius: var(--radius); color: var(--ink); font: inherit; padding: 4px 6px 4px 22px; }
+  /* T-minus. It was the right-hand end of an alert strip; it is the foot of the
+     clock lane now, which is where the other things you are waiting on live. */
+  .b-tminus { text-align: left; cursor: pointer; background: none; border: none;
+    border-radius: var(--radius); color: var(--ink); font: inherit; padding: 4px 6px; }
   .b-tminus:hover { background: var(--hover); }
   .bnum { display: block; font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1.05;
     letter-spacing: .01em; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
@@ -2259,43 +2286,25 @@
   .bl { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 2px; }
   .bl b { color: var(--ink); }
 
-  /* Inside the work list the row title is the row, same de-chroming as
-     round three's white card: the tint comes back on hover, where it means
-     something. */
-  .b-work .chip { background: none; border-color: transparent; padding-left: 0; font-size: 13.5px; }
-  .b-work .chip:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
-  .dboard .dgrouphd .bnum { font-size: 30px; line-height: 1; }
+  /* Inside a lane the row title is the row, same de-chroming as round three's
+     white card: the tint comes back on hover, where it means something. */
+  .dlane .chip { background: none; border-color: transparent; padding-left: 0; font-size: 13.5px; }
+  .dlane .chip:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
   .dboard .dg-more { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
-  .b-work .dg-more { margin-top: 12px; padding: 11px 14px; font-size: 13px; }
-  /* NEW ACTIVITY keeps its gold rail: gold still means unread, yours, now. */
-  .b-activity { border-left: 3px solid var(--gold); }
-  .b-activity .bmod-hd .unread-dot { position: static; display: inline-block; margin-right: 5px; vertical-align: middle; }
-  /* SEASON keeps its gauge proportions, links as a quiet text row. The track
-     outranks --fill, which is within a few percent of the card in both
-     themes (the round-three lesson). */
-  .b-season .sb-bar, .b-season .stagebreak .sb-bar { background: var(--border-2); height: 14px; }
-  .b-season .stagebreak { margin: 9px 0; }
-  .b-season .stagebreak:last-of-type { margin-bottom: 0; }
-  .b-season .sb-label { font-size: 11px; }
-  .b-season .ds-links { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--line); }
-  .b-season .ds-links .dg-more { display: inline-block; width: auto; background: none; border-color: transparent; padding: 8px 14px 0 0; margin-top: 0; border-radius: 0; }
-  .b-season .ds-links .dg-more:hover { background: none; border-color: transparent; color: var(--ink); }
-  /* MONEY: the numeral is the module. */
-  .b-money { display: flex; align-items: baseline; gap: 9px; margin: 0; padding: 2px 0 4px; text-align: left;
-    background: none; border: none; border-radius: var(--radius); font: inherit; color: var(--ink); cursor: pointer; }
-  .b-money:hover { background: var(--hover); }
-  .b-money .bnum { font-size: 30px; }
+  /* The stage gauges kept their proportions when they moved out of the season
+     module and into the program strip. The track outranks --fill, which is
+     within a few percent of the card in both themes — the round-three lesson. */
+  .dprog .sb-bar, .showcase .sb-bar { background: var(--border-2); height: 14px; }
+  .dprog .stagebreak, .showcase .stagebreak { margin: 9px 0; }
+  .dprog .stagebreak:last-of-type, .showcase .stagebreak:last-of-type { margin-bottom: 0; }
+  .dprog .sb-label, .showcase .sb-label { font-size: 11px; }
 
   /* Countdown and streaks. The T-minus numeral is the biggest thing on the
      page after the alert strip; streak rows read like a pit wall column. */
-  .b-count .bnum { font-size: 44px; }
-  .b-streak { display: flex; align-items: baseline; gap: 9px; padding: 6px 0; border-top: 1px solid var(--line); }
-  .b-streak .sn { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--brand-ink); flex: none; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
-  .b-streak .sn.bad { color: var(--bad); }
-  .b-streak .sl { font-size: 12px; color: var(--muted); min-width: 0; }
+  .sc-tminus .bnum { font-size: 44px; }
 
   /* Launchpad tiles: real buttons, tap-target sized, quiet fills. */
-  .b-launch .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 7px; }
+  .dfoot .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 7px; }
   .b-tile { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 44px; min-width: 0;
     margin: 0; padding: 7px 10px; text-align: left; cursor: pointer; font: inherit;
     background: var(--surface-2); border: 1px solid transparent; border-radius: var(--radius); color: var(--ink); }
@@ -2306,20 +2315,18 @@
   /* Race day: the one day the board wears gold. */
   .dboard.raceday { border-top: 3px solid var(--gold); padding-top: 10px; }
   /* Fact of the day: prose, one size up, with a gold open-quote garnish. */
-  .b-fact .fq { position: relative; margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
-  .b-fact .fq::before { content: "\201C"; position: absolute; left: 0; top: -4px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
-  .b-fact .fmeta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .dfoot .fq { position: relative; margin: 10px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+  .dfoot .fq::before { content: "\201C"; position: absolute; left: 0; top: -4px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
+  .dfoot .fmeta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 
   /* Phone: the strip becomes one scrollable chip row so four numerals do not
      spend the first screen. The row is the scroller, never the document. */
   @media (max-width: 700px) {
     .dboard { gap: 11px; }
-    .b-alerts { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
-    .b-alert { flex: 0 0 auto; padding: 4px 14px; }
+    .dlane-hd .bnum { font-size: 26px; }
     .b-tminus { padding-left: 14px; }
     .bnum { font-size: 26px; }
-    .b-count .bnum { font-size: 34px; }
-    .dboard .dgrouphd .bnum { font-size: 24px; }
+    .sc-tminus .bnum { font-size: 34px; }
   }
 
   /* login */
@@ -2736,11 +2743,9 @@
        the same reasoning as .tl-cell.empty in the Timeline. Show what is
        actually booked; the count is in the heading either way. */
     .stn.off { display: none; }
-    .stn-l { width: 96px; }
     /* Two tiles, one row. Two classes, to match the specificity of the base
        rule that caps them at 210px — with one class this lost and the tiles
        stacked one per row, eating the top of the phone screen. */
-    .dgrouphd { margin: 14px 0 4px; }
     /* Four at-a-glance tiles at a 70px floor still fit on one line at 393, so
        they each get about 84px — and "PURCHASES" at 11px uppercase is wider
        than that, so its last letter crossed the tile's border and "WORK

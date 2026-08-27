@@ -24,54 +24,91 @@ The screenshots through this file regenerate with
 
 ### Dashboard
 
+**Round five: the pit board.** Rounds one through four were a grid of modules,
+and the last of them left five of eleven areas able to render nothing at all —
+so on a quiet week, or on the SN5 archive where every run is retro, the page had
+holes in the middle of it. Tighter packing does not fix that. What fixes it is
+that a module which can vanish was answering a question nobody asked it.
+
+So: **four lanes, each a question**, and a lane with no answer says so.
+
+- **Stopped** — a run whose next step nobody can sign. Two shapes, and the
+  difference matters: a blocker *at* the live step is work waiting on a person;
+  a blocker *behind* it means the run walked past a gate, which is a record that
+  lies and is worse.
+- **Waiting on you** — the one thing the old board never answered. It walks the
+  buy-off gate ladder in the order the button walks it — sequence, training,
+  evidence, the cure clock, CS-013 — so it can never promise a signature the
+  button then refuses. Missing evidence *demotes* a step rather than hiding it:
+  pressing the button is how you find out what is short. A cure hold stops a
+  member and offers a lead an override, so this lane is genuinely different for
+  the two of them. And a design review on a run you created ranks down for you
+  and up for everyone else, which is what CS-013 says and what nothing on screen
+  used to show.
+- **Due this week** — inside seven days, late first. Its header says how many
+  are actually late, because "5 due this week" listing things from January is
+  true and reads as a lie.
+- **On the clock** — cures running, the next milestone, and the days to
+  competition.
+
+**The alert strip is gone.** It counted "Late 3" one row above the module that
+listed the three: one fact drawn twice, in two places that could disagree. Each
+lane header is its own numeral now, attached to the thing it counts. The
+consequence is worth knowing — a run that is late *and* has a step you can sign
+appears in one lane only, so the numerals do not sum to "everything open". That
+is why each header says what its number is of.
+
+**Nothing is ranked across lanes.** "Is this blocker more urgent than that
+deadline" has no honest answer, and inventing one is how a board starts lying
+quietly. There is an order inside *Waiting on you*, where everything is the same
+kind of thing, and nowhere else.
+
+Below the lanes, **the program**: build progress, molds, money, this week's RFS
+bookings, the store, and the all-season counters — the facts that are a monthly
+read rather than a daily one, one line each. A fact with no value prints a
+labelled dash instead of disappearing. Then **around the shop**: the filtered
+jumps, what has been touched lately, and the fact of the day.
+
+A **guest** gets a different page rather than an emptier one — see below.
+
+
 ![Dashboard: the mission-control board](../design/dashboard-mockup-20260826.png)
 
-The landing page is the board: read-only, every element linking into the tab it
-came from. On a phone it stacks today-first.
+*(The picture above is round four, and is due a re-shoot — `node tools/make_mockups.mjs`.)*
 
-The **alert strip** leads with the lead's one-second read, team-wide: late,
-blocked, unassigned (open work with no owner), curing with the soonest ready-at
-clock, and T-minus to the competition. All quiet renders a green all-clear cell.
+Read-only, every element linking into the tab it came from. On a phone the lanes
+stack in the day's order and the program and footer sink below them.
 
-The modules under it:
+**What each lane says when it has nothing.** This is the part that matters, and
+it is enforced rather than remembered: `laneShell()` is the only thing that
+renders a lane and its empty-state argument is required, so a lane cannot ship
+without one.
 
-- **The work list** — one grouped deadline list, an item in exactly one bucket.
-  One row per physical thing: a part and its work order are the same object seen
-  twice and merge into one row, and an issue folds into the run it holds up,
-  leaving a ⚑ with the count of what is still open. Late and This week render
-  open; the quieter buckets fold.
-- **Shop status** — what is blocked and what is curing (a clock time, never a
-  countdown), and nothing else. A clean shop reads a single "All clear" line,
-  which is real information at a Monday meeting.
-- **Build progress** — the stage bars plus the molds pipeline, counts printed as
-  words for colourblind safety.
-- **This week at RFS** — only the booked stations.
-- **Activity** — a cross-app feed of what changed, one event per record per day.
-  The header wears a gold pip when something you watch is in it.
-- **Countdown** — the competition it is counting to, the next milestone, and
-  three all-season counters (days since a missed deadline, layups banked,
-  sign-offs). The T-minus number itself lives in the strip above, once. A lead
-  sets the season name, date and milestones in one modal.
-- **Money** — the unreimbursed sum plus the $50 approval rule.
-- **Launchpad** — filtered jumps (open issues, late WOs, the reorder list, the
-  week plan), a jump to Documents, and the pinned Google links.
-- **Stock & housekeeping** — expired lots, chemical-storage warnings, what is
-  running low, what has no shelf, and how long since anyone walked the stock.
-  Reference rather than an alarm, so it sits at the bottom and disappears
-  entirely when there is nothing to say.
-- **Shop knowledge** — rotates a fact a day, most of them mined from the team's
-  own SN5 documentation. On competition day the board wears gold and tells you
-  to go run the car.
+- Stopped — *"Nothing is blocked. Every open run's next step is available to
+  somebody."*
+- Waiting on you — *"Nothing needs your signature. 4 steps are ready for the
+  people trained on them."* Or, for somebody with no grants yet: *"3 steps are
+  waiting on Wet layup training — Nico and Justin have it."* with a jump to
+  People. An empty lane that tells you how to make it non-empty.
+- Due this week — *"Nothing is due before 3 Sep. Next up: SPLITTER."*
+- On the clock — *"No cure is running."* plus the next milestone and the
+  countdown, so it is never empty once a season exists.
 
-Empty states shrink the page instead of padding it.
+**Role.** A lead also sees purchases over $50 awaiting sign-off, cure holds they
+could release, and open work with nobody's name on it. A member sees the steps
+they can actually sign. A **guest** gets the showcase — the season, the build
+progress, and what the team is making — rather than a work queue with everything
+filtered out of it, which would be a blank apology. Nothing on the showcase is a
+link into a record, because a guest following one would land on a permission
+error.
 
 ### Season
 
 ![Season: the blueprint](../design/season-mockup-20260827.png)
 
 The blueprint, and the tab that replaced the Composites Master Tracker
-spreadsheet. One row per part the team means to make, thirteen columns, and most
-of the cells empty — which is the point, not a defect. In September the team
+spreadsheet. One line per part the team means to make, most of them nearly
+empty — which is the point, not a defect. In September the team
 knows it is building a nosecone, an undertray and four side panels; it does not
 yet know the layup schedule, the mold location or who is machining what. **A row
 that exists with nothing in it is a commitment to build the thing.**

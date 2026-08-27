@@ -27,17 +27,31 @@ so the team is still on v2.2.2.
 Done and tested: the **boot splash** takes a floor and a Continue affordance;
 the **Season tab** is a read (the muster line, and a bulk "lay out the season"
 form in place of + Row); **cut sheets** land on a mold's drawing set and as
-their own batch document off the Molds tab.
+their own batch document off the Molds tab; the **dashboard** is the four-lane
+pit board.
 
-Not started: the **dashboard** (Design B, the four-lane pit board, with
-`signableSteps`/`waitingOnMe`/`trainingGaps` as a data-only first PR) and
-**guest mode** (anonymous auth, a `canEdit()` role, and a rules deploy).
-The approved plan is at
+Not started: **guest mode** — anonymous auth, a `canEdit()` role beside
+`isLead()`, and the only rules deploy in the whole pass. The approved plan is at
 `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+
+**The showcase is written but has never been seen by a real guest.**
+`renderShowcase()` is reachable today only by setting `fb.guest` by hand, which
+is how it is tested. It becomes real when the auth work lands.
 
 **The one thing in the plan that is a rules deploy is guest mode, and it is
 deliberately last.** Rules go alone and first; everything else in this pass is
 hosting only.
+
+**A dashboard lane cannot ship without an empty state, and that is enforced.**
+`laneShell()` is the only thing that renders a lane and `emptyFn` is a required
+parameter — it throws without one. That is the whole fix for round four's five
+collapsible areas, and weakening the signature to an optional argument brings
+the holes straight back.
+
+**Nothing is scored across lanes, on purpose.** `actScore` runs inside "waiting
+on you" only. Its tiers sit 50 apart because every bonus added together is 45:
+make the bonuses bigger, or the tiers closer, and a low tier quietly outranks
+the one above it. `test_app.mjs` pins that relationship rather than a symptom.
 
 **`min == max` is asserted byte-identical to the pre-range packer.** That test
 in `test_packer.mjs` is the rollback story for the whole density-range feature —

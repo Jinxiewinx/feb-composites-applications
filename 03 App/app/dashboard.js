@@ -29,18 +29,15 @@ function deadlineItems() {
     // late. `rnd` rides along so the row can say so.
     rnd: isRnd(p),
   }));
-  // Issues only. Project tickets are shelved (see the TABS row in core.js),
-  // and a deadline for a record nobody can navigate to is a deadline nobody
-  // can act on. projStatus() still migrates the old 4-value status, same as
-  // everywhere else a ticket is read.
-  DB.projects.filter(isIssue).forEach(p => items.push({
-    coll: "projects", id: p.id,
-    kind: "Issue",
-    label: p.title || p.id,
-    who: whoLabel(p.assignees || []),
-    date: p.dueDate, done: projStatus(p) === "Done",
-    mine: isMine(p.assignees || []),
-  }));
+  /* NO ISSUE ROWS. Project tickets are shelved (see the TABS row in core.js),
+     and every ISSUE requires a workOrderId — v1.0.0 put issues on the run they
+     hold up. So an issue row was always a second line about a run already on
+     this list, minted here only to be folded away below; the fold is now done
+     directly off openIssuesForWO() and the round trip is gone with it.
+
+     What the fold was providing besides the count is kept: an issue with an
+     EARLIER date than its run still pulls the run's date forward, so folding
+     can never under-report lateness. */
   DB.workOrders.forEach(w => items.push({
     coll: "workOrders", id: w.id, kind: "WO", label: w.partName || w.id,
     who: whoLabel([w.moldEngineer, w.manufacturingEngineer]),
@@ -139,17 +136,26 @@ function mergedDeadlineItems() {
      the part's coll and id up there — byWoId still holds the same object, so
      the lookup keeps working, and the flag belongs on it either way because it
      is the same physical run. */
-  const issueItems = items.filter(i => i.coll === "projects");
-  issueItems.forEach(it => {
-    const iss = recById("projects", it.id);
-    const row = iss && iss.workOrderId ? byWoId.get(iss.workOrderId) : null;
-    if (!row || row === it || absorbed.has(row)) return;   // orphan, itself, or already merged away
-    absorbed.add(it);
-    if (it.date && (!row.date || it.date < row.date)) row.date = it.date;
-    row.mine = row.mine || it.mine;
-    // Only what is still open: a disposed issue is history, and a flag counting
-    // it would never go back down.
-    if (!it.done && projStatus(iss) !== "Cancelled") row.issues = (row.issues || 0) + 1;
+  /* The flag, read off the run rather than reconstructed from rows that only
+     existed to carry it. openIssuesForWO() is the same filter the work order's
+     own page uses, so the number on the board and the number inside the record
+     cannot disagree.
+
+     Iterated over byWoId rather than over items: a row may have adopted the
+     part's coll and id above (a Complete traveler hands the row back to the
+     open part), and byWoId still holds that same object — the flag belongs on
+     it either way, because it is the same physical run. */
+  byWoId.forEach((row, woId) => {
+    if (absorbed.has(row)) return;
+    const open = typeof openIssuesForWO === "function" ? openIssuesForWO(woId) : [];
+    if (open.length) row.issues = open.length;
+    /* An issue filed from a step carries no due date and sinks out of sight;
+       one that HAS a date, and an earlier one, has to pull the run forward or
+       folding would quietly under-report how late the run is. */
+    (typeof issuesForWO === "function" ? issuesForWO(woId) : []).forEach(iss => {
+      if (!iss.dueDate || projStatus(iss) === "Cancelled" || projStatus(iss) === "Done") return;
+      if (!row.date || iss.dueDate < row.date) row.date = iss.dueDate;
+    });
   });
   return items.filter(i => !absorbed.has(i));
 }
@@ -362,219 +368,17 @@ function dashRole() {
   return (typeof isLead === "function" && isLead()) ? "lead" : "member";
 }
 
-/* ---------- one list, grouped ----------
-   One list, bucketed FIRST-MATCH-WINS so an item appears exactly once, and
-   ordered by what you would act on first. */
-const DASH_BUCKETS = [
-  { id: "late", label: "Late", test: (dd) => dd != null && dd < 0 },
-  { id: "week", label: "This week", test: (dd) => dd != null && dd >= 0 && dd <= 7 },
-  { id: "soon", label: "Next two weeks", test: (dd) => dd != null && dd > 7 && dd <= 14 },
-  { id: "later", label: "Later", test: (dd) => dd != null && dd > 14 },
-  { id: "nodate", label: "No date", test: (dd) => dd == null },
-];
-function bucketOf(it) {
-  const dd = daysUntil(it.date);
-  return (DASH_BUCKETS.find(b => b.test(dd)) || DASH_BUCKETS[DASH_BUCKETS.length - 1]).id;
-}
+/* A stable tiebreak when two things fall on the same date: the run before the
+   part it makes, and both before an issue against them. It outlived the bucket
+   list it was written for — the lanes still need two equal dates to order the
+   same way on every render, or rows swap places under your thumb. */
 const KIND_RANK = { WO: 0, Part: 1, Issue: 2 };
 function dashSort(a, b) {
   return (a.date || "9999").localeCompare(b.date || "9999")
     || (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9)
     || String(a.label).localeCompare(String(b.label));
 }
-/* The count is the biggest type in the group, and it is a real control: it
-   scrolls nothing, it is the heading. .bnum, not .bignum: the board carries
-   its own numeral class, and .bignum is one of the shared selectors the
-   theme-proof audit samples for light/dark difference, which a constant-dark
-   page must stay out of. */
-function groupHead(label, n, cls) {
-  return `<div class="dgrouphd">
-    <span class="bnum ${cls || ""}">${n}</span>
-    <span class="dg-label">${esc(label)}</span>
-  </div>`;
-}
 
-/* ---------- rows ----------
-   One stacked-row renderer for every module. The old dashboard drew 3-column
-   tables, which is what broke the rail: a table's min-content width is the sum
-   of its columns', and a 3-col table with a pill, a kind tag and a raw email
-   cannot fit a 304px box (the "new activity" overflow). Stacked rows have one
-   min-content: the longest word, and .srow-meta ellipsises. */
-function dashRow(it) {
-  const dd = daysUntil(it.date);
-  const paren = dd < 0 ? Math.abs(dd) + "d late" : dd === 0 ? "today" : dd + "d";
-  const when = it.date
-    ? `<span class="${dd != null && dd < 0 ? "warn" : ""}">${esc(it.date)}${dd != null ? ` (${paren})` : ""}</span>`
-    : "no date";
-  return `<div class="srow">
-    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${rndBadge(it.rnd)}${
-      // The run is held up by something. Not a count of everything ever filed:
-      // undisposed issues are what stop it closing.
-      it.issues ? ` <span class="warn tny" title="${it.issues} open issue${it.issues > 1 ? "s" : ""}">⚑ ${it.issues}</span>` : ""}</span>
-    <span class="srow-meta">${esc(it.who || "—")} · ${when}</span>
-  </div>`;
-}
-
-/* ---------- the page ----------
-   Round four: mission control, on the app's ordinary light surfaces (Simon
-   liked the board, not the navy). One grid (.dboard, NOT .board, which is
-   the Tickets kanban's class) holding the whole team state as flat
-   children, so the phone re-orders it with grid-template-areas alone. The
-   alert strip leads because "what is late, blocked, unassigned or curing" is
-   the lead's one-second read; the work list keeps round three's proven
-   bucket behavior unchanged underneath. Round one died of addition and
-   round two of loose packing; the guards stay: <=5 visible rows a module,
-   one numeral scale, one header treatment. */
-function renderDashboard() {
-  const items = mergedDeadlineItems();
-  const open = items.filter(i => !i.done);
-  const mine = open.filter(i => i.mine).sort(dashSort);
-  const team = open.filter(i => !i.mine).sort(dashSort);
-
-  const blocked = blockedNow();
-  const curing = curingNow();
-  const watched = (DB.projects || []).filter(p => isIssue(p) && typeof projUnread === "function" && projUnread(p))
-    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-
-  const showTeam = view.dashTeam == null ? !mine.length : !!view.dashTeam;
-  const list = showTeam ? mine.concat(team).sort(dashSort) : mine;
-  const teamLate = team.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
-  /* Strip numbers are TEAM-WIDE regardless of the list toggle: the strip is
-     the lead's read of the whole program, the list below is the member's. */
-  const late = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; });
-  const unassigned = open.filter(i => !i.who);
-
-  const raceday = window.SEASON && SEASON.compDate === today();
-  return `<div class="dboard${raceday ? " raceday" : ""}">
-    ${dashAlerts(late.length, blocked.length, unassigned.length, curing)}
-    <div class="bmod b-work" id="dash-list">
-      <div class="bmod-hd"><span>${showTeam ? "Everything open" : "Your work"}</span><span class="gh-n">${list.length} open</span></div>
-      ${showTeam && !mine.length ? `<p class="muted tny">Nothing is assigned to you, so this is the whole team's.</p>` : ""}
-      ${list.length ? dashGroups(list) : `<p class="muted">Nothing open. Either the season hasn't started or you're all caught up.</p>`}
-      ${team.length ? `<button class="dg-more" onclick="view={...view,dashTeam:${showTeam ? "false" : "true"}};render()">${
-        showTeam ? (mine.length ? "Show only my work" : "Hide the team's work")
-                 : `Everything else — ${team.length} open, ${teamLate} late`
-      }</button>` : ""}
-    </div>
-    ${dashShopStatus(blocked, curing)}
-    ${dashShopRef()}
-    ${dashSeason()}
-    ${dashWeek()}
-    ${dashFeed(watched)}
-    ${dashCount(items, open)}
-    ${dashBudget()}
-    ${dashLaunch()}
-    ${dashFact()}
-  </div>`;
-}
-
-/* ---------- fact of the day ----------
-   factOfTheDay (facts.js) is deterministic by UTC day, so the whole team
-   sees the same fact all day with no storage anywhere; "another one" offsets
-   the index for this session only. On the configured competition date the
-   module stops being a fact and says the only thing that matters. */
-function dashFact() {
-  if (typeof factOfTheDay !== "function") return "";
-  if (window.SEASON && SEASON.compDate === today()) {
-    return `<div class="bmod b-fact">
-      <div class="bmod-hd"><span>Race day</span></div>
-      <p class="fq">It's race day. Everything on this board already happened. Go run the car.</p>
-    </div>`;
-  }
-  const f = factOfTheDay(view.factN);
-  if (!f) return "";
-  return `<div class="bmod b-fact">
-    <div class="bmod-hd"><span>Shop knowledge</span><span class="gh-n">${f.src === "lore" ? "team lore" : "the wider world"}</span></div>
-    <p class="fq">${esc(f.t)}</p>
-    <div class="fmeta"><button class="dg-more" onclick="view={...view,factN:(view.factN||0)+1};render()">Another one</button></div>
-  </div>`;
-}
-
-/* ---------- launchpad ----------
-   One tile per place people actually go: filtered jumps into the tabs (the
-   flags each tab already owns — setTab clears wo* flags, so those are set
-   AFTER the switch), the bundled document shelves with real counts from the
-   manifest, and whatever Google links the team pinned in Documents. External
-   links are <a> so a long-press/middle-click works like the web. */
-function dashLaunch() {
-  const tile = (go, label, meta) => `<button class="b-tile" onclick="${go}">
-    <span class="tl">${label}</span>${meta ? `<span class="tm">${meta}</span>` : ""}</button>`;
-  const ext = (url, label, meta) => `<a class="b-tile" href="${esc(url)}" target="_blank" rel="noopener">
-    <span class="tl">${esc(label)}</span>${meta ? `<span class="tm">${esc(meta)}</span>` : ""}</a>`;
-  const shelf = (DB.documents || []).filter(d => d.pinned && d.url).slice(0, 4);
-  return `<div class="bmod b-launch">
-    <div class="bmod-hd"><span>Launchpad</span></div>
-    <div class="lgrid">
-      ${tile("setTab('workorders');view.woIssues=true;render()", "Open issues", "runs with one open")}
-      ${tile("setTab('workorders');view.woLate=true;render()", "Late WOs", "past due only")}
-      ${tile("view.invFlag='reorder';setTab('inventory')", "Reorder list", "low + expired")}
-      ${tile("view.schedView='week';setTab('timeline')", "Week plan", "goals by person")}
-      ${tile("setTab('reports')", "Reports", "counts + CSV")}
-      ${tile("setTab('people')", "People", "who is on what")}
-      ${/* The Datasheets and Standards tiles lived here until 2026-08-18, when
-            those categories were unlisted from the Documents tab. A launchpad
-            tile counting documents nobody can browse to is worse than no tile.
-            The manifest load they used to trigger went with them; Documents
-            loads it itself when opened. */""}
-      ${tile("setTab('documents')", "Documents", "shelf + uploads")}
-      ${shelf.map(d => ext(d.url, d.title || d.id, "pinned · opens in Google")).join("")}
-    </div>
-  </div>`;
-}
-
-/* ---------- countdown & streaks ----------
-   The pit-wall column: T-minus to the configured competition, the next
-   milestone, and three all-season counters. Every number here is
-   denominator-free on purpose (a documented round-two decision: there is no
-   completion history and no budget cap, so no meter gets a target it would
-   have to invent). "Days since a deadline was missed" uses only due dates
-   and open/closed, both real: an open item past due zeroes it; otherwise the
-   most recent past due date among ALL items was met by definition. */
-function dashCount(items, open) {
-  const s = window.SEASON;
-  const lead = typeof isLead === "function" && isLead();
-
-  let head;
-  if (s && s.compDate) {
-    // No day count here: the alert strip prints it, larger, above this module,
-    // and its tile scrolls HERE. Printing it twice made the scroll land on a
-    // copy of the thing you just clicked. What this owns is what the strip
-    // cannot say — which milestone is next, and how the season has gone.
-    const next = (s.milestones || [])
-      .filter(m => m.date && daysUntil(m.date) != null && daysUntil(m.date) >= 0)
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
-    head = `<div class="srow-meta"><b>${esc(s.compName || "competition")}</b> · ${esc(s.compDate)}</div>
-    ${next ? `<div class="srow-meta">next: ${esc(next.label)} · ${esc(next.date)} (${daysUntil(next.date)}d)</div>` : ""}`;
-  } else {
-    head = `<p class="muted tny">No competition date set.</p>
-    ${lead ? `<button class="dg-more" onclick="editSeason()">Set the season</button>` : ""}`;
-  }
-
-  const lateNow = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
-  let missRow;
-  if (lateNow) {
-    missRow = { n: 0, cls: "bad", label: `days clean, ${lateNow} late right now` };
-  } else {
-    const pastDue = items.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; })
-      .map(i => daysUntil(i.date)).sort((a, b) => b - a);
-    missRow = pastDue.length
-      ? { n: -pastDue[0], cls: "ok", label: "days since a deadline was missed" }
-      : { n: "—", cls: "", label: "no deadlines missed yet" };
-  }
-  const layups = (DB.parts || []).filter(p => typeof partDone === "function" && partDone(p)).length;
-  const signed = (DB.workOrders || []).reduce((n, w) =>
-    n + (w.steps || []).filter(st => typeof isSigned === "function" && isSigned(st)).length, 0);
-  const streak = (r) => `<div class="b-streak"><span class="sn ${r.cls || ""}">${r.n}</span><span class="sl">${r.label}</span></div>`;
-
-  return `<div class="bmod b-count" id="b-count">
-    <div class="bmod-hd"><span>Countdown</span>${s && s.compDate && lead
-      ? `<button class="icon-btn" title="Edit season" aria-label="Edit season" onclick="editSeason()">✎</button>` : ""}</div>
-    ${head}
-    ${streak(missRow)}
-    ${streak({ n: layups, cls: "", label: `layup${layups === 1 ? "" : "s"} banked all season` })}
-    ${streak({ n: signed, cls: "", label: `step sign-off${signed === 1 ? "" : "s"} all season` })}
-  </div>`;
-}
 
 /* Lead-only editor for config/season. Milestones as date-label lines rather
    than a row editor: a season has a handful, and a lead sets them twice a
@@ -609,145 +413,6 @@ async function submitSeason() {
   } catch (e) { toast("Save failed: " + e.message, "error"); }
 }
 
-/* The alert strip: the lead's one-second read, team-wide, bare numerals on
-   the board itself. Red/amber only when nonzero; when everything is quiet a
-   green all-clear cell leads, because "the program is fine" is real
-   information at a Monday meeting. The T-minus readout holds the strip's
-   right end once a season is configured. */
-function dashAlerts(nLate, nBlocked, nUnassigned, curing) {
-  const toList = "document.getElementById('dash-list').scrollIntoView({block:'start'})";
-  const toShop = "var el=document.getElementById('dash-status');if(el)el.scrollIntoView({block:'start'})";
-  const cell = (n, label, cls, go, sub) => `<button class="b-alert" onclick="${go}">
-    <span class="bnum ${n ? cls : ""}">${n}</span><span class="bl">${label}${sub || ""}</span>
-  </button>`;
-  const allClear = !nLate && !nBlocked && !nUnassigned && !curing.length;
-  let tminus = "";
-  if (window.SEASON && SEASON.compDate) {
-    const dd = daysUntil(SEASON.compDate);
-    tminus = `<button class="b-tminus" onclick="var el=document.getElementById('b-count');if(el)el.scrollIntoView({block:'start'})">
-      <span class="bnum">${dd == null ? "?" : Math.abs(dd)}</span>
-      <span class="bl">${dd != null && dd < 0 ? "days since" : "days to"} <b>${esc(SEASON.compName || "competition")}</b></span>
-    </button>`;
-  }
-  return `<div class="b-alerts">
-    ${allClear ? `<div class="b-alert"><span class="bnum ok">✓</span><span class="bl">All clear</span></div>` : ""}
-    ${cell(nLate, "Late", "bad", toList)}
-    ${cell(nBlocked, "Blocked", "bad", nBlocked ? toShop : "setTab('workorders')")}
-    ${cell(nUnassigned, "Unassigned", "warn", toList)}
-    ${cell(curing.length, "Curing", "warn", nBlocked || curing.length ? toShop : "setTab('workorders')",
-      curing.length ? ` · ready ${esc(curing[0].hold.readyAt)}` : "")}
-    ${tminus}
-  </div>`;
-}
-
-/* Money: the unreimbursed sum, and the $50 approval rule finally surfaced —
-   needsApproval() existed in budget.js all season and nothing showed it. */
-function dashBudget() {
-  const openOrders = DB.budget.filter(b => b.status !== "Reimbursed");
-  const openSum = openOrders.reduce((s, b) => s + num(b.cost), 0);
-  const approvals = typeof needsApproval === "function" ? DB.budget.filter(needsApproval) : [];
-  return `<div class="bmod b-budget">
-    <div class="bmod-hd"><span>Money</span>${openOrders.length ? `<span class="gh-n">${openOrders.length} open purchase${openOrders.length === 1 ? "" : "s"}</span>` : ""}</div>
-    <button class="b-money" onclick="setTab('budget')">
-      <span class="bnum">$${openSum.toFixed(0)}</span><span class="bl">unreimbursed</span>
-    </button>
-    ${approvals.length ? `<div class="srow"><span class="sr-main">
-      <button class="chip" onclick="setTab('budget')">${approvals.length} over $50 awaiting sign-off</button></span></div>` : ""}
-    ${(() => {
-      // Bought vs actually used: the consumed sum comes from WO BOM lines
-      // logged at the bench, so this number only exists where someone told
-      // the truth at a buy-off. Absent until then, never $0.
-      const consumed = (DB.workOrders || []).reduce((s, w) =>
-        s + (w.bom || []).reduce((a, l) => a + (typeof l.costAtConsumption === "number" ? l.costAtConsumption : 0), 0), 0);
-      return consumed > 0 ? `<div class="srow"><span class="sr-main muted">$${consumed.toFixed(0)} of materials consumed across runs</span></div>` : "";
-    })()}
-  </div>`;
-}
-
-/* Shop status: what is stopping work RIGHT NOW. Blocked gates (red) and cure
-   clocks (amber, clock time never a countdown — see curingNow), and nothing
-   else.
-
-   It used to also carry the Inventory tab's warning arithmetic, which made one
-   module answer two unrelated questions: "can the shop work" is a thing on a
-   clock that someone must act on today, and "is the store tidy" is a monthly
-   habit. They now sit apart — see dashShopRef — because the strip above counts
-   blocked and curing, so this module's job is the DETAIL behind those counts,
-   and four inventory chips buried under them were the reason nobody read it.
-
-   The flagship is still the empty state: a clean shop renders ONE line, because
-   "the shop is fine" is real information at a Monday meeting, and never a
-   missing box. That also lets this module sit high in the grid without
-   violating the rule that nothing which renders empty on the team's own archive
-   sits above the fold — blockedNow and curingNow are both structurally empty on
-   the SN5 records, and this line is what stands in their place. */
-function dashShopStatus(blocked, curing) {
-  const rows = [];
-  const dot = c => `<span class="sdot ${c}"></span>`;
-  blocked.forEach(b => rows.push(`<div class="srow">${dot("bad")}<span class="sr-main">
-    ${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)} <b>${esc(stripCS(b.step.title))}</b> unsigned</span>
-    <span class="srow-meta">step ${b.step.seq}${b.wo.moldEngineer ? " · " + esc(b.wo.moldEngineer) : ""}</span></div>`));
-  curing.forEach(c => rows.push(`<div class="srow">${dot("warn")}<span class="sr-main">
-    ${chip("workOrders", c.wo.id, c.wo.partName || c.wo.id)} <span class="cure-at">ready ${esc(c.hold.readyAt)}</span></span>
-    <span class="srow-meta">${c.hold.resin ? esc(c.hold.resin.label) : "resin not recorded"}${
-      typeof holdIsCold === "function" && holdIsCold(c.hold) ? " · shop is cold, it will run long" : ""}</span></div>`));
-
-  const body = rows.length
-    ? rows.join("")
-    : `<div class="srow">${dot("ok")}<span class="sr-main">All clear — nothing blocked or curing</span></div>`;
-  return `<div class="bmod b-shop" id="dash-status">
-    <div class="bmod-hd"><span>Shop status</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
-    ${body}
-  </div>`;
-}
-
-/* The store, and the habits that keep it honest: expired lots, the CS-011 §6
-   chemical-storage rule, what is running low, what has no shelf, and how long
-   since anyone walked the stock. Reference, not an alarm — every row here is a
-   count that links into Inventory, and none of it changes what can be built
-   this afternoon. That is why it sits at the bottom of every breakpoint.
-
-   Returns "" when there is nothing to say. Unlike Shop status it has no
-   defensible empty state — "0 expired, 0 low, 0 unhoused" is a row of zeroes,
-   not the news that the store is fine — so it collapses instead, which is safe
-   precisely because of where it sits. */
-function dashShopRef() {
-  const rows = [];
-  const dot = c => `<span class="sdot ${c}"></span>`;
-  let footer = "";
-  if (typeof invIndex === "function") {
-    const idx = invIndex();
-    const lots = (DB.lots || []).filter(o => o.stage !== "Empty");
-    const expired = lots.filter(lotExpired).length;
-    const low = lots.filter(lotIsLow).length;
-    let chem = 0;
-    invActiveBins().forEach(b => {
-      chem += invLocWarnings(b, idx.by.get(b.id) || invEmptyBucket())
-        .filter(w => w.cls === "bad" && !/expired/.test(w.text)).length;
-    });
-    const unhoused = invBucketCount(idx.un);
-    const inv = (n, cls, label, go) => { if (n) rows.push(`<div class="srow">${dot(cls)}<span class="sr-main">
-      <button class="chip" onclick="${go}">${n} ${label}</button></span></div>`); };
-    inv(expired, "bad", `expired lot${expired === 1 ? "" : "s"}`, "view.invFlag='reorder';setTab('inventory')");
-    inv(chem, "bad", `chemical storage warning${chem === 1 ? "" : "s"}`, "setTab('inventory')");
-    inv(low, "warn", "running low", "view.invFlag='reorder';setTab('inventory')");
-    inv(unhoused, "warn", "unhoused (no location)", "setTab('inventory')");
-    const bins = invActiveBins();
-    if (bins.length) {
-      const ages = bins.map(b => invDaysSince(b.walkedAt));
-      const overdue = ages.some(a => a == null || a > INV_WALK_STALE_DAYS);
-      const oldest = ages.every(a => a != null) ? Math.max(...ages) : null;
-      footer = `<div class="srow-meta gmod-foot">${overdue ? "stock walk overdue" : `walked ${oldest}d ago`}${
-        (DB.stackplans || []).some(p => !p.moldId) ? ` · ${(DB.stackplans || []).filter(p => !p.moldId).length} stack plans unlinked` : ""}</div>`;
-    }
-  }
-
-  if (!rows.length && !footer) return "";
-  return `<div class="bmod b-ref" id="dash-ref">
-    <div class="bmod-hd"><span>Stock &amp; housekeeping</span>${rows.length ? `<span class="gh-n">${rows.length}</span>` : ""}</div>
-    ${rows.join("")}${footer}
-  </div>`;
-}
 
 /* ---------- the activity feed ----------
    Every synced doc carries updatedAt/updatedBy and every comment a ts, and
@@ -787,103 +452,445 @@ function dashFeedEvents() {
     seen.add(k); return true;
   });
 }
-function dashFeed(watched) {
-  const wShown = watched.slice(0, 3);
-  const wIds = new Set(wShown.map(p => p.id));
-  const events = dashFeedEvents()
-    .filter(e => !(e.coll === "projects" && wIds.has(e.id)))
-    .slice(0, 8 - wShown.length);
-  if (!wShown.length && !events.length) return "";
-  return `<div class="bmod b-activity">
-    <div class="bmod-hd"><span>${wShown.length ? '<span class="unread-dot"></span> ' : ""}Activity</span><span class="gh-n">latest across the app</span></div>
-    ${wShown.map(p => `<div class="srow">
-      <span class="sr-main"><span class="kind">Issue</span> ${chip("projects", p.id, p.title || p.id)}</span>
-      <span class="srow-meta"><span class="status ${projStatusClass(projStatus(p))}"><span class="dot"></span>${esc(projStatus(p))}</span>
-        ${fmtWhen(p.updatedAt)} by ${esc(whoLabel(p.updatedBy) || "?")}</span>
-    </div>`).join("")}
-    ${events.map(e => `<div class="srow">
-      <span class="sr-main">${chip(e.coll, e.id, e.label)}</span>
-      <span class="srow-meta">${e.verb} by ${esc(whoLabel(e.who) || "?")} · ${fmtWhen(e.ts)}</span>
-    </div>`).join("")}
-    ${watched.length > wShown.length ? `<button class="dg-more" onclick="setTab('workorders');view.woIssues=true;render()">All watched — ${watched.length}</button>` : ""}
-  </div>`;
-}
 
-/* This week at RFS: the booked stations only. Seven rows of the word "open"
-   is an empty grid with a heading — the count in the header carries the free
-   stations, which is what the phone CSS always did and desktop now matches. */
-function dashWeek() {
-  if (typeof weekPlanWeeks !== "function" || typeof STATIONS === "undefined") return "";
-  const week = weekPlanWeeks().find(w => weekContains(w, today()));
-  if (!week) return "";
-  const booked = STATIONS.filter(([k]) => String(week[k] || "").trim());
-  const open = `onclick="view.schedView='stations';setTab('timeline')"`;
-  if (!booked.length) {
-    return `<div class="bmod b-week">
-      <div class="bmod-hd"><span>This week at RFS</span><span class="gh-n">wk of ${esc(week.weekOf)}</span></div>
-      <button class="dg-more" ${open}>Nothing booked yet — open the schedule</button>
-    </div>`;
-  }
-  return `<div class="bmod b-week">
-    <div class="bmod-hd"><span>This week at RFS</span><span class="gh-n">${booked.length} of ${STATIONS.length} booked</span></div>
-    ${booked.map(([k, label]) => {
-      const v = String(week[k]).trim();
-      const part = recById("parts", v);
-      return `<div class="srow"><span class="sr-main"><span class="stn-l">${esc(label)}</span>
-        ${part ? chip("parts", part.id, part.partName || part.id) : esc(v)}</span></div>`;
-    }).join("")}
-    <button class="dg-more" ${open}>Open the schedule</button>
-  </div>`;
-}
+/* ============================================================================
+   THE PIT BOARD
+   ============================================================================
+   Round five. Rounds one through four were a grid of modules, and the last of
+   them left five of eleven areas able to render nothing at all — so on a quiet
+   week, or on the SN5 archive where every run is retro, the page had holes in
+   the middle of it.
 
-/* The build-progress panel, the page's centerpiece and the graphic Simon asked
-   to keep: the parts stage bars (all-parts denominator, counts printed as words
-   for colourblind safety — both documented decisions from round two) plus the
-   molds pipeline via the same moldsStageBar() the Molds tab renders.
+   The fix is not tighter packing. It is that a module which can vanish was
+   answering a question nobody asked it. Four lanes, each a QUESTION, and a lane
+   with no answer says so in a sentence — because "nothing is blocked" is real
+   information at a Monday meeting and an empty column is not.
 
-   It used to be called "Season". The Season TAB took that word — it is the
-   blueprint, the plan for what gets made — and this panel is how far through
-   BUILDING it the team is, which is a different question. The class stays
-   .b-season so the grid areas and every CSS rule keep working; only the word
-   somebody reads changed. */
-function dashSeason() {
-  const parts = DB.parts || [];
-  if (!parts.length || typeof PART_STAGES === "undefined") return "";
-  const liveMolds = (DB.molds || []).filter(m => m.stage !== "Retired");
-  return `<section class="bmod b-season">
-    <div class="bmod-hd"><span>Build progress</span><span class="gh-n">all ${parts.length} parts${liveMolds.length ? ` · ${liveMolds.length} molds` : ""}</span></div>
-    ${PART_STAGES.map(st => {
-      const b = stageBreakdown(st.key, st.vals, parts);
-      const tot = b["st-0"] + b["st-mid"] + b["st-done"] + b["st-na"] || 1;
-      const seg = (cls, n, lbl) => n ? `<span class="sb-seg ${cls}" style="width:${(n / tot) * 100}%" title="${n} ${lbl}"></span>` : "";
-      return `<div class="stagebreak">
-        <div class="sb-label">${esc(st.label)}</div>
-        <div class="sb-bar">${seg("st-0", b["st-0"], "not started")}${seg("st-mid", b["st-mid"], "under way")}${seg("st-done", b["st-done"], "done")}${seg("st-na", b["st-na"], "not applicable")}</div>
-        <div class="sb-nums tny"><span class="done">${b["st-done"]} done</span>${b["st-mid"] ? ` · <span class="mid">${b["st-mid"]} under way</span>` : ""}${b["st-0"] ? ` · <span class="muted">${b["st-0"]} to start</span>` : ""}${b["st-na"] ? ` · <span class="na">${b["st-na"]} n/a</span>` : ""}</div>
-      </div>`;
-    }).join("")}
-    ${liveMolds.length && typeof moldsStageBar === "function" ? `<div class="ds-molds">${moldsStageBar(liveMolds)}</div>` : ""}
-    <div class="ds-links"><button class="dg-more" onclick="setTab('parts')">Parts</button><button class="dg-more" onclick="setTab('molds')">Molds</button></div>
-  </section>`;
-}
+   THE ALERT STRIP IS GONE, and that is the deletion this round is really about.
+   It counted "Late 3" and then a module below listed the three. One fact drawn
+   twice, in two places that could disagree. Each lane header is its own numeral
+   now, attached to the thing it counts — which is exactly the argument the old
+   groupHead() already made about its own numbers.
 
-/* The list: one row per thing, each in exactly one bucket. Late and This week
-   render open (Late keeps the big-numeral heading — THE number on the page);
-   the quieter buckets fold behind a disclosure with the count in the summary,
-   so a single "Later" item stops costing a 48px band. */
-function dashGroups(list) {
-  const byBucket = new Map();
-  list.forEach(it => {
-    const k = bucketOf(it);
-    if (!byBucket.has(k)) byBucket.set(k, []);
-    byBucket.get(k).push(it);
+   NO SCORE ACROSS LANES. "Is this blocker more urgent than that deadline" has
+   no honest answer, and inventing one is how a board starts lying quietly.
+   actScore ranks INSIDE "waiting on you", where everything is the same kind of
+   thing, and nowhere else. */
+
+const LANES = [
+  { id: "stopped", cls: "l-stopped", label: "Stopped", scope: "runs" },
+  { id: "you", cls: "l-you", label: "Waiting on you", scope: "steps" },
+  { id: "due", cls: "l-due", label: "Due this week", scope: "items" },
+  { id: "clock", cls: "l-clock", label: "On the clock", scope: "" },
+];
+
+/* FIRST LANE WINS, keyed on coll|id, so one thing appears exactly once — the
+   same discipline the old bucket list enforced and for the same reason.
+
+   The consequence has to be said on screen: a run that is three days late AND
+   has a step you can sign appears only in lane 2, so the numerals do not sum to
+   "everything open". Each header carries its scope for that reason, and lane 3
+   says "Later — 9" rather than implying it is everything. Getting this wrong is
+   how a lead concludes the board is lying to them. */
+function laneFill(email, role) {
+  const seen = new Set();
+  /* ONE KEY CONVENTION, and it has to be the one mergedDeadlineItems uses —
+     "<coll>|<id>" — or the lanes cannot dedupe against each other at all. */
+  const take = (k) => { if (seen.has(k)) return false; seen.add(k); return true; };
+  const woKey = (w) => "workOrders|" + w.id;
+  const sig = signableSteps(email);
+  const L = { stopped: [], you: [], due: [], clock: [] };
+
+  /* 1. STOPPED — a run whose next step nobody can sign. Two shapes, and the
+        difference matters: a blocker AT the live step is work waiting on a
+        person, and a blocker BEHIND it means the run walked past a gate, which
+        is a record that lies and is worse. */
+  sig.filter(s => s.state === "blocked").forEach(s => {
+    if (take(woKey(s.wo))) L.stopped.push({ ...s, why: "stranded" });
   });
-  return `<div>${DASH_BUCKETS.map(b => {
-    const rows = byBucket.get(b.id);
-    if (!rows || !rows.length) return "";
-    const head = groupHead(b.label, rows.length, b.id === "late" ? "bad" : "");
-    const body = rows.map(dashRow).join("");
-    if (b.id === "late" || b.id === "week") return head + body;
-    return `<details class="dg-fold"><summary>${head}</summary>${body}</details>`;
-  }).join("")}</div>`;
+  blockedNow().forEach(b => {
+    if (take(woKey(b.wo))) L.stopped.push({ ...b, why: "gate" });
+  });
+
+  /* 2. WAITING ON YOU — the only lane with an order inside it. */
+  waitingOnMe(email).forEach(s => {
+    if (take(woKey(s.wo))) {
+      L.you.push({ ...s, kind: "sign", date: s.wo.dueDate,
+        score: actScore({ base: s.state === "needs-evidence" ? "needsEvidence" : "signoffReady",
+          date: s.wo.dueDate, mine: s.mine, scarce: s.scarce, releases: s.releases,
+          selfReview: s.selfReview, rnd: typeof woIsRnd === "function" && woIsRnd(s.wo) }) });
+    }
+  });
+  if (role === "lead") {
+    sig.filter(s => s.state === "overridable").forEach(s => {
+      if (take(woKey(s.wo))) L.you.push({ ...s, kind: "override",
+        score: actScore({ base: "overridable", mine: s.mine }) });
+    });
+    (DB.budget || []).filter(b => typeof needsApproval === "function" && needsApproval(b)).forEach(b => {
+      if (take("budget|" + b.id)) L.you.push({ kind: "approval", rec: b, score: actScore({ base: "approval" }) });
+    });
+    mergedDeadlineItems().filter(i => !i.done && !i.who).forEach(i => {
+      if (take(i.coll + "|" + i.id)) L.you.push({ ...i, kind: "unassigned",
+        score: actScore({ base: "unassigned", date: i.date, rnd: i.rnd }) });
+    });
+  }
+  L.you.sort(actSort);
+
+  /* 3. DUE THIS WEEK — inside seven days, late first. Anything further out
+        lives behind one button and is NOT in the header's numeral. */
+  const later = [];
+  mergedDeadlineItems().filter(i => !i.done).forEach(i => {
+    const dd = daysUntil(i.date);
+    if (dd == null || dd > 7) { if (dd != null) later.push(i); return; }
+    if (take(i.coll + "|" + i.id)) L.due.push(i);
+  });
+  L.due.sort(dashSort);
+  L.laterCount = later.length;
+  L.laterNext = later.sort(dashSort)[0] || null;
+
+  /* 4. ON THE CLOCK — things running without you, and when you come back.
+        Structurally never empty once a season exists, which is the point. */
+  curingNow().forEach(c => { if (take(woKey(c.wo))) L.clock.push({ kind: "cure", ...c }); });
+  const s = window.SEASON;
+  const next = ((s && s.milestones) || [])
+    .filter(m => m.date && daysUntil(m.date) != null && daysUntil(m.date) >= 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+  if (next) L.clock.push({ kind: "milestone", ...next });
+  return L;
+}
+
+/* THE ANTI-HOLE MECHANISM, expressed in code rather than in a comment.
+
+   Exactly one function renders a lane, and `emptyFn` is a REQUIRED parameter —
+   a lane physically cannot ship without an empty state, because there is
+   nowhere to put one that skips it. That is the whole reason round four could
+   leave holes: every module decided for itself whether it had anything to say,
+   and five of them could answer "no" by returning "". */
+function laneShell(lane, rows, n, emptyFn, extra, scope) {
+  if (typeof emptyFn !== "function") throw new Error("a lane needs an empty state: " + lane.id);
+  const sc = scope != null ? scope : (n === 1 ? lane.scope.replace(/s$/, "") : lane.scope);
+  return `<div class="bmod dlane ${lane.cls}">
+    <div class="dlane-hd">
+      <span class="bnum ${n ? (lane.id === "stopped" || lane.id === "due" ? "bad" : lane.id === "you" ? "warn" : "") : ""}">${n}</span>
+      <span class="dlane-lbl">${lane.label}</span>
+      ${n && sc ? `<span class="gh-n tny">${esc(sc)}</span>` : ""}
+    </div>
+    ${rows || `<div class="dlane-empty">${emptyFn()}</div>`}
+    ${extra || ""}
+  </div>`;
+}
+
+/* One row, one shape, every lane. The chip is the only clickable thing in it —
+   the row itself is not a control, which is what keeps a screen reader from
+   announcing every line twice. */
+function laneRow(cls, main, meta) {
+  return `<div class="srow">${cls ? `<span class="sdot ${cls}"></span>` : ""}
+    <span class="sr-main">${main}</span>
+    ${meta ? `<span class="srow-meta">${meta}</span>` : ""}</div>`;
+}
+
+function laneStopped(L) {
+  const rows = L.stopped.slice(0, 6).map(s => {
+    const step = (s.why === "stranded" ? s.blocker : s.step) || s.step || {};
+    const who = whoLabel([s.wo.moldEngineer, s.wo.manufacturingEngineer]);
+    return laneRow("bad",
+      `${chip("workOrders", s.wo.id, s.wo.partName || s.wo.id)} <b>${esc(step.title || "")}</b> unsigned`,
+      `${who || "nobody assigned"}${s.why === "stranded"
+        ? " · signed past — the record is wrong" : ""}${s.releases ? ` · holds ${s.releases} step${s.releases === 1 ? "" : "s"}` : ""}`);
+  }).join("");
+  return laneShell(LANES[0], rows, L.stopped.length,
+    () => "Nothing is blocked. Every open run's next step is available to somebody.",
+    L.stopped.length > 6 ? `<div class="srow-meta">and ${L.stopped.length - 6} more</div>` : "");
+}
+
+function laneYou(L, email) {
+  const rows = L.you.slice(0, 6).map(a => {
+    if (a.kind === "approval") {
+      return laneRow("warn", `${chip("budget", a.rec.id, a.rec.item || a.rec.id)} over $50, awaiting your sign-off`,
+        `$${(typeof num === "function" ? num(a.rec.cost) : 0).toFixed(0)}`);
+    }
+    if (a.kind === "unassigned") {
+      return laneRow("warn", `${chip(a.coll, a.id, a.label)} has nobody on it`, a.date ? esc(a.date) : "no date");
+    }
+    const step = a.step || {};
+    if (a.kind === "override") {
+      return laneRow("warn", `${chip("workOrders", a.wo.id, a.wo.partName || a.wo.id)} <b>${esc(step.title || "")}</b>`,
+        `curing · ready ${esc((a.curing && a.curing.readyAt) || "")} · a lead can release it`);
+    }
+    const short = (a.missing || []).length;
+    return laneRow("warn",
+      `${chip("workOrders", a.wo.id, a.wo.partName || a.wo.id)} <b>${esc(step.title || "")}</b>`,
+      short
+        ? `needs ${esc((typeof evidenceLabels === "function" ? evidenceLabels(a.missing) : a.missing).join(", "))} first`
+        : `ready now${a.scarce ? " · few people can sign this" : ""}${a.releases ? ` · releases ${a.releases}` : ""}`);
+  }).join("");
+
+  /* THE EMPTY STATE THAT MATTERS MOST. A member with no trainings would
+     otherwise see an empty lane every day with nothing to do about it, which is
+     the worst possible first impression of a board built to answer "what do I
+     do next". Turn the gate into the next action. */
+  const empty = () => {
+    const gaps = trainingGaps(email);
+    if (gaps.length) {
+      const g = gaps[0];
+      const who = (g.who || []).map(u => u.name || u.email).slice(0, 3).join(", ");
+      return `Nothing needs your signature yet. <b>${g.n}</b> step${g.n === 1 ? "" : "s"} ${g.n === 1 ? "is" : "are"} waiting on
+        <b>${esc(g.name)}</b> training — ${who ? `${esc(who)} ${(g.who.length === 1 ? "has" : "have")} it.` : "nobody holds it yet."}
+        <button class="dg-more" onclick="setTab('people')">See People</button>`;
+    }
+    const ready = readyForAnyone(email).length;
+    return ready
+      ? `Nothing needs your signature. <b>${ready}</b> step${ready === 1 ? "" : "s"} ${ready === 1 ? "is" : "are"} ready for the people trained on ${ready === 1 ? "it" : "them"}.`
+      : "Nothing needs your signature, and nothing else is waiting on anybody either.";
+  };
+  return laneShell(LANES[1], rows, L.you.length, empty,
+    L.you.length > 6 ? `<div class="srow-meta">and ${L.you.length - 6} more</div>` : "");
+}
+
+function laneDue(L) {
+  const rows = L.due.slice(0, 7).map(i => {
+    const dd = daysUntil(i.date);
+    const late = dd != null && dd < 0;
+    return laneRow(late ? "bad" : "warn",
+      `${chip(i.coll, i.id, i.label)}${typeof rndBadge === "function" ? rndBadge(i.rnd) : ""}${
+        i.issues ? ` <span class="warn tny" title="${i.issues} open issue${i.issues > 1 ? "s" : ""}">⚑ ${i.issues}</span>` : ""}`,
+      `${esc(i.who || "nobody")} · ${esc(i.date)}${late ? ` (${Math.abs(dd)}d late)` : dd === 0 ? " (today)" : ` (${dd}d)`}`);
+  }).join("");
+  const empty = () => L.laterNext
+    ? `Nothing is due before <b>${esc(L.laterNext.date)}</b>. Next up: ${esc(L.laterNext.label)}.`
+    : `No part or run carries a date yet. <button class="dg-more" onclick="setTab('season')">Set them on Season</button>`;
+  const nLate = L.due.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
+  const scope = nLate === L.due.length ? (nLate === 1 ? "late" : "all late")
+    : nLate ? `items · ${nLate} late` : (L.due.length === 1 ? "item" : "items");
+  return laneShell(LANES[2], rows, L.due.length, empty,
+    L.laterCount ? `<button class="dg-more" onclick="setTab('workorders')">Later — ${L.laterCount}</button>` : "",
+    scope);
+}
+
+function laneClock(L, role) {
+  const cures = L.clock.filter(c => c.kind === "cure");
+  const ms = L.clock.find(c => c.kind === "milestone");
+  const s = window.SEASON;
+  const rows = cures.slice(0, 4).map(c => laneRow("warn",
+    `${chip("workOrders", c.wo.id, c.wo.partName || c.wo.id)} <b>${esc((c.step || {}).title || "")}</b>`,
+    `ready <span class="cure-at">${esc((c.hold && c.hold.readyAt) || "")}</span>${
+      c.hold && c.hold.resin ? ` · ${esc(c.hold.resin.name || c.hold.resinId || "")}` : ""}`)).join("");
+
+  const tail = [
+    ms ? `<div class="srow-meta">next: <b>${esc(ms.label)}</b> · ${esc(ms.date)} (${daysUntil(ms.date)}d)</div>` : "",
+    s && s.compDate
+      ? `<button class="b-tminus dlane-tminus" onclick="${role === "lead" ? "editSeason()" : "setTab('timeline')"}">
+          <span class="bnum">${Math.max(0, daysUntil(s.compDate) ?? 0)}</span>
+          <span class="bl">days to ${esc(s.compName || "competition")}</span></button>`
+      : `<div class="dlane-empty">No competition date set.${role === "lead"
+          ? ` <button class="dg-more" onclick="editSeason()">Set the season</button>` : ""}</div>`,
+  ].join("");
+
+  return laneShell(LANES[3], rows, cures.length,
+    () => "No cure is running — nothing is waiting on a clock.", tail);
+}
+
+/* ---------- the program strip ----------
+   Six facts that are a monthly read rather than a daily one, on one line each.
+   They were five separate modules, four of which could render nothing; here a
+   fact with no value prints a labelled em-dash instead of disappearing, so the
+   strip is the same height whatever the data says. */
+function dashProgram(role) {
+  const parts = (DB.parts || []).filter(p => typeof inSeason === "function" ? inSeason(p) : !p.retro);
+  const live = (DB.molds || []).filter(m => m.stage !== "Retired");
+  const bars = (typeof PART_STAGES !== "undefined" && typeof stageBreakdown === "function")
+    ? PART_STAGES.map(st => {
+        const b = stageBreakdown(st.key, st.vals, parts);
+        const tot = Object.values(b).reduce((a, n) => a + n, 0) || 1;
+        return `<div class="stagebreak"><div class="sb-label">${esc(st.label)}</div>
+          <div class="sb-bar">${["st-done", "st-mid", "st-0", "st-na"].map(k => b[k]
+            ? `<span class="sb-seg ${k}" style="width:${(b[k] / tot) * 100}%" title="${b[k]}"></span>` : "").join("")}</div>
+          <div class="sb-nums tny">${b["st-done"]} done · ${b["st-mid"]} under way · ${b["st-0"]} to start</div></div>`;
+      }).join("")
+    : "";
+  const molds = typeof moldsStageBar === "function" ? moldsStageBar(live) : "";
+
+  const openOrders = (DB.budget || []).filter(b => b.status !== "Reimbursed");
+  const openSum = openOrders.reduce((a, b) => a + (typeof num === "function" ? num(b.cost) : 0), 0);
+  const approvals = (DB.budget || []).filter(b => typeof needsApproval === "function" && needsApproval(b)).length;
+
+  const wk = typeof weekPlanWeeks === "function" ? weekPlanWeeks() : [];
+  const cur = wk.filter(w => w.weekOf <= today()).slice(-1)[0];
+  /* bookedCount() already exists in timeline.js and is the ONE definition of
+     'booked' — it walks STATIONS (which are [key, label] pairs, and whose values
+     live as fields directly on the week record) and deliberately excludes the
+     two free-text rows, so a note never counts as a booking. Re-deriving it here
+     is how the dashboard and the schedule would come to disagree. */
+  const booked = cur && typeof bookedCount === "function" ? bookedCount(cur) : 0;
+  const nStations = typeof STATIONS !== "undefined" ? STATIONS.length : 0;
+
+  const done = (DB.parts || []).filter(p => typeof partDone === "function" && partDone(p)).length;
+  const signed = (DB.workOrders || []).reduce((n, w) =>
+    n + (w.steps || []).filter(st => typeof isSigned === "function" && isSigned(st)).length, 0);
+  const open = mergedDeadlineItems().filter(i => !i.done);
+  const lateNow = open.filter(i => { const d = daysUntil(i.date); return d != null && d < 0; }).length;
+
+  const line = (label, val) => `<span class="dprog-i"><b>${val}</b> ${label}</span>`;
+  return `<div class="bmod dprog">
+    <div class="bmod-hd"><span>The program</span><span class="gh-n">${parts.length} part${parts.length === 1 ? "" : "s"} · ${live.length} mold${live.length === 1 ? "" : "s"}</span>
+      ${role === "lead" && window.SEASON && SEASON.compDate
+        ? `<button class="icon-btn" title="Edit season" aria-label="Edit season" onclick="editSeason()">✎</button>` : ""}</div>
+    <div class="dprog-bars">${bars}${molds}</div>
+    <div class="dprog-row">
+      ${line("unreimbursed", "$" + openSum.toFixed(0))}
+      ${approvals ? line("over $50 awaiting sign-off", approvals) : line("awaiting sign-off", "—")}
+      ${line(`of ${nStations} stations booked at RFS`, nStations ? booked : "—")}
+      ${role === "lead" ? dashStore() : ""}
+    </div>
+    <div class="dprog-row">
+      ${line(lateNow ? `days clean — ${lateNow} late right now` : "days clean", lateNow ? 0 : "✓")}
+      ${line(`layup${done === 1 ? "" : "s"} banked all season`, done)}
+      ${line(`step sign-off${signed === 1 ? "" : "s"} all season`, signed)}
+    </div>
+  </div>`;
+}
+
+/* The store, as one line. It was a module that returned "" whenever the shop
+   was tidy — which is the good case, and the case that left a hole. */
+function dashStore() {
+  if (typeof invIndex !== "function") return "";
+  const lots = (DB.lots || []).filter(o => o.stage !== "Empty");
+  const expired = lots.filter(lotExpired).length;
+  const low = lots.filter(lotIsLow).length;
+  const bits = [];
+  if (expired) bits.push(`${expired} expired`);
+  if (low) bits.push(`${low} low`);
+  const txt = bits.length ? bits.join(", ") : "nothing flagged";
+  return `<span class="dprog-i"><button class="link" onclick="view.invFlag='reorder';setTab('inventory')"><b>Store</b> ${esc(txt)}</button></span>`;
+}
+
+/* ---------- around the shop ----------
+   The things that are not work: where to go, what happened, and the fact. */
+function dashFoot() {
+  const tile = (go, label, meta) => `<button class="b-tile" onclick="${go}">
+    <span class="tl">${label}</span>${meta ? `<span class="tm">${meta}</span>` : ""}</button>`;
+  const ext = (url, label) => `<a class="b-tile" href="${esc(url)}" target="_blank" rel="noopener">
+    <span class="tl">${esc(label)}</span><span class="tm">pinned · opens in Google</span></a>`;
+  const pinned = (DB.documents || []).filter(d => d.pinned && d.url).slice(0, 3);
+
+  const ev = typeof dashFeedEvents === "function" ? dashFeedEvents().slice(0, 3) : [];
+  const feed = ev.length
+    ? ev.map(e => `<div class="srow"><span class="sr-main">${chip(e.coll, e.id, e.label)} ${esc(e.verb)}</span>
+        <span class="srow-meta">${esc(whoLabel(e.who) || "somebody")} · ${esc(String(e.ts).slice(0, 10))}</span></div>`).join("")
+    : `<div class="srow-meta">Nothing has been touched yet.</div>`;
+
+  const f = typeof factOfTheDay === "function" ? factOfTheDay(view.factN) : null;
+  const raceday = window.SEASON && SEASON.compDate === today();
+  return `<div class="bmod dfoot">
+    <div class="bmod-hd"><span>Around the shop</span></div>
+    <div class="lgrid">
+      ${tile("setTab('workorders');view.woIssues=true;render()", "Open issues", "runs with one open")}
+      ${tile("setTab('workorders');view.woLate=true;render()", "Late WOs", "past due only")}
+      ${tile("view.invFlag='reorder';setTab('inventory')", "Reorder list", "low + expired")}
+      ${tile("view.schedView='week';setTab('timeline')", "Week plan", "goals by person")}
+      ${tile("setTab('reports')", "Reports", "counts + CSV")}
+      ${tile("setTab('documents')", "Documents", "shelf + uploads")}
+      ${pinned.map(d => ext(d.url, d.title || d.id)).join("")}
+    </div>
+    <div class="dfoot-band">${feed}</div>
+    ${raceday
+      ? `<p class="fq">It's race day. Everything on this board already happened. Go run the car.</p>`
+      : f ? `<p class="fq">${esc(f.t)}</p>
+        <div class="fmeta"><span class="gh-n tny">${f.src === "lore" ? "team lore" : "the wider world"}</span>
+        <button class="dg-more" onclick="view={...view,factN:(view.factN||0)+1};render()">Another one</button></div>` : ""}
+  </div>`;
+}
+
+/* ---------- the page ---------- */
+function renderDashboard() {
+  const role = dashRole();
+  if (role === "guest") return renderShowcase(showcaseData());
+  const email = typeof myEmail === "function" ? myEmail() : "";
+  const L = laneFill(email, role);
+  const raceday = window.SEASON && SEASON.compDate === today();
+  return `<div class="dboard${raceday ? " raceday" : ""}">
+    ${laneStopped(L)}
+    ${laneYou(L, email)}
+    ${laneDue(L)}
+    ${laneClock(L, role)}
+    ${dashProgram(role)}
+    ${dashFoot()}
+  </div>`;
+}
+
+/* ---------- the guest showcase ----------
+   A DIFFERENT PAGE, not a filtered one. A work queue with everything filtered
+   out is a blank apology, and a guest has no work — they are looking at what
+   the team is building.
+
+   Nothing here is a chip. chip() emits an openRecord() button and a data-open
+   deep-link hook, and a guest tapping into a detail page is a dead end with a
+   permission error behind it. Plain labels, deliberately.
+
+   Built against a plain object so where the data comes from can change without
+   touching the render — a guest reads live collections today, and may read a
+   curated mirror later. */
+function showcaseData() {
+  const parts = (DB.parts || []).filter(p => typeof inSeason === "function" ? inSeason(p) : !p.retro);
+  const live = (DB.molds || []).filter(m => m.stage !== "Retired");
+  const s = window.SEASON || {};
+  return {
+    season: { name: s.compName || "", date: s.compDate || "", milestones: s.milestones || [] },
+    parts: parts.map(p => ({
+      name: p.partName || p.id, subteam: p.subteam || "",
+      status: typeof seasonStatus === "function" ? seasonStatus(p) : { cls: "st-0", label: "" },
+    })),
+    molds: { live: live.length, cut: live.filter(m => m.stage !== "Designed").length },
+    counts: {
+      layups: parts.filter(p => typeof partDone === "function" && partDone(p)).length,
+      signoffs: (DB.workOrders || []).reduce((n, w) =>
+        n + (w.steps || []).filter(st => typeof isSigned === "function" && isSigned(st)).length, 0),
+    },
+  };
+}
+
+function renderShowcase(d) {
+  const dd = d.season.date ? daysUntil(d.season.date) : null;
+  const bars = (typeof PART_STAGES !== "undefined" && typeof stageBreakdown === "function")
+    ? PART_STAGES.map(st => {
+        const rows = (DB.parts || []).filter(p => typeof inSeason === "function" ? inSeason(p) : !p.retro);
+        const b = stageBreakdown(st.key, st.vals, rows);
+        const tot = Object.values(b).reduce((a, n) => a + n, 0) || 1;
+        return `<div class="stagebreak"><div class="sb-label">${esc(st.label)}</div>
+          <div class="sb-bar">${["st-done", "st-mid", "st-0", "st-na"].map(k => b[k]
+            ? `<span class="sb-seg ${k}" style="width:${(b[k] / tot) * 100}%"></span>` : "").join("")}</div>
+          <div class="sb-nums tny">${b["st-done"]} done · ${b["st-mid"]} under way · ${b["st-0"]} to start</div></div>`;
+      }).join("")
+    : "";
+  return `<div class="dboard showcase">
+    <div class="bmod sc-head">
+      <div class="sc-team">Formula Electric at Berkeley · Composites · SN6</div>
+      ${d.season.date
+        ? `<div class="sc-tminus"><span class="bnum">${Math.max(0, dd ?? 0)}</span>
+             <span class="bl">days to ${esc(d.season.name || "competition")}</span></div>`
+        : `<div class="sc-tminus"><span class="bl">the season is being planned</span></div>`}
+    </div>
+    <div class="bmod sc-prog">
+      <div class="bmod-hd"><span>The car so far</span><span class="gh-n">${d.molds.cut} of ${d.molds.live} molds past design</span></div>
+      ${bars}
+    </div>
+    <div class="bmod sc-parts">
+      <div class="bmod-hd"><span>What we are making</span><span class="gh-n">${d.parts.length} part${d.parts.length === 1 ? "" : "s"} on the car</span></div>
+      ${d.parts.length
+        ? `<div class="sc-grid">${d.parts.map(p => `<div class="sc-card">
+            <span class="sc-name">${esc(p.name)}</span>
+            <span class="sc-sub">${esc(p.subteam)}</span>
+            <span class="stage ${p.status.cls}">${esc(p.status.label)}</span>
+          </div>`).join("")}</div>`
+        : `<p class="muted">The season has not been laid out yet.</p>`}
+    </div>
+    <div class="bmod sc-nums">
+      <div class="bmod-hd"><span>By the numbers</span></div>
+      <div class="dprog-row">
+        <span class="dprog-i"><b>${d.counts.layups}</b> layups banked</span>
+        <span class="dprog-i"><b>${d.counts.signoffs}</b> step sign-offs</span>
+        <span class="dprog-i"><b>${d.molds.live}</b> live molds</span>
+      </div>
+    </div>
+  </div>`;
 }

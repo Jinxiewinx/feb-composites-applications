@@ -2370,125 +2370,6 @@ await t("aggregates deadlines across tabs", () => {
   assert(items.find(i => i.id === "P-SN6-001").mine === true, "Simon's part should be mine");
   assert(items.find(i => i.id === "P-SN6-002").mine === false, "Nick's part not mine");
 });
-/* One list, grouped, each item in exactly one bucket. The page used to draw
-   deadlineItems() three times — mine / behind / upcoming — with filters that
-   overlap by construction, so a late item of yours appeared twice on one
-   screen and a lead had to diff three tables to notice. */
-await t("one grouped list, and every item appears in exactly one group", () => {
-  setTab("dashboard");
-  const html = main.innerHTML;
-  assert(html.includes("Your work"), "the list is the spine of the page: " + html.slice(0, 300));
-  assert(!html.includes("Upcoming team deadlines"), "the three near-identical tables are gone");
-  assert(html.includes("SOON PART"), "your item is listed");
-  // LATE PART is Nick's, so it is behind the team expander rather than absent.
-  assert(html.includes("Everything else"), "the team's work is one row away, not a second table");
-  // Scoped to the list: the part grid below it also names every part, which is
-  // its job. What must not happen again is the same row under three headings.
-  const listOnly = html.slice(html.indexOf('id="dash-list"'), html.indexOf("dashcar") >= 0 ? html.indexOf("dashcar") : html.length);
-  assert((listOnly.match(/SOON PART/g) || []).length === 1, "listed once, not once per filter: " + listOnly);
-  assert(/dg-label">This week/.test(html), "and it is grouped by when it is due: " + html);
-});
-await t("the alert strip: team-wide numerals lead the board, money is its own module", () => {
-  DB.budget = [{ id: "B-1", cost: "120", status: "Ordered" }, { id: "B-2", cost: "30", status: "Reimbursed" }];
-  setTab("dashboard");
-  const html = main.innerHTML;
-  assert(html.includes('class="dboard"'), "the page is the board grid — dboard, since .board is the Tickets kanban");
-  assert(html.includes('class="b-alerts"'), "the alert strip leads");
-  assert(!html.includes("heroband") && !html.includes("glance-grid"), "rounds one to three are gone");
-  // The board keeps its own class vocabulary out of the shared selectors the
-  // theme-proof audit samples (.card/.stat-tile/.bignum), so a future surface
-  // change on this page never re-arms that audit by accident.
-  assert(!/class="[^"]*\bcard\b/.test(html) && !html.includes("stat-tile") && !html.includes("bignum"),
-    "no sampled surface classes inside the board: " + (html.match(/class="[^"]*(card|stat-tile|bignum)[^"]*"/) || [""])[0]);
-  // LATE PART is Nick's, not Simon's — the strip counts the TEAM's lateness,
-  // because the strip is the lead's read while the list below is the member's.
-  assert(/<span class="bnum bad">1<\/span>\s*<span class="bl">Late/.test(html),
-    "one late item team-wide, red because nonzero: " + html.slice(html.indexOf("b-alerts"), html.indexOf("b-alerts") + 700));
-  assert(/<span class="bnum ">0<\/span>\s*<span class="bl">Blocked/.test(html), "Blocked reads an honest 0, not red");
-  assert(/class="bl">Unassigned/.test(html), "unassigned work is a first-class alert");
-  assert(/class="bl">Curing/.test(html), "so is what is in the oven");
-  // A running total with no cap, no target and no trend prompts no decision.
-  assert(!/Season spend/.test(html), "season spend is not a number anyone acts on");
-  // Unreimbursed money IS: its correct value is zero, so it needs no denominator.
-  assert(html.includes('class="bmod b-budget"'), "money is its own quiet module");
-  assert(/\$120<\/span><span class="bl">unreimbursed/.test(html), "the module carries what is owed: " + html.slice(-900));
-});
-await t("the strip goes all-clear only when nothing is late, blocked, unassigned or curing", () => {
-  const keepParts = DB.parts, keepBudget = DB.budget;
-  DB.parts = []; DB.budget = [];
-  setTab("dashboard");
-  // The strip's own green cell, not Shop status's "All clear —" empty line,
-  // which renders on a quiet shop regardless of deadlines.
-  assert(/<span class="bnum ok">/.test(main.innerHTML), "quiet program says so in green");
-  DB.parts = keepParts; DB.budget = keepBudget;
-  setTab("dashboard");
-  assert(!/<span class="bnum ok">/.test(main.innerHTML), "one late item silences the all-clear");
-});
-await t("countdown & streaks: T-minus from config, honest all-season counters, lead-only pencil", () => {
-  const iso = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-  window.SEASON = { compName: "FSAE Michigan", compDate: iso(10),
-    milestones: [{ date: iso(-2), label: "Past milestone" }, { date: iso(3), label: "All molds cut" }] };
-  setTab("dashboard");
-  let html = main.innerHTML;
-  assert(html.includes('id="b-count"'), "the module renders");
-  assert(/<span class="bnum">10<\/span>/.test(html), "T-minus reads whole days: " + html.slice(html.indexOf("b-count"), html.indexOf("b-count") + 400));
-  assert(/days to <b>FSAE Michigan/.test(html), "named, not generic");
-  assert(/next: All molds cut/.test(html) && !/Past milestone/.test(html), "nearest FUTURE milestone only");
-  // LATE PART is open and past due, so the clean streak is zero and says why.
-  assert(/<span class="sn bad">0<\/span>/.test(html) && /1 late right now/.test(html), "an open late item zeroes the streak: " + html.slice(html.indexOf("b-streak"), html.indexOf("b-streak") + 300));
-  assert(/all season/.test(html), "counters admit their denominator-free window");
-  // The pencil is the lead's; a member sees the readout only.
-  assert(html.includes("editSeason()"), "lead can edit the season");
-  fb.roster = { name: "Simon", role: "member" };
-  setTab("dashboard");
-  assert(!main.innerHTML.includes("editSeason()"), "a member cannot");
-  fb.roster = { name: "Simon", role: "lead" };
-  // No config, lead: an invitation, not an empty numeral.
-  window.SEASON = null;
-  setTab("dashboard");
-  assert(main.innerHTML.includes("No competition date set") && main.innerHTML.includes("Set the season"),
-    "missing config renders the setup path for a lead");
-  window.SEASON = { compName: "FSAE Michigan", compDate: iso(10) };
-});
-await t("fact of the day: deterministic per day, lore weighted double, offset rotates", () => {
-  assert(FACTS.length > 60, "the pool is real: " + FACTS.length);
-  const lore = FACTS.filter(f => f.src === "lore").length;
-  assert(lore > 30, "team lore dominates: " + lore);
-  assert(FACT_POOL.length === FACTS.length + lore, "lore entries counted twice in the pool");
-  assert(FACTS.every(f => !f.t.includes("—")), "no em dashes, per the writing rule");
-  const a = factOfTheDay(0), b = factOfTheDay(0);
-  assert(a && a.t === b.t, "same fact all day for everyone, no storage");
-  assert(factOfTheDay(1).t !== a.t, "'another one' offsets the index");
-  const html = renderDashboard();
-  assert(html.includes('class="bmod b-fact"') && html.includes(esc(a.t).slice(0, 40)), "the module shows today's fact");
-  // Race day: the module stops being a fact and the board wears gold.
-  const kept = window.SEASON;
-  window.SEASON = { compName: "FSAE Michigan", compDate: today() };
-  const rd = renderDashboard();
-  assert(rd.includes("dboard raceday") && rd.includes("race day"), "competition day flips the easter egg");
-  window.SEASON = kept;
-});
-await t("launchpad: filtered jumps respect setTab's flag clearing, pinned shelf is real links", () => {
-  DB.documents = [{ id: "DOC-1", title: "Master tracker", pinned: true, url: "https://docs.google.com/x" }];
-  setTab("dashboard");
-  const html = main.innerHTML;
-  assert(html.includes('class="bmod b-launch"'), "the module renders");
-  // setTab() wipes woLate/woMine/woDone, so the flag must be set AFTER the
-  // switch; invFlag is not wiped, so the inventory jump may lead with it.
-  assert(html.includes("setTab('workorders');view.woLate=true;render()"), "late-WO jump survives setTab's flag clearing");
-  assert(html.includes("view.invFlag='reorder';setTab('inventory')"), "reorder jump uses the surviving flag");
-  // The Datasheets and Standards tiles were removed on 2026-08-18 when those
-  // categories were unlisted. Assert they are GONE, so re-adding a tile that
-  // jumps to a section nobody can browse to fails here first.
-  assert(!html.includes("TDS + SDS") && !html.includes("the CS series"),
-    "no launchpad tile for the unlisted categories");
-  assert(html.includes("shelf + uploads"), "the Documents tile replaced them");
-  assert(/<a class="b-tile" href="https:\/\/docs\.google\.com\/x"/.test(html), "a pinned Google doc is an anchor, not a button");
-  DB.documents = [];
-});
-/* One row per physical thing. A part and its work order are the same object
-   seen twice, and the page counted both. On the SN5 archive that inflated
-   "behind schedule" by ~40%, in the largest type on the page. */
 await t("a part and its work order are one row, not two", () => {
   const late = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
   const later = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
@@ -2532,28 +2413,6 @@ await t("a part with no work order is never merged away — that is the alarm, n
   const merged = mergedDeadlineItems();
   assert(merged.length === 1 && merged[0].coll === "parts", "work with no traveler still shows: " + JSON.stringify(merged));
 });
-/* What is stopping work, and what is curing. Both are conditional sections —
-   they are empty on the SN5 archive (every seeded work order is retro) and a
-   blank 250px band at the top of a landing page reads as a broken app. */
-await t("a blocker stops the page, but only when it is actually in the way", () => {
-  DB.parts = []; DB.projects = [];
-  DB.workOrders = [{ id: "WO-B1", partName: "CLAMSHELL", status: "InWork", moldEngineer: "Nico", steps: [
-    { seq: 1, title: "Stack frozen", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
-    { seq: 2, title: "Machine mold", status: "open", buyoff: { name: "", date: "" } },
-  ] }];
-  assert(blockedNow().length === 1, "the unsigned blocker at the front is in the way");
-  setTab("dashboard");
-  assert(main.innerHTML.includes("Blocked"), "and it reaches the landing page instead of hiding inside the work order");
-  // Signed: nothing is blocked, and the section disappears rather than showing
-  // an all-clear nobody needs to read every week.
-  DB.workOrders[0].steps[0].buyoff = { name: "Simon", date: today() };
-  assert(blockedNow().length === 0, "signed, so nothing is stopping work");
-  // Retro records document, they do not enforce — which is why this is a
-  // conditional section under a tile that can honestly read 0.
-  DB.workOrders[0].steps[0].buyoff = { name: "", date: "" };
-  DB.workOrders[0].retro = true;
-  assert(blockedNow().length === 0, "a historical record is not a live blocker");
-});
 await t("curing shows a clock time, never a countdown", () => {
   // A countdown would need syncHoldTick's 60-second interval, which watches
   // `#main .step .gate` and re-renders the whole page — tearing the landing
@@ -2572,32 +2431,6 @@ await t("curing shows a clock time, never a countdown", () => {
   assert(!/\d+\s*h\s*\d+\s*m left/.test(html), "and not as a countdown that goes stale between renders");
   assert(!/class="step"/.test(html), "and never inside .step, which would arm the 60s re-render interval");
 });
-await t("an issue folds into the run it holds up, and carries a flag rather than a second row", () => {
-  const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-  DB.parts = [];
-  DB.workOrders = [
-    { id: "WO-MRG-1", partName: "MERGE ME", status: "InWork", dueDate: soon, moldEngineer: "Dana Chen", steps: [] },
-    { id: "WO-MRG-2", partName: "CLEAN", status: "InWork", dueDate: soon, moldEngineer: "Dana Chen", steps: [] },
-  ];
-  DB.projects = [
-    { id: "TKT-MA", kind: "issue", title: "Delam", status: "To Do", workOrderId: "WO-MRG-1", resolutionMethod: "", assignees: ["simon@berkeley.edu"], dueDate: "" },
-    { id: "TKT-MB", kind: "issue", title: "Pinhole", status: "To Do", workOrderId: "WO-MRG-1", resolutionMethod: "", assignees: [], dueDate: "" },
-    { id: "TKT-MC", kind: "issue", title: "Closed one", status: "Done", workOrderId: "WO-MRG-1", resolutionMethod: "UAI (Use As Is)", assignees: [], dueDate: "" },
-    // No work order in the list: an orphan must keep its own row rather than vanish.
-    { id: "TKT-MD", kind: "issue", title: "Orphan", status: "To Do", workOrderId: "WO-GONE", resolutionMethod: "", assignees: [], dueDate: soon },
-  ];
-  const rows = mergedDeadlineItems();
-  assert(!rows.some(r => ["TKT-MA", "TKT-MB", "TKT-MC"].includes(r.id)), "no issue keeps a row beside the run it belongs to");
-  const one = rows.find(r => r.id === "WO-MRG-1");
-  assert(one && one.issues === 2, "the run counts its OPEN issues, not its closed one: " + (one && one.issues));
-  assert(one.mine === true, "an issue assigned to you makes the run yours");
-  const clean = rows.find(r => r.id === "WO-MRG-2");
-  assert(clean && !clean.issues, "a run with no issues carries no flag");
-  assert(rows.some(r => r.id === "TKT-MD"), "an issue whose work order is not listed keeps its own row");
-  assert(dashRow(one).includes("⚑"), "and the flag renders on the row: " + dashRow(one));
-  assert(!dashRow(clean).includes("⚑"), "but not on a clean one");
-});
-
 await t("merging an issue never hides a date, and never absorbs a row into itself", () => {
   const soon = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
   const sooner = new Date(Date.now() + 1 * 86400000).toISOString().slice(0, 10);
@@ -2615,41 +2448,37 @@ await t("merging an issue never hides a date, and never absorbs a row into itsel
   assert(row.issues === 1, "and it carries the flag");
 });
 
-await t("the dashboard carries issues only — a shelved project never reaches the deadline list", () => {
+await t("no ticket of any kind is a deadline row — an issue is a flag on the run it holds up", () => {
+  /* Project tickets are shelved, and every ISSUE requires a workOrderId, so an
+     issue row was always a second line about a run already on this list. It was
+     minted only to be folded away; now it is never minted, and the flag is read
+     straight off openIssuesForWO(). */
   const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-  DB.parts = []; DB.workOrders = [];
+  DB.parts = [];
+  DB.workOrders = [{ id: "WO-1", partName: "ENDPLATE", status: "InWork", dueDate: soon, moldEngineer: "Simon", steps: [] }];
   DB.projects = [
     { id: "TKT-P", title: "Nosecone mold", kind: "project", status: "In Progress", dueDate: soon, assignees: ["simon@berkeley.edu"] },
     { id: "TKT-C", title: "Machine the plug", kind: "project", status: "In Progress", parentId: "TKT-P", dueDate: soon, assignees: ["simon@berkeley.edu"] },
     { id: "TKT-X", title: "Delam on the endplate", kind: "issue", status: "In Progress", workOrderId: "WO-1", dueDate: soon, assignees: ["simon@berkeley.edu"] },
   ];
   const items = deadlineItems();
-  assert(!items.some(i => i.id === "TKT-P" || i.id === "TKT-C"), "no project ticket, and no sub-ticket");
-  const iss = items.find(i => i.id === "TKT-X");
-  assert(iss && iss.kind === "Issue", "the issue is there, labelled Issue: " + JSON.stringify(iss && iss.kind));
+  assert(!items.some(i => i.coll === "projects"), "no ticket of any kind reaches the deadline list");
+  const row = mergedDeadlineItems().find(r => r.id === "WO-1");
+  assert(row && row.issues === 1, "the issue reaches the board as a flag on its run: " + JSON.stringify(row && row.issues));
   setTab("dashboard");
-  const html = main.innerHTML;
-  assert(html.includes("Delam on the endplate"), "and it renders");
-  assert(!html.includes("part of"), "nothing claims a parent — issues are flat now");
+  assert(main.innerHTML.includes("ENDPLATE"), "and the run is what you can open");
 });
-await t("an issue carrying a legacy parentId still renders, flat", () => {
-  // parentId is left in the data on purpose (un-shelving restores it), so a
-  // pre-shelf issue can still carry one. Nothing may read it as nesting.
+
+await t("a legacy parentId resolves to null rather than crashing", () => {
+  /* parentId is left in the data on purpose — un-shelving restores it — so a
+     pre-shelf issue can still carry one pointing at a ticket that is gone.
+     Nothing may read it as nesting, and nothing may throw on it. */
   DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "issue", status: "To Do", parentId: "TKT-GONE", workOrderId: "WO-1", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
   assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
   setTab("dashboard");
-  assert(main.innerHTML.includes("Orphan"), "the issue is listed");
-  assert(!main.innerHTML.includes("part of"), "and doesn't claim a parent it can't name");
+  assert(!main.innerHTML.includes("part of"), "and nothing claims a parent it cannot name");
 });
-await t("dashRow closes exactly one paren per case, future/late/today (regression: the old table row used to double-close future dates and never close late ones)", () => {
-  const soonRow = dashRow({ date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
-  assert(/\(3d\)/.test(soonRow) && !/\(3d\)\)/.test(soonRow), "future date: single close paren: " + soonRow);
-  const lateRow = dashRow({ date: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10), kind: "Part", coll: "parts", id: "x", label: "x" });
-  assert(/\(5d late\)/.test(lateRow), "late date gets its closing paren too: " + lateRow);
-  assert(lateRow.includes('class="warn"'), "a late date reads red");
-  const todayRow = dashRow({ date: today(), kind: "Part", coll: "parts", id: "x", label: "x" });
-  assert(/\(today\)/.test(todayRow), "today: " + todayRow);
-});
+
 await t("isMine: exact name/first/email match, NOT shared-first-name overmatch", () => {
   fb.user = { uid: "u2", email: "nick.ortiz@berkeley.edu", name: "Nick Ortiz" };
   fb.roster = { name: "Nick Ortiz", role: "member" };
@@ -2661,29 +2490,21 @@ await t("isMine: exact name/first/email match, NOT shared-first-name overmatch",
   fb.user = { uid: "u1", email: "simon@berkeley.edu", name: "Simon Starbuck" };
   fb.roster = { name: "Simon", role: "lead" };
 });
-await t("dashboard deadline items reflect ticket kind and migrated status, not raw fields", () => {
-  // Deliberately doesn't touch DB.parts/DB.workOrders — later tests in this
-  // file depend on fixtures set earlier (e.g. P-SN6-001 for openRecord below).
+await t("the issue flag counts only what is still open, through the status migration", () => {
+  /* The flag is read off openIssuesForWO(), which filters on projStatus() — so
+     a pre-migration record whose raw status is one of the old four values is
+     still counted correctly, and a disposed issue stops being counted rather
+     than sticking on the row forever. */
+  DB.parts = [];
+  DB.workOrders = [{ id: "WO-D1", partName: "SPLITTER", status: "InWork", dueDate: today(), moldEngineer: "Simon", steps: [] }];
   DB.projects = [
-    { id: "TKT-D1", kind: "issue", title: "issue kind on dashboard", assignees: ["simon@berkeley.edu"], status: "In Progress" },
-    { id: "TKT-D2", kind: "project", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" }, // pre-migration record
+    { id: "TKT-D1", kind: "issue", title: "still open", workOrderId: "WO-D1", status: "In Progress", assignees: [] },
+    { id: "TKT-D3", kind: "issue", title: "legacy done", workOrderId: "WO-D1", status: "Done", assignees: [] },
+    { id: "TKT-D2", kind: "project", title: "shelved", workOrderId: "WO-D1", status: "In Progress", assignees: [] },
   ];
-  DB.projects.push({ id: "TKT-D3", kind: "issue", title: "legacy status", assignees: ["simon@berkeley.edu"], status: "Done" });
-  const items = deadlineItems();
-  assert(items.find(i => i.id === "TKT-D1").kind === "Issue", "an issue is labelled Issue, peer to Part/WO");
-  assert(!items.find(i => i.id === "TKT-D2"), "a project-kind ticket is shelved and never reaches this list");
-  assert(items.find(i => i.id === "TKT-D3").done === true, "legacy Done status still reads as done through projStatus()");
-});
-await t("dashboard Watched card uses the new colored .status pill, not the old flat .pill", () => {
-  DB.projects = [{ id: "TKT-D3", kind: "issue", title: "watched issue", status: "Blocked", // legacy status string
-    watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
-  const html = renderDashboard();
-  assert(html.includes('class="status onhold"'), "migrated Blocked->On Hold renders with the new dot-pill class: " + html.slice(0, 400));
-  assert(html.includes(">On Hold<"), "shows the migrated label, not the stale 'Blocked': " + html);
-  // .kind, not .kindbadge. The page used to render both, twelve lines apart —
-  // two visual answers to "what type of record is this" on one screen. The
-  // Tickets tab keeps .kindbadge, where Project-vs-Issue is the point.
-  assert(html.includes('<span class="kind">Issue</span>'), "one micro-tag idiom on this page, not two: " + html.slice(0, 400));
+  const row = mergedDeadlineItems().find(r => r.id === "WO-D1");
+  assert(row.issues === 1, "one open issue, not three: " + row.issues);
+  assert(openIssuesForWO("WO-D1").length === 1, "and the run's own page agrees, because it is the same filter");
 });
 
 await t("the feed merges touches, comments and buy-offs — one event per record per day, retro archive excluded", () => {
@@ -2705,51 +2526,147 @@ await t("the feed merges touches, comments and buy-offs — one event per record
   assert(ev[0].ts >= ev[ev.length - 1].ts, "newest first");
   DB.workOrders = [];
 });
-await t("the feed prints a NAME, never a raw email (the overflow bug's regression test)", () => {
+/* ---------- the pit board ----------
+   Round five replaced eleven modules with four lanes, and the reason was not
+   taste: five of those eleven could render nothing at all, so on a quiet week
+   — or on the SN5 archive, where every run is retro — the page had holes in
+   the middle of it. These are the assertions that keep that fixed. */
+await t("every lane renders, always, and a lane with nothing says so with a number in it", () => {
+  /* THE ANTI-HOLE PROPERTY. An empty lane is information — "nothing is
+     blocked" is worth reading at a Monday meeting — but a lane that vanishes
+     is a gap in a grid, which is what round four shipped. */
+  signInAsLead();
+  DB.parts = []; DB.projects = []; DB.workOrders = []; DB.budget = []; DB.molds = [];
+  setTab("dashboard");
+  const html = main.innerHTML;
+  ["l-stopped", "l-you", "l-due", "l-clock"].forEach(c =>
+    assert(html.includes(c), "the " + c + " lane is on the page even with no data at all"));
+  assert((html.match(/dlane-empty/g) || []).length >= 4, "and each one is saying something");
+  assert(/Nothing is blocked/.test(html), "in words: " + html.slice(html.indexOf("l-stopped"), html.indexOf("l-stopped") + 260));
+  assert(html.includes("dprog"), "the program strip is there too");
+  assert(html.includes("dfoot"), "and the footer");
+});
+
+await t("a lane cannot be written without an empty state", () => {
+  /* The guarantee is structural rather than remembered: laneShell is the only
+     thing that renders a lane and emptyFn is a required parameter, so there is
+     nowhere to put a lane that skips one. */
+  let threw = false;
+  try { laneShell(LANES[0], "", 0); } catch (e) { threw = true; }
+  assert(threw, "laneShell refuses to render a lane with no empty state");
+});
+
+await t("the alert strip is gone — a fact is not drawn twice", () => {
+  /* It counted "Late 3" and a module below listed the three: one fact in two
+     places that could disagree. Each lane header carries its own numeral now,
+     attached to the thing it counts. */
+  DB.parts = []; DB.workOrders = []; DB.projects = [];
+  const html = renderDashboard();
+  assert(!html.includes("b-alerts"), "no strip");
+  assert((html.match(/dlane-hd/g) || []).length === 4, "four lane headers, each with its own number");
+});
+
+await t("one thing appears in exactly one lane, and the headers say what they count", () => {
+  /* First-lane-wins, so a run that is late AND has a step you can sign is in
+     "waiting on you" only. The numerals therefore do NOT sum to everything
+     open — which is why each header prints its scope, and why lane 3's fold
+     says "Later — N" rather than implying it is the whole list. */
+  signInAsLead();
+  const late = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+  DB.parts = []; DB.projects = []; DB.budget = [];
+  DB.workOrders = [{ id: "WO-P1", partName: "BOTH", status: "InWork", dueDate: late,
+    moldEngineer: "Simon", createdBy: "x@y.z", steps: [{ title: "Layup", status: "" }] }];
+  const L = laneFill(myEmail(), "lead");
+  const inYou = L.you.filter(a => a.wo && a.wo.id === "WO-P1").length;
+  const inDue = L.due.filter(i => i.id === "WO-P1").length;
+  assert(inYou === 1 && inDue === 0,
+    "signable beats merely late, and it is not in both: you=" + inYou + " due=" + inDue);
+  const html = renderDashboard();
+  assert(html.includes("Waiting on you"), "the lane is on the page");
+  /* Singular for one, plural for more. It matters because the numerals do NOT
+     sum to everything open — first-lane-wins means a run counted here is not
+     counted in Due — so each header has to say what its own number is of. */
+  assert(html.includes(">step<"), "and its header says its number is of steps, singular for one");
+});
+
+await t("a blocker in the way stops the run; one that is not in the way does not", () => {
+  signInAsLead();
+  DB.parts = []; DB.projects = []; DB.budget = [];
+  DB.workOrders = [{ id: "WO-B1", partName: "CLAMSHELL", status: "InWork", moldEngineer: "Nico",
+    createdBy: "x@y.z", steps: [
+      { seq: 1, title: "Stack frozen", status: "Skipped", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
+      { seq: 2, title: "Machine mold", status: "", buyoff: { name: "", date: "" } },
+    ] }];
+  const L = laneFill(myEmail(), "lead");
+  assert(L.stopped.length === 1, "a run standing past an unsigned blocker is stopped: " + L.stopped.length);
+  const html = renderDashboard();
+  assert(html.includes("CLAMSHELL"), "and it reaches the landing page rather than hiding inside the work order");
+  assert(/Stack frozen/.test(html), "naming the step that is in the way");
+
+  // Signed, and the run is nobody's emergency any more.
+  DB.workOrders[0].steps[0].status = "";
+  DB.workOrders[0].steps[0].buyoff = { name: "Nico", email: "n@feb.test", date: today() };
+  assert(laneFill(myEmail(), "lead").stopped.length === 0, "a signed blocker stops nothing");
+});
+
+await t("an issue folds into the run it holds up, and carries a flag rather than a second row", () => {
+  /* Kept from the old board, because the reason has not changed: an issue
+     REQUIRES a workOrderId, so a separate row for it was a second line about
+     the same physical thing. What changed is that the fold no longer runs
+     through a dead `kind: "Issue"` branch — openIssuesForWO() answers it. */
+  signInAsLead();
+  const due = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  DB.parts = [];
+  DB.workOrders = [{ id: "WO-I1", partName: "NOSECONE", status: "InWork", dueDate: due,
+    moldEngineer: "Simon", steps: [] }];
+  DB.projects = [{ id: "PROJ-I1", kind: "issue", title: "Bag leak", workOrderId: "WO-I1",
+    status: "To Do", dueDate: due, assignees: [] }];
+  const merged = mergedDeadlineItems();
+  assert(merged.length === 1, "one row for one physical thing: " + JSON.stringify(merged.map(m => m.id)));
+  assert(merged[0].issues === 1, "carrying the count as a flag: " + merged[0].issues);
+  assert(!merged.some(m => m.kind === "Issue"), "and no issue row of its own");
+});
+
+await t("the feed prints a NAME, never a raw email", () => {
+  /* The regression test from the overflow bug: a raw address is both wider
+     than the column and less use than the person's name. */
+  signInAsLead();
   DB.users = [{ email: "nick@berkeley.edu", name: "Nick Jepsen", role: "member" }];
-  DB.projects = [{ id: "TKT-D4", kind: "issue", title: "watched thing", status: "In Progress",
-    watchers: ["simon@berkeley.edu"], updatedAt: "2026-08-01T00:00:00", updatedBy: "nick@berkeley.edu" }];
-  const html = renderDashboard();
-  const act = html.slice(html.indexOf("b-activity"));
-  assert(act.includes("Nick Jepsen"), "resolved through whoLabel/userName");
-  assert(!act.includes("nick@berkeley.edu"), "the unbreakable email token is gone");
-  assert(!/<table/.test(act.slice(0, act.indexOf("</div></div>"))) || !act.includes('class="list dash"'),
-    "and it is stacked rows, not the 3-column table that could not fit the module");
-});
-
-await t("shop status merges blocked + curing + inventory, with severity dots", () => {
-  DB.items = [{ id: "BIN-SN6-001", cls: "BIN", name: "Resin shelf", stage: "Active" }];
-  DB.lots = [
-    { id: "RSN-D1", cls: "RSN", name: "old resin", role: "resin", stage: "Open", location: "BIN-SN6-001", expiresOn: "2020-01-01" },
-    { id: "RSN-D2", cls: "RSN", name: "hardener", role: "hardener", stage: "Open", location: "BIN-SN6-001" },
-    { id: "CON-D1", cls: "CON", name: "tape", stage: "Open", lowFlag: "Yes — reorder" },
-  ];
-  const html = renderDashboard();
-  const st = html.slice(html.indexOf('id="dash-status"'));
-  assert(st.includes("expired lot"), "expired surfaces");
-  assert(st.includes("chemical storage warning"), "the §6 violation surfaces");
-  assert(st.includes("running low"), "low surfaces");
-  assert(st.includes('class="sdot bad"') && st.includes('class="sdot warn"'), "severity dots carry the color");
-});
-
-await t("a clean shop reads ALL CLEAR on one line, never a missing box", () => {
-  DB.items = []; DB.lots = []; DB.stackplans = []; DB.workOrders = []; DB.projects = [];
-  const html = renderDashboard();
-  const st = html.slice(html.indexOf('id="dash-status"'));
-  assert(st.includes("All clear"), "the module never disappears: " + st.slice(0, 300));
-  assert(st.includes('class="sdot ok"'), "with the green dot");
-});
-
-await t("quiet buckets fold; Late and This week stay open", () => {
-  const mk = (id, dd) => ({ id, partName: id, layupDeadline: new Date(Date.now() + dd * 86400000).toISOString().slice(0, 10), moldEngineer: "X" });
-  DB.parts = [mk("P-L", -3), mk("P-W", 2), mk("P-S", 10), mk("P-LT", 30)];
+  DB.parts = [{ id: "P-F1", partName: "STRAKE", updatedAt: new Date().toISOString(), updatedBy: "nick@berkeley.edu" }];
   DB.workOrders = []; DB.projects = [];
   const html = renderDashboard();
-  const list = html.slice(html.indexOf('id="dash-list"'));
-  const lateAt = list.indexOf(">Late<"), foldAt = list.indexOf("dg-fold");
-  assert(lateAt >= 0 && foldAt > lateAt, "Late renders before any fold");
-  assert((list.match(/dg-fold/g) || []).length >= 2, "Next two weeks and Later fold: " + (list.match(/dg-fold/g) || []).length);
+  assert(!/nick@berkeley\.edu/.test(html), "no raw address on the board");
 });
+
+await t("the guest gets a different page, not an emptier one", () => {
+  /* A work queue with everything filtered out is a blank apology. And nothing
+     on the showcase is a chip(): chip emits an openRecord button and a
+     data-open deep link, and a guest tapping into a detail page is a dead end
+     with a permission error behind it. */
+  signInAsLead();
+  DB.parts = [{ id: "P-G1", partName: "NOSECONE", subteam: "AERO", retro: false, rnd: false,
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" }];
+  DB.workOrders = []; DB.projects = []; DB.molds = [];
+  fb.guest = true;
+  const html = renderDashboard();
+  fb.guest = false;
+  assert(html.includes("showcase"), "the showcase, not the board");
+  assert(!html.includes("dlane"), "with no work lanes at all");
+  assert(html.includes("NOSECONE"), "it says what the team is making");
+  assert(!/data-open=/.test(html) && !/openRecord\(/.test(html),
+    "and nothing on it is a link into a record a guest cannot read");
+});
+
+await t("the showcase is built from a plain object, so where the data comes from can change", () => {
+  signInAsLead();
+  DB.parts = [{ id: "P-G2", partName: "UNDERTRAY", subteam: "AERO", retro: false, rnd: false,
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" }];
+  const d = showcaseData();
+  assert(Array.isArray(d.parts) && d.parts[0].name === "UNDERTRAY", "parts carry names");
+  assert(d.parts[0].status && d.parts[0].status.label, "and a status in words, not a colour");
+  assert(typeof d.counts.layups === "number" && typeof d.molds.live === "number", "and the counts are numbers");
+});
+
 
 console.log("cross-links + backup:");
 await t("openRecord jumps to a tab's detail", () => { openRecord("parts", "P-SN6-001"); assert(view.tab === "parts" && view.mode === "detail" && view.id === "P-SN6-001"); });
@@ -2900,12 +2817,17 @@ await t("openModal honors [autofocus] over the first field (new-ticket led with 
   assert(openModal.toString().includes("[autofocus]"), "openModal looks for it");
 });
 await t("deadlineItems shows display names, never raw emails", () => {
+  /* The overflow bug's regression test. It used to run through an issue's
+     assignees; issues are not rows any more, so it runs through the field that
+     still carries addresses — a work order's engineers. */
   DB.users = [{ email: "nico@b.edu", name: "Nico Alvarez", role: "member" }];
-  DB.parts = []; DB.workOrders = [];
-  DB.projects = [{ id: "T-WHO", kind: "issue", title: "t", status: "To Do", dueDate: today(), assignees: ["nico@b.edu"] }];
-  const it = deadlineItems().find(i => i.id === "T-WHO");
+  DB.parts = []; DB.projects = [];
+  DB.workOrders = [{ id: "WO-WHO", partName: "STRAKE", status: "InWork", dueDate: today(),
+    moldEngineer: "nico@b.edu", steps: [] }];
+  const it = deadlineItems().find(i => i.id === "WO-WHO");
   assert(it.who === "Nico Alvarez", "name, not email: " + it.who);
 });
+
 await t("deadlineItems drops 'N/A (Flat)' from Who — it's a stage value, not a person", () => {
   // 7 of the 33 SN5 parts carry it in moldEngineer, and it rendered as a name.
   DB.projects = []; DB.workOrders = [];
