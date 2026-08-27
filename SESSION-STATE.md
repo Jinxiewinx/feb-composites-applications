@@ -20,12 +20,20 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**All five items of the pass are LIVE.** Rules went first and alone, then
-hosting, and both were verified off the host rather than from "Deploy complete".
-`APP_VERSION` is still 2.2.2 and `config/release` is untouched, so nobody has
-been told: no reload banner, no What's New. Announcing is a lead pressing
-`⋯ → Announce this release`, and the version bump is `tools/release.mjs`.
-The plan is at `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+**v3.0.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
+and verified by fetching `core.js` off the host. Major by CHANGELOG's own
+rubric: Season editing moved off the tab and the dashboard is a different page,
+which is "the way the team works changes".
+
+**Nobody has been told yet.** `config/release` is untouched, so there is no
+reload banner and no What's New panel — anyone still on v2.2.2 stays there
+until a lead opens the app and presses `⋯ → Announce this release`. The
+#composites note and its two pictures are printed at the end of
+`node tools/release.mjs` (re-run it with `--dry` to reprint them) and posting it
+is Simon's call, not the script's. Both are still outstanding.
+
+The plan for the five-item pass is at
+`C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
 
 **GUEST MODE IS ON, AND THE APP IS PUBLICLY READABLE.** Anonymous sign-in is
 enabled on the project and `autodeleteAnonymousUsers` is on, so a visit no
