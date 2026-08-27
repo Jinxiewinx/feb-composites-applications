@@ -31,8 +31,10 @@ var APP_VERSION = "2.1.2";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "All 25 manufacturer datasheets are back on the Documents tab — TDS and SDS for everything we actually buy, searchable, opening in the app.",
-  "The shop printables guide has come off that tab.",
+  "Coupons, test panels, layup trials and mold shakedowns can now be marked R&D. They are real parts with real deadlines and they still show up on your parts list, your work orders and the dashboard — they just stay off the Season blueprint and out of the Master Tracker, because they are not going on the car.",
+  "An R&D part says so everywhere it matters: a black R&D badge on screen, a stamp on its printed traveler, a boxed R&D on its 4x1 label, and a line on the page you get when you scan its QR.",
+  "Start one with the R&D part button beside New Part, or R&D run beside New WO. A run started from an R&D part is already marked — there is nothing to remember.",
+  "Got it wrong? While a part has no work order against it, R&D is a checkbox anyone can flip. Once work has started, only a lead can move it into the season, only once, and it keeps the same ID — so its label and its traveler stay valid.",
 ];
 
 /* ---------- config/release ----------
