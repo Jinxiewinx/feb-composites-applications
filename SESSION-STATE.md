@@ -20,17 +20,27 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v3.0.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
-and verified by fetching `core.js` off the host. Major by CHANGELOG's own
-rubric: Season editing moved off the tab and the dashboard is a different page,
-which is "the way the team works changes".
+**v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
+and verified by fetching `core.js` off the host. v3.0.0 went out an hour
+earlier the same day — Major by CHANGELOG's own rubric, since Season editing
+moved off the tab and the dashboard became a different page.
 
-**Nobody has been told yet.** `config/release` is untouched, so there is no
-reload banner and no What's New panel — anyone still on v2.2.2 stays there
-until a lead opens the app and presses `⋯ → Announce this release`. The
-#composites note and its two pictures are printed at the end of
-`node tools/release.mjs` (re-run it with `--dry` to reprint them) and posting it
-is Simon's call, not the script's. Both are still outstanding.
+v3.1.0 is Simon's correction to v3.0.0's Season: the compactness was right, the
+two-abreast flow was not. `.sline` and `.shead` now share ONE declaration of
+eight fixed grid tracks, so the lines are columnated rather than each sizing its
+own auto tracks. Two fields came back onto the line with the width — `layupType`
+and `moldLocation` are `where: "grid"` in SEASON_COLS again. **Do not reach for
+`columns:` on `.seasongrid` a third time**: it is what made the fields land in a
+different place on every line.
+
+**Nobody has been told about either one.** `config/release` is untouched, so
+there is no reload banner and no What's New panel — anyone still on v2.2.2 stays
+there until a lead opens the app and presses `⋯ → Announce this release`. That
+one press covers both releases; the panel shows v3.1.0's WHATS_NEW, so v3.0.0's
+five items (guest mode, the pit board, the cut sheets, the splash) are now only
+in CHANGELOG.md — worth saying out loud in the #composites note, which the
+script prints and never posts. Re-run `node tools/release.mjs 3.1.0 --dry` to
+reprint it. Both are still outstanding and both are Simon's call.
 
 The plan for the five-item pass is at
 `C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
