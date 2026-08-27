@@ -8331,6 +8331,187 @@ await t("Start fresh from the modal produces exactly the plain new run", async (
     "no carries leak into a fresh start");
 });
 
+/* ---------- what can I actually do right now? ----------
+   The data behind the new dashboard, tested before any of it is drawn. These
+   are the assertions that stop the board promising a signature the button then
+   refuses — which is the one failure mode a "what do I do next" page cannot
+   survive, because it teaches people not to believe it. */
+console.log("waiting on you:");
+
+/* A run whose steps can be posed at each rung of buyoff()'s ladder in turn. */
+function woLadder(over) {
+  return Object.assign({
+    id: "WO-SN6-700", partName: "LADDER", status: "In progress", retro: false,
+    createdBy: "lead@feb.test", moldEngineer: "", manufacturingEngineer: "",
+    steps: [
+      { title: "Stack frozen", status: "" },
+      { title: "Layup", status: "" },
+      { title: "Debulk", status: "" },
+    ],
+  }, over || {});
+}
+
+await t("an untagged step with nothing before it is simply ready", () => {
+  signInAsLead();
+  DB.workOrders = [woLadder()];
+  const all = signableSteps(myEmail());
+  assert(all.length === 1, "one open run, one live step: " + all.length);
+  assert(all[0].state === "ready", "state is: " + all[0].state);
+  assert(all[0].i === 0, "and it is the first unsigned step");
+  assert(all[0].releases === 2, "which would release the two behind it: " + all[0].releases);
+});
+
+await t("a signed step moves the live step along, and a complete run leaves the list", () => {
+  signInAsLead();
+  const w = woLadder();
+  w.steps[0].buyoff = { name: "Lead", email: "lead@feb.test", date: today() };
+  DB.workOrders = [w];
+  assert(signableSteps(myEmail())[0].i === 1, "the next open step is the live one");
+  DB.workOrders = [woLadder({ status: "Complete" })];
+  assert(signableSteps(myEmail()).length === 0, "a finished run has nothing waiting");
+  DB.workOrders = [woLadder({ retro: true })];
+  assert(signableSteps(myEmail()).length === 0, "and history signs nothing — same rule as everywhere else");
+});
+
+await t("a blocker BEFORE the live step blocks it; a blocker AT it is the best item on the page", () => {
+  /* blockerOpenBefore looks strictly before the index, so when the next step IS
+     the blocker it returns null — and that is not an oversight, it is the whole
+     point. Sign it and the run moves. Getting this backwards would bury the
+     highest-value action on the board under everything else. */
+  signInAsLead();
+  const w = woLadder();
+  w.steps[0].blocker = true;
+  DB.workOrders = [w];
+  const at = signableSteps(myEmail())[0];
+  assert(at.state === "ready" && at.isBlockerStep,
+    "the blocker itself is signable, not blocked by itself: " + at.state);
+
+  /* To be BEHIND a blocker the run has to have walked past one, and it cannot
+     do that while the blocker is merely unsigned — findIndex would make the
+     blocker itself the live step. It happens when the blocker was failed or
+     skipped, which stepState treats as "not open" and isSigned still calls
+     unsigned. That is the record that lies, and it is worth its own state. */
+  const w2 = woLadder();
+  w2.steps[0].blocker = true;
+  w2.steps[0].status = "Skipped";
+  DB.workOrders = [w2];
+  const beh = signableSteps(myEmail())[0];
+  assert(beh.i === 1, "the live step is past the blocker: " + beh.i);
+  assert(beh.state === "blocked" && beh.blocker, "and the run reads as blocked: " + beh.state);
+});
+
+await t("training gates the step, and the gap is reported as the next action rather than a dead end", () => {
+  /* The worst first impression this board could give a first-year is an empty
+     "waiting on you" every day with no way to learn why. */
+  signInAsLead();
+  const w = woLadder();
+  w.steps[0].rule = { training: "wetlayup" };
+  DB.workOrders = [w];
+  /* Grants live on ROSTER DOCS and arrive in DB.users — hasTraining() reads
+     there, not off fb.roster, which is what makes it a synchronous pure
+     lookup. Seeding the wrong one is a test that passes for the wrong reason. */
+  DB.users = [{ email: myEmail(), name: "Simon Starbuck", role: "lead", trainings: {} }];
+  const s0 = signableSteps(myEmail())[0];
+  assert(s0.state === "untrained", "no grant, no signature: " + s0.state);
+  assert(waitingOnMe(myEmail()).length === 0, "so it is not waiting on you");
+
+  const gaps = trainingGaps(myEmail());
+  assert(gaps.length === 1 && gaps[0].n === 1, "the gap is counted: " + JSON.stringify(gaps.map(g => [g.id, g.n])));
+  assert(gaps[0].id === "wetlayup", "and named, so the page can say which training unlocks the work");
+
+  assert(gaps[0].who.length === 0, "and nobody holds it yet, which is the thing to say out loud");
+  DB.users = [{ email: myEmail(), name: "Simon Starbuck", role: "lead", trainings: { wetlayup: { by: "x", at: today() } } }];
+  assert(signableSteps(myEmail())[0].state === "ready", "granted, it is ready");
+  assert(trainingGaps(myEmail()).length === 0, "and the gap closes");
+});
+
+await t("missing evidence DEMOTES a step, it never removes it", () => {
+  /* parts.js and workorders.js both say this out loud in their own comments:
+     pressing the button is how you find out what is missing and get the control
+     that fixes it. A dashboard that hid those steps would be hiding the errand
+     as well as the signature. */
+  signInAsLead();
+  const w = woLadder({ moldEngineer: "Simon" });   // isMine() matches signerName()
+  w.steps[0].rule = { needs: ["note"] };
+  DB.workOrders = [w];
+  const s0 = signableSteps(myEmail())[0];
+  assert(s0.state === "needs-evidence", "state says what is short: " + s0.state);
+  assert(s0.missing.length > 0, "and what specifically");
+  assert(waitingOnMe(myEmail()).some(x => x.state === "needs-evidence"),
+    "and it is STILL waiting on you — one errand short is not the same as barred");
+});
+
+await t("a cure hold stops a member and offers a lead an override", () => {
+  /* The one gate in the ladder whose answer genuinely depends on who is asking,
+     and the board has to reflect that or it is wrong for one of them. */
+  signInAsLead();
+  const w = woLadder();
+  w.steps[0] = { title: "Cure", status: "", cure: { resin: RESINS[0].id, startedAt: new Date().toISOString(), tempC: 21 } };
+  w.steps[1] = { title: "Hold until cured", status: "", rule: { hold: true } };
+  w.steps[0].buyoff = { name: "L", email: "lead@feb.test", date: today() };
+  DB.workOrders = [w];
+  const asLead = signableSteps(myEmail())[0];
+  if (asLead && asLead.curing) {
+    assert(asLead.state === "overridable", "a lead can act on a running hold: " + asLead.state);
+    fb.roster = { name: "Member", role: "member", trainings: {} };
+    assert(signableSteps(myEmail())[0].state === "curing", "a member can only know when");
+  }
+});
+
+await t("CS-013 inverts a design review rather than filtering it", () => {
+  /* A review signed by whoever made the thing is not a review. It ranks DOWN
+     for its creator and UP for everyone else — a distinction that exists in
+     buyoff() and has never existed anywhere on screen. */
+  signInAsLead();
+  const w = woLadder({ createdBy: myEmail(), moldEngineer: "Simon" });
+  w.steps[0] = { title: "Design review", status: "" };
+  DB.workOrders = [w];
+  const mine = signableSteps(myEmail())[0];
+  assert(mine.selfReview === true, "the app knows you made this run");
+  assert(!waitingOnMe(myEmail()).length, "so it is not yours to sign");
+  assert(actScore({ base: "signoffReady", selfReview: true }) < actScore({ base: "signoffReady" }),
+    "and it scores below the same step without that flag");
+
+  DB.workOrders = [woLadder({ createdBy: "someone@else.test" })];
+  DB.workOrders[0].steps[0] = { title: "Design review", status: "" };
+  assert(signableSteps(myEmail())[0].selfReview === false, "somebody else's run is an ordinary review");
+});
+
+await t("the score is capped, so one ancient part cannot outrank every live blocker", () => {
+  /* The SN5 archive is full of records three hundred days past their date. An
+     uncapped lateness bonus would put one of them permanently above a run that
+     is stopping the shop today. */
+  const ancient = { base: "signoffReady", date: "2020-01-01" };
+  const blocker = { base: "blockerAtNext", date: today() };
+  assert(actScore(blocker) > actScore(ancient),
+    `a live blocker outranks a very old deadline: ${actScore(blocker)} vs ${actScore(ancient)}`);
+  const late = { base: "signoffReady", date: "2020-01-01" };
+  const later = { base: "signoffReady", date: "1999-01-01" };
+  assert(actScore(late) === actScore(later), "past the cap, more lateness adds nothing");
+  /* The relationship, not just the symptom. Every bonus ADDED TOGETHER has to
+     be smaller than the smallest gap between two tiers, or a late, scarce,
+     assigned, releases-everything item from a low tier outranks the tier above
+     it — and the ordering quietly stops meaning what the tier names say. */
+  const bases = Object.values(ACT_BASE).sort((a, b) => a - b);
+  const gap = Math.min(...bases.slice(1).map((v, i) => v - bases[i]));
+  const maxBonus = actScore({ base: "unassigned", date: "1999-01-01", mine: true, scarce: true, releases: 99 });
+  assert(maxBonus < gap,
+    `every bonus together (${maxBonus}) must stay under the smallest tier gap (${gap})`);
+  const worstLow = { base: "approval", date: "1999-01-01", mine: true, scarce: true, releases: 99 };
+  assert(actScore(worstLow) < actScore({ base: "overridable" }),
+    "so the best possible approval still ranks below the worst possible cure override");
+});
+
+await t("dashRole is the third value, because a guest is not a member with less", () => {
+  signInAsLead();
+  assert(dashRole() === "lead", "a lead");
+  fb.roster = { name: "Member", role: "member", trainings: {} };
+  assert(dashRole() === "member", "a member");
+  fb.guest = true;
+  assert(dashRole() === "guest", "and a guest, whatever the roster says");
+  fb.guest = false;
+});
+
 /* ---------- cut sheets: the plumbing ----------
    The sheets themselves are checked in tools/test_drawings.mjs, in a browser,
    where a label crossing a rule is something you can measure. What is here is

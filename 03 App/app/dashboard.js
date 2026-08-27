@@ -200,6 +200,168 @@ function curingNow() {
   return out.sort((a, b) => (a.hold.msLeft || 0) - (b.hold.msLeft || 0));
 }
 
+/* ---------- what can I actually do right now? ----------
+   THE QUESTION THE DASHBOARD NEVER ANSWERED. Everything on the old board was a
+   count of things that EXIST: late items, blocked runs, open issues. None of it
+   answered "what should I go and do", and the difference matters most for the
+   half of the roster who cannot yet do most of it.
+
+   buyoff() is a ladder of gates in a fixed order — sequence, then identity,
+   then evidence, then the clock, then CS-013 — and any list that promises a
+   signature has to walk the same ladder in the same order or the dashboard
+   sends people to a button that refuses them. So this walks it, and reports
+   which rung a step is standing on rather than a yes/no.
+
+   The `typeof x === "function"` guards are the idiom this file already uses:
+   tools/lib/appload.mjs loads each app file as its own vm.Script, so a helper
+   from workorders.js may genuinely not be there yet when this parses. */
+function signableSteps(email) {
+  email = String(email || (typeof myEmail === "function" ? myEmail() : "")).toLowerCase();
+  const lead = typeof isLead === "function" && isLead();
+  const out = [];
+  (DB.workOrders || []).forEach(w => {
+    if (w.retro || w.status === "Complete") return;   // history signs nothing
+    const steps = w.steps || [];
+    /* The same definition of "next" as woFlags() and blockedNow(). Three
+       surfaces disagreeing about which step is live is a bug report, not a
+       nuance, so it is copied deliberately rather than re-derived. */
+    const next = steps.findIndex(s =>
+      typeof stepState === "function" && stepState(s) !== "done" && stepState(s) !== "failed");
+    if (next < 0) return;
+    const s = steps[next];
+
+    // 1. SEQUENCE. Looks strictly BEFORE next — so when the next step IS the
+    //    blocker this is null, and that is the most valuable item on the page:
+    //    sign it and the whole run moves.
+    const blocker = typeof blockerOpenBefore === "function" ? blockerOpenBefore(w, next) : null;
+
+    // 2. IDENTITY. Rule field only; an untagged step is ungated by design.
+    const tr = typeof stepTraining === "function" ? stepTraining(s) : null;
+    const trained = !tr || !!s.trainingOverride
+      || (typeof hasTraining === "function" && hasTraining(email, tr));
+
+    // 3. EVIDENCE. NOT a hard bar — pressing the button is how you find out
+    //    what is missing and get the control that fixes it. So it demotes.
+    const ev = typeof stepEvidence === "function" ? stepEvidence(w, next) : { missing: [] };
+
+    // 4. THE CLOCK. A member gets a toast; a LEAD gets openHoldOverride(). So
+    //    whether this gate stops you is genuinely role-dependent, in the data.
+    const h = typeof holdState === "function" ? holdState(w, next) : null;
+    const curing = h && !h.ready && !h.overridden ? h : null;
+
+    // 5. CS-013. A design review signed by whoever made the thing is not a
+    //    review. Inverted rather than filtered: it ranks DOWN for the creator
+    //    and UP for everyone else, which is a distinction nothing on screen
+    //    has ever drawn.
+    const selfReview = /design review/i.test(s.title || "")
+      && !!email && email === String(w.createdBy || "").toLowerCase();
+
+    const qualified = (tr && typeof qualifiedFor === "function") ? qualifiedFor(tr) : [];
+    out.push({
+      wo: w, step: s, i: next, tr, blocker, curing, selfReview,
+      missing: ev.missing || [],
+      isBlockerStep: typeof isBlocker === "function" && isBlocker(s),
+      mine: typeof isMine === "function" && isMine([w.moldEngineer, w.manufacturingEngineer]),
+      // Scarce: almost nobody else can do it, so it is much more yours.
+      scarce: !!tr && qualified.length > 0 && qualified.length <= 2,
+      qualified,
+      // How much this ONE signature unlocks. It is why a blocker outranks a
+      // late deadline, so it is a number rather than a feeling.
+      releases: Math.max(0, steps.length - next - 1),
+      state:
+        blocker ? "blocked"                    // not yours: the blocker is the item
+        : curing && !lead ? "curing"           // nothing to do but know when
+        : curing ? "overridable"               // a lead CAN act on this one
+        : !trained ? "untrained"
+        : (ev.missing || []).length ? "needs-evidence"
+        : "ready",
+    });
+  });
+  return out;
+}
+
+/* Waiting on YOU: ready, or one errand short, and either carrying your name or
+   held by a training almost nobody has. Everything else that is ready is real
+   work and belongs to the team — it ranks below, never in the hero. */
+function waitingOnMe(email) {
+  return signableSteps(email).filter(s =>
+    (s.state === "ready" || s.state === "needs-evidence") && (s.mine || s.scarce) && !s.selfReview);
+}
+function readyForAnyone(email) {
+  return signableSteps(email).filter(s => s.state === "ready" && !s.mine && !s.scarce);
+}
+
+/* THE ANSWER FOR A FIRST-YEAR. A member with no trainings has an empty
+   "waiting on you" forever, which is the worst possible first impression of a
+   board built to answer "what do I do next". Turn the gate into the next
+   action: which training would unlock the most work that is ready RIGHT NOW,
+   and who on the roster can teach it. */
+function trainingGaps(email) {
+  const need = new Map();
+  signableSteps(email).forEach(s => {
+    if (s.state !== "untrained") return;
+    need.set(s.tr, (need.get(s.tr) || 0) + 1);
+  });
+  return [...need].map(([id, n]) => ({
+    id, n,
+    name: (typeof trainingById === "function" ? trainingById(id).name : id),
+    who: (typeof qualifiedFor === "function" ? qualifiedFor(id) : []),
+  })).sort((a, b) => b.n - a.n);
+}
+
+/* Ranking, used in ONE place: inside "waiting on you", where every item is the
+   same kind of thing and an order is defensible. The lanes themselves are
+   deliberately not scored against each other — "is this blocker more urgent
+   than that deadline" is a question with no honest answer, and inventing one
+   is how a board starts lying quietly.
+
+   Small integers, added, so a lead can reproduce the order in their head. A
+   score nobody can argue with is a score nobody trusts. */
+/* The TIER is what kind of stop this is; the bonuses only order things within
+   a tier. For that to be true rather than merely intended, the tiers have to be
+   spaced further apart than every bonus added together — otherwise a late,
+   scarce, mine, releases-everything purchase approval outranks a live blocker,
+   and the ordering silently stops meaning what the names say.
+
+   45 is the most the bonuses can add (15 + 12 + 8 + 10), so the tiers sit 50
+   apart. A test pins the relationship, because getting it wrong is invisible:
+   the board still renders, in a slightly wrong order, forever. */
+const ACT_BASE = {
+  blockerAtNext: 250,   // your signature IS the gate; signing it moves the run
+  signoffReady: 200,
+  needsEvidence: 150,   // yours to sign, but go and take the photo first
+  overridable: 100,     // a cure that is ready and waiting on a lead
+  approval: 50,         // over $50, awaiting sign-off (lead only)
+  unassigned: 0,        // open, dated, nobody's name on it
+};
+/* The most a deadline can be worth. Capped at all because the SN5 archive is
+   full of records three hundred days past their date, and uncapped any one of
+   them would sit permanently above a run that is stopping the shop today.
+   Capped at THIS because of the tier arithmetic above. */
+const ACT_LATE_CAP = 15;
+function actScore(a) {
+  let s = ACT_BASE[a.base] || 0;
+  const dd = typeof daysUntil === "function" ? daysUntil(a.date) : null;
+  if (dd != null && dd < 0) s += Math.min(ACT_LATE_CAP, -dd);
+  if (a.mine) s += 12;              // yours beats the team's, never by a whole tier
+  if (a.scarce) s += 8;
+  if (a.releases) s += Math.min(10, a.releases);
+  if (a.rnd) s -= 4;                // real work, not a season deliverable
+  if (a.selfReview) s -= 40;        // CS-013: your own review is not yours to sign
+  return s;
+}
+function actSort(a, b) {
+  return (b.score || 0) - (a.score || 0) || dashSort(a, b);
+}
+
+/* Which board to draw. A third value beyond lead/member, because a guest is not
+   a member with less — a work queue filtered to nothing is a blank apology, and
+   a guest gets a different page rather than an emptier one. */
+function dashRole() {
+  if (window.fb && fb.guest) return "guest";
+  return (typeof isLead === "function" && isLead()) ? "lead" : "member";
+}
+
 /* ---------- one list, grouped ----------
    One list, bucketed FIRST-MATCH-WINS so an item appears exactly once, and
    ordered by what you would act on first. */
