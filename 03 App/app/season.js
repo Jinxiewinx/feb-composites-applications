@@ -31,7 +31,16 @@
    one click away, where the CS-003 evidence gate and both confirms live
    anyway (partStageRow in parts.js). So a row became a line: a name that opens
    the part, the C/M/L rail the Parts index already draws, a status in words,
-   and a date. Roughly sixty parts on screen where eighteen used to be.
+   and a date. Eight controls' worth of information and no controls.
+
+   ONE PART PER LINE, AND THE LINES ARE COLUMNATED. It shipped in v3.0.0 as a
+   two-abreast multi-column flow, which fitted about sixty parts on a screen
+   and made every one of them harder to read: a line's fields landed wherever
+   its neighbour's happened to leave room, so there was no column to scan down.
+   Half as many parts, each in a fixed grid track that lines up with the one
+   above it, is the better read — and the width one line got back paid for two
+   more fields (layup type, mold location) that used to need the part opening.
+   The tracks are literal widths in one shared declaration; see the CSS.
 
    THE FEED IS DOWNSTREAM. tracker.js publishes the parts list to a document
    the Master Tracker's Apps Script pulls every 15 minutes, so the sheet still
@@ -67,9 +76,9 @@ const SEASON_COLS = [
   { key: "moldProgress", label: "Mold", type: "stage", where: "grid" },
   { key: "layupProgress", label: "Layup", type: "stage", where: "grid" },
   { key: "subteam", label: "Subteam", type: "select", where: "grid", opts: () => SUBTEAMS },
-  { key: "layupType", label: "Layup type", type: "select", where: "part", opts: () => LAYUP_TYPES },
+  { key: "layupType", label: "Layup type", type: "select", where: "grid", opts: () => LAYUP_TYPES },
   { key: "layupSchedule", label: "Schedule", type: "text", where: "part" },
-  { key: "moldLocation", label: "Mold loc.", type: "text", where: "part" },
+  { key: "moldLocation", label: "Mold loc.", type: "text", where: "grid" },
   { key: "moldEngineer", label: "Mold eng.", type: "person", where: "part" },
   { key: "manufacturingEngineer", label: "Mfg eng.", type: "person", where: "part" },
   { key: "weightG", label: "Weight (g)", type: "num", where: "part" },
@@ -125,17 +134,61 @@ function seasonLine(p) {
   const late = typeof partLate === "function" && partLate(p);
   const named = !!String(p.partName || "").trim();
   const engs = typeof partEngineers === "function" ? partEngineers(p) : [];
-  return `<div class="sline${late ? " late" : ""}${named ? "" : " unnamed"}"
-      title="${esc(p.id)}${p.layupType ? " · " + esc(p.layupType) : ""}">
+  /* An empty cell is left EMPTY, not filled with an em-dash. A blueprint in
+     September is mostly empty and that is the tab's founding argument, not a
+     rendering gap; a column of placeholders down twenty-six rows would be
+     louder than the values. What makes an empty cell legible is the header
+     over it, which is why seasonHead() exists. */
+  return `<div class="sline${late ? " late" : ""}${named ? "" : " unnamed"}" title="${esc(p.id)}">
     <button type="button" class="sl-open" data-open="${esc(p.id)}"
       onclick="openRecord('parts','${esc(p.id)}')">${esc(p.partName || p.id)}</button>
     <span class="sl-sub">${esc(p.subteam || "")}</span>
+    <span class="sl-type" title="${esc(p.layupType || "")}">${esc(p.layupType || "")}</span>
     ${typeof stageRail === "function" ? stageRail(p) : ""}
     <span class="stage ${st.cls} sl-stat">${esc(st.label)}</span>
+    <span class="sl-loc" title="${esc(p.moldLocation || "")}">${esc(p.moldLocation || "")}</span>
     <span class="sl-due${late ? " warn" : ""}">${p.layupDeadline
       ? esc(shortDate(p.layupDeadline)) + (late ? " " + icon("warning", 12) : "")
       : `<span class="muted">no date</span>`}</span>
     <span class="sl-who">${engs.map(e => avatar(e.email || e.name, 20)).join("")}</span>
+  </div>`;
+}
+
+/* ---------- the column names ----------
+   Eight quiet words, once, above the first line. Columns of mostly-empty cells
+   need naming or they are just gaps, and this is the cheapest thing that names
+   them: a row on the same grid tracks as .sline, sharing one declaration of
+   those tracks so it cannot drift off them.
+
+   NOT a <th> and not sortable. Thirteen sortable headers are what this tab was
+   before v3.0.0 and what made it 1,700px wide; sorting lives in the one select
+   above, where it costs no width at all. This is a label and nothing else.
+
+   Five of the eight labels are read out of SEASON_COLS rather than typed here,
+   so a field renamed in the manifest is renamed on screen. The other three are
+   not single fields: the rail is the three stage columns drawn as one mark,
+   the state is derived (seasonStatus) and is in no manifest, and "Who" is both
+   engineer fields collapsed into one stack of faces.
+
+   The two droppable cells wear the LINE's classes, .sl-type and .sl-loc, and
+   that is the point of them: below 1240px one display:none rule takes the
+   column out of the header and out of every line at once. With plain spans the
+   header kept eight cells over six tracks and wrapped, which put LAYUP TYPE
+   over the subteam column and DEADLINE on a second row — a header lying about
+   its own columns is worse than none. */
+function seasonHead() {
+  const lbl = k => { const c = seasonCol(k); return esc(c ? c.label : k); };
+  const rail = typeof PART_STAGES !== "undefined"
+    ? PART_STAGES.map(s => esc(s.short)).join(" / ") : "C / M / L";
+  return `<div class="shead">
+    <span>${lbl("partName")}</span>
+    <span>${lbl("subteam")}</span>
+    <span class="sl-type">${lbl("layupType")}</span>
+    <span>${rail}</span>
+    <span>State</span>
+    <span class="sl-loc">${lbl("moldLocation")}</span>
+    <span>${lbl("layupDeadline")}</span>
+    <span>Who</span>
   </div>`;
 }
 
@@ -197,7 +250,8 @@ const SEASON_SORT_EXTRA = {
 const SEASON_SORT_LABELS = {
   layupDeadline: "Sort: Deadline", status: "Sort: Status", partName: "Sort: Part",
   subteam: "Sort: Subteam", cadProgress: "Sort: CAD", moldProgress: "Sort: Mold",
-  layupProgress: "Sort: Layup", group: "Group: subteam",
+  layupProgress: "Sort: Layup", layupType: "Sort: Layup type",
+  moldLocation: "Sort: Mold loc.", group: "Group: subteam",
 };
 function seasonSortVal(p, key) {
   if (SEASON_SORT_EXTRA[key]) return SEASON_SORT_EXTRA[key](p);
@@ -249,13 +303,17 @@ function seasonGroupHead(name, rows) {
   </div>`;
 }
 
-/* Rows in, sections out. Grouped, each subteam gets its own flow container, so
-   a heading can never be stranded at the foot of one column with its rows in
-   the next — which is the one thing a multi-column layout will do to you if you
-   let a single flow carry both. */
+/* Rows in, sections out. Grouped, each subteam gets its own section under its
+   own heading; the column names are printed ONCE, above everything, and never
+   again per group. Repeating them over each subteam would put the loudest thing
+   on the page — eight uppercase words — between every group and its rows.
+
+   They still line up across groups because the tracks are fixed widths shared
+   by .shead and .sline, not per-container auto tracks. That is the property
+   that makes one header able to label five separate sections at all. */
 function seasonBody(rows, grouped) {
-  if (!grouped) return `<div class="seasongrid">${rows.map(seasonLine).join("")}</div>`;
-  let out = "", run = null, bucket = [];
+  if (!grouped) return `<div class="seasongrid">${seasonHead()}${rows.map(seasonLine).join("")}</div>`;
+  let out = seasonHead(), run = null, bucket = [];
   const flush = () => {
     if (!bucket.length) return;
     out += `<section class="sgroup">${seasonGroupHead(run, bucket)}
@@ -396,10 +454,12 @@ function renderSeason() {
     <button class="sm sortdir" title="Clear filters" onclick="resetSeasonFilters()">✕</button>
   </div>
   <div class="card">
-    ${/* A wrapping multi-column flow, NOT a scroller. Down-then-across is the
-          reading order of a sorted list, and a flow that wraps cannot overflow
-          sideways at all — which is what the UI suite fails on, and what the
-          thirteen-column table did at every width it was ever opened at. */""}
+    ${/* Eight fixed grid tracks and one elastic name, NOT a scroller. The only
+          track that can grow is minmax(0, 1fr), so a long name shrinks its own
+          cell instead of pushing the line wide — which is what the UI suite
+          fails on, and what the thirteen-column table did at every width it was
+          ever opened at. The two quiet columns drop out below 1240px and the
+          line folds in two below 1000px; see the CSS. */""}
     ${rows.length ? seasonBody(rows, sortKey === "group") : `<p class="muted">${all.length
       ? "Nothing matches these filters."
       : "No parts yet. <b>Lay out the season</b> — a list of names is enough to start."}</p>`}

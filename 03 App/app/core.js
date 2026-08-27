@@ -31,11 +31,9 @@ var APP_VERSION = "3.0.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "The dashboard is four lanes now, and each one is a question: what is Stopped, what is Waiting on you, what is Due this week, and what is On the clock. A lane is never empty-looking — if nothing is blocked it says so, because that is worth knowing on a Monday. \"Waiting on you\" is the new one: it only lists steps you can actually sign, and if you are waiting on a training it tells you which one and who can teach it.",
-  "The Season tab is a read now. One line per part — name, subteam, the C/M/L marks, where it has got to, and its deadline — about sixty on screen instead of eighteen, and no more scrolling sideways to find the column you wanted. Clicking a part's name opens it. EDITING MOVED: change a part on its own page, where the evidence gate and the confirms already live. To add parts, \"Lay out the season\" takes a whole list of names at once.",
-  "A mold's drawings now come with its cut sheets: which boards it needs, where they are on the rack, and a full-size nest of each board with the saw cuts numbered. Blanks belonging to other molds are hatched, so you leave them alone. The Molds tab also prints the whole shop's cut list as a proper drawing set — title block, sheet numbers and all — instead of the bare page it used to make.",
-  "Anyone can now open the app and press \"View as guest\" to look around without an account. Guests can read everything and change nothing, because a buy-off carries a name. Useful for showing the team what we do; worth knowing that it means the app is readable by anyone with the link.",
-  "The loading screen holds long enough to actually read the fun fact, and you can tap it (or press Enter) to go straight in.",
+  "The Season tab is one part per line again, and the lines now sit in real columns — subteam under subteam, deadline under deadline, all the way down. It went out last week two abreast, which fitted more parts and made every one of them harder to read, because no two lines put the same field in the same place. Half as many parts, in columns you can scan, is the better read.",
+  "The width that bought back paid for two more fields on the line: LAYUP TYPE and MOLD LOC. So \"which of these are wet layups\" and \"what is still sitting in Etcheverry\" are now questions you answer by looking down a column, instead of opening eleven parts. There is a row of column names across the top, and both new columns drop out on a narrow screen before anything else does.",
+  "On a laptop or a tablet the line folds into two rows, and those two rows line up now too — the subteam and the C/M/L marks used to land in a different place on every row, and on the narrowest screens the subteam printed underneath the stage rail.",
 ];
 
 /* ---------- config/release ----------

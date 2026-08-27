@@ -73,31 +73,26 @@ const SEASON = `
 `;
 
 export const RELEASE_SHOTS = [
-  {
-    id: "pit-board",
-    /* Tall, because the program column stacks its bars and facts now instead of
-       stringing them across the page. 1000 clipped it mid-sentence. */
-    vh: 1180,
-    js: `setTab("dashboard");`,
-    title: "The dashboard asks four questions",
-    note: "Stopped, Waiting on you, Due this week, On the clock — and a lane that has nothing to " +
-          "say says so, rather than leaving a hole where a card used to be. “Waiting on you” is the " +
-          "one to look at first: it lists only the steps you can actually sign, and when a training " +
-          "is what is stopping you it names the training and who can teach it.",
-  },
+  /* ONE picture this time, and that is the honest number. Two is the cap, not
+     the target, and the only thing that changed is the blueprint — reshipping
+     last release's dashboard shot beside it would pad the post with a picture
+     the team has already seen and read past. */
   {
     id: "blueprint",
-    vh: 790,
+    /* Tall enough for all twenty-six seeded parts plus the footer note. One per
+       line costs vertical space; a shot that crops the list mid-season is
+       arguing the opposite of its own caption. */
+    vh: 1250,
     js: SEASON + `
       view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "",
                seasonQ: "", seasonSort: null, seasonDir: null };
       render();`,
-    title: "The blueprint is a read, and the season fits on one screen",
-    note: "One line per part instead of thirteen columns you had to scroll sideways through. " +
-          "Name, subteam, the C/M/L marks, where it has got to in a word, and the deadline — with " +
-          "late ones spined in red and parts nobody has named yet still visible rather than blank. " +
-          "Click a name to open the part; that is where you change anything now, next to the gate " +
-          "and the confirms that were always there.",
+    title: "The season, in columns",
+    note: "One part per line, and every line on the same eight tracks — so subteam sits under " +
+          "subteam and a deadline under a deadline, and you read down a column instead of across " +
+          "a line. Two of those columns are new: LAYUP TYPE and MOLD LOC., which used to mean " +
+          "opening the part. Clicking a name still opens it, and that is still where you change " +
+          "anything.",
   },
 ];
 

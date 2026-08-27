@@ -3622,6 +3622,79 @@ await t("the blueprint is a read: it renders no control that writes a part", () 
     "the write paths are gone rather than merely unrendered — an unused writer is one somebody re-renders");
 });
 
+await t("the blueprint is columnated, and one header labels every line under it", () => {
+  /* The line is a grid of FIXED tracks and the header shares that one
+     declaration, which is the whole reading mechanism: you scan a column, not a
+     line. What can be asserted here is the half that lives in the markup — that
+     the header exists, that it is emitted exactly once however the list is
+     sectioned, and that its cells are in the same order the line writes its
+     values in. Track widths are CSS and are checked by the UI suite, which
+     fails any horizontal overflow of <main> at 900, 1440 and 1920. */
+  DB.parts = [
+    { id: "P-SN6-921", partName: "SPAR", subteam: "AERO", layupType: "MOLD INFUSION",
+      moldLocation: "RFS rack 2", cadProgress: "Mold CAD/CAM Done",
+      moldProgress: "Machining", layupProgress: "Not Started", layupDeadline: "2026-11-02" },
+    { id: "P-SN6-922", partName: "SKIN", subteam: "BERGO", layupType: "WET LAYUP",
+      moldLocation: "Etcheverry", cadProgress: "Not Started",
+      moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null };
+  render();
+  const html = main.innerHTML;
+
+  assert((html.match(/class="shead"/g) || []).length === 1,
+    "one header, for the whole card");
+  /* Cell order is the contract between .shead and .sline: they are two rows on
+     one set of tracks, so a cell inserted into either one alone silently slides
+     every column after it off its label. */
+  const head = (html.match(/class="shead"[\s\S]*?<\/div>/) || [""])[0];
+  const cells = [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map(m => m[1].trim());
+  assert(cells.length === 8, "eight columns are named: " + JSON.stringify(cells));
+  assert(cells[0] === "Part" && cells[6] === "Deadline",
+    "and they read left to right in the order the line writes them: " + JSON.stringify(cells));
+  /* Five of the eight are read out of SEASON_COLS rather than typed into the
+     header, so renaming a field in the manifest renames the column. */
+  assert(cells[2] === seasonCol("layupType").label && cells[5] === seasonCol("moldLocation").label,
+    "and the labels come from SEASON_COLS, not from a second list that can drift");
+
+  assert(/class="sl-type"[^>]*>MOLD INFUSION</.test(html) && /class="sl-loc"[^>]*>RFS rack 2</.test(html),
+    "the two fields the wider line paid for are on it");
+  assert(seasonCol("layupType").where === "grid" && seasonCol("moldLocation").where === "grid",
+    "and the manifest says so, since 'where' is what tells you which fields need the part opening");
+  /* Both are droppable below 1240px by ONE display:none rule, which only works
+     while the header's cells wear the line's classes. */
+  assert((html.match(/class="sl-type"/g) || []).length === 3,
+    "the header's own cell wears the line's class, so one rule hides the column everywhere");
+
+  /* An empty cell stays empty. A blueprint is mostly blank for months — that is
+     the tab's founding argument — and a column of em-dashes would be louder
+     than the values. The header is what makes a blank cell legible. */
+  DB.parts[1].layupType = "";
+  render();
+  assert(/class="sl-type" title=""><\/span>/.test(main.innerHTML),
+    "and a field nobody has filled in yet renders as nothing, not as a placeholder");
+});
+
+await t("grouping the blueprint does not reprint the column names over every subteam", () => {
+  DB.parts = [
+    { id: "P-SN6-931", partName: "A", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-932", partName: "B", subteam: "BERGO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-933", partName: "C", subteam: "AUTO-MECH", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: "group" };
+  render();
+  const html = main.innerHTML;
+  assert((html.match(/class="sgroup"/g) || []).length === 3, "three subteams, three sections");
+  /* Eight uppercase words between every group and its rows would be the loudest
+     thing on the page. They can be said once because the tracks are fixed
+     widths shared by .shead and .sline rather than per-container auto tracks —
+     that is the property that lets one header label five separate sections. */
+  assert((html.match(/class="shead"/g) || []).length === 1,
+    "and still exactly one header, above all of them");
+  assert(html.indexOf('class="shead"') < html.indexOf('class="sgroup"'),
+    "printed before the first group rather than inside it");
+});
+
 await t("the blueprint says where a part is without anyone having to read a colour", () => {
   /* Two carriers, deliberately: the C/M/L rail is scannable down a column and
      the chip is a word. The house rule is that no distinction may rest on hue

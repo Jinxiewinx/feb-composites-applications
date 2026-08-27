@@ -469,31 +469,83 @@
   .list .statusdrop select { padding: 4px 22px 4px 9px; font-size: 12px; }
 
   /* ---- the Season blueprint ----
-     One line per part, in a MULTI-COLUMN FLOW rather than a table or a grid.
-     Three reasons, in order of how much they cost to learn:
+     One line per part, and the lines are COLUMNATED: every line is a grid with
+     the same fixed tracks, so subteam sits under subteam and a date under a
+     date all the way down the card. The alignment IS the reading mechanism —
+     you scan a column, not a line — which is why the tracks are literal widths
+     and not `auto`. An `auto` track sizes itself per row, and a grid per row is
+     eight ragged edges rather than eight columns.
 
-     A flow that wraps cannot overflow sideways. The thirteen-column table this
-     replaces had a floor near 1,700px against about 1,300px of content width,
-     so it scrolled sideways at every real viewport, forever; the UI suite fails
-     any horizontal overflow of <main> and exempted it only because .mtxwrap was
-     a scroller. There is nothing to exempt now.
+     It shipped in v3.0.0 as a two-abreast multi-column flow. That fitted about
+     sixty parts on a screen and made every one of them harder to read: with
+     each line sizing its own tracks, a field landed wherever its neighbours
+     left room, so there was no column to scan. Half as many parts, aligned,
+     is the better read — and the width one line got back paid for two more
+     fields that used to need the part opening.
 
-     `columns` and not `grid`, because down-then-across is the reading order of
-     a sorted list — the same call .rgrid makes, for the same reason. A grid
-     would put the second-most-urgent part beside the first instead of under it.
+     .shead and .sline SHARE ONE DECLARATION of the tracks, deliberately. Two
+     rules holding the same eight numbers is a drift waiting to happen, and a
+     header that has drifted off its columns is worse than no header at all.
 
-     And break-inside: avoid, or a line splits across the column gap. */
-  .seasongrid { columns: 430px; column-gap: 14px; }
-  .sgroup { break-inside: avoid-column; margin-bottom: 10px; }
+     No rules drawn between the columns. The alignment is the separation; a
+     line every hundred pixels rebuilds the table nobody asked to come back.
+
+     Nothing here can scroll sideways: the only elastic track is the name, at
+     minmax(0, 1fr), so a long name shrinks its own cell rather than pushing
+     the line wide. The UI suite fails any horizontal overflow of <main> and
+     exempted this tab only while .mtxwrap was a scroller; there is nothing to
+     exempt now. */
+  /* justify-items: start, or every cell fills its track — and a cell that fills
+     its track is invisible until it has a background, at which point "Done"
+     prints as a 122px pill and the status column reads as a bar chart of
+     nothing. The tracks position the cells; they are not the cells. */
+  .sline, .shead {
+    display: grid; align-items: center; justify-items: start; gap: 0 12px;
+    grid-template-columns:
+      /* Four text columns share the slack and four fixed ones do not. The
+         alternative — one elastic name track — gives the widest column all the
+         width nothing else wants, and at 1440 that left 230px of blank paper
+         between a part's name and its subteam with every other column jammed
+         against the right edge. Ratios, so the line uses the window it has
+         without any one column running away with it.
+
+         Every elastic track is minmax(_, Nfr) with a floor that fits its
+         content, and the name's floor is 0 so a long name shrinks itself to an
+         ellipsis rather than pushing the line wide. Sum of the minima is 702px
+         against ~1,000px of content at the 1240px breakpoint where the two
+         quiet columns drop out, so the grid can never be the thing that
+         overflows. */
+      minmax(0,     2fr)    /* part name                                     */
+      minmax(84px,  1fr)    /* subteam                                       */
+      minmax(104px, 1.2fr)  /* layup type                                    */
+      88px                  /* C/M/L rail: three 26px chips, two 3px gaps    */
+      122px                 /* the state in a word ("Machine Complete")      */
+      minmax(96px,  1.2fr)  /* mold location                                 */
+      78px                  /* deadline, with room for the late glyph        */
+      46px;                 /* two 20px avatars, overlapped                  */
+  }
+  .seasongrid { display: block; }
+  .sgroup { margin-bottom: 12px; }
   .sgroup .pgrouphd { margin-top: 0; }
 
-  /* Five things wide: name, subteam, the C/M/L rail, the state in a word, the
-     date. .sline and not .srow — that name has belonged to the dashboard's
-     module rows since round four, and the .dboard/.board collision is already
-     one cautionary tale in this file. */
-  .sline { break-inside: avoid; position: relative;
-    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
-    gap: 0 10px; align-items: center; padding: 5px 9px; margin-bottom: 2px;
+  /* The column names. Said once at the top of the card and never per group —
+     eight uppercase words between every subteam and its rows would be the
+     loudest thing on the page.
+
+     A blueprint is mostly empty for months and that is the tab's founding
+     argument rather than a defect (see season.js's header), so most of what
+     these label is blank. That is exactly when a column needs a name: an empty
+     cell under a heading is a field nobody has filled in yet, and an empty cell
+     under nothing is a gap. */
+  .shead { padding: 0 9px 5px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .shead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* .sline and not .srow — that name has belonged to the dashboard's module
+     rows since round four, and the .dboard/.board collision is already one
+     cautionary tale in this file. */
+  .sline { position: relative; padding: 5px 9px; margin-bottom: 2px;
     border: 1px solid transparent; border-radius: 7px;
     transition: background var(--t-fast) var(--ease); }
   .sline:hover { background: var(--hover); border-color: var(--line); }
@@ -515,7 +567,14 @@
   .sl-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
   .sline.unnamed .sl-open { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
   .sl-sub { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
-  .sl-stat { white-space: nowrap; }
+  /* The two quiet ones. Muted and small on purpose: they qualify the name, they
+     do not compete with it, and they are the first two columns to go when the
+     window narrows. Both ellipsis rather than wrap — a line that grows to two
+     rows because one mold lives somewhere with a long name breaks the only
+     thing this layout is for. The full value is in the cell's own title. */
+  .sl-type, .sl-loc { font-size: 11px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sl-stat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sl-due { font-size: 11.5px; color: var(--muted); white-space: nowrap;
     display: inline-flex; align-items: center; gap: 3px; }
   .sl-due.warn { color: var(--bad); font-weight: 600; }
@@ -523,18 +582,35 @@
   .sl-who .avatar { margin-left: -5px; box-shadow: 0 0 0 2px var(--card); }
   .sl-who .avatar:first-child { margin-left: 0; }
 
-  /* Below about 1200px of content the line folds in two, the way .pitem does
-     on the Parts rail — name and date on top, everything that qualifies them
-     underneath. Narrower columns, so more of them still fit. */
-  @media (max-width: 1350px) {
-    .seasongrid { columns: 380px; }
-    .sline { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
-    .sl-open { grid-row: 1; grid-column: 1; }
-    .sl-due { grid-row: 1; grid-column: 2; justify-self: end; }
-    .sl-sub, .sline .prog3, .sl-stat { grid-row: 2; }
-    .sl-sub { grid-column: 1; }
-    .sline .prog3 { grid-row: 2; grid-column: 1; justify-self: start; }
-    .sl-who { grid-row: 2; grid-column: 2; justify-self: end; }
+  /* Narrowing happens in two steps, and the cheap one comes first.
+
+     Losing layup type and mold location costs context and nothing structural,
+     and it hands 216px back to the name — which is enough to carry the line
+     down to a phone-adjacent width before anything has to fold. */
+  @media (max-width: 1240px) {
+    .sline, .shead { grid-template-columns: minmax(0, 2fr) minmax(84px, 1fr) 88px 122px 78px 46px; }
+    .sl-type, .sl-loc { display: none; }
+  }
+  /* Then the line folds in two, the way .pitem does on the Parts rail: name and
+     date on top, everything that qualifies them underneath.
+
+     Every cell on row two is placed EXPLICITLY, in FIXED tracks. Two bugs in
+     one line: the version this replaces put .sl-sub and .prog3 both at row 2 /
+     column 1, which stacks two grid items in one cell — the subteam printed
+     underneath the stage rail — and auto tracks would have sized row two per
+     row, so a BERGO line and an AUTO-MECH line put their rails in different
+     places. Folded is still columnated; it just has two rows to do it in. */
+  @media (max-width: 1000px) {
+    /* A header cannot label a folded line. The fields are no longer in one row,
+       so eight words across the top would name columns that are not there. */
+    .shead { display: none; }
+    .sline { grid-template-columns: 84px 88px 1fr auto; row-gap: 3px; }
+    .sl-open { grid-row: 1; grid-column: 1 / -2; }
+    .sl-due { grid-row: 1; grid-column: -2 / -1; justify-self: end; }
+    .sl-sub { grid-row: 2; grid-column: 1; }
+    .sline .prog3 { grid-row: 2; grid-column: 2; }
+    .sl-stat { grid-row: 2; grid-column: 3; justify-self: start; }
+    .sl-who { grid-row: 2; grid-column: 4; justify-self: end; }
   }
   /* Budget goals: one bar per category, spent against the lead-set goal, and
      a Season bar whose tick marks where base ends and contingency begins (the
@@ -2567,13 +2643,13 @@
        rather than blowing out their card. */
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-    /* SEASON: one column of cards, like every other list here.
+    /* SEASON: one card per part, like every other list here.
        This used to be an exemption FROM table.list's card collapse, because a
        <td> holding an <input> is never :empty and every row would have become
        thirteen labelled inputs stacked down a 393px screen. There are no inputs
-       and no table now, so the exemption is gone with them and the flow simply
-       stops having columns to wrap into. */
-    .seasongrid { columns: auto; }
+       and no table now, so the exemption went with them. The folded two-row
+       line above is already what a card wants to hold; this only gives it the
+       card. */
     .sline { background: var(--card); border-color: var(--line); box-shadow: var(--shadow);
       padding: 9px 12px; margin-bottom: 8px; }
 
@@ -2932,9 +3008,13 @@
        else. Without this the printed Season tab is a page of dates and status
        chips with no idea what any of them is about. */
     #main .sl-open { display: inline !important; font: inherit; font-weight: 600; color: inherit; }
-    /* Two columns on paper: the lines are short and a season is long. */
-    #main .seasongrid { columns: 2; }
+    /* One line per part on paper, as on screen. It was two columns while a
+       line was five short fields; at eight it no longer fits beside itself, and
+       a season printed in two half-width columns would drop the last three
+       columns off both. The column names print with it — a page of blank cells
+       needs them more than the screen does, since paper has no tooltip. */
     #main .sline { break-inside: avoid; box-shadow: none; border-color: transparent; }
+    #main .shead { break-inside: avoid; break-after: avoid; }
     /* The budget list's inline editors print as the plain values they show:
        a form control on paper is chrome around a number. */
     .list .statusdrop select, .buy-cost input, .buy-cat { border: none; background: none; padding: 0; appearance: none; color: inherit; }
