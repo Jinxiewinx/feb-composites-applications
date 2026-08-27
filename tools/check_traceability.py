@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CS_DIR = ROOT / "02 CS Standards" / "src"
-PP = (ROOT / "01 Pain Points and Improvements" / "src" / "pain-points.md").read_text()
+PP = (ROOT / "01 Pain Points and Improvements" / "src" / "pain-points.md").read_text(encoding="utf-8")
 DS_DIR = ROOT / "04 Datasheets"
 
 fails = []
@@ -43,7 +43,7 @@ for i in range(1, 11):
 cs_files = sorted(CS_DIR.glob("CS-*.md"))
 cs_ids = set()
 for f in cs_files:
-    t = f.read_text()
+    t = f.read_text(encoding="utf-8")
     m = re.match(r"CS-(\d{3})", f.name)
     if m:
         cs_ids.add(f"CS-{m.group(1)}")
@@ -53,7 +53,7 @@ for f in cs_files:
     check(cited, f"{f.name} cites at least one PP / SN5 doc / datasheet")
 
 # 3. WO refs resolve
-wos = json.loads((ROOT / "03 App" / "data" / "sn5-work-orders.json").read_text())
+wos = json.loads((ROOT / "03 App" / "data" / "sn5-work-orders.json").read_text(encoding="utf-8"))
 bad_refs = set()
 for w in wos:
     for ref in w.get("standardsRefs", []):
@@ -69,18 +69,18 @@ check(len(wos) == 26, f"retro WO count == 26 (got {len(wos)})")
 # 4. cited datasheet files exist
 missing = set()
 for f in cs_files:
-    for m in re.finditer(r"04 Datasheets/([\w .\-'&]+\.pdf)", f.read_text()):
+    for m in re.finditer(r"04 Datasheets/([\w .\-'&]+\.pdf)", f.read_text(encoding="utf-8")):
         if not (DS_DIR / m.group(1)).exists():
             missing.add(m.group(1))
 check(not missing, f"all cited datasheet PDFs exist {sorted(missing) if missing else ''}")
 
 # 5. CS-INDEX rows match files
-index = (CS_DIR / "CS-INDEX.md").read_text()
+index = (CS_DIR / "CS-INDEX.md").read_text(encoding="utf-8")
 for f in cs_files:
     if f.name == "CS-INDEX.md":
         continue
     doc_id = f.name[:-3]
-    title = f.read_text().splitlines()[0].lstrip("# ").strip()
+    title = f.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
     title_body = title.split(" ", 1)[1]
     row = next((l for l in index.splitlines() if l.strip().startswith(f"| {doc_id} ")), "")
     check(bool(row) and title_body.split(" (")[0] in row,

@@ -120,7 +120,7 @@ def _add_photo_placeholder(doc, caption):
 
 
 def build(src: Path, out: Path):
-    lines = src.read_text().splitlines()
+    lines = src.read_text(encoding="utf-8").splitlines()
     doc = Document()
     _style_base(doc)
     for section in doc.sections:
@@ -194,7 +194,7 @@ def build_all():
     # CS standards: src/CS-*.md -> "<id> <title>.docx" from first heading
     cs_src = ROOT / "02 CS Standards" / "src"
     for md in sorted(cs_src.glob("CS-*.md")):
-        first = md.read_text().splitlines()[0].lstrip("# ").strip()
+        first = md.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
         name = re.sub(r"[/:]", "-", first)
         out = ROOT / "02 CS Standards" / f"{name}.docx"
         build(md, out)

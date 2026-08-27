@@ -29,8 +29,25 @@ the website can be verified before it lands. Run everything from the repo root
   anchored on `;\n` and CRLF slips past it.
 - **`tools/.venv` is gitignored**, so it does not exist in a fresh clone on any
   platform, and on Windows the layout is `.venv\Scripts\python.exe` rather than
-  `.venv/bin/python`. Build it with `python -m venv tools/.venv` and install
-  what `build_docx.py` imports.
+  `.venv/bin/python`. The whole of it:
+
+  ```
+  winget install --id Python.Python.3.12 --scope user   # Windows, if needed
+  python -m venv tools/.venv
+  tools/.venv/Scripts/python.exe -m pip install python-docx
+  ```
+
+  `python-docx` is the only third-party import in the pipeline; everything else
+  is stdlib.
+- **The Python tools all pass `encoding="utf-8"` explicitly, and must keep
+  doing so.** Python's default is the locale codepage, which on Windows is
+  cp1252 — so a bare `read_text()` turns every `§`, `—`, `°` and `±` in the
+  markdown sources into mojibake, and `build_docx.py` then bakes it into the
+  .docx. It is silent, it looks like a font problem, and the only reason it was
+  not already in the repo is that the committed .docx were built where UTF-8 was
+  the default. The check that catches it: rebuild an UNCHANGED standard and
+  compare `word/document.xml` against the committed one — it must be byte
+  identical. Writers pass `newline="\n"` for the same class of reason.
 - **The emulator suites need a JDK** on PATH, which Windows has no reason to
   have already. `winget install Microsoft.OpenJDK.21` is enough; the CLI itself
   is `npm i -g firebase-tools`.

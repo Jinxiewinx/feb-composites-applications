@@ -93,11 +93,25 @@ nobody finding out. `--no-shots` is the deliberate way past it; patches skip it.
 invented", got 4 want 0) — this is NOT the known flake, which was the timing
 assertion. `test_safearea`: `wo-detail` at landscape-max. Both want a look.
 
-**The CS-001 and CS-013 `.docx` are stale.** Both went to Rev D in markdown
-(the R&D mark, and R&D explicitly NOT being a class word). `tools/build_docx.py`
-and `gen_docs_manifest.py` need Python, and there is no `tools/.venv` on this
-machine — the `python` on PATH is the Windows Store stub. The `.md` copies under
-`03 App/app/docs/standards/` were synced by hand, which is all the app serves.
+**The Python tools mangled every non-ASCII character on Windows, and now do
+not.** `build_docx.py` and friends called `read_text()` / `write_text()` with no
+encoding, so Python used the locale codepage — cp1252 here — and every `§`, `—`,
+`°` and `±` in the markdown sources came out as `Â§`, `â€"`, `Â°`. Silent, and it
+looks like a font problem. The committed .docx were fine only because they were
+built where UTF-8 was already the default; the first Windows rebuild would have
+corrupted all seventeen. All five Python tools now pass `encoding="utf-8"`
+explicitly, and the writers pass `newline="\n"` so they cannot reintroduce the
+CRLF that kills `test_app.mjs`.
+
+**The check that catches it:** rebuild a standard you did NOT change and compare
+`word/document.xml` against the committed one — byte identical or the toolchain
+is lying to you. That is how this was found, and it is why only the three
+revised standards show in the diff: a .docx is a zip, so every rebuild looks
+modified until you compare the rendered XML.
+
+CS-001, CS-013 → **Rev D**; CS-INDEX → **Rev E** (its Rev column and the doc
+headers change together, CS-000 §7.1). `.docx` rebuilt, app copies in sync,
+`check_traceability.py` passes. Setup is now written out in `tools/README.md`.
 
 
 ---

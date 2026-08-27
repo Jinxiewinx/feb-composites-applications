@@ -154,7 +154,7 @@ for ri in sorted(trows):
 def write(name, obj):
     for d in (APP, DATA):
         d.mkdir(parents=True, exist_ok=True)
-        (d / name).write_text(json.dumps(obj, indent=1))
+        (d / name).write_text(json.dumps(obj, indent=1), encoding="utf-8", newline="\n")
     print(f"{name}: {len(obj)} records -> app/ and data/")
 
 

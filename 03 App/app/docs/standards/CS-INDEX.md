@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Doc ID** | CS-INDEX |
-| **Revision** | D |
-| **Effective date** | 2026-08-03 |
+| **Revision** | E |
+| **Effective date** | 2026-08-27 |
 | **Maintained by** | Composites Lead (update at the moment any standard changes status, CS-000 §7) |
 
 Depth key: **Drafted** means full procedure, follow it as written (pending approver signature). **Outlined** means all sections present, procedure steps stubbed; complete before first use in anger.
@@ -12,7 +12,7 @@ Depth key: **Drafted** means full procedure, follow it as written (pending appro
 | Doc ID | Title | Rev | Status | Depth | Motivating pain point(s) |
 |---|---|---|---|---|---|
 | CS-000 | Documentation Standards, Template & Revision Process | B | Draft, pending signature | Drafted | PP-09 |
-| CS-001 | Part, Mold & Material Labeling | C | Draft, pending signature | Drafted | PP-09, PP-10 |
+| CS-001 | Part, Mold & Material Labeling | D | Draft, pending signature | Drafted | PP-09, PP-10 |
 | CS-002 | Layup Schedule Specification & Recording | C | Draft, pending signature | Drafted | PP-04, PP-07 |
 | CS-003 | Mold Design & Manufacturing | C | Draft, pending signature | Drafted | PP-03; SN4 lessons |
 | CS-004 | Mold Sealing, Release & Surface Prep | C | Draft, pending signature | Drafted | PP-01 |
@@ -24,6 +24,6 @@ Depth key: **Drafted** means full procedure, follow it as written (pending appro
 | CS-010 | CF Grounding & Electrical Bonding | B | Draft, pending signature | Drafted | PP-05 |
 | CS-011 | Inventory, Storage & Transport | C | Draft, pending signature | Drafted (storage-map locations to field-verify) | PP-02, PP-10 |
 | CS-012 | Purchasing & Reimbursement (Composites) | C | Draft, pending signature | Drafted (re-verify tiers/names each fall) | PP-02, PP-08 |
-| CS-013 | Work Orders & Part Traceability | C | Draft, pending signature | Drafted | PP-09; bridges to the WO system |
+| CS-013 | Work Orders & Part Traceability | D | Draft, pending signature | Drafted | PP-09; bridges to the WO system |
 
-Notes: every standard flips to Released only when the SN6 Composites Lead signs its approval table (CS-000 §7.1); the doc header and this index change together. Next free number: **CS-014**. 2026-07-28: every doc above got a language pass (fewer em dashes, less decorative bold) plus targeted accuracy fixes, most substantively CS-013 (now describes the live Firebase app, not the retired offline `work-orders.html`), CS-005 (a dated web cross-check + a sharpened certified-operator caveat), and CS-011 (a note tying it to the app's Stock tab). 2026-08-01: CS-008 → Rev C, adding the FEB hold column to the resin table and §5.1 explaining it; the work-order app now blocks a demould step until that hold elapses, and the standard had been stating only the datasheet figures.
+Notes: every standard flips to Released only when the SN6 Composites Lead signs its approval table (CS-000 §7.1); the doc header and this index change together. Next free number: **CS-014**. 2026-07-28: every doc above got a language pass (fewer em dashes, less decorative bold) plus targeted accuracy fixes, most substantively CS-013 (now describes the live Firebase app, not the retired offline `work-orders.html`), CS-005 (a dated web cross-check + a sharpened certified-operator caveat), and CS-011 (a note tying it to the app's Stock tab). 2026-08-01: CS-008 → Rev C, adding the FEB hold column to the resin table and §5.1 explaining it; the work-order app now blocks a demould step until that hold elapses, and the standard had been stating only the datasheet figures. 2026-08-27: CS-013 and CS-001 → Rev D together, for the R&D build — a part that is real carbon on a real deadline but is not a season deliverable. CS-013 §4 defines it and §7.1 says when to mark it; CS-001 §4 and §7.6 place the mark on the label's ID line and state outright that it is **not** a class word, so the class-word list is unchanged and TEST PANEL keeps its single meaning. An R&D record enforces exactly like any other — it is the opposite of a retro record in that respect — and the ID never carries the distinction, so a build can be moved into the season without a relabel.

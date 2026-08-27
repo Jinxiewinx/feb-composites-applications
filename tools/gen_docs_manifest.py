@@ -53,7 +53,7 @@ def add(entry):
 
 
 def title_from_md(md_path):
-    for line in md_path.read_text(errors="ignore").splitlines():
+    for line in md_path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = line.strip()
         if line.startswith("#"):
             return line.lstrip("#").strip()
@@ -144,7 +144,7 @@ if pr.exists():
 # stable order: category then title
 order = {"Datasheets": 0, "Standards": 1, "Guides": 2}
 manifest.sort(key=lambda m: (order.get(m["category"], 9), m["title"]))
-(DOCS / "manifest.json").write_text(json.dumps(manifest, indent=1))
+(DOCS / "manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8", newline="\n")
 
 by_cat = {}
 for m in manifest:

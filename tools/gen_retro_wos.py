@@ -227,11 +227,11 @@ def catch_can():
 def main():
     wos = [make_wo(i + 1, row) for i, row in enumerate(PARTS)] + [catch_can()]
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(wos, indent=1, ensure_ascii=False))
+    OUT.write_text(json.dumps(wos, indent=1, ensure_ascii=False), encoding="utf-8", newline="\n")
     print(f"wrote {len(wos)} work orders -> {OUT.name}")
     if APP.exists():
         import re as _re
-        html = APP.read_text()
+        html = APP.read_text(encoding="utf-8")
         payload = json.dumps(wos, ensure_ascii=False)
         marker = "__SN5_SEED_JSON__"
         if marker in html:
@@ -240,7 +240,7 @@ def main():
             html = _re.sub(
                 r'(<script id="seed" type="application/json">)[\s\S]*?(</script>)',
                 lambda m: m.group(1) + payload + m.group(2), html, count=1)
-        APP.write_text(html)
+        APP.write_text(html, encoding="utf-8", newline="\n")
         print("seed injected into work-orders.html")
 
 
