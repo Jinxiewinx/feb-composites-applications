@@ -67,7 +67,7 @@ Empty states shrink the page instead of padding it.
 
 ### Season
 
-![Season: the blueprint](../design/season-mockup-20260826.png)
+![Season: the blueprint](../design/season-mockup-20260827.png)
 
 The blueprint, and the tab that replaced the Composites Master Tracker
 spreadsheet. One row per part the team means to make, thirteen columns, and most
@@ -98,6 +98,56 @@ made there is overwritten on the next publish.
 
 Season is the planning view; **Parts** is the working view, a rail plus one open
 record for when you are doing something to one part. Same records, two questions.
+
+### R&D parts
+
+Not everything the shop lays up is going on the car. Coupons, flat test panels,
+layup trials, a mold shakedown — those are **real parts**: real carbon, real
+resin, a real cost and a real deadline. What they are not is something the team
+promised to deliver this season.
+
+So a part can be marked **R&D**, and that means one thing and one thing only:
+*it is not a season deliverable.* It is not scrap, it is not a draft, and it is
+not exempt from anything. An R&D work order has the same blockers, the same cure
+holds, the same evidence gates and the same buy-offs as any other, because it is
+real work at a real bench.
+
+What changes:
+
+- **It is not on the Season tab.** That tab is the list of things that have to be
+  on the car. The count in its toolbar says how many are being held back — `12
+  of 20 parts · 8 R&D` — and the R&D number takes you to them, so nothing ever
+  just disappears.
+- **It is not in the Google Sheet mirror**, for the same reason.
+- **It is everywhere else**, marked with a black **R&D** capsule: the Parts rail,
+  the Work Orders rail, both detail pages, the dashboard, the deadline lists,
+  search, and both CSV exports (as a column, so you can still total it).
+- **Its work orders inherit it.** Start a run on an R&D part and the run is R&D;
+  nobody has to remember. A run with no part of its own — a bar cast on the
+  bench for a shrinkage test — can be marked on its own with **+ R&D run**.
+- **It says so on paper too.** The printed traveler carries an `R&D — NOT A
+  SEASON DELIVERABLE` stamp beside the usual Draft or Retro one, and a **Build
+  type** line in the body in case the top of the sheet gets cropped. The 4×1
+  label carries a boxed **R&D** next to the ID. Scan that label and the nameplate
+  says it too.
+
+**Making one:** the Parts tab has two buttons — **New Part** and **R&D part** —
+and Work Orders has **New WO** and **R&D run**. There is no dialog asking you
+which; you press the one you mean, and the badge is the first thing on the page
+you land on. Adding a row on the Season tab always makes a season part, because a
+row on the blueprint is a commitment by definition.
+
+**Changing your mind:** while a part has no work order against it, R&D is an
+ordinary checkbox on its page and anyone can flip it either way. Once a run
+exists, it locks: a **lead** can move it *into* the season, once, and nothing
+moves a season part back to R&D. That is what makes the season count worth
+trusting.
+
+**Promotion keeps the ID.** `P-SN6-042` is still `P-SN6-042` afterwards — its
+label is still on the shelf, its traveler is still in the binder and its QR
+still resolves. All that changes is that it now appears on the blueprint. The
+move is written to the part's own comment log with your name on it.
+
 
 ### How parts, runs and molds fit together
 
@@ -233,7 +283,7 @@ cannot be brought back, so the offer is a backup export first instead.
 
 ### Parts
 
-![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260826.png)
+![Parts: the split view, each stage a row of steps](../design/parts-mockup-20260827.png)
 
 Parts is last season's Part Tracker reborn, and it leads the Build group because
 the part is where the work starts. Each part carries three parallel progress

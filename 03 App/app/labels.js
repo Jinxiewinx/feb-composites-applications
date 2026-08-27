@@ -142,6 +142,15 @@ function qrSvg(text, sizeMm, cls) {
  * is a bearer credential and works regardless of storage.rules), or unbounded
  * free text like comments.
  */
+/* R&D, asked in a way that survives this file being loaded ALONE.
+   test_qr.mjs runs labels.js in a bare sandbox with only `esc` and `qrcode`,
+   and its header says that is deliberate: anything more and the QR arithmetic
+   starts depending on core.js's whole surface. So this is guarded exactly the
+   way pubProjection already guards DB a few lines down. Loaded on its own, a
+   label simply cannot know about a flag that lives on records it was not
+   given — and the geometry it IS there to check is unaffected. */
+function lblIsRnd(coll, o) { return typeof recIsRnd === "function" ? recIsRnd(coll, o) : false; }
+
 function pubProjection(coll, o) {
   if (!o || !o.id) return null;
   const cls = labelClass(coll, o);
@@ -164,7 +173,21 @@ function pubProjection(coll, o) {
     })(),
     wo: o.workOrderId || o.wo || (coll === "workOrders" ? o.id : "") || "",
     rev: o.revision || o.rev || "",
-    note: "",
+    /* R&D rides `note` rather than a new key, and that is a DEPLOYMENT decision
+       rather than a tidiness one. `note` is already in firestore.rules'
+       hasOnly() list and has been the empty string on every document ever
+       written, so this ships with the app and nothing else has to be true at the
+       same time.
+       A new key would need the rules deployed FIRST, and getting that order
+       wrong is silent and total: pubProjection() emits every key on every write,
+       so one key the deployed rules do not accept rejects EVERY nameplate in the
+       app, not just R&D ones — and pubSync() reduces that to a console.warn on
+       purpose ("a mirror failure must never surface as a save failure"). The
+       symptom is nothing at all, for as long as it takes somebody to scan a
+       label and notice a stale answer.
+       A fixed sentence, not user text, so the "no unbounded free text" rule
+       above still holds. */
+    note: lblIsRnd(coll, o) ? "R&D build — a real part, not a season deliverable." : "",
     updatedAt: o.updatedAt || ""
   };
 }
@@ -251,7 +274,21 @@ function labelHtml(coll, o, opts) {
   return `<div class="lbl" data-id="${esc(o.id)}" data-cls="${esc(p.cls)}">
     <div class="lbl-txt">
       <div class="lbl-name ${t.cls}">${esc(L.name)}</div>
-      <div class="lbl-rid">${esc(o.id)}</div>
+      ${/* R&D goes on the ID row and nowhere else. The vertical budget above is
+            spent, so this had to cost zero millimetres — and it does: the tag is
+            smaller than the row it sits in, so the row cannot grow (the sums are
+            in print.css beside .lbl-rnd).
+            The ID row is also the only row on this label whose CONTENT IS
+            LENGTH-CAPPED — 14 characters, enforced by fitsQrBudget — so it is
+            the one place a mark can be put and proven never to truncate. The
+            name clamps, the key row and the footer ellipsis, and the mid row is
+            deleted outright whenever the name needs two lines.
+            Deliberately NOT a class word: labelClass()'s list maps one-to-one
+            onto id prefixes and already contains TEST PANEL for PNL, so "R&D
+            PART" would immediately raise "is an R&D test panel an R&D part or a
+            test panel?". R&D is an adjective on a class, so it prints as its own
+            tag. */""}
+      <div class="lbl-rid"><span>${esc(o.id)}</span>${lblIsRnd(coll, o) ? '<span class="lbl-rnd">R&amp;D</span>' : ""}</div>
       <div class="lbl-r2">${esc(L.key)}</div>
       ${t.merge ? "" : `<div class="lbl-r3">${esc(L.mid)}</div>`}
       <div class="lbl-r4"><span>${esc(foot)}</span><span class="lbl-feb">FEB</span></div>
@@ -506,7 +543,7 @@ function labelBuilderHtml() {
     </div>
     <div class="lblist">${rows.map(o => `<label class="chk"><input type="checkbox" ${LB.picked[o.id] ? "checked" : ""}
       onchange="LB.picked['${esc(o.id)}']=this.checked;lbRefresh()"> <b>${esc(o.id)}</b>
-      <span class="muted">${esc(o.partName || o.name || o.label || "")}</span></label>`).join("")}</div>
+      <span class="muted">${esc(o.partName || o.name || o.label || "")}</span>${rndBadge(recIsRnd(LB.coll, o))}</label>`).join("")}</div>
   </div>
   <div class="foot">
     <button onclick="closeModal()">Cancel</button>

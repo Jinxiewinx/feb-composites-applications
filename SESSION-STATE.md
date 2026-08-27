@@ -48,9 +48,9 @@ the app called it before any shim had it. Grep `window.fb = {` for the list.
 32/0 on three straight re-runs, with `q.html` untouched. Re-run before believing
 it.
 
-**Fixture gaps, found twice, same shape.** The fixtures described records the
-app considers impossible, and nothing failed because nothing asserted on a count
-that was always zero:
+**Fixture gaps, found twice, same shape — and now guarded.** The fixtures
+described records the app considers impossible, and nothing failed because
+nothing asserted on a count that was always zero:
 
 - v1.0.0: neither issue carried a `workOrderId`, so `issuesForWO()` matched
   nothing and every browser suite and mockup photographed an empty Issues
@@ -59,8 +59,46 @@ that was always zero:
   Season tab and the tracker feed exclude retro — so the blueprint photographed
   empty. `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix.
 
-Worth a pass before the next release: **which other fixtures describe last
-season only?** The pattern is a filter the fixtures do not satisfy.
+The open question — *which other fixtures describe last season only?* — now has
+a test instead of a reading pass. `test_app.mjs` imports `tools/lib/fixtures.mjs`
+(it never did before, which is exactly why the gap survived) and the block
+**"fixtures satisfy every filter the app applies"** asserts records exist on
+BOTH sides of every filter the fixtures feed, naming the bug in its own failure
+message. Add a filter, add a row to its `SIDES` table.
+
+**R&D is not a second `retro`, and that is the thing to protect.** `rnd` on a
+part means "not a season deliverable"; it does NOT mean "do not enforce". Every
+`if (x.retro) return null` gate stays as written and never gains an `rnd` test —
+an R&D run has real blockers and a real cure clock. The test named *"AN R&D RUN
+STILL ENFORCES"* is the guard. Accessors are `isRnd` / `inSeason` / `woIsRnd` /
+`recIsRnd` in `core.js`; `inSeason()` is fused so no site ever tests two flags by
+hand. Hidden in exactly three places (`seasonRows()`, the Season denominator,
+`trackerRow()`), marked everywhere else. Full reasoning in `DESIGN-NOTES.md`.
+
+**The Season tab has TWO retro/R&D filters, not one.** `seasonRows()` and the
+`all` denominator behind the toolbar count. Patch one and not the other and the
+tab reports rows it is not showing. Both directions are asserted.
+
+**Every Major and Minor release now ships one or two pictures.** Hand-written
+into `tools/lib/release-shots.mjs`, shot by `tools/shoot_release.mjs` at step 9b
+of `release.mjs` — after the live check, so the picture is of the version that
+shipped — and listed under the Slack note to attach. `release.mjs` refuses to
+ship if that file has not moved since the last tag, the same guard `WHATS_NEW`
+already had and for the same reason. `shoot_release.mjs` DIES without Chromium
+rather than skipping: a skipped picture is a release announced without one and
+nobody finding out. `--no-shots` is the deliberate way past it; patches skip it.
+
+**Two suites fail at HEAD, and did before this work** — verified by stashing.
+`test_q_landing`: 4 failures on the hanging/refused paths ("no detail rows are
+invented", got 4 want 0) — this is NOT the known flake, which was the timing
+assertion. `test_safearea`: `wo-detail` at landscape-max. Both want a look.
+
+**The CS-001 and CS-013 `.docx` are stale.** Both went to Rev D in markdown
+(the R&D mark, and R&D explicitly NOT being a class word). `tools/build_docx.py`
+and `gen_docs_manifest.py` need Python, and there is no `tools/.venv` on this
+machine — the `python` on PATH is the Windows Store stub. The `.md` copies under
+`03 App/app/docs/standards/` were synced by hand, which is all the app serves.
+
 
 ---
 

@@ -55,6 +55,17 @@ const RECS = [
   { coll: "molds", o: {
       id: "MOLD-SN6-007", name: "NOSECONE",
       board: "BRD-SN6-014", location: "JACOBS BASEMENT SHELF B3 BEHIND THE ETCH LOCKER" } },
+  /* R&D, under the worst conditions the label can actually be asked for: a
+     55-character name (so nameTier merges the mid row away) AND a footer long
+     enough to overflow. The R&D tag rides the ID row precisely because that row
+     is the only one whose content is length-capped, so this is the case that
+     proves it — if the tag ever starts costing vertical space or eating the
+     ellipsis, it fails here and not in the shop. */
+  { coll: "parts", o: {
+      id: "P-SN6-950", partName: "VORTEX GENERATOR TRIAL PANEL LOWER SURFACE SET TWO OF SIX",
+      layupSchedule: "4X 195 TWILL + .125 NOMEX", layupType: "MOLD INFUSION", rnd: true,
+      workOrderId: "WO-SN6-118", moldLocation: "JACOBS BASEMENT SHELF B3 BEHIND THE ETCH LOCKER",
+      layupProgress: "Not Started", by: "RJB" } },
   { coll: "parts", o: {
       id: "P-SN6-007", partName: "UT INLET L/H", layupSchedule: "6X 195 TWILL + .125 NOMEX",
       layupType: "MOLD INFUSION", workOrderId: "WO-SN6-031", moldLocation: "RFS",
@@ -101,6 +112,11 @@ const HARNESS = `<!doctype html><meta charset="utf-8">
   function icon(){ return ""; }
   function toast(){}
   function recById(){ return null; }
+  // The R&D lookup lives in core.js. Stubbed like the rest of the boundary, so
+  // the R&D record below actually renders its tag and the geometry checks have
+  // something to measure. Without this, lblIsRnd() correctly answers false and
+  // every R&D assertion here would pass against a label with no tag on it.
+  function recIsRnd(coll, o){ return !!(o && o.rnd); }
   function mountSheet(html){ document.getElementById("printroot").innerHTML = html; }
 </script>
 <script src="/labels.js"></script>
@@ -301,6 +317,53 @@ const febClip = await page.evaluate(() => {
   return bad;
 });
 ok(febClip.length === 0, "the FEB tag is never clipped, however long the footer", febClip.join(" | "));
+
+/* The R&D tag. It rides the ID row rather than a row of its own because the
+   vertical budget is spent (18.8mm of 21.4mm one-line, 20.6mm two-line) — so
+   the assertion that matters is that it costs NOTHING, measured rather than
+   argued. Same technique as the FEB check above: measure the tag itself. */
+console.log("\nR&D mark");
+const rnd = await page.evaluate(() => {
+  const el = [...document.querySelectorAll(".lbl")].find(l => l.dataset.id === "P-SN6-950");
+  const plain = [...document.querySelectorAll(".lbl")].find(l => l.dataset.id === "P-SN6-007");
+  const tag = el && el.querySelector(".lbl-rnd");
+  if (!el || !tag) return { missing: true, hasEl: !!el };
+  const t = tag.getBoundingClientRect();
+  const row = el.querySelector(".lbl-rid").getBoundingClientRect();
+  const cell = el.closest(".label-cell").getBoundingClientRect();
+  const idSpan = el.querySelector(".lbl-rid > span");
+  return {
+    text: tag.textContent,
+    // Cut glyphs off? The whole reason it sits on the capped row.
+    clipped: tag.scrollWidth > tag.clientWidth + 0.5,
+    insideCell: t.right <= cell.right + 0.5 && t.bottom <= cell.bottom + 0.5,
+    tagH: t.height, rowH: row.height,
+    // The plain part's ID row, for the "costs nothing" comparison.
+    plainRowH: plain.querySelector(".lbl-rid").getBoundingClientRect().height,
+    idReadable: idSpan.scrollWidth <= idSpan.clientWidth + 1,
+    keyRow: !!el.querySelector(".lbl-r2") && el.querySelector(".lbl-r2").textContent.trim().length > 0,
+    febW: el.querySelector(".lbl-feb").getBoundingClientRect().width,
+  };
+});
+ok(!rnd.missing, "the R&D part's label carries the mark", JSON.stringify(rnd));
+if (!rnd.missing) {
+  eq(rnd.text, "R&D", "and it says R&D");
+  ok(!rnd.clipped, "never cut off — it sits on the one row whose content is length-capped", `scroll=${rnd.clipped}`);
+  ok(rnd.insideCell, "inside the 4x1in cell");
+  ok(rnd.tagH < rnd.rowH + 0.5, "shorter than the row it rides, so a flex row cannot grow around it",
+    `tag=${rnd.tagH.toFixed(1)}px row=${rnd.rowH.toFixed(1)}px`);
+  ok(Math.abs(rnd.rowH - rnd.plainRowH) < 0.5,
+    "and the ID row is the SAME HEIGHT as a label with no mark — this is the 18.8/20.6mm budget, measured",
+    `rnd=${rnd.rowH.toFixed(1)}px plain=${rnd.plainRowH.toFixed(1)}px`);
+  ok(rnd.idReadable, "the id itself is still fully readable beside it");
+  ok(rnd.keyRow, "and the layup stack — the line this whole system exists for — is untouched");
+  ok(rnd.febW >= 14, "the FEB tag survives too, on a label carrying both", `${rnd.febW.toFixed(1)}px`);
+}
+const rndOnPlain = await page.evaluate(() =>
+  [...document.querySelectorAll(".lbl")].filter(l => l.querySelector(".lbl-rnd")).map(l => l.dataset.id));
+ok(rndOnPlain.length === 1 && rndOnPlain[0] === "P-SN6-950",
+  "and exactly one label on the sheet is marked — a season part's label is unchanged", rndOnPlain.join(" | "));
+
 
 // Same failure one level up: the truncation must land on the text, not on the
 // row, so a footer that is too long ends in an ellipsis rather than a hard cut.

@@ -227,7 +227,7 @@ export const SEASON_PARTS = [
     cadProgress: "Mold CAD/CAM Done", moldProgress: "Machining", layupProgress: "Not Started",
     weightG: "420", weightActualG: "", layupDeadline: iso(47),
     comments: "Draft angle opened 2° from the SN5 mold.",
-    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, rnd: false, createdBy: "starbuck@berkeley.edu",
   },
   {
     id: "P-SN6-002", partName: "UT DIFFUSER", subteam: "AERO", layupType: "MOLD INFUSION",
@@ -235,7 +235,7 @@ export const SEASON_PARTS = [
     moldEngineer: "Ana Rivera", manufacturingEngineer: "",
     cadProgress: "Part CAD Done", moldProgress: "Not Started", layupProgress: "Not Started",
     weightG: "", weightActualG: "", layupDeadline: iso(61), comments: "",
-    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, rnd: false, createdBy: "starbuck@berkeley.edu",
   },
   {
     id: "P-SN6-003", partName: "FIREWALL", subteam: "BERGO", layupType: "GLASS INFUSION",
@@ -245,14 +245,60 @@ export const SEASON_PARTS = [
     moldEngineer: "Justin", manufacturingEngineer: "",
     cadProgress: "Not Started", moldProgress: "N/A (Flat)", layupProgress: "Not Started",
     weightG: "", weightActualG: "", layupDeadline: "", comments: "",
-    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, rnd: false, createdBy: "starbuck@berkeley.edu",
   },
   {
     id: "P-SN6-004", partName: "", subteam: "AUTO-MECH", layupType: "MOLD WET LAY",
     layupSchedule: "", moldLocation: "", moldEngineer: "", manufacturingEngineer: "",
     cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started",
     weightG: "", weightActualG: "", layupDeadline: "", comments: "",
-    commentLog: [], workOrderId: "", layupStack: [], retro: false, createdBy: "starbuck@berkeley.edu",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, rnd: false, createdBy: "starbuck@berkeley.edu",
+  },
+];
+
+/* R&D parts: the OTHER SIDE of the Season tab's filter.
+
+   SEASON_PARTS exists because all 33 SN5 parts are retro and the Season tab
+   excludes retro, so the blueprint photographed empty for a whole release and
+   nothing failed — every assertion was on a count that was always zero. R&D is
+   a second filter on the same tab and would have repeated it exactly: with only
+   season parts in the fixtures, "R&D is excluded" passes against no R&D parts
+   at all.
+
+   So these are deliberately awkward:
+     P-SN6-101  linked to a run, dated, engineered — the ordinary case, and the
+                one that proves a run INHERITS its part's programme
+     P-SN6-102  sparse and undated — an R&D part is a real part, and a real part
+                is allowed to be half-filled-in
+     P-SN6-103  retro AND rnd at once. This is the one that matters: it is the
+                only fixture that fails a seasonRows() written with && instead
+                of ||, and it is legal (R&D work from a finished season). */
+export const RND_PARTS = [
+  {
+    id: "P-SN6-101", partName: "VG TRIAL PANEL", subteam: "AERO", layupType: "MOLD INFUSION",
+    layupSchedule: "4x 195 TWILL", moldLocation: "RFS rack 4",
+    moldEngineer: "Ana Rivera", manufacturingEngineer: "Miles Okafor",
+    cadProgress: "Part CAD Done", moldProgress: "Not Started", layupProgress: "Not Started",
+    weightG: "85", weightActualG: "", layupDeadline: iso(24),
+    comments: "Vortex generator draft study — feeds the SN7 decision, not the SN6 car.",
+    commentLog: [], workOrderId: "WO-SN6-003", layupStack: [], retro: false, rnd: true,
+    createdBy: "starbuck@berkeley.edu",
+  },
+  {
+    id: "P-SN6-102", partName: "CORE BONDING COUPON SET", subteam: "BERGO", layupType: "MOLD WET LAY",
+    layupSchedule: "", moldLocation: "", moldEngineer: "", manufacturingEngineer: "",
+    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started",
+    weightG: "", weightActualG: "", layupDeadline: "", comments: "",
+    commentLog: [], workOrderId: "", layupStack: [], retro: false, rnd: true,
+    createdBy: "starbuck@berkeley.edu",
+  },
+  {
+    id: "P-SN6-103", partName: "SN5 SHAKEDOWN PANEL", subteam: "AERO", layupType: "GLASS INFUSION",
+    layupSchedule: "", moldLocation: "", moldEngineer: "", manufacturingEngineer: "",
+    cadProgress: "Not Started", moldProgress: "N/A (Flat)", layupProgress: "Not Started",
+    weightG: "", weightActualG: "", layupDeadline: "", comments: "",
+    commentLog: [], workOrderId: "", layupStack: [], retro: true, rnd: true,
+    createdBy: "starbuck@berkeley.edu",
   },
 ];
 
@@ -291,7 +337,7 @@ export const APPLY_FIXTURES = `
   /* Concatenated onto the SN5 archive, not replacing it. Parts and the
      dashboard want both seasons; only the Season tab and the tracker feed
      filter retro out, which is the whole point of these four. */
-  window.onFbData("parts", (DB.parts || []).concat(${JSON.stringify(SEASON_PARTS)}));
+  window.onFbData("parts", (DB.parts || []).concat(${JSON.stringify(SEASON_PARTS)}, ${JSON.stringify(RND_PARTS)}));
   /* Season config for the dashboard countdown. Relative dates, so the module
      photographs alive on any day the suites run; the loader in core.js never
      overwrites a planted value with a missing doc. */
@@ -329,6 +375,31 @@ export const APPLY_FIXTURES = `
       ],
       files: [{ id: "FFIX1", name: "trimmed-part.jpg", type: "image/jpeg", by: "dana@feb.test", ts: new Date().toISOString(),
         url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23353'/%3E%3C/svg%3E" }] },
+    /* Two R&D runs, and they are different on purpose.
+
+       WO-SN6-003 carries partId and NO rnd field of its own. That is the point:
+       it must read as R&D anyway, because woIsRnd() asks its part. A fixture
+       that set rnd:true here would pass whether inheritance worked or not.
+
+       WO-SN6-004 has no part at all — a bar cut on the bench for a shrinkage
+       test — so it carries its own flag. That is the standalone fallback, and
+       it is the only path that exercises it.
+
+       Both are ordinary live runs with real dates and real steps, because an
+       R&D run ENFORCES: unlike a retro record it has real blockers and a real
+       cure clock, and a fixture full of exempt records would quietly stop
+       testing that. */
+    { id: "WO-SN6-003", partName: "VG TRIAL PANEL", partId: "P-SN6-101", subteam: "AERO", status: "InWork",
+      moldEngineer: "Ana Rivera", manufacturingEngineer: "Miles Okafor", dueDate: dd(9),
+      steps: [
+        { seq: 1, title: "Mold sealed and release verified", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
+        { seq: 2, title: "Layup per stack plan", status: "open", buyoff: { name: "", date: "" } },
+      ] },
+    { id: "WO-SN6-004", partName: "RESIN SHRINKAGE TEST BAR", subteam: "BERGO", status: "Draft",
+      moldEngineer: "Priya Patel", manufacturingEngineer: "", dueDate: dd(11), rnd: true,
+      steps: [
+        { seq: 1, title: "Cast bar", status: "open", buyoff: { name: "", date: "" } },
+      ] },
   ]));
   /* One stack plan and a board that fits it, so the cut list and the
      mark-cut confirm photograph as transactions instead of empty states

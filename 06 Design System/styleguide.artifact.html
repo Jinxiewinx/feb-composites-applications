@@ -413,6 +413,27 @@ button.wosec-hd { appearance: none; -webkit-appearance: none; width: 100%; backg
   background: var(--surface-2); border: 1px solid var(--border-2);
   color: var(--muted); white-space: nowrap;
 }
+/* R&D — a real part or run that is not a season deliverable.
+   NOT a status, and it must never be readable as one, so it borrows nothing
+   from the status vocabulary. Every status badge in this stylesheet — .pill,
+   .status, .wflag, .stage — is a ~5px-radius RECTANGLE carrying a LIGHT TINT
+   of its own hue. This is the opposite of all three: the fully-rounded .tpill
+   capsule (the documented "credential, not a status" silhouette),
+   solid-filled, and with NO HUE AT ALL. Shape says "category", fill weight
+   says "look at me", and there is no hue left to confuse with in-work, late,
+   done, archive, collecting, parked or now.
+   One token pair, no new tokens and no dark override: --ink on --card is
+   near-black on white, and because both re-point under [data-theme="dark"]
+   the capsule inverts itself to near-white on dark. The distinction survives
+   greyscale, a colour-blind reader and a photocopy, because the carriers are
+   fill weight and the word — never hue.
+   NOT dashed. Dashed already means "not real yet" everywhere here —
+   .tpill.mtx-add, .ln-ghost, .pstep.na, .comment.deleted — and an R&D part is
+   real carbon on a real deadline. Dashed would say the exact thing this
+   feature exists to deny. */
+.tpill.rnd { background: var(--ink); border-color: var(--ink); color: var(--card);
+             letter-spacing: .06em; font-size: 11px; }
+
 /* Wrap container for a row of training capsules. */
 .trwrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 /* One training per row in the grant/revoke modal; the whole row is the tap

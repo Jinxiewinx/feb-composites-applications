@@ -133,6 +133,36 @@ if you did not, and prints the subjects as raw material. Both team-facing
 surfaces read that one list — the What's New panel in the app and the
 `#composites` note this prints — so they cannot say different things.
 
+**Every Major and Minor release ships one or two pictures.** Write them into
+`tools/lib/release-shots.mjs` before you cut. It is the same hand-written act as
+`WHATS_NEW` and it is checked the same way: the script refuses to ship if that
+file has not moved since the last tag, because a shot list picked from what
+changed photographs the biggest diff, and the biggest diff is almost never the
+thing worth showing. **Two is the cap** — three pictures in a Slack post is a
+blog entry and nobody reads the third.
+
+`release.mjs` shoots them at step 9b, *after* it has verified the deploy is live,
+so the picture is provably of the version that actually shipped, and prints
+their paths under the Slack note for you to drag in. Iterate on the framing
+without cutting a release:
+
+```bash
+node tools/shoot_release.mjs --version 2.2.0
+```
+
+Two things about it that differ from every other browser tool here, both on
+purpose. It **dies when Chromium is missing** rather than printing a skip line
+and exiting 0: a skipped test teaches you nothing and breaks nothing, whereas a
+skipped picture is a release announced without one and nobody finding out. And
+it seeds from the **same fixtures the suites use**, so a release picture cannot
+show a state no test covers — which is the other half of the lesson behind
+`SEASON_PARTS`.
+
+Patches skip all of this: "fixes and copy, nothing new to learn" has nothing to
+photograph. To announce a Major or Minor without a picture anyway, say so out
+loud — `node tools/release.mjs 1.1.0 --no-shots` — and the note will carry a line
+saying there isn't one.
+
 What it deliberately does not do:
 
 - **It does not post to Slack.** `#composites` announcements need Simon's
@@ -161,6 +191,7 @@ What counts as major, minor or patch is at the top of `CHANGELOG.md`.
 | `nocache_server.py` | A static server that actually sends no-cache headers. Use it instead of `python3 -m http.server`, which will happily serve a stale script while you debug code that is not running. |
 | `shoot_ui.mjs` | The camera: PNGs of any tab at four widths and two themes, real SN5 data. Asserts nothing. |
 | `make_mockups.mjs` | The camera plus a picture frame: the annotated screenshots embedded in the READMEs. Captions live in its SHOTS table; rerun it after a UI change and the mockups update themselves. |
+| `shoot_release.mjs` | The same camera pointed at what CHANGED: the one or two pictures that go out with a release, from `tools/lib/release-shots.mjs`. Run by `release.mjs` after the deploy is verified live. Unlike every other browser tool here it DIES without Chromium rather than skipping — see "Cutting a release". |
 | `shoot_receiving.mjs` | The camera pointed at the receiving desk, which `shoot_ui.mjs` cannot reach: it is a surface you drive into, not a tab in a list state. Needs `serve_populated.mjs` running. Asserts nothing, on purpose. |
 | `print-preview.html` | Open in a browser; its Audit all button runs every seed work order through the print layout ladder and reports page counts. |
 

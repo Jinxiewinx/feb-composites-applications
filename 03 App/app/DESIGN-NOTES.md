@@ -223,6 +223,67 @@ sign-off can move: the datasheet floor stays in code, and an override below it
 is refused at write time **and** ignored at read time, so nothing can weaken a
 hold from either side.
 
+## `rnd` is not a second `retro`
+
+They look identical — a boolean whole-record modifier on `parts` that changes
+what the record means everywhere it is read — and they are opposites in the half
+that matters.
+
+`retro` means two things at once:
+
+- *not this season's plan* — `season.js`, `tracker.js`, the dashboard feed
+- *do not enforce; this is a document, not a job* — the evidence gate, cure
+  holds, blockers, the attention query, the training gate, the cure modal
+
+`rnd` wants the first meaning and the **exact opposite** of the second. An R&D
+part is real carbon on a real deadline: a mold shakedown that skips the
+stack-freeze blocker is precisely how you get a bad shakedown, and an R&D cure
+hold is a real cure hold with real resin and a real clock.
+
+So **every `if (x.retro) return null` gate stays exactly as written and never
+gains an `rnd` test.** If you are about to add one beside a `retro` one, stop —
+the feature has silently become `retro` with a different word, and the only
+thing that catches it is the test named *"AN R&D RUN STILL ENFORCES"* in
+`test_app.mjs`. That test exists for you.
+
+Three accessors, all in `core.js` next to `isLead()`:
+
+| | |
+|---|---|
+| `isRnd(rec)` | the raw flag on a **part** |
+| `inSeason(rec)` | `!retro && !rnd` — **the one predicate** every "is this on this season's board" site calls |
+| `woIsRnd(wo)` | a run's programme, **derived** from its part through `partOf()`, falling back to the run's own flag only when there is no part |
+| `recIsRnd(coll, o)` | the `(collection, record)` form, for the label, the nameplate and the label-sheet builder |
+
+`inSeason()` is fused on purpose. `retro` is honoured in about twenty-five
+places and forgotten in nine, and the reason is that every site has to remember
+a flag test; a second flag on a second axis would double that. **Never spell out
+`!p.retro && !isRnd(p)` by hand.**
+
+`woIsRnd()` derives rather than stores, and that is what makes promotion **one
+field write on one document**. A stored copy would make "promote this part" a
+fan-out over every run it has, with no transaction across them and a
+half-promoted state in the middle — and it would drift the moment somebody
+confirmed a name guess or relinked a run.
+
+**R&D is hidden in exactly three places**: `seasonRows()`, the Season toolbar's
+denominator, and `trackerRow()`. Everywhere else it is marked and counted —
+Parts, Work Orders, the dashboard, deadlines, search, the CSVs, budget. If you
+find yourself adding a fourth exclusion, you are building a second archive.
+
+The two Season sites are **one change, not two**. Filter the rows and not the
+denominator and the toolbar reports parts it is not showing, which is the quiet
+sibling of the release where the blueprint photographed empty because every
+fixture was retro and nothing asserted on a count that was always zero.
+
+**Never encode R&D in a part's name.** `"R&D — NOSECONE"` is the obvious
+workaround and it breaks three things at once: `Sync.gs` matches rows on the
+Part Name column, so a rename orphans that part's row in the Master Tracker and
+tints it amber forever; `partOf()` falls back to a name match, so it silently
+unlinks the part from its work order; and `nameTier()` gives a one-line label
+only 20 characters, so six characters of prefix pushes most names to two lines
+and deletes the mid row from the printed label.
+
 ## The public surfaces
 
 There are two deliberate public holes, and both are narrow on purpose.

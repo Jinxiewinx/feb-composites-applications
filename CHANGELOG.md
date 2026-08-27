@@ -3,7 +3,8 @@
 Every released version of the FEB Composites app, newest first.
 
 Releases are cut with `node tools/release.mjs <version>`, which tags the commit,
-deploys hosting and prints a Slack note for `#composites`. See
+deploys hosting and prints a Slack note for `#composites` — with one or two
+pictures to attach to it, on every Major and Minor. See
 [the release section of the tools README](tools/README.md).
 
 ## What the numbers mean

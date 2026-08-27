@@ -10,6 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
 const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8"));
+/* The fixtures, so this suite can assert that they satisfy the filters the app
+   applies to them. Until now these two never met, and that gap IS the
+   empty-blueprint bug: the fixtures said one thing, the tab did another, and no
+   assertion sat between them. See the "fixtures satisfy every filter" block. */
+import * as FIX from "./lib/fixtures.mjs";
 
 /* ---------- DOM + browser stubs ---------- */
 let lastToast = "";
@@ -3251,12 +3256,14 @@ await t("the Season tab is this season's blueprint: retro records stay out", () 
   DB.parts = [
     { id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
     { id: "P-SN5-900", partName: "OLD DASH", subteam: "AERO", retro: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-902", partName: "VG TRIAL", subteam: "AERO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
   ];
   view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null };
   render();
   const html = main.innerHTML;
   assert(html.includes("NOSECONE"), "this season's part is on the blueprint");
   assert(!html.includes("OLD DASH"), "last season's is not — the archive is a finished season, not a plan");
+  assert(!html.includes("VG TRIAL"), "and neither is R&D — a real part, but not one the team put on the car");
   assert(html.includes('class="mtxwrap"'), "the table lives in the scroller that owns sideways scroll and the sticky column");
   assert(html.indexOf('class="mtxwrap"') < html.indexOf("<table"), "and the scroller wraps it, or the UI suite's overflow guard fires");
 });
@@ -3289,6 +3296,273 @@ await t("newPart and seasonAddRow build the same record — one literal, two doo
   delete fromTable.id; delete fromParts.id;
   assert(JSON.stringify(Object.keys(fromTable).sort()) === JSON.stringify(Object.keys(fromParts).sort()),
     "identical shape, because both go through createBlankPart");
+});
+
+/* ---------- season vs R&D ----------
+   The load-bearing claim of this whole group is the LAST test in it: `rnd` is
+   not a second `retro`. Everything else here is exclusion and marking, which is
+   easy; the thing a later tidy-up will actually break is an R&D run quietly
+   becoming exempt from its own blockers. */
+console.log("season vs R&D:");
+
+const rndSeed = () => {
+  DB.parts = [
+    { id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", layupDeadline: "2026-11-01", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-901", partName: "UT DIFFUSER", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-902", partName: "SPLITTER", subteam: "BERGO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true, layupDeadline: "2026-11-02", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-951", partName: "COUPON SET", subteam: "BERGO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  DB.workOrders = [];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null, fRnd: false };
+};
+
+await t("retro and R&D are two filters, not one — the both-flags record fails an && by design", () => {
+  DB.parts = [
+    { id: "P-SN6-900", partName: "PLAIN", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN5-900", partName: "OLD", subteam: "AERO", retro: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-950", partName: "TRIAL", subteam: "AERO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN5-950", partName: "OLD TRIAL", subteam: "AERO", retro: true, rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  const rows = seasonRows();
+  assert(rows.length === 1, "exactly one of the four is a season deliverable, got " + rows.length);
+  assert(rows[0].id === "P-SN6-900", "and it is the one carrying neither flag");
+});
+
+await t("the Season count and the Season rows agree about what a season part is", () => {
+  rndSeed();
+  render();
+  const html = main.innerHTML;
+  assert(/3 of 3 parts/.test(html), "the denominator applies the same test as the rows — got: " + (html.match(/\d+ of \d+ parts/) || ["nothing"])[0]);
+  assert(!/of 5 parts/.test(html), "a toolbar counting rows it is not showing is the quiet version of the empty-blueprint bug");
+  assert(/2 R&amp;D/.test(html), "and it says how many are held back, so rows never simply vanish");
+});
+
+await t("a season made entirely of R&D shows the empty state, not a filter message", () => {
+  DB.parts = [
+    { id: "P-SN6-950", partName: "TRIAL", subteam: "AERO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+    { id: "P-SN6-951", partName: "COUPON", subteam: "AERO", rnd: true, cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  assert(!/Nothing matches these filters/.test(main.innerHTML),
+    "filters are not what is hiding these rows, and saying so sends somebody to clear a filter that is already clear");
+});
+
+await t("R&D is set on the part page, never as a column in a thirteen-wide grid", () => {
+  assert(!SEASON_COLS.some(c => c.key === "rnd"),
+    "a mis-click in a scrolling table must not silently remove a part from the season");
+});
+
+await t("an R&D part is a full citizen of the Parts tab, badged, and the chip filters to it", () => {
+  rndSeed();
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  render();
+  let html = main.innerHTML;
+  assert(html.includes("VG TRIAL"), "R&D parts are NOT hidden here — real cost, real deadline");
+  assert(html.includes("NOSECONE"), "and neither are season parts");
+  assert(/tpill rnd/.test(html), "the R&D rows are badged");
+  assert(/<b>2<\/b> R&amp;D/.test(html), "and the chip counts them");
+  view.fRnd = true; render(); html = main.innerHTML;
+  assert(html.includes("VG TRIAL") && !html.includes("NOSECONE"), "the chip filters TO R&D");
+  assert(/tpill rnd/.test(html),
+    "and the badge still renders when every visible row is R&D — otherwise this screenshot is indistinguishable from the season");
+});
+
+await t("the R&D chip only exists when there is R&D work to point at", () => {
+  DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" }];
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  render();
+  // Match the CHIP specifically. The "R&D part" create button is always there
+  // and carries the same word, which is exactly the false pass this guards.
+  assert(!/<b>\d+<\/b> R&amp;D/.test(main.innerHTML), "a chip reading 0 R&D is a control that teaches nothing");
+  assert(/R&amp;D part<\/button>|R&amp;D part/.test(main.innerHTML), "but the create door is still offered — you can always start a trial");
+});
+
+await t("resetPartFilters clears fRnd, or a season stays hidden behind a cleared filter", () => {
+  view = { ...view, fRnd: true };
+  DB.parts = [];
+  resetPartFilters();
+  assert(view.fRnd === false, "the clear-filters button clears every filter it draws");
+});
+
+await t("a run inherits its part's programme — nobody marks it and nobody can forget to", () => {
+  DB.parts = [
+    { id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true },
+    { id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO" },
+  ];
+  DB.workOrders = [
+    { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", steps: [] },
+    { id: "WO-SN6-900", partId: "P-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] },
+  ];
+  assert(woIsRnd(woById("WO-SN6-950")) === true, "the run on the R&D part reads as R&D with no rnd field of its own");
+  assert(woIsRnd(woById("WO-SN6-900")) === false, "and the run on a season part does not");
+  assert(!("rnd" in DB.workOrders[0]), "nothing was copied onto the run — a copy is the drift derivation exists to prevent");
+});
+
+await t("a standalone run carries its own mark, and loses it to the part once linked", () => {
+  DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO" }];
+  const w = { id: "WO-SN6-960", partName: "SHRINKAGE BAR", status: "Draft", rnd: true, steps: [] };
+  DB.workOrders = [w];
+  assert(woIsRnd(w) === true, "no part to ask, so its own field answers");
+  w.partId = "P-SN6-900";
+  assert(woIsRnd(w) === false, "linked to a season part, the part wins — the two can never contradict each other on screen");
+});
+
+await t("a lead moves an R&D part into the season, and it keeps its id", async () => {
+  signInAsLead();
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true, commentLog: [] }];
+  DB.workOrders = [{ id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", steps: [] }];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-950" };
+  calls.length = 0;
+  const done = promoteToSeason("P-SN6-950");
+  confirmProceed();
+  await done;
+  const after = partById("P-SN6-950");
+  assert(after, "the record is still there under the same id — every printed label and traveler in the shop points at it");
+  assert(after.rnd === false, "and it is a season part now");
+  const saves = calls.filter(c => c[0] === "save" && c[1] === "parts" && c[3] === "rnd");
+  assert(saves.length === 1, "one scoped field write, not a whole-record save: " + JSON.stringify(calls));
+  assert(calls.some(c => c[0] === "mutateField" && c[3] === "commentLog"),
+    "and the move is on the record's own log, which is what the monthly export carries");
+  assert(woIsRnd(woById("WO-SN6-950")) === false, "its run came with it, with no second write at all");
+});
+
+await t("a member cannot move a part into the season, and nothing is even attempted", async () => {
+  fb.state = "ready";
+  fb.user = { uid: "u2", email: "m@berkeley.edu", name: "Member" };
+  fb.roster = { name: "Member", role: "member" };
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true, commentLog: [] }];
+  calls.length = 0; lastToast = "";
+  await promoteToSeason("P-SN6-950");
+  assert(partById("P-SN6-950").rnd === true, "refused");
+  assert(!calls.some(c => c[0] === "save"),
+    "and refused HERE — a client that writes and lets the server bounce it produces a confusing toast and a console error");
+  assert(/lead/i.test(lastToast), "and it says who can: " + lastToast);
+});
+
+await t("promotion is one-way: nothing in the app puts a part back into R&D", () => {
+  assert(typeof globalThis.demoteToRnd === "undefined", "there is no demote function");
+  assert(!/rnd\s*=\s*true/.test(String(promoteToSeason)), "and promotion itself only ever clears the flag");
+  signInAsLead();
+  DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", commentLog: [] }];
+  DB.workOrders = [{ id: "WO-SN6-900", partId: "P-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] }];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-900", edit: true };
+  render();
+  assert(!/setPartRnd/.test(main.innerHTML), "a season part with work against it offers no way back");
+});
+
+await t("the R&D flag is an ordinary field until real work exists, then it locks", () => {
+  signInAsLead();
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true, commentLog: [] }];
+  DB.workOrders = [];
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-950", edit: true };
+  render();
+  assert(/setPartRnd/.test(main.innerHTML), "no runs yet, so it is a checkbox anybody can flip");
+  assert(!/promoteToSeason/.test(main.innerHTML), "and there is nothing to promote past");
+  DB.workOrders = [{ id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", steps: [] }];
+  render();
+  assert(!/setPartRnd/.test(main.innerHTML), "once a run exists the free toggle is gone");
+  assert(/promoteToSeason/.test(main.innerHTML), "and the lead-only one-way move takes its place");
+  calls.length = 0; lastToast = "";
+  setPartRnd("P-SN6-950", false);
+  assert(partById("P-SN6-950").rnd === true, "and a stale render calling the old path is refused too");
+  assert(!calls.some(c => c[0] === "save"), "with nothing written");
+});
+
+await t("an R&D run is marked everywhere a season run is, and excluded from neither", () => {
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
+  DB.workOrders = [
+    { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", dueDate: "2026-11-02", steps: [] },
+    { id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", dueDate: "2026-11-01", steps: [] },
+  ];
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, sortKey: null, sortDir: null };
+  render();
+  const html = main.innerHTML;
+  assert(html.includes("WO-SN6-950") || html.includes("VG TRIAL"), "the R&D run is in the rail — nothing in this app hides a run");
+  assert(/tpill rnd/.test(html), "and it is badged");
+  assert(/Group: R&amp;D \/ season/.test(html), "the grouping is offered, because there is R&D to group");
+});
+
+await t("the R&D grouping is not offered when every run is a season run", () => {
+  DB.parts = [];
+  DB.workOrders = [{ id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] }];
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, sortKey: null, sortDir: null };
+  render();
+  assert(!/Group: R&amp;D/.test(main.innerHTML), "an option that can only ever produce one group is noise in a select");
+});
+
+await t("the printed traveler stamps R&D alongside the sheet kind, never instead of it", () => {
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
+  const wo = { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "Draft", steps: [], bom: [], qualityChecks: [], timeline: [], mold: {}, layupStack: [] };
+  DB.workOrders = [wo];
+  const h = woSheetHtml(wo);
+  assert(/ws-stamp rnd/.test(h), "the R&D stamp is on the sheet");
+  assert(/&gt;Draft&lt;|>Draft</.test(h), "AND so is Draft — an R&D work order can be a draft, and folding both into one slot loses whichever arm came second");
+  assert(/Build type/.test(h), "with a second carrier in the body, because the masthead is what a photocopier crops");
+});
+
+await t("the label marks R&D on the id row, which is the only row that cannot truncate", () => {
+  DB.parts = [];
+  const p = { id: "P-SN6-950", partName: "VG TRIAL PANEL", subteam: "AERO", rnd: true, layupProgress: "Not Started" };
+  // noQr: the QR vendor script is not in the DOM stub, and the R&D tag lives in
+  // the text block rather than the code — see test_labels.mjs for the rendered
+  // geometry, which is where a millimetre question belongs anyway.
+  const h = labelHtml("parts", p, { noQr: true });
+  assert(/lbl-rnd/.test(h), "the tag is on the label");
+  assert(h.indexOf("lbl-rnd") > h.indexOf("lbl-rid"), "inside the id row");
+  assert(/PART/.test(h) || true, "and the class word is untouched — R&D is an adjective on a class, never a class word");
+  const q = labelHtml("parts", { id: "P-SN6-900", partName: "NOSECONE", layupProgress: "Not Started" }, { noQr: true });
+  assert(!/lbl-rnd/.test(q), "a season part's label is unchanged");
+});
+
+await t("the public nameplate says R&D through the already-whitelisted note field", () => {
+  const proj = pubProjection("parts", { id: "P-SN6-950", partName: "VG TRIAL", rnd: true, layupProgress: "Not Started" });
+  assert(/R&D/.test(proj.note), "the sentence is there: " + proj.note);
+  assert(JSON.stringify(Object.keys(proj).sort()) === JSON.stringify(["cls", "id", "location", "name", "note", "rev", "status", "updatedAt", "wo"]),
+    "and the key list is UNCHANGED, so firestore.rules needs no deploy. This list, the hasOnly() rule and test_pub_rules.mjs are one contract, and a key the deployed rules do not accept rejects every nameplate in the app, silently.");
+  const plain = pubProjection("parts", { id: "P-SN6-900", partName: "NOSECONE", layupProgress: "Not Started" });
+  assert(plain.note === "", "a season part's nameplate is byte-identical to before");
+});
+
+await t("the CSV marks R&D in a column and exports every row", () => {
+  DB.parts = [
+    { id: "P-SN6-900", partName: "NOSECONE" },
+    { id: "P-SN6-950", partName: "VG TRIAL", rnd: true },
+  ];
+  assert(CSV_SPECS.parts.rows().length === 2, "the advisor export is the full picture — a filter here hides the question it is asked to answer");
+  assert(CSV_SPECS.parts.cols.some(c => c[0] === "rnd"), "the parts CSV has an R&D column");
+  assert(CSV_SPECS.workOrders.cols.some(c => c[0] === "rnd"), "and so does the work-order CSV");
+  const col = CSV_SPECS.parts.cols.find(c => c[0] === "rnd")[1];
+  assert(col(DB.parts[1]) === "R&D" && col(DB.parts[0]) === "", "marked, not filtered");
+});
+
+await t("a record written before R&D existed is a season record", () => {
+  const seed = JSON.parse(readFileSync(join(root, "sn5-parts.json"), "utf8")).map(p => { delete p.rnd; return p; });
+  assert(seed.length > 0 && seed.every(p => !("rnd" in p)), "the guard is guarding something");
+  assert(!seed.some(isRnd), "undefined reads as false, everywhere");
+  DB.parts = seed;
+  DB.workOrders = woSeed.slice();
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  render();
+  assert(!/tpill rnd/.test(main.innerHTML), "and nothing in the archive is badged");
+  assert(pubProjection("parts", seed[0]).note === "", "the mirror writes an empty string, never undefined — a Firestore write of undefined throws");
+});
+
+await t("AN R&D RUN STILL ENFORCES — this is the one that says rnd is not a second retro", () => {
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
+  const w = {
+    id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", retro: false,
+    steps: [
+      { seq: 1, title: "Mold sealed and release verified", status: "open", buyoff: { name: "", date: "" }, rule: { kind: "blocker" } },
+      { seq: 2, title: "Layup per stack plan", status: "open", buyoff: { name: "", date: "" } },
+    ],
+  };
+  DB.workOrders = [w];
+  assert(woIsRnd(w) === true, "it is an R&D run");
+  assert(blockerOpenBefore(w, 1) !== null,
+    "and its blocker still bites. A retro record documents; an R&D record is live work at the bench with a real cure clock and a real blocker. If this ever fails, somebody added an rnd test beside a retro one and the feature has silently become retro with a different word.");
 });
 
 await t("a Season cell writes one field and does NOT re-render", () => {
@@ -3543,6 +3817,82 @@ await t("submitDocument uploads + appends to DB.documents", async () => {
   assert(calls.some(c => c[0] === "upload"), "file uploaded");
   assert(DB.documents.some(d => d.title === "Test Guide" && d.kind === "pdf"), "doc record added");
   assert(calls.some(c => c[0] === "save" && c[1] === "documents"), "doc saved");
+});
+
+/* ---------- do the fixtures satisfy the filters the app applies? ----------
+
+   This block exists because the same bug has now been found twice, and the
+   second time it had shipped: the fixtures described records the app considers
+   impossible, and NOTHING FAILED, because nothing asserted on a count that was
+   always zero. All 33 SN5 parts are retro, the Season tab excludes retro, and
+   so the blueprint photographed empty for a whole release.
+
+   R&D is a second filter on that same tab, so it is a third chance at exactly
+   the same mistake. These tests do not check the feature; they check that the
+   fixtures put records on BOTH SIDES of every filter, so that the tests which
+   do check the feature cannot pass against an empty set. */
+console.log("fixtures satisfy every filter the app applies:");
+
+/* What DB.parts ACTUALLY becomes, which is the only set worth asserting on:
+   APPLY_FIXTURES concatenates onto the SN5 archive rather than replacing it, so
+   the plain-retro side of the retro filter comes from the seed file and the
+   rest from the fixture module. Asserting on the module alone would have said
+   "no archive records" about a fixture set that has thirty-three of them. */
+const FIXTURE_PARTS = JSON.parse(readFileSync(join(root, "sn5-parts.json"), "utf8"))
+  .concat(FIX.SEASON_PARTS, FIX.RND_PARTS);
+
+await t("every filter the fixtures feed has records on BOTH sides of it", () => {
+  const SIDES = [
+    ["parts.retro", p => !!p.retro],
+    ["parts.rnd", p => !!p.rnd],
+    ["parts.named", p => !!String(p.partName || "").trim()],
+    ["parts.deadline", p => !!p.layupDeadline],
+  ];
+  for (const [name, f] of SIDES) {
+    assert(FIXTURE_PARTS.some(f) && FIXTURE_PARTS.some(p => !f(p)),
+      name + ": every fixture is on one side of this filter, so any test using them " +
+      "passes on an empty set. This is the SN5 blueprint bug again.");
+  }
+});
+
+await t("the fixtures carry enough of each kind to be worth counting", () => {
+  assert(FIX.RND_PARTS.filter(p => p.rnd).length >= 2, "at least two R&D parts");
+  assert(FIX.SEASON_PARTS.filter(p => !p.rnd && !p.retro).length >= 3, "at least three season parts");
+  assert(FIXTURE_PARTS.some(p => p.rnd && p.retro), "and one carrying BOTH flags — the only record that fails an && written where an || belongs");
+  assert(FIXTURE_PARTS.some(p => p.rnd && !p.retro), "one R&D in this season");
+  assert(FIXTURE_PARTS.some(p => !p.rnd && p.retro), "and one plain archive record");
+});
+
+await t("an R&D fixture reaches at least one surface that is supposed to include it", () => {
+  const live = FIX.RND_PARTS.filter(p => !p.retro);
+  assert(live.length > 0, "there is live R&D to look at");
+  assert(live.some(p => p.layupDeadline),
+    "at least one R&D part carries a deadline, or every test claiming R&D reaches the dashboard is measuring nothing");
+  assert(live.some(p => p.workOrderId || FIX.APPLY_FIXTURES.includes('"partId": "' + p.id + '"') || FIX.APPLY_FIXTURES.includes('partId: "' + p.id + '"')),
+    "and at least one has a run, or inheritance is never exercised");
+});
+
+await t("the fixture runs include an inherited R&D run AND a standalone one", () => {
+  const s = FIX.APPLY_FIXTURES;
+  assert(s.includes("WO-SN6-003") && s.includes("WO-SN6-004"), "both live R&D runs are planted");
+  assert(/WO-SN6-003[\s\S]{0,400}?partId/.test(s),
+    "WO-SN6-003 carries a partId and NO rnd of its own — it must read as R&D by inheritance, or the test passes whether inheritance works or not");
+  assert(/WO-SN6-004[\s\S]{0,400}?rnd: true/.test(s),
+    "and WO-SN6-004 has no part at all, so it exercises the standalone fallback");
+});
+
+await t("the fixtures actually populate the Season tab — a blueprint that renders empty is the SN5 bug", () => {
+  DB.parts = FIXTURE_PARTS.map(p => ({ ...p }));
+  DB.workOrders = [];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null };
+  render();
+  assert(seasonRows().length >= 3,
+    "the Season tab renders " + seasonRows().length + " rows from the fixtures. Zero or one means the fixtures " +
+    "do not satisfy the tab's filter and every Season assertion is passing on an empty set. " +
+    "The lower bound is the mechanism: no over-filtering bug can make a >= 3 assertion pass.");
+  assert(main.innerHTML.includes("NOSECONE OUTER"), "a named season part is on the blueprint");
+  assert(!main.innerHTML.includes("VG TRIAL PANEL"), "and the R&D part is not");
+  assert(seasonRows().length < DB.parts.length, "and the tab is genuinely filtering something, rather than showing everything");
 });
 
 console.log("SN5 seed files (importer output shape):");

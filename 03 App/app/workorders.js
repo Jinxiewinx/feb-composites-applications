@@ -214,7 +214,7 @@ function stripCS(s) {
 function woById(id) { return DB.workOrders.find(w => w.id === id); }
 function saveWO(w, field) { w = w || woById(view.id); if (w) save("workOrders", w, field); }
 
-async function newWO() {
+async function newWO(rnd) {
   const id = await allocId("workOrders");
   if (!id) return;
   const wo = {
@@ -225,7 +225,12 @@ async function newWO() {
     layupStack: [], stackNote: "", bom: [], standardsRefs: [],
     steps: STD_STEPS.MoldInfusion.map(stepFromTemplate),
     qualityChecks: [{ criterion: "mass", target: "", actual: "", pass: null }],
-    weightTargetG: null, weightActualG: null, timeline: [], notes: "", retro: false,
+    /* `rnd` here is ONLY the fallback for a run with no part. woIsRnd() asks
+       the part first and every time, so a run that gets linked reads its part's
+       programme and this field goes dormant. newRunForPart() deliberately does
+       NOT set it: that path writes partId, so it inherits, and a copy is
+       exactly the drift derivation exists to prevent. */
+    weightTargetG: null, weightActualG: null, timeline: [], notes: "", retro: false, rnd: !!rnd,
     createdBy: myEmail(),
   };
   DB.workOrders.push(wo); saveWO(wo);
@@ -728,6 +733,10 @@ const WO_GROUPS = {
   gstatus: w => w.status || "",
   gsub: w => w.subteam || "",
   gproc: w => w.processType || "",
+  /* Season first, R&D second — the group key is the sort key here, and the
+     deliverables are what the tab is mostly about. woGroupHead() maps the two
+     values back to words. */
+  grnd: w => (woIsRnd(w) ? "1" : "0"),
 };
 const WO_SORT_COLS = {
   gpart: woPartSortKey,
@@ -736,6 +745,7 @@ const WO_SORT_COLS = {
   gstatus: w => WO_STATUSES.indexOf(w.status),
   gsub: w => (w.subteam || "~").toLowerCase(),
   gproc: w => (w.processType || "~").toLowerCase(),
+  grnd: w => (woIsRnd(w) ? "1" : "0"),
   dueDate: w => w.dueDate || "9999",
   id: w => w.id,
   partName: w => (w.partName || "").toLowerCase(),
@@ -744,6 +754,7 @@ const WO_SORT_COLS = {
 };
 const WO_SORT_LABELS = {
   gpart: "Group: part", gstatus: "Group: status", gsub: "Group: subteam", gproc: "Group: process",
+  grnd: "Group: R&D / season",
   dueDate: "Sort: Due", id: "Sort: ID", partName: "Sort: Part", status: "Sort: Status", progress: "Sort: Progress",
 };
 function woSortKey() { return WO_SORT_COLS[view.sortKey] ? view.sortKey : "gpart"; }
@@ -875,7 +886,7 @@ function woIndexItem(w, opts) {
   return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""} ${ticked ? "picked" : ""}" id="pi-${esc(w.id)}"
       role="option" aria-selected="${picking ? ticked : sel}" title="${esc(w.id)} · ${esc(w.processType || "")} · ${esc(w.status || "")}"
       onclick="${picking ? `toggleWOPick('${esc(w.id)}')` : `selectWO('${esc(w.id)}')`}">
-    <span class="pi-name">${box}${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}</span>
+    <span class="pi-name">${box}${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(woIsRnd(w))}</span>
     <span class="pi-due ${late ? "warn" : ""}">${w.dueDate ? shortDate(w.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${woProgBar(pr)}${flag || `<span class="tny">${esc(opts.hidePart ? (w.processType || "") : (w.subteam || ""))}</span>`}</span>
     <span class="pi-who">${engs.map(e => avatar(e, 20)).join("")}</span>
@@ -961,7 +972,11 @@ function woIndexBody(rows) {
     const g = grouping(w);
     if (g !== run) {
       run = g;
-      out += woGroupHead(esc(g || "None"), rows.filter(r => grouping(r) === g));
+      // The R&D grouping's keys are sort positions, not labels. Map them back
+      // here rather than making the key itself the word, so "R&D" cannot sort
+      // above "Season" alphabetically and invert the grouping.
+      const head = woSortKey() === "grnd" ? (g === "1" ? "R&D" : "Season") : (g || "None");
+      out += woGroupHead(esc(head), rows.filter(r => grouping(r) === g));
     }
     out += woIndexItem(w);
   });
@@ -986,6 +1001,7 @@ function renderWOIndex() {
             <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedWOs()">Delete ${n || ""}</button>
             <button class="sm ib" onclick="cancelWOPick()">${icon("x", 14)}</button>`;
         })() : `<button class="primary ib" onclick="newWO()">${icon("plus", 15)} New WO</button>
+        <button class="ib" onclick="newWO(true)">${icon("plus", 15)} R&amp;D run</button>
         <button class="sm" onclick="openBlankTraveler()">Blank traveler</button>
         ${/* Lead-only, because firestore.rules allows a workOrders delete to
               leads only and there is no mine() clause — a member's bulk delete
@@ -1011,7 +1027,9 @@ function renderWOIndex() {
           ${subs.map(st => `<option ${view.fSub === st ? "selected" : ""}>${esc(st)}</option>`).join("")}
         </select>
         <select title="Group or sort by" onchange="sortWOsBy(this.value)">
-          ${Object.keys(WO_SORT_LABELS).map(k => `<option value="${k}" ${key === k ? "selected" : ""}>${esc(WO_SORT_LABELS[k])}</option>`).join("")}
+          ${/* "Group: R&D / season" only when there is an R&D run to group. */""}
+          ${Object.keys(WO_SORT_LABELS).filter(k => k !== "grnd" || (DB.workOrders || []).some(woIsRnd))
+            .map(k => `<option value="${k}" ${key === k ? "selected" : ""}>${esc(WO_SORT_LABELS[k])}</option>`).join("")}
         </select>
         <button class="sm sortdir" title="Reverse order" onclick="toggleWOSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
       </div>
@@ -1294,7 +1312,7 @@ function renderWODetail() {
         section is open. A gate you can navigate away from is a gate that gets
         walked past. */""}
   <div class="card wohead">
-    <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
+    <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(woIsRnd(wo))}</h2>
     ${/* The facts band replaces the old middle-dot run-on line: the answers
           someone actually comes for (can I work it, how far along, when is it
           due, is it on mass, whose is it) each get their own labeled slot.

@@ -89,7 +89,23 @@ function woSheetHtml(wo, opts) {
   const ev = wo.timeline || [];
   const strip = typeof stripCS === "function" ? stripCS : (t => t);
 
+  /* TWO AXES, TWO STAMPS.
+
+     "Blank form" / "Retro record" / "Draft" describe THE SHEET, and are
+     mutually exclusive by construction — a sheet is exactly one of them.
+     "R&D" describes THE PART: real carbon, real cost, not a season deliverable.
+     That is true of a Draft R&D work order and of a Complete one alike.
+
+     Folding R&D into that ternary would make an R&D Draft print as one word or
+     the other, and whichever arm lost would be wrong on somebody's bench. Two
+     independent elements cost one flex child in a masthead that already centres
+     its stamp in empty space, and they can never contradict each other.
+
+     R&D prints FIRST, immediately right of the brand, because it qualifies what
+     the sheet is about; the kind word qualifies the sheet itself. A blank form
+     gets no R&D stamp — it has no work order to ask. */
   const stampTxt = blank ? "Blank form" : (wo.retro ? "Retro record" : (wo.status === "Draft" ? "Draft" : ""));
+  const rndTxt = (!blank && woIsRnd(wo)) ? "R&D — not a season deliverable" : "";
 
   /* One printed line for a step that waits on a cure. On a blank form the
      length isn't known yet (it depends on what gets mixed), so the form asks
@@ -199,6 +215,7 @@ function woSheetHtml(wo, opts) {
   return `<div class="wsheet ${L.compact ? "compact" : ""}"><div class="ws-page"><table class="pgflow"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td>
   <div class="ws-head">
     <div class="brand">FEB COMPOSITES <span class="sub">SN6</span></div>
+    ${rndTxt ? `<div class="ws-stamp rnd">${esc(rndTxt)}</div>` : ""}
     ${stampTxt ? `<div class="ws-stamp">${esc(stampTxt)}</div>` : ""}
     <div class="idblock">
       <div class="idcell"><div class="lab">Work order</div><div class="val">${esc(blank ? "" : pv(wo.id))}</div></div>
@@ -217,6 +234,13 @@ function woSheetHtml(wo, opts) {
     ${pfield("Part name", blank ? "" : wo.partName, "span2")}
     ${pfield("Subteam", blank ? "" : wo.subteam)}
     ${pfield("Status", blank ? "" : wo.status)}
+    ${/* The masthead is what gets cut off in a photocopier or cropped out of a
+          phone photo, so the fact is on the page a second time. CONDITIONAL on
+          purpose: a season traveler renders byte-identical markup to before, so
+          the nine-rung fit ladder sees no change at all for 100% of existing
+          records, and only an R&D sheet can be pushed a rung — into `compact`,
+          which is a designed floor rather than a failure. */""}
+    ${rndTxt ? pfield("Build type", rndTxt, "span2") : ""}
     ${pfield("Mold engineer", blank ? "" : wo.moldEngineer)}
     ${pfield("Manufacturing engineer", blank ? "" : wo.manufacturingEngineer)}
     ${pfield("Created", blank ? "" : wo.createdDate, "", "date")}

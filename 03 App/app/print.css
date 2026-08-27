@@ -253,6 +253,17 @@ tr.blk td.seq {
   font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
   white-space: nowrap;
 }
+/* The R&D stamp rides ALONGSIDE the kind stamp, never instead of it: one is
+   about the sheet and the other about the part, and both can be true.
+   It has to be tellable from "Draft" at a glance on a photocopy of a photocopy,
+   so it differs in BORDER STRUCTURE and in word count — never in colour, since
+   this file prints on a monochrome laser and tokens.css flattens everything to
+   ink anyway. A double rule needs >= 3pt of border-width to resolve as two
+   lines rather than one thick one, which is why 3pt and not 1.75pt.
+   Deliberately NOT reverse video: at 8pt on a shop laser with a tired cartridge
+   a knockout fills in and becomes an illegible black lozenge, whereas a double
+   rule degrades to a single rule, which is still a stamp. */
+.ws-stamp.rnd { border-style: double; border-width: 3pt; padding: 2pt 7pt; letter-spacing: .1em; }
 
 /* ---------- compact mode (fit-loop floor) ---------- */
 /* Last resort before a third page. Rows stay tall enough to write in; the sheet
@@ -548,8 +559,31 @@ tr.blk td.seq {
 .lbl-name.n2b { font-size: 11pt; }
 .lbl-name.n2c { font-size: 9pt; }
 .lbl-name.n2d { font-size: 8pt; }
-.lbl-rid { font-size: 9.5pt; font-weight: 700; letter-spacing: -.01em; line-height: 1.2;
-           margin-top: .3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A flex row for the same reason .lbl-r4 is one (see the note below it): the
+   ellipsis has to live on the TEXT span and never on the row, or a tag at the
+   end gets clipped mid-glyph instead of the text truncating before it.
+   Here that lesson is inverted and deliberate — flex:0 0 auto on the R&D tag
+   makes it the one element on this label that can never be truncated away. */
+.lbl-rid { display: flex; align-items: baseline; gap: 1.6mm;
+           font-size: 9.5pt; font-weight: 700; letter-spacing: -.01em; line-height: 1.2;
+           margin-top: .3mm; white-space: nowrap; }
+.lbl-rid > span:first-child { min-width: 0; flex: 1 1 auto;
+                              overflow: hidden; text-overflow: ellipsis; }
+
+/* R&D: real carbon, a real cost, not a season deliverable.
+   COSTS ZERO VERTICAL MILLIMETRES, which is the whole reason it is on this row
+   and not a new one — the budget above is spent. The row is 9.5pt x 1.2 =
+   4.02mm; the tag is 7.5pt x 1.1 = 2.91mm of text box, plus 2 x 0.75pt of rule
+   (0.53mm) and 0.2mm of padding = 3.64mm. A flex row is as tall as its tallest
+   item and 3.64 < 4.02, so the row cannot grow and the 18.8/20.6mm arithmetic
+   is unchanged.
+   Horizontally there is 26mm of slack even at the 14-character id cap, against
+   the narrow 5522 track. A rule and not a fill: this prints on the office laser
+   and then gets resin wiped off it, and an 8pt knockout fills in solid the first
+   time toner runs low. */
+.lbl-rnd { flex: 0 0 auto;
+           font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; line-height: 1.1;
+           border: 0.75pt solid #000; border-radius: 0.6mm; padding: 0.1mm 1.0mm; }
 
 /* The line the system exists for: layup stack on a part or panel, sealing
    record on a mold. Bold at 8.5pt rather than dropped to the 7pt tier. */

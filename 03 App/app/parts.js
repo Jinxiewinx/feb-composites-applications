@@ -349,7 +349,7 @@ function partHasEngineer(p, name) {
    Which is why it lives in one place and both callers use it. newPart() opens
    the new part's page; seasonAddRow() stays in the table. Duplicating the
    literal is how the two would drift into meaning different things. */
-async function createBlankPart() {
+async function createBlankPart(rnd) {
   const id = await allocId("parts");
   if (!id) return null;
   const p = {
@@ -357,14 +357,14 @@ async function createBlankPart() {
     layupSchedule: "", moldLocation: "RFS", moldEngineer: "", manufacturingEngineer: "",
     cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started",
     weightG: "", weightActualG: "", layupDeadline: "", comments: "", commentLog: [],
-    workOrderId: "", layupStack: [], retro: false,
+    workOrderId: "", layupStack: [], retro: false, rnd: !!rnd,
     createdBy: myEmail(),
   };
   DB.parts.push(p); savePart(p);
   return p;
 }
-async function newPart() {
-  const p = await createBlankPart();
+async function newPart(rnd) {
+  const p = await createBlankPart(rnd);
   if (!p) return;
   view = { ...view, mode: "detail", id: p.id, edit: true }; render();
 }
@@ -437,6 +437,10 @@ function partIndexRows() {
     .filter(p => (!view.fLate || partLate(p)))
     .filter(p => (!view.fMine || isMine([p.moldEngineer, p.manufacturingEngineer])))
     .filter(p => (!view.fEng || partHasEngineer(p, view.fEng)))
+    // Filters TO R&D, never away from it. "Hide R&D" would be a default-hidden
+    // deadline, and a default-hidden deadline is a deadline nobody meets; the
+    // season-only view already exists one tab away.
+    .filter(p => (!view.fRnd || isRnd(p)))
     .filter(p => !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
   // The selected part never falls out from under you — a filter that would hide
   // what you are reading keeps it in place instead (this is the whole point of
@@ -463,7 +467,7 @@ function partIndexItem(p, mixedRetro) {
   return `<div class="pitem ${sel ? "sel" : ""} ${partDone(p) ? "isdone" : ""}" id="pi-${esc(p.id)}"
       role="option" aria-selected="${sel}" title="${esc(p.id)} · ${esc(p.layupType || "")}"
       onclick="selectPart('${esc(p.id)}')">
-    <span class="pi-name">${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}</span>
+    <span class="pi-name">${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(isRnd(p))}</span>
     <span class="pi-due ${late ? "warn" : ""}">${p.layupDeadline ? shortDate(p.layupDeadline) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${stageRail(p)}<span class="tny">${esc(p.subteam || "")}</span></span>
     <span class="pi-who">${engs.map(e => avatar(e.email || e.name, 20)).join("") || ""}</span>
@@ -554,14 +558,28 @@ function renderPartIndex() {
   <aside class="mdindex" aria-label="Parts index">
     <div class="pindex-head no-print">
       <div class="toolbar">
+        ${/* TWO LABELLED DOORS, not a modal with a question in it.
+              createBlankPart()'s own note says why: laying out a season means
+              typing twenty names, not opening twenty modals. Two buttons keep
+              one-click creation and you cannot press one without reading the
+              word on it. The loud/quiet split puts .primary on the majority
+              case, so the reflex gesture is the safe one — and both paths land
+              on the detail page in edit mode, where the <h2> badge is the first
+              thing on screen. */""}
         <button class="primary ib" onclick="newPart()">${icon("plus", 15)} New Part</button>
+        <button class="ib" onclick="newPart(true)">${icon("plus", 15)} R&amp;D part</button>
         <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>
       </div>
       <div class="psum">
-        ${summaryChip("open", s.open, !view.fLate && !view.fMine && !view.fDone, "resetPartFilters()")}
+        ${summaryChip("open", s.open, !view.fLate && !view.fMine && !view.fDone && !view.fRnd, "resetPartFilters()")}
         ${summaryChip("late", s.late, !!view.fLate, "view.fLate=!view.fLate;view.fMine=false;render()", s.late ? "bad" : "")}
         ${summaryChip("mine", s.mine, !!view.fMine, "view.fMine=!view.fMine;view.fLate=false;render()")}
         ${summaryChip("done", s.done, !!view.fDone, "view.fDone=!view.fDone;render()")}
+        ${/* Only when there ARE any, the shape molds.js uses for retired and
+              no-home. A chip reading "0 R&D" on a season with no trials in it is
+              a control that teaches nothing and costs a row of space. */""}
+        ${(() => { const n = (DB.parts || []).filter(isRnd).length;
+          return n ? summaryChip("R&D", n, !!view.fRnd, "view.fRnd=!view.fRnd;render()") : ""; })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search part / id…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -741,6 +759,99 @@ function confirmRunLink(partId, woId) {
   toast(`${w.id} is now linked to ${p.partName || p.id}.`);
   render();
 }
+/* ---------- season vs R&D: the two controls ----------
+
+   A part is in one of two states and gets a different control in each, because
+   the cost of being wrong is different in each.
+
+   NO RUNS YET — a blank blueprint row. Nothing has been built, nothing has been
+   reported to anybody, and the record is a commitment rather than a history. So
+   the flag is an ordinary editable field: any member, either direction, no
+   confirm. A mis-click costs one more click.
+
+   HAS RUNS — real work exists against it. Now it is lead-only and ONE-WAY: R&D
+   can become a season part and a season part can never become R&D. The one-way
+   rule is the whole reason the season count can be trusted, and the lead gate
+   matches how every other irreversible act in this app is gated — client-side,
+   with the monthly Drive export as the audit trail (HANDOFF.md). Nothing here
+   is enforced by firestore.rules, on purpose: this stops an accident, not an
+   adversary, and a field-level rule would refuse every edit to the 59 SN5
+   records that predate the field. */
+function rndControl(p, E) {
+  if (!p || p.retro || !E) return "";
+  const runs = partRuns(p).length;
+  if (!runs) {
+    return `<label class="sm rndtog" title="A real part with a real cost and a real deadline, that is not a season deliverable">
+      <input type="checkbox" ${isRnd(p) ? "checked" : ""} onchange="setPartRnd('${esc(p.id)}', this.checked)"> R&amp;D part</label>`;
+  }
+  if (isRnd(p) && isLead()) {
+    return `<button class="primary" onclick="promoteToSeason('${esc(p.id)}')">Move to season</button>`;
+  }
+  return "";
+}
+
+function setPartRnd(id, on) {
+  const p = partById(id);
+  if (!p || p.retro) return;
+  // The gate lives here as well as in rndControl, because a stale render could
+  // still be showing the checkbox on a part somebody just opened a run against.
+  if (partRuns(p).length) {
+    toast("This part has a work order against it. Only a lead can move it, and only into the season.", "error");
+    render(); return;
+  }
+  p.rnd = !!on;
+  savePart(p, "rnd");
+  render();
+}
+
+/* ONE-WAY, LEAD-ONLY. The record KEEPS ITS ID — P-SN6-042 stays P-SN6-042 —
+   because that id is on a printed traveler, on a label stuck to a mold, and in
+   Nick's sheet, and CS-013 §4.1 says ids are never reused. There is no
+   demoteToRnd() and there deliberately never will be.
+
+   TWO WRITES, IN THIS ORDER AND NOT THE OTHER ONE. The note goes first. If the
+   field write then fails you have a part whose log claims a promotion that did
+   not happen — visible, and retrying costs a duplicate note. Flipping the field
+   first and failing to log leaves a silent promotion with nobody's name on it,
+   which is the kind of thing nobody ever notices. Neither write can be made
+   atomic with the other (save() is per-field by design), so the ORDER is the
+   safety property.
+
+   The linked runs are not touched at all. woIsRnd() derives a run's programme
+   from its part every time it is asked, so this one field write moves the part
+   and every run that resolves to it in the same instant. */
+async function promoteToSeason(id) {
+  const p = partById(id);
+  if (!p) return;
+  if (!isLead()) { toast("Moving an R&D part into the season is lead-only. Ask the lead.", "error"); return; }
+  if (p.retro) { toast("An SN5 record cannot be moved into this season.", "error"); return; }
+  if (!isRnd(p)) { toast(`${p.partName || p.id} is already a season part.`); return; }
+
+  const runs = partRuns(p).length;
+  const ok = await confirmAsync(
+    `Move ${p.partName || p.id} into the season?\n\n` +
+    `It keeps the id ${p.id} and everything on it` +
+    (runs ? `, and its ${runs} run${runs === 1 ? " comes" : "s come"} with it — nothing about ${runs === 1 ? "it" : "them"} changes` : "") +
+    `. From now on it appears on the Season tab and in the Google Sheet feed.\n\n` +
+    `There is no way back: nothing in this app moves a season part to R&D.`,
+    { title: "Move to season", ok: "Move to season", danger: false });
+  if (!ok) return;
+
+  const c = {
+    id: "C" + Date.now(), author: signerName(), email: myEmail(),
+    ts: new Date().toISOString(),
+    text: `Moved from R&D into the season, keeping id ${p.id}.`, html: "",
+  };
+  p.commentLog = (p.commentLog || []).concat([c]);
+  saveField("parts", p, "commentLog", arr => (arr || []).concat([c]));
+
+  p.rnd = false;
+  savePart(p, "rnd");                       // ONE field, ONE document
+
+  toast(`${p.partName || p.id} is a season part now.`);
+  render();
+}
+
 function confirmMoldLink(partId, moldId) {
   const p = partById(partId);
   if (!p || !recById("molds", moldId)) return;
@@ -1361,6 +1472,7 @@ function renderPartDetail() {
       <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
       ${labelBtn("parts", p.id)}
       ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
+      ${rndControl(p, E)}
       <span class="mdnav no-print">
         <button class="sm" title="Previous part (↑)" onclick="movePartSelection(-1)">${icon("chevronLeft", 14)}</button>
         <button class="sm" title="Next part (↓)" onclick="movePartSelection(1)">${icon("chevronRight", 14)}</button>
@@ -1371,7 +1483,7 @@ function renderPartDetail() {
           lead had to press Esc to see it and Enter to get back. Pinned. */""}
     ${partStatRow(true)}
     <div class="card wohead">
-      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}</h2>
+      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(isRnd(p))}</h2>
       <div class="muted">${esc(p.id)}${p.subteam ? " · " + esc(p.subteam) : ""}${p.layupType ? " · " + esc(p.layupType) : ""}${
         linkedWO ? " · work order " + chip("workOrders", linkedWO.id, linkedWO.id) : ""}${
         p.updatedAt ? " · saved " + fmtWhen(p.updatedAt) + " by " + esc(p.updatedBy || "?") : ""}</div>
@@ -1453,7 +1565,7 @@ function partsKeydown(e) {
 }
 document.addEventListener("keydown", partsKeydown);
 
-function resetPartFilters() { view = { ...view, fLate: false, fMine: false, fDone: false, fEng: "", fSub: "", q: "" }; render(); }
+function resetPartFilters() { view = { ...view, fLate: false, fMine: false, fDone: false, fRnd: false, fEng: "", fSub: "", q: "" }; render(); }
 
 /* Every write is single-field, and the whole tab re-renders afterwards: the old
    version only re-rendered for four keys, so renaming a part left a stale <h2>

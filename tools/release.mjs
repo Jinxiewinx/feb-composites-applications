@@ -16,7 +16,10 @@
  *   7. commits, tags, pushes over HTTPS
  *   8. deploys hosting — ONLY hosting
  *   9. verifies the new version is actually live, by fetching it
- *  10. prints the Slack note — built from WHATS_NEW, not from subjects — and STOPS
+ *  9b. shoots the release pictures — AFTER the live check, so the picture is
+ *      provably of the version that shipped (Major and Minor only)
+ *  10. prints the Slack note — built from WHATS_NEW, not from subjects — with
+ *      the pictures to attach under it, and STOPS
  *
  * WHAT IT REFUSES TO GUESS:
  *
@@ -39,6 +42,14 @@
  * panel have exactly one audience between them, so they now say the same thing:
  * the note is WHATS_NEW. Subjects stay where they were always right, in the
  * CHANGELOG.
+ *
+ * RELEASE_SHOTS, for the same reason one step further on. A shot list picked
+ * from what changed photographs the biggest diff, and the biggest diff is
+ * almost never the thing worth showing — the same failure mode as generating
+ * WHATS_NEW from subjects, in pictures. So tools/lib/release-shots.mjs is
+ * hand-written, capped at two, and this script CHECKS that it moved since the
+ * last tag and refuses to ship if it did not. A patch skips the whole thing:
+ * "fixes and copy, nothing new to learn" has nothing to photograph.
  *
  * WHAT IT DELIBERATELY DOES NOT DO:
  *
@@ -68,6 +79,7 @@ const HOST = "https://feb-composites.web.app";
 
 const args = process.argv.slice(2);
 const DRY = args.includes("--dry");
+const NO_SHOTS = args.includes("--no-shots");
 const version = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
 function die(msg) { console.error("\n✕ " + msg + "\n"); process.exit(1); }
@@ -178,6 +190,40 @@ say("\n  WHATS_NEW — the What's New panel on their next reload, and the");
 say("  #composites note at the bottom of this run:");
 whatsNew.forEach(n => say("    • " + n));
 
+/* ---- 4b. the picture -----------------------------------------------------
+   Every Major and Minor release goes out with one or two pictures. A bulleted
+   list of sentences is what we had, and the one thing that actually makes
+   fifteen people open the app is a picture of the new thing.
+
+   Checked HERE and shot at step 9b, for the two different reasons each half
+   has: a stale shot list is a thing you can still fix before anything ships,
+   and a picture is only honest if it is taken after the deploy is verified
+   live. Same split, and the same stale check, as WHATS_NEW above — for the same
+   reason that one exists: a shot list picked from what changed photographs the
+   biggest diff, which is almost never the thing worth showing.
+
+   A patch is "fixes and copy, nothing new to learn" (CHANGELOG.md), so there is
+   nothing to photograph and this is skipped entirely. */
+const isPatch = /^\d+\.\d+\.[1-9]\d*$/.test(version);
+const wantShots = !isPatch && !NO_SHOTS;
+if (isPatch) {
+  say("\n  a patch ships no pictures — nothing new to look at");
+} else if (NO_SHOTS) {
+  say("\n  --no-shots: this release will be announced WITHOUT a picture");
+} else {
+  const shotsMoved = prev
+    ? run("git", ["diff", "--name-only", `${prev}..HEAD`, "--", "tools/lib/release-shots.mjs"]).trim()
+    : "first release";
+  if (!shotsMoved) {
+    die(`tools/lib/release-shots.mjs has not changed since ${prev}, so this release\n` +
+        `would be announced with the LAST one's pictures.\n\n` +
+        `Write the one or two pictures that show what changed, then cut again.\n` +
+        `Iterate on the framing without cutting a release:\n\n` +
+        `    node tools/shoot_release.mjs --version ${version}\n\n` +
+        `Or ship without a picture on purpose:  node tools/release.mjs ${version} --no-shots`);
+  }
+}
+
 /* ---- 5. the changelog --------------------------------------------------- */
 const today = run("git", ["log", "-1", "--format=%cs"]).trim();
 const entry = `## v${version} — ${today}\n\n` +
@@ -271,6 +317,37 @@ if (!DRY) {
   say(`  ✓ ${HOST} is serving v${version}`);
 }
 
+/* ---- 9b. the picture ---------------------------------------------------
+   AFTER the live check, deliberately: a release picture is only honest if it is
+   of the version that actually shipped, and step 9 is the first moment that is
+   known. Before it, the app on the port is whatever is on disk.
+
+   shoot_release.mjs DIES when Chromium is missing rather than skipping, which
+   is the opposite of every other Playwright suite here. That is on purpose and
+   its header says why: a skipped test teaches you nothing and breaks nothing,
+   whereas a skipped picture is a release announced without one and nobody
+   finding out. --no-shots is the way past it. */
+let shots = [];
+if (wantShots && !DRY) {
+  say("\n  shooting the release pictures");
+  try {
+    const out = execFileSync(process.execPath, [join(ROOT, "tools", "shoot_release.mjs"), "--version", version],
+      { cwd: ROOT, encoding: "utf8" });
+    shots = out.split("\n").filter(l => l.startsWith("SHOT ")).map(l => l.slice(5).trim());
+    shots.forEach(f => say("    " + f));
+    if (!shots.length) die("shoot_release.mjs wrote nothing. The release IS live; re-run it by hand:\n\n" +
+                           `    node tools/shoot_release.mjs --version ${version}`);
+  } catch (e) {
+    /* The deploy has already gone out and been verified, so this must not read
+       as "the release failed". Say exactly what is and is not true. */
+    const detail = ((e.stdout || "") + (e.stderr || "") + (e.message || "")).trim();
+    die(`v${version} IS DEPLOYED AND LIVE — only the pictures failed.\n\n` +
+        detail.split("\n").slice(-12).join("\n") + "\n\n" +
+        `Fix it and run:  node tools/shoot_release.mjs --version ${version}\n` +
+        `Then post the note by hand; nothing else is left to do.`);
+  }
+}
+
 /* ---- 10. the Slack note, for a human to send --------------------------- */
 /* Slack mrkdwn, not HTML: *bold* is a single asterisk and there is no entity
    escaping — the app's own slackIssueCreatedMsg carries the same warning.
@@ -293,5 +370,13 @@ say("\n" + "─".repeat(64));
 say("Paste into #composites (Simon's call — this script never posts):\n");
 say(slack);
 say("─".repeat(64));
+if (shots.length) {
+  say(`\n${shots.length === 1 ? "One image" : "Two images"} to attach (drag ${shots.length === 1 ? "it" : "them"} into the message):`);
+  shots.forEach(f => say("  " + f));
+} else if (wantShots && DRY) {
+  say("\n(a real run would shoot the release pictures here and list them)");
+} else if (!wantShots) {
+  say(`\nNO PICTURE with this one${NO_SHOTS ? " (--no-shots)" : " — a patch has nothing new to look at"}.`);
+}
 say(`\nThen open the app as a lead and hit ⋯ → "Announce this release",`);
 say("so anyone still on an older build gets the reload prompt.\n");

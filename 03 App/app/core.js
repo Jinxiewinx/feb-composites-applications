@@ -229,7 +229,11 @@ async function allocIds(coll, cls, n) {
  * It would only ever happen on the offline path, which is the RFS wifi-dropout
  * case nobody tests under. Hence: filter by prefix, not by collection.
  */
-function localId(coll, cls) {
+/* SCANS DB[coll] WHOLE, and must keep doing so. Filtering this list — to season
+   parts, to non-retro, to anything — mints an id that already exists on a
+   record the filter hid, and CS-013 §4.1 rule 2 says ids are never reused. The
+   collision is offline-only, silent, and produces well-formed ids, which is the
+   worst combination there is. */function localId(coll, cls) {
   const prefix = cls || ID_PREFIX_LOCAL[coll] || coll.toUpperCase();
   const re = new RegExp("^" + prefix + "-SN6-(\\d+)$");
   let max = 0;
@@ -367,6 +371,95 @@ function signerName() {
   return (fb.roster && fb.roster.name) || (fb.user && fb.user.name) || "?";
 }
 function myEmail() { return (window.fb && fb.user && fb.user.email) || ""; }
+
+/* ---------- season vs R&D ----------
+
+   `rnd` says which PROGRAMME a part belongs to inside a season:
+     false  a deliverable — a thing that has to be on the car
+     true   a real part, real carbon, a real cost and a real deadline, that is
+            not on the car: a coupon, a test panel, a layup trial, a mold
+            shakedown
+
+   This is NOT a scratch flag and it is NOT a second `retro`. They are different
+   axes and both can be true of the same record:
+     retro = which SEASON     (the SN5 archive vs this one)
+     rnd   = which PROGRAMME  (deliverable vs R&D) inside a season
+
+   THE DIFFERENCE THAT MATTERS. `retro` means two things at once — "not this
+   season's plan" AND "do not enforce, this is a document and not a job". R&D
+   wants the first and the exact OPPOSITE of the second. A mold shakedown that
+   skips the stack-freeze blocker is how you get a bad shakedown, and an R&D
+   cure hold is a real cure hold with real resin and a real clock. So every
+   `if (x.retro) return null` gate in this app stays exactly as written and
+   never gains an `rnd` test. Adding one there would silently turn this into
+   `retro` with a different word, which is the likeliest way to break this
+   feature.
+
+   Read-time normalisation, no backfill — the technique projStatus()
+   (projects.js) already uses. Every record written before this field existed
+   reads as a season part, which is what all 33 SN5 parts, all 26 SN5 work
+   orders and everything made in SN6 up to now actually are. It is also why
+   fb.js's snapshots did NOT grow a where(): Firestore's == does not match a
+   document where the field is absent, so a server-side filter would have made
+   a backfill mandatory. */
+function isRnd(rec) { return !!(rec && rec.rnd); }
+
+/* THE ONE PREDICATE every "is this on this season's board" site calls.
+
+   Fused on purpose. `retro` is honoured in about twenty-five places and
+   forgotten in nine, and the reason is that each site has to remember a flag
+   test. A second flag on a second axis would double that failure. Nothing
+   should ever spell out `!p.retro && !isRnd(p)` by hand. */
+function inSeason(rec) { return !!rec && !rec.retro && !isRnd(rec); }
+
+/* A run's programme is its PART's, asked fresh every time.
+
+   DERIVED, never stored. If a run kept its own copy, promoting a part would be
+   N non-atomic writes (fb.save is one document, and there is no batched
+   per-field primitive) and a guaranteed half-promoted state on shop wifi.
+   Derived, promotion is ONE field write on ONE document, and a relink is free.
+
+   partOf() resolves by partId, then the legacy pointer, then a UNIQUE
+   partName — and refuses an ambiguous name. Inheriting through the name match
+   is deliberate: 0 of 33 SN5 parts carry an id link, so the name is the only
+   edge the archive has, and a wrong match there mislabels a pill. It can never
+   hide a record, because nothing in this app hides runs.
+
+   A standalone run — no part to ask — falls back to its own field. One quirk
+   follows and is worth knowing: a standalone run marked R&D and LATER linked
+   to a season part reads as season, because the part wins, while keeping a
+   dormant rnd:true on disk. Unlink it and it reverts. That is arguably right
+   (it was born an R&D run) and is not worth a delete-on-link write. */
+function woIsRnd(wo) {
+  if (!wo) return false;
+  const r = typeof partOf === "function" ? partOf(wo) : null;
+  return r ? isRnd(r.part) : !!wo.rnd;
+}
+
+/* The badge, in one place so the ampersand is entity-escaped ONCE. It is a
+   literal in an innerHTML template at eight call sites, and a bare & there is
+   a bug waiting for the one browser that cares.
+
+   .tpill and not .pill: the capsule is the design system's documented shape for
+   "a credential, not a status", and R&D is a category rather than a position in
+   any lifecycle. See the CSS in index.html for why it is hueless.
+
+   ALWAYS rendered — deliberately NOT the mixedRetro idiom (parts.js). Retro can
+   hide itself in an all-retro list because the archive is signposted elsewhere.
+   R&D cannot: an all-R&D filtered rail with no badges is pixel-identical to a
+   screenshot of the season, which is the one thing this feature exists to make
+   impossible. */
+/* The collection-generic form, for the places that are handed a (coll, record)
+   pair and cannot know which accessor applies: the label, the public nameplate
+   and the label-sheet builder. A work order's programme is DERIVED from its
+   part, so asking isRnd() on one reads a field that is only ever the standalone
+   fallback and is dormant on every linked run. Molds, boards, items and lots do
+   not carry the flag at all and correctly answer false. */
+function recIsRnd(coll, o) { return coll === "workOrders" ? woIsRnd(o) : isRnd(o); }
+
+function rndBadge(on) {
+  return on ? ' <span class="tpill rnd" title="R&amp;D — a real part, but not a season deliverable">R&amp;D</span>' : "";
+}
 
 /* ---------- users & avatars ---------- */
 function usersSorted() { return (DB.users || []).slice().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email)); }
@@ -2206,8 +2299,12 @@ function searchAll(q) {
     if (!s) return;
     out.push({ tab, id, label, sub, score: s, where: rec ? invWhere(rec, names) : null });
   };
-  DB.workOrders.forEach(w => add("workorders", w.id, w.partName || w.id, "Work order " + w.id));
-  DB.parts.forEach(p => add("parts", p.id, p.partName || p.id, "Part " + p.id, "", p));
+  /* R&D rides the `sub` line, the same slot that already distinguishes a
+     storage location from an item. ⌘K must FIND an R&D part — that is half the
+     point of it having a real id — so this marks, it never filters. esc() at
+     the render site handles the ampersand. */
+  DB.workOrders.forEach(w => add("workorders", w.id, w.partName || w.id, (woIsRnd(w) ? "R&D work order " : "Work order ") + w.id));
+  DB.parts.forEach(p => add("parts", p.id, p.partName || p.id, (isRnd(p) ? "R&D part " : "Part ") + p.id, "", p));
   // Issues only: a shelved project ticket surfacing in ⌘K is an invitation
   // into a paused feature. The records are still there, just not offered.
   DB.projects.filter(isIssue).forEach(p => add("projects", p.id, p.title || p.id, "Issue"));

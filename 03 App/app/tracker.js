@@ -82,9 +82,18 @@ const TRACKER_DEBOUNCE_MS = 4000;
    Retro records are the SN5 archive. They are real parts of a finished season
    and they belong in the app, but the live tracker is this season's board and
    the workbook already keeps last season on its own reference tab. Publishing
-   them would append 33 dead rows to Nick's sheet on the first run. */
+   them would append 33 dead rows to Nick's sheet on the first run.
+
+   R&D parts are excluded for the same reason and by the same predicate: the
+   sheet mirrors the Season tab, and a coupon is not a deliverable. Note the one
+   cost, which is real — Sync.gs matches rows on Part Name and tints anything it
+   no longer recognises amber, so an R&D part that was already in the sheet
+   becomes an orphan row and stays amber until somebody deletes it by hand. That
+   was chosen over the alternative, which was widening TRACKER_FIELDS (a
+   disclosure decision, see above) and hand-inserting a column in Nick's live
+   workbook. */
 function trackerRow(p) {
-  if (!p || !p.id || p.retro) return null;
+  if (!p || !p.id || !inSeason(p)) return null;
   const r = {};
   // Stringify everything: the sheet is text, and a null reaching the Apps
   // Script's JSON.parse would land in a cell as the literal "null".

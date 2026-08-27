@@ -376,6 +376,38 @@
   .mtxcell:hover .tpill.mtx-add { border-color: var(--ok-border); color: var(--ok); background: var(--ok-bg); }
   .tpill.mtx-yes { color: var(--ok); border-color: var(--ok-border); background: var(--ok-bg); }
   .mtxcell:hover .tpill.mtx-yes { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+  /* R&D — a real part or run that is not a season deliverable.
+     NOT a status, and it must never be readable as one, so it borrows nothing
+     from the status vocabulary. Every status badge in this stylesheet — .pill,
+     .status, .wflag, .stage — is a ~5px-radius RECTANGLE carrying a LIGHT TINT
+     of its own hue. This is the opposite of all three: the fully-rounded .tpill
+     capsule (the documented "credential, not a status" silhouette),
+     solid-filled, and with NO HUE AT ALL. Shape says "category", fill weight
+     says "look at me", and there is no hue left to confuse with in-work, late,
+     done, archive, collecting, parked or now.
+     One token pair, no new tokens and no dark override: --ink on --card is
+     near-black on white, and because both re-point under [data-theme="dark"]
+     the capsule inverts itself to near-white on dark. The distinction survives
+     greyscale, a colour-blind reader and a photocopy, because the carriers are
+     fill weight and the word — never hue.
+     NOT dashed. Dashed already means "not real yet" everywhere here —
+     .tpill.mtx-add, .ln-ghost, .pstep.na, .comment.deleted — and an R&D part is
+     real carbon on a real deadline. Dashed would say the exact thing this
+     feature exists to deny.
+     11px, NOT .tpill's 10.5px: the UI suite enforces an 11px floor on readable
+     type and this badge appears on the dashboard and the work-order rail, which
+     .tpill's training capsules do not. Do not harmonise it back down — the
+     suite will catch it, but the reason is that this is read across a bench. */
+  .tpill.rnd { background: var(--ink); border-color: var(--ink); color: var(--card);
+             letter-spacing: .06em; font-size: 11px; }
+  /* The R&D toggle, in the part's action row beside Edit and Delete. A bare
+     label rides the top of a row of 30px buttons, so it centres itself onto
+     their baseline. Only ever rendered on a part with no runs against it — once
+     real work exists the control becomes the lead-only Move to season button
+     (rndControl, parts.js). The box is 15px because this gets tapped with
+     gloves on. */
+  .rndtog { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+  .rndtog input { width: 15px; height: 15px; }
   .mtxro { font-size: 14px; }
   .mtxcol-hi { background: var(--accent-soft); }
   .mtxcol-arch { opacity: .55; }
@@ -2457,6 +2489,10 @@
       padding: 0 0 8px; margin-bottom: 4px; font-size: 15px;
     }
     .tl-wk.retro .tl-wkhd, .tl-wk.retro .tl-cell { background: none; }
+    /* A solid fill does not survive a printer that drops backgrounds, and white
+       text on a dropped fill is an invisible label. On paper the capsule becomes
+       the outline form the printed traveler's own stamp already uses. */
+    .tpill.rnd { background: none; color: #000; border: 1.25pt solid #000; }
     /* The card already carries the gold edge; the header's own bar doubles it. */
     .tl-wkhd.now { box-shadow: none; }
     .tl-cell { border-top: none; min-height: 42px; padding: 6px 0; }

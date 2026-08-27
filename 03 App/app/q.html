@@ -84,7 +84,15 @@
   .row dt { flex: 0 0 84px; color: var(--faint); font-size: 13px; margin: 0; }
   .row dd { margin: 0; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
 
-  .note { margin-top: 14px; color: var(--muted); font-size: 14px; }
+  /* Body weight, not small print: this says what the thing IS. A rule down the
+     left rather than a tint behind it, so it survives greyscale and a phone in
+     bright sun; the sentence carries the meaning on its own and the gold is
+     decoration. Every pub document ever written has had note:"" — this is the
+     first thing that fills it, so nothing that exists today changes. */
+  .note { margin: 14px 0; padding: 10px 12px; font-size: 14px; font-weight: 600;
+          color: var(--ink); background: var(--card);
+          border: 1px solid var(--line); border-left: 4px solid var(--gold);
+          border-radius: var(--radius); }
   .state { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius);
            background: color-mix(in srgb, var(--accent) 8%, transparent);
            color: var(--muted); font-size: 14px; }
@@ -237,7 +245,10 @@ function render(d) {
     const n = document.createElement("div");
     n.className = "note";
     n.textContent = d.note;
-    $("rows").after(n);
+    // ABOVE the facts, not below them. `note` is the one line on this page that
+    // qualifies WHAT THE OBJECT IS rather than reporting one of its fields, so
+    // it changes how every row under it should be read.
+    $("rows").before(n);
   }
   $("state").remove();
 }

@@ -120,9 +120,27 @@ async function seasonAddRow() {
 /* ---------- which rows ----------
    This season only, the same rule and the same reason as trackerRow(): the SN5
    archive is a finished season kept on its own reference tab, and a blueprint
-   for a season already built is not a blueprint. */
+   for a season already built is not a blueprint.
+
+   And this season's DELIVERABLES only. An R&D part — a coupon, a test panel, a
+   layup trial, a mold shakedown — is a real part with real carbon and a real
+   deadline, but it is not a thing the team committed to putting on the car, and
+   a blueprint that lists it is overstating what the season is. It stays fully
+   visible on Parts, on Work Orders and on the dashboard; this is the one tab it
+   is kept off, and the count below says how many so the rows never simply
+   vanish.
+
+   inSeason() fuses both tests on purpose — see its note in core.js. Never spell
+   out `!p.retro && !isRnd(p)` here or anywhere else.
+
+   NEVER "fix" this by prefixing a part's NAME with "R&D — ". Sync.gs matches
+   rows on the Part Name column, so a rename orphans the part's row in Nick's
+   Master Tracker and tints it amber forever; partOf() falls back to a name
+   match, so it silently unlinks the part from its work order; and nameTier()
+   gives one label line only 20 characters, so six characters of prefix pushes
+   most names to two lines and deletes the mid row from the printed label. */
 function seasonRows() {
-  let rows = (DB.parts || []).filter(p => !p.retro);
+  let rows = (DB.parts || []).filter(inSeason);
   if (view.seasonSub) rows = rows.filter(p => p.subteam === view.seasonSub);
   const q = (view.seasonQ || "").toLowerCase().trim();
   if (q) rows = rows.filter(p => `${p.partName || ""} ${p.id}`.toLowerCase().includes(q));
@@ -234,8 +252,13 @@ function seasonHead(col) {
 
 function renderSeason() {
   const rows = seasonRows();
-  const all = (DB.parts || []).filter(p => !p.retro);
+  /* THE DENOMINATOR MUST APPLY THE SAME TEST AS THE ROWS. Filter seasonRows()
+     and not this and the toolbar reports parts it is not showing — the quiet
+     sibling of the release where the blueprint photographed empty because every
+     fixture was retro and nothing asserted on a count that was always zero. */
+  const all = (DB.parts || []).filter(inSeason);
   const named = all.filter(p => String(p.partName || "").trim()).length;
+  const rnd = (DB.parts || []).filter(p => !p.retro && isRnd(p)).length;
   return `
   ${/* Marked work in progress at Simon's ask. .gate is the app's existing amber
         notice strip — the release banner, the bad-link hint and the "can't close
@@ -248,8 +271,12 @@ function renderSeason() {
   </div></div>
   <div class="toolbar no-print">
     <button class="primary" onclick="seasonAddRow()">+ Row</button>
+    ${/* R&D is stated, not silently subtracted. A row that disappears with
+          nothing on screen to explain it reads as data loss; a count that names
+          it and offers the way to it reads as a decision. */""}
     <span class="muted tny" style="margin-left:auto">${rows.length} of ${all.length} parts${
-      named < all.length ? ` · ${all.length - named} unnamed` : ""}</span>
+      named < all.length ? ` · ${all.length - named} unnamed` : ""}${
+      rnd ? ` · <button class="link sm" title="R&D parts are real work, kept off the blueprint. Show them on Parts." onclick="view={...view,fRnd:true};setTab('parts')">${rnd} R&amp;D</button>` : ""}</span>
   </div>
   <div class="filters no-print">
     <input id="searchbox" placeholder="search name / id…" value="${esc(view.seasonQ || "")}" oninput="view.seasonQ=this.value;render()">

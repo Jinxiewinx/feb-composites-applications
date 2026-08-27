@@ -12,9 +12,13 @@ function toCSV(rows, cols) {
 function downloadCSV(name, csv) {
   downloadBlob(name, new Blob([csv], { type: "text/csv" }));
 }
+/* R&D is a COLUMN here and never a filter. The advisor export is the full
+   picture, and the question it has to be able to answer — how much of this was
+   trials rather than the car — is unanswerable if the trials are missing
+   instead of marked. Same reasoning as budget's two money columns below. */
 const CSV_SPECS = {
-  parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline]] },
-  workOrders: { file: "work-orders", rows: () => DB.workOrders, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["process", r => r.processType], ["status", r => r.status], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["due", r => r.dueDate]] },
+  parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline], ["rnd", r => isRnd(r) ? "R&D" : ""]] },
+  workOrders: { file: "work-orders", rows: () => DB.workOrders, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["process", r => r.processType], ["status", r => r.status], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["due", r => r.dueDate], ["rnd", r => woIsRnd(r) ? "R&D" : ""]] },
   projects: { file: "issues", rows: () => DB.projects.filter(isIssue), cols: [["id", r => r.id], ["title", r => r.title], ["status", r => projStatus(r)], ["workOrder", r => r.workOrderId], ["resolution", r => r.resolutionMethod], ["priority", r => r.priority], ["due", r => r.dueDate], ["assignees", r => (r.assignees || []).join("; ")]] },
   budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose], ["status", r => r.status], ["cost", r => r.cost],
     // Both money columns on purpose: cost is the hand-set number the app
@@ -77,21 +81,21 @@ function renderReports() {
     <div class="card">
       <h3>Work orders in progress (${woInWork.length})</h3>
       ${woInWork.length ? woInWork.map(w => `<div class="srow">
-        <span class="sr-main"><span class="kind">WO</span> ${chip("workOrders", w.id, w.partName || w.id)}</span>
+        <span class="sr-main"><span class="kind">WO</span> ${chip("workOrders", w.id, w.partName || w.id)}${rndBadge(woIsRnd(w))}</span>
         <span class="srow-meta">${esc(w.manufacturingEngineer || w.moldEngineer || "unassigned")}</span>
       </div>`).join("") : '<p class="muted">None marked in-work.</p>'}
     </div>
     <div class="card">
       <h3>Open blockers (${openBlockers.length})</h3>
       ${openBlockers.length ? openBlockers.map(b => `<div class="srow">
-        <span class="sr-main">${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)} <b>${esc(stripCS(b.step.title))}</b></span>
+        <span class="sr-main">${chip("workOrders", b.wo.id, b.wo.partName || b.wo.id)}${rndBadge(woIsRnd(b.wo))} <b>${esc(stripCS(b.step.title))}</b></span>
         <span class="srow-meta">step ${esc(b.step.seq)} · unsigned</span>
       </div>`).join("") : '<p class="muted">No unsigned blockers on active work orders.</p>'}
     </div>
     <div class="card">
       <h3>Deadlines in the next two weeks (${upcoming.length})</h3>
       ${upcoming.length ? upcoming.map(i => `<div class="srow">
-        <span class="sr-main"><span class="kind">${i.kind}</span> ${chip(i.coll, i.id, i.label)}</span>
+        <span class="sr-main"><span class="kind">${i.kind}</span> ${chip(i.coll, i.id, i.label)}${rndBadge(i.rnd)}</span>
         <span class="srow-meta">${esc(i.date)} (${daysUntil(i.date)}d)${i.who ? " · " + esc(i.who) : ""}</span>
       </div>`).join("") : '<p class="muted">Nothing due in the next two weeks.</p>'}
     </div>

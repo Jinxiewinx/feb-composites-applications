@@ -25,6 +25,9 @@ function deadlineItems() {
     who: whoLabel([p.moldEngineer, p.manufacturingEngineer]),
     date: p.layupDeadline, done: partDone(p),
     mine: isMine([p.moldEngineer, p.manufacturingEngineer]),
+    // Included, never filtered: an R&D layup that misses its date is really
+    // late. `rnd` rides along so the row can say so.
+    rnd: isRnd(p),
   }));
   // Issues only. Project tickets are shelved (see the TABS row in core.js),
   // and a deadline for a record nobody can navigate to is a deadline nobody
@@ -43,6 +46,7 @@ function deadlineItems() {
     who: whoLabel([w.moldEngineer, w.manufacturingEngineer]),
     date: w.dueDate, done: w.status === "Complete",
     mine: isMine([w.moldEngineer, w.manufacturingEngineer]),
+    rnd: woIsRnd(w),
   }));
   return items;
 }
@@ -104,6 +108,11 @@ function mergedDeadlineItems() {
     const who = [row.who, it.who].filter(Boolean).join(" / ");
     row.who = [...new Set(who.split(" / ").filter(Boolean))].join(" / ");
     row.mine = row.mine || it.mine;
+    /* Belt and braces. woIsRnd() already derives the run's programme from this
+       very part, so the two agree in every case that can actually merge — but
+       if they ever disagreed, a badge going missing on a merged row is the
+       failure that matters, and OR is the direction that cannot lose it. */
+    row.rnd = row.rnd || it.rnd;
     row.partId = it.id;                     // so the row can still link to the part
     /* The work order usually wins, but not when it is closed and the part is
        not: a Complete traveler beside a part still in layup means the work that
@@ -236,7 +245,7 @@ function dashRow(it) {
     ? `<span class="${dd != null && dd < 0 ? "warn" : ""}">${esc(it.date)}${dd != null ? ` (${paren})` : ""}</span>`
     : "no date";
   return `<div class="srow">
-    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${
+    <span class="sr-main"><span class="kind">${it.kind}</span> ${chip(it.coll, it.id, it.label)}${rndBadge(it.rnd)}${
       // The run is held up by something. Not a count of everything ever filed:
       // undisposed issues are what stop it closing.
       it.issues ? ` <span class="warn tny" title="${it.issues} open issue${it.issues > 1 ? "s" : ""}">⚑ ${it.issues}</span>` : ""}</span>

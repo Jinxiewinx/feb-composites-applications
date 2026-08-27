@@ -92,6 +92,13 @@ workflow that keeps it safe:
 3. Verify with your eyes, not the CLI's "Deploy complete": load the site, or
    curl the changed file off the live host and check the new code is in it.
 
+**When you cut a named release, it goes out with a picture.** Every Major and
+Minor carries one or two, written by hand into `tools/lib/release-shots.mjs`
+before you cut; `node tools/release.mjs <version>` refuses to ship if that file
+has not moved since the last tag, shoots them once the deploy is verified live,
+and prints their paths under the `#composites` note for you to attach. Patches
+skip it — nothing new to look at. Full reasoning in `tools/README.md`.
+
 **`--only hosting` is deliberate.** The same `firebase.json` also carries
 `firestore.rules` and `storage.rules`, and those are the part that can lock
 the whole team out of their own data. Deploy rules only when the rules
