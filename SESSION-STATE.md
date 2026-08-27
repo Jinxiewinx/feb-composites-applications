@@ -20,17 +20,23 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.1.0 is live and tagged** — the rack and work-order release. Verified
-against the host: `APP_VERSION` reads 2.1.0 and What's New is the hand-written
-copy, not commit subjects.
+**v2.2.1 is live and tagged** — the R&D build. Verified against the host by
+fetch, not by "Deploy complete": `APP_VERSION` reads 2.2.1, both rails carry
+their R&D filters and `.plistfade` carries `margin: 0`.
+
+**MAIN IS AHEAD OF LIVE, ON PURPOSE.** After v2.2.1 shipped, the R&D chip was
+changed from additive (season + R&D) to an exclusive SWITCH (season list OR
+R&D list), and `showRnd`/`woShowRnd` became `onlyRnd`/`woOnlyRnd`. Simon is
+holding to batch any further tweaks into one release rather than cutting a
+third version in an afternoon for a feature nobody has been told about yet.
+So: **do not paste the v2.2.1 #composites note** — `WHATS_NEW` has moved on
+since it was printed. Cut the next version and use the note that run prints.
 
 - **Nobody sees the reload banner or What's New yet.** A lead has to open the
   deployed app and hit ⋯ → "Announce this release", which writes
   `config/release`. Until then everyone stays on whatever they loaded last.
-- **The #composites note has not been sent** — that needs Simon. The script
-  prints it and never posts. The note that run printed was the old
-  subject-based one; v2.1.0 was the last release cut before the note switched
-  to reading WHATS_NEW, so do not paste it as printed.
+- **The #composites note has not been sent** — that needs Simon, and the
+  script prints it and never posts.
 
 **`min == max` is asserted byte-identical to the pre-range packer.** That test
 in `test_packer.mjs` is the rollback story for the whole density-range feature —
