@@ -1644,7 +1644,13 @@ async function doGuest() {
        anonymous provider is switched off in the console, and it is the one
        failure a person cannot do anything about — so it says who can, rather
        than printing an API constant at somebody who came to look at a car. */
-    const admin = /ADMIN_ONLY_OPERATION|operation-not-allowed/i.test(e && (e.code || e.message) || "");
+    /* Three spellings for one condition, and they are not interchangeable: the
+       REST API answers ADMIN_ONLY_OPERATION, the JS SDK wraps that as
+       auth/admin-restricted-operation, and a provider disabled a different way
+       gives auth/operation-not-allowed. The first version of this matched only
+       the first two, so production printed the raw SDK string at people. */
+    const admin = /ADMIN_ONLY_OPERATION|admin-restricted-operation|operation-not-allowed/i
+      .test(String((e && (e.code || e.message)) || ""));
     toast(admin
       ? "Guest access is not switched on for this project yet — ask a composites lead."
       : "Couldn't start a guest session: " + (e && e.message ? e.message : e), "error");
