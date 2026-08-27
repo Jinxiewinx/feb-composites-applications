@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v2.2.2 — 2026-08-27
+
+- SESSION-STATE: main is ahead of live, and the printed note is stale
+- The R&D chip swaps the list instead of adding to it
+- The two v2.2.1 release pictures
+
+---
+
 ## v2.2.1 — 2026-08-27
 
 - release.mjs: --shots, for a patch that does have something to look at
