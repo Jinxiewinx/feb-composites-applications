@@ -97,7 +97,9 @@ Minor carries one or two, written by hand into `tools/lib/release-shots.mjs`
 before you cut; `node tools/release.mjs <version>` refuses to ship if that file
 has not moved since the last tag, shoots them once the deploy is verified live,
 and prints their paths under the `#composites` note for you to attach. Patches
-skip it — nothing new to look at. Full reasoning in `tools/README.md`.
+skip it by default — nothing new to look at — unless you pass `--shots`, which
+is what a patch that changes what a list *shows* wants. Full reasoning in
+`tools/README.md`.
 
 **`--only hosting` is deliberate.** The same `firebase.json` also carries
 `firestore.rules` and `storage.rules`, and those are the part that can lock

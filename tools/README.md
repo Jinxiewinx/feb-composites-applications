@@ -175,10 +175,12 @@ it seeds from the **same fixtures the suites use**, so a release picture cannot
 show a state no test covers — which is the other half of the lesson behind
 `SEASON_PARTS`.
 
-Patches skip all of this: "fixes and copy, nothing new to learn" has nothing to
-photograph. To announce a Major or Minor without a picture anyway, say so out
-loud — `node tools/release.mjs 1.1.0 --no-shots` — and the note will carry a line
-saying there isn't one.
+Patches skip all of this by default: "fixes and copy, nothing new to learn" has
+nothing to photograph. That is a default and not a law — a patch that changes
+what a *list shows* has plenty to look at, so `--shots` forces pictures onto
+one. Conversely `--no-shots` announces a Major or Minor without a picture, and
+the note carries a line saying there isn't one. Both are deliberate acts you
+have to type.
 
 What it deliberately does not do:
 

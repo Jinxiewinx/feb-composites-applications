@@ -80,6 +80,11 @@ const HOST = "https://feb-composites.web.app";
 const args = process.argv.slice(2);
 const DRY = args.includes("--dry");
 const NO_SHOTS = args.includes("--no-shots");
+/* Force pictures onto a release that would skip them. "A patch has nothing new
+   to look at" is a good default and a bad law: a patch that changes what a list
+   SHOWS has plenty to look at, and v2.2.1 — R&D hidden by default on both rails
+   — was exactly that. The default stays; this is how you say it does not apply. */
+const FORCE_SHOTS = args.includes("--shots");
 const version = args.find(a => /^\d+\.\d+\.\d+$/.test(a));
 
 function die(msg) { console.error("\n✕ " + msg + "\n"); process.exit(1); }
@@ -203,11 +208,13 @@ whatsNew.forEach(n => say("    • " + n));
    biggest diff, which is almost never the thing worth showing.
 
    A patch is "fixes and copy, nothing new to learn" (CHANGELOG.md), so there is
-   nothing to photograph and this is skipped entirely. */
+   normally nothing to photograph and this is skipped. --shots overrides that,
+   because a patch that changes what a LIST SHOWS has plenty to look at. */
 const isPatch = /^\d+\.\d+\.[1-9]\d*$/.test(version);
-const wantShots = !isPatch && !NO_SHOTS;
-if (isPatch) {
+const wantShots = !NO_SHOTS && (!isPatch || FORCE_SHOTS);
+if (isPatch && !FORCE_SHOTS && !NO_SHOTS) {
   say("\n  a patch ships no pictures — nothing new to look at");
+  say("  (--shots if this one does)");
 } else if (NO_SHOTS) {
   say("\n  --no-shots: this release will be announced WITHOUT a picture");
 } else {
@@ -376,7 +383,7 @@ if (shots.length) {
 } else if (wantShots && DRY) {
   say("\n(a real run would shoot the release pictures here and list them)");
 } else if (!wantShots) {
-  say(`\nNO PICTURE with this one${NO_SHOTS ? " (--no-shots)" : " — a patch has nothing new to look at"}.`);
+  say(`\nNO PICTURE with this one${NO_SHOTS ? " (--no-shots)" : " — a patch has nothing new to look at; --shots if it does"}.`);
 }
 say(`\nThen open the app as a lead and hit ⋯ → "Announce this release",`);
 say("so anyone still on an older build gets the reload prompt.\n");
