@@ -8378,7 +8378,14 @@ await t("the topbar swaps the account actions for a way in", () => {
 await t("the login screen offers the door, and says what is behind it", () => {
   fb.state = "signedout"; fb.guest = false;
   const html = renderLogin();
-  assert(/signInGuest\(\)/.test(html), "the button exists");
+  assert(/doGuest\(\)/.test(html), "the button exists");
+  /* Through a doX() that catches, like every other button on this screen.
+     Wired straight to the SDK call it was an unhandled rejection — pressing it
+     did nothing at all, no error and no change, which is exactly what
+     production did when it was pressed against a project with the anonymous
+     provider switched off. */
+  assert(/signInGuest/.test(doGuest.toString()) && /catch/.test(doGuest.toString()),
+    "and it catches, so a refusal is a sentence rather than silence");
   assert(/every buy-off carries a name/.test(html),
     "and gives the same reason the name field above it gives for existing");
 });

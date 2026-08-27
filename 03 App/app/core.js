@@ -1636,6 +1636,20 @@ async function doSignUp() {
   if (!name) { toast("Enter your name — it goes on your buy-offs and assignments.","error"); return; }
   try { await fb.signUp(name, email, pass); } catch (e) { toast("Sign-up failed: " + e.message,"error"); }
 }
+async function doGuest() {
+  try {
+    await fb.signInGuest();
+  } catch (e) {
+    /* ADMIN_ONLY_OPERATION is what the Identity Toolkit answers when the
+       anonymous provider is switched off in the console, and it is the one
+       failure a person cannot do anything about — so it says who can, rather
+       than printing an API constant at somebody who came to look at a car. */
+    const admin = /ADMIN_ONLY_OPERATION|operation-not-allowed/i.test(e && (e.code || e.message) || "");
+    toast(admin
+      ? "Guest access is not switched on for this project yet — ask a composites lead."
+      : "Couldn't start a guest session: " + (e && e.message ? e.message : e), "error");
+  }
+}
 async function doReset() {
   const email = document.getElementById("li-email").value.trim();
   if (!email) { toast("Type your email first, then hit Forgot password.","error"); return; }
@@ -1662,7 +1676,7 @@ function renderLogin() {
     ${/* Under a rule, not beside Sign in: it is a different act, and the
           sentence is the same reason the name field above gives for existing. */""}
     <div class="row" style="margin-top:10px;border-top:1px solid var(--line);padding-top:12px">
-      <button onclick="fb.signInGuest()">View as guest</button>
+      <button onclick="doGuest()">View as guest</button>
       <span class="muted tny">See the whole app. You won't be able to change anything —
         every buy-off carries a name.</span>
     </div>
