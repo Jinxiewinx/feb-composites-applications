@@ -23,35 +23,81 @@
  *   title  the caption, in the voice of somebody telling the team what changed
  *   note   one or two sentences under it. What it MEANS, not what it is.
  *
+ * A SHOT MAY SEED ITS OWN DATA, and the blueprint one below does — the same
+ * thing make_mockups does for the inventory map, which builds its own shelves.
+ * The standing fixtures hold four season parts, which is the right size for
+ * testing and the wrong size for a picture whose whole point is how many lines
+ * now fit: four rows under a caption about sixty argues against the caption.
+ * What is seeded has to be what the team would actually see — a real spread of
+ * subteams, stages and dates — not a wall of filler that flatters the layout.
+ *
  * Iterate on framing without cutting a release:
- *   node tools/shoot_release.mjs --version 2.2.0
+ *   node tools/shoot_release.mjs --version 3.0.0
  */
+
+/* A plausible SN6 season: three subteams, every stage represented, some late,
+   some undated, one still unnamed. Values are the real enums from parts.js. */
+const SEASON = `
+  const mk = (name, sub, cad, mold, layup, due) => ({
+    id: "P-SN6-" + String(900 + (DB.parts.length % 90)).padStart(3, "0") + "-" + DB.parts.length,
+    partName: name, subteam: sub, layupType: "MOLD INFUSION",
+    cadProgress: cad, moldProgress: mold, layupProgress: layup,
+    layupDeadline: due, retro: false, rnd: false,
+    moldEngineer: "", manufacturingEngineer: "", layupStack: [], commentLog: [],
+  });
+  const D = (n) => { const d = new Date(Date.now() + n * 86400000); return d.toISOString().slice(0, 10); };
+  DB.parts.push(
+    mk("NOSECONE INNER",     "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-4)),
+    mk("UNDERTRAY MAIN",     "AERO",      "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(3)),
+    mk("UNDERTRAY DIFFUSER", "AERO",      "Mold CAD/CAM Done", "Machining",       "Not Started",    D(9)),
+    mk("SIDEPOD LEFT",       "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
+    mk("SIDEPOD RIGHT",      "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
+    mk("FRONT WING MAIN",    "AERO",      "Mold CAD/CAM Done", "Ready For Layup", "Layup Complete", D(-21)),
+    mk("FRONT WING FLAP",    "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-2)),
+    mk("REAR WING MAIN",     "AERO",      "Part CAD Done",     "Machining",       "Not Started",    D(24)),
+    mk("REAR WING ENDPLATE", "AERO",      "Not Started",       "Not Started",     "Not Started",    ""),
+    mk("FLOOR PAN",          "AUTO-MECH", "Mold CAD/CAM Done", "N/A (Flat)",      "Layup Complete", D(-30)),
+    mk("FIREWALL",           "AUTO-MECH", "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(11)),
+    mk("SEAT PAN",           "AUTO-MECH", "Mold CAD/CAM Done", "Sealed",          "Polished",       D(-45)),
+    mk("BATTERY BOX LID",    "AUTO-MECH", "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(6)),
+    mk("BATTERY BOX SHELL",  "AUTO-MECH", "Part CAD Done",     "Machining",       "Not Started",    D(13)),
+    mk("IMPACT ATTENUATOR",  "AUTO-MECH", "Mold CAD/CAM Done", "Ready For Layup", "In Layup",       D(1)),
+    mk("STEERING SHROUD",    "AUTO-MECH", "Not Started",       "Not Started",     "Not Started",    ""),
+    mk("MONOCOQUE UPPER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-7)),
+    mk("MONOCOQUE LOWER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "Layup Complete", D(-14)),
+    mk("BULKHEAD FRONT",     "BERGO",     "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(5)),
+    mk("BULKHEAD REAR",      "BERGO",     "Part CAD Done",     "Machining",       "Not Started",    D(19)),
+    mk("SUSPENSION A-ARM",   "BERGO",     "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(27)),
+    mk("PEDAL BOX",          "BERGO",     "Not Started",       "Not Started",     "Not Started",    D(34)),
+  );
+`;
 
 export const RELEASE_SHOTS = [
   {
-    id: "rnd-parts",
-    vh: 1000,
-    /* onlyRnd ON for the picture: the honest default is the season list, and a
-       screenshot of the default is a screenshot of nothing new. What the
-       picture has to show is the other half of the switch. */
-    js: `view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "",
-                 fLate: false, fMine: false, fDone: false, onlyRnd: true }; render();`,
-    title: "Trials and coupons have a list of their own",
-    note: "An R&D part is a real part — real carbon, a real cost, a real deadline — that is not " +
-          "something we promised to put on the car. Your parts list is now either the season parts " +
-          "or the trials, and the R&D chip swaps between them, carrying the count so you always know " +
-          "how many are running. The Work Orders rail works the same way, and the dashboard never " +
-          "hides them, so a late trial still finds you.",
+    id: "pit-board",
+    /* Tall, because the program column stacks its bars and facts now instead of
+       stringing them across the page. 1000 clipped it mid-sentence. */
+    vh: 1180,
+    js: `setTab("dashboard");`,
+    title: "The dashboard asks four questions",
+    note: "Stopped, Waiting on you, Due this week, On the clock — and a lane that has nothing to " +
+          "say says so, rather than leaving a hole where a card used to be. “Waiting on you” is the " +
+          "one to look at first: it lists only the steps you can actually sign, and when a training " +
+          "is what is stopping you it names the training and who can teach it.",
   },
   {
-    id: "rnd-season",
-    vh: 950,
-    js: `view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "",
-                 seasonQ: "", seasonSort: null, seasonDir: null }; render();`,
-    title: "And they are off the blueprint, without disappearing",
-    note: "The Season tab is the list of things that have to be on the car, so R&D work is not on it. " +
-          "The count says how many are being held back and takes you to them, because a row that " +
-          "vanishes with nothing on screen to explain it reads as data loss.",
+    id: "blueprint",
+    vh: 790,
+    js: SEASON + `
+      view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "",
+               seasonQ: "", seasonSort: null, seasonDir: null };
+      render();`,
+    title: "The blueprint is a read, and the season fits on one screen",
+    note: "One line per part instead of thirteen columns you had to scroll sideways through. " +
+          "Name, subteam, the C/M/L marks, where it has got to in a word, and the deadline — with " +
+          "late ones spined in red and parts nobody has named yet still visible rather than blank. " +
+          "Click a name to open the part; that is where you change anything now, next to the gate " +
+          "and the confirms that were always there.",
   },
 ];
 

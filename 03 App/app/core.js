@@ -31,11 +31,11 @@ var APP_VERSION = "2.2.2";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "Coupons, test panels, layup trials and mold shakedowns can now be marked R&D. They are real parts with real deadlines, they just are not going on the car — so they stay off the Season blueprint and out of the Master Tracker.",
-  "Your Parts and Work Orders lists are now the season list or the R&D list, never both. The R&D chip above each one swaps between them and carries the count, so you can see how many trials are running without them cluttering the parts you are actually building. The dashboard never hides them, so a trial that is late or blocked still finds you.",
-  "An R&D part says so everywhere it matters: a black R&D badge on screen, a stamp on its printed traveler, a boxed R&D on its 4x1 label, and a line on the page you get when you scan its QR.",
-  "Start one with the R&D part button beside New Part, or R&D run beside New WO. A run started from an R&D part is already marked — there is nothing to remember.",
-  "Got it wrong? While a part has no work order against it, R&D is a checkbox anyone can flip. Once work has started, only a lead can move it into the season, only once, and it keeps the same ID — so its label and its traveler stay valid.",
+  "The dashboard is four lanes now, and each one is a question: what is Stopped, what is Waiting on you, what is Due this week, and what is On the clock. A lane is never empty-looking — if nothing is blocked it says so, because that is worth knowing on a Monday. \"Waiting on you\" is the new one: it only lists steps you can actually sign, and if you are waiting on a training it tells you which one and who can teach it.",
+  "The Season tab is a read now. One line per part — name, subteam, the C/M/L marks, where it has got to, and its deadline — about sixty on screen instead of eighteen, and no more scrolling sideways to find the column you wanted. Clicking a part's name opens it. EDITING MOVED: change a part on its own page, where the evidence gate and the confirms already live. To add parts, \"Lay out the season\" takes a whole list of names at once.",
+  "A mold's drawings now come with its cut sheets: which boards it needs, where they are on the rack, and a full-size nest of each board with the saw cuts numbered. Blanks belonging to other molds are hatched, so you leave them alone. The Molds tab also prints the whole shop's cut list as a proper drawing set — title block, sheet numbers and all — instead of the bare page it used to make.",
+  "Anyone can now open the app and press \"View as guest\" to look around without an account. Guests can read everything and change nothing, because a buy-off carries a name. Useful for showing the team what we do; worth knowing that it means the app is readable by anyone with the link.",
+  "The loading screen holds long enough to actually read the fun fact, and you can tap it (or press Enter) to go straight in.",
 ];
 
 /* ---------- config/release ----------
