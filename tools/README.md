@@ -260,6 +260,36 @@ dark-pixel fraction lands between 0.30 and 0.60. A real code is about 45%
 dark, a blank square is 0%, a black box is 100%. Pixels are the only honest
 check for a QR.
 
+### A browser test must stay off the network, and can prove it
+
+`sealNetwork(page, { mode })` in `tools/lib/browser.mjs` blocks everything that
+is not 127.0.0.1 or localhost. **Seal by origin; never block a host by glob.**
+`mode: "hang"` is the RFS case — the wifi associates and nothing ever comes
+back. `mode: "abort"` is a refusal.
+
+The rule exists because `test_q_landing.mjs` routed on a glob of the form
+star-star-slash gstatic.com-slash-star-star, which matches nothing: the URL is
+`https://WWW.gstatic.com/...` and the leading star-star-slash wants a slash
+where `www.` sits. All six of its routes matched zero requests. Every "with no
+network" assertion in the file ran against the real Firebase SDK and a live
+channel to PRODUCTION Firestore, rendering four rows of real data. The offline
+watchdog it exists to defend had never executed once, and the assertions raced
+real network latency — which was the intermittency people kept re-running.
+
+**`AUDIT_NET=1` proves it.** Run any browser suite with it and read the
+NET-AUDIT lines at the end:
+
+```bash
+AUDIT_NET=1 node tools/test_q_landing.mjs   # -> NET-AUDIT clean
+```
+
+Worth knowing if you extend it: the two obvious Playwright events both cry wolf.
+`request` fires even for a request `sealNetwork` aborts, so it flags a sealed
+suite. `requestfinished` fires for route-FULFILLED requests too, so it flags a
+correctly stubbed one — that false positive briefly indicted `test_detailui`,
+whose photo route was working exactly as intended. `response.serverAddr()` is
+the honest discriminator: a real remote address off the wire, null from a route.
+
 ### Traps in the harness itself
 
 **App files load from `index.html`, not from a list kept by hand.**

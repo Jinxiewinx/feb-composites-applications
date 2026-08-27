@@ -89,7 +89,7 @@ export async function loadChromium() {
          only `.chromium` there yields undefined and looks exactly like "not
          installed". Check both before giving up on this candidate. */
       const chromium = m.chromium ?? m.default?.chromium;
-      if (chromium) return chromium;
+      if (chromium) return process.env.AUDIT_NET ? auditNet(chromium) : chromium;
     } catch { /* next */ }
   }
   return null;
@@ -193,4 +193,64 @@ export async function sealNetwork(page, { mode = "abort", allow } = {}) {
     route.abort();
   });
   return blocked;
+}
+
+/* AUDIT_NET=1 wraps every page this process opens and reports, at exit, which
+   origins the NETWORK actually answered from.
+
+   It exists because test_q_landing.mjs spent its whole life believing it was
+   offline while talking to production Firestore: a route glob matched nothing,
+   and there was no way to see that. A test that claims to run with no network
+   should be able to prove it. Run any browser suite with AUDIT_NET=1 and read
+   the NET-AUDIT lines.
+
+   Picking the signal took three tries, and the two obvious events both cry
+   wolf. "request" fires even for a request sealNetwork aborts, so it flags a
+   correctly-sealed suite. "requestfinished" fires for route-FULFILLED requests
+   too, so it flags a correctly-stubbed one — that false positive briefly had
+   me reporting test_detailui as reaching production Storage when its route was
+   working exactly as intended.
+
+   response.serverAddr() is the honest discriminator: a real remote address when
+   the bytes came off the wire, null when a route supplied them. Verified both
+   directions against the same URL.
+
+   Declared below its use in loadChromium on purpose — function declarations
+   hoist, and this belongs with the diagnostics rather than above the thing
+   everyone actually reads. */
+function auditNet(chromium) {
+  const offbox = new Map();
+  const pending = new Set();
+  const LOCAL = /^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/;
+  const note = res => {
+    const u = res.url();
+    if (!/^https?:/.test(u) || LOCAL.test(u)) return;
+    const pr = res.serverAddr()
+      .then(addr => {
+        if (!addr) return;                  // a route answered, not the network
+        const origin = (u.match(/^https?:\/\/[^/]+/) || [u])[0];
+        offbox.set(origin, (offbox.get(origin) || 0) + 1);
+      })
+      .catch(() => {})
+      .finally(() => pending.delete(pr));
+    pending.add(pr);
+  };
+  process.on("exit", () => {
+    const rows = [...offbox.entries()].sort((a, b) => b[1] - a[1]);
+    console.log(rows.length ? "NET-AUDIT REACHED-THE-INTERNET" : "NET-AUDIT clean");
+    for (const [o, n] of rows) console.log("NET-AUDIT   " + n + "\t" + o);
+  });
+  return new Proxy(chromium, {
+    get(t, k) {
+      const v = Reflect.get(t, k);
+      if (k !== "launch") return typeof v === "function" ? v.bind(t) : v;
+      return async (...a) => {
+        const b = await t.launch(...a);
+        const oc = b.newContext.bind(b), op = b.newPage.bind(b);
+        b.newContext = async (...x) => { const c = await oc(...x); c.on("response", note); return c; };
+        b.newPage = async (...x) => { const p = await op(...x); p.on("response", note); return p; };
+        return b;
+      };
+    },
+  });
 }

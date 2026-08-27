@@ -17,7 +17,7 @@
  * Needs Playwright, same as the other browser tests, and skips loudly without it.
  */
 
-import { serveApp, loadChromium, skipMessage } from "./lib/browser.mjs";
+import { serveApp, loadChromium, skipMessage, sealNetwork, FB_STUB } from "./lib/browser.mjs";
 
 const chromium = await loadChromium();
 if (!chromium) { console.log(skipMessage("the HTML sanitizer")); process.exit(0); }
@@ -25,6 +25,14 @@ if (!chromium) { console.log(skipMessage("the HTML sanitizer")); process.exit(0)
 const srv = await serveApp();
 const browser = await chromium.launch();
 const page = await browser.newPage();
+/* This suite needs the real vendored DOMPurify and the real sanitizeHtml(), both
+   of which are served locally. It does not need Firebase — but index.html pulls
+   fb.js, fb.js imports the SDK from gstatic, and with nothing stubbed this suite
+   was making 8 live CDN requests per run and then WAITING ON THEM, because
+   networkidle does not go idle until the network does. The one suite guarding
+   the sanitizer allowlist should not have its timing decided by a CDN. */
+await page.route("**/fb.js", r => r.fulfill({ body: FB_STUB, contentType: "text/javascript" }));
+await sealNetwork(page, { mode: "abort" });
 await page.goto(`http://127.0.0.1:${srv.port}/index.html`, { waitUntil: "networkidle" });
 
 let pass = 0, fail = 0;
