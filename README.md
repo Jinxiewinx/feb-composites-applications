@@ -54,7 +54,7 @@ on phones and tablets as well as desktop. The full manual and setup live in
 `03 App/app/README.md`, and the architecture behind it in
 `03 App/app/DESIGN-NOTES.md`; this is the short tour.
 
-![Dashboard: the mission-control board on the app's white surfaces, alert strip leading](03%20App/design/dashboard-mockup-20260826.png)
+![Dashboard: the pit board — four lanes, none of which can render empty](03%20App/design/dashboard-mockup-20260827.png)
 
 Eleven tabs, grouped in the sidebar by who is asking (Dashboard and Season up
 top, then Build, Planning, and Team):

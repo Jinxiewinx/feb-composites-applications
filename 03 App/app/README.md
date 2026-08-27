@@ -72,9 +72,7 @@ jumps, what has been touched lately, and the fact of the day.
 A **guest** gets a different page rather than an emptier one — see below.
 
 
-![Dashboard: the mission-control board](../design/dashboard-mockup-20260826.png)
-
-*(The picture above is round four, and is due a re-shoot — `node tools/make_mockups.mjs`.)*
+![Dashboard: the pit board](../design/dashboard-mockup-20260827.png)
 
 Read-only, every element linking into the tab it came from. On a phone the lanes
 stack in the day's order and the program and footer sink below them.
