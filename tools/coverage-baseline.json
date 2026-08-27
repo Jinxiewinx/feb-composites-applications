@@ -1,0 +1,161 @@
+{
+  "note": "Baseline from tools/test_app.mjs alone. Ratchet: no file may drop below these.",
+  "generated": "2026-08-27",
+  "files": {
+    "budget.js": {
+      "lines": 83.88,
+      "branches": 79.03,
+      "functions": 85.19
+    },
+    "core.js": {
+      "lines": 79.27,
+      "branches": 73.08,
+      "functions": 77.22
+    },
+    "dashboard.js": {
+      "lines": 94.64,
+      "branches": 82.04,
+      "functions": 90.27
+    },
+    "documents.js": {
+      "lines": 80,
+      "branches": 60.75,
+      "functions": 71.43
+    },
+    "drawings.js": {
+      "lines": 96.98,
+      "branches": 81.04,
+      "functions": 96.39
+    },
+    "facts.js": {
+      "lines": 100,
+      "branches": 80,
+      "functions": 100
+    },
+    "gdocs.js": {
+      "lines": 67.7,
+      "branches": 73.44,
+      "functions": 71.43
+    },
+    "inventory.js": {
+      "lines": 92.88,
+      "branches": 73.38,
+      "functions": 87.14
+    },
+    "labels.js": {
+      "lines": 64.69,
+      "branches": 54.12,
+      "functions": 51.85
+    },
+    "meshview.js": {
+      "lines": 54.29,
+      "branches": 76.67,
+      "functions": 65.31
+    },
+    "molds.js": {
+      "lines": 94.69,
+      "branches": 68.81,
+      "functions": 91.78
+    },
+    "packer.js": {
+      "lines": 95.95,
+      "branches": 66.92,
+      "functions": 93.94
+    },
+    "parts.js": {
+      "lines": 97.63,
+      "branches": 75.77,
+      "functions": 92.08
+    },
+    "people.js": {
+      "lines": 68.1,
+      "branches": 74.85,
+      "functions": 71.43
+    },
+    "print.js": {
+      "lines": 77.29,
+      "branches": 88.46,
+      "functions": 52.94
+    },
+    "projects.js": {
+      "lines": 97.99,
+      "branches": 79.48,
+      "functions": 88.89
+    },
+    "receiving.js": {
+      "lines": 80.34,
+      "branches": 70.74,
+      "functions": 86
+    },
+    "reports.js": {
+      "lines": 75.16,
+      "branches": 75.51,
+      "functions": 31.25
+    },
+    "resins.js": {
+      "lines": 95.22,
+      "branches": 76.32,
+      "functions": 76.92
+    },
+    "rte.js": {
+      "lines": 55.66,
+      "branches": 68.35,
+      "functions": 43.14
+    },
+    "scan.js": {
+      "lines": 52.65,
+      "branches": 63.16,
+      "functions": 47.62
+    },
+    "season.js": {
+      "lines": 94.84,
+      "branches": 79.07,
+      "functions": 72.73
+    },
+    "shop.js": {
+      "lines": 80.56,
+      "branches": 77.82,
+      "functions": 79.73
+    },
+    "slicer.js": {
+      "lines": 92.08,
+      "branches": 73.6,
+      "functions": 92.77
+    },
+    "stackview.js": {
+      "lines": 100,
+      "branches": 75,
+      "functions": 100
+    },
+    "stlio.js": {
+      "lines": 96.68,
+      "branches": 79.69,
+      "functions": 100
+    },
+    "stock.js": {
+      "lines": 94.03,
+      "branches": 67.28,
+      "functions": 88.72
+    },
+    "timeline.js": {
+      "lines": 76.53,
+      "branches": 79.52,
+      "functions": 82.14
+    },
+    "tracker.js": {
+      "lines": 75,
+      "branches": 76.19,
+      "functions": 63.64
+    },
+    "weeklyplan.js": {
+      "lines": 89.23,
+      "branches": 67.46,
+      "functions": 83.33
+    },
+    "workorders.js": {
+      "lines": 95.1,
+      "branches": 73.95,
+      "functions": 86.79
+    }
+  }
+}

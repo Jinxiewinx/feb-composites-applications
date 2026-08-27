@@ -15,6 +15,7 @@ const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8
    empty-blueprint bug: the fixtures said one thing, the tab did another, and no
    assertion sat between them. See the "fixtures satisfy every filter" block. */
 import * as FIX from "./lib/fixtures.mjs";
+import { loadApp } from "./lib/appload.mjs";
 
 /* ---------- DOM + browser stubs ---------- */
 let lastToast = "";
@@ -115,17 +116,15 @@ globalThis.fb = {
   async publishTracker(token, snap) { calls.push(["publishTracker", token, snap]); },
 };
 
-/* ---------- load the app (classic scripts, concatenated, one indirect eval) */
-const FILES = ["core.js", "resins.js", "gdocs.js", "rte.js", "workorders.js", "parts.js", "season.js", "projects.js", "timeline.js", "weeklyplan.js", "budget.js", "facts.js", "dashboard.js", "slicer.js", "stlio.js", "packer.js", "stackview.js", "meshview.js", "drawings.js", "stock.js", "documents.js", "people.js", "reports.js", "print.js", "shop.js", "scan.js", "molds.js", "inventory.js", "receiving.js", "labels.js", "tracker.js"];
-let src = FILES.map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
-src = src.replace(/"use strict";\n/g, "");
-// core's top-level lexical bindings → implicit globals so tests can read them.
-src = src.replace(/^let (DB|view|rosterCache|pendingRender|WHATS_NEW_SHOWN|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
-// Same for the const tables the tests assert against — `const` stays lexical
-// inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SORT_LABELS|WO_SECTIONS_BASE|PART_SECTIONS_BASE|SEASON_COLS|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
-src = src.replace(/^let (SLACK_CFG_CACHE);$/gm, "var $1;");
-(0, eval)(src);
+/* ---------- load the app (classic scripts, one vm.Script each) ----------
+   loadApp() reads the file list and order from index.html's own <script> tags
+   and runs each file as its own script carrying its real path. That is what
+   lets --experimental-test-coverage attribute lines to "03 App/app/core.js"
+   rather than to an anonymous eval, and it is why the two regex allowlists
+   that used to rewrite ~70 top-level const/let into implicit globals are gone:
+   runInThisContext puts them in the global lexical scope, where the bare names
+   below already reach them. See tools/lib/appload.mjs. */
+loadApp();
 
 /* ---------- runner ---------- */
 let pass = 0, fail = 0;
