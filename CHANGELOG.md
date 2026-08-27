@@ -20,6 +20,31 @@ to learn**, not about API compatibility:
 
 ---
 
+## v3.0.0 — 2026-08-27
+
+- Write the v3.0.0 What's New and shot list
+- Guest mode is switched on, and the app is publicly readable
+- The program and the shop's footer go side by side, and team lore gets a surface
+- The guest door recognises the code the SDK actually throws
+- The guest door catches, so a refusal is a sentence rather than silence
+- Re-shoot the dashboard and season mockups, and their captions
+
+<details><summary>9 more</summary>
+
+- View as guest: the whole app, read-only, with no account
+- The dashboard becomes a pit board: four lanes, and none of them can vanish
+- The dashboard learns what you can actually do right now
+- The splash waits, the blueprint became a read, the cut list reached paper
+- AUDIT_NET, and the sanitizer suite stops waiting on a CDN
+- test_q_landing was talking to production Firestore, not to nothing
+- The app loads per file, so coverage can finally name one
+- SESSION-STATE: v2.2.2 is live and main matches it
+- The two v2.2.2 release pictures
+
+</details>
+
+---
+
 ## v2.2.2 — 2026-08-27
 
 - SESSION-STATE: main is ahead of live, and the printed note is stale
