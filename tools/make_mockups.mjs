@@ -25,7 +25,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { serveApp, serveDir, loadChromium, skipMessage, APP_ROOT } from "./lib/browser.mjs";
+import { serveApp, serveDir, loadChromium, skipMessage, APP_ROOT, splashGone } from "./lib/browser.mjs";
 import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -321,6 +321,7 @@ async function rawShot(shot) {
          flag the fixtures set LAST, or the shot photographs a half-seeded
          database (and the labels shot finds no DB.molds at all). */
       await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+      await splashGone(page);
       const seedError = await page.evaluate("window.__seedError || null");
       if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
       const js = shot.js

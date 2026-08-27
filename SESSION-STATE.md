@@ -20,20 +20,24 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**v2.2.2 is live and tagged, and main matches it.** The R&D build. Verified
-against the host by fetch, not by "Deploy complete": `APP_VERSION` reads 2.2.2,
-both rails carry the exclusive R&D switch, the Season tab's count-button sets
-`onlyRnd`, and `.plistfade` carries `margin: 0`.
+**A five-item pass is in flight. Three of the five are written and green; two
+are not started.** Nothing here is deployed, and `config/release` is untouched,
+so the team is still on v2.2.2.
 
-v2.2.0 and v2.2.1 were cut and superseded the same day and were never
-announced, so the team only ever sees this one. The note v2.2.2 printed is the
-only accurate one; the earlier two describe behaviour that no longer exists.
+Done and tested: the **boot splash** takes a floor and a Continue affordance;
+the **Season tab** is a read (the muster line, and a bulk "lay out the season"
+form in place of + Row); **cut sheets** land on a mold's drawing set and as
+their own batch document off the Molds tab.
 
-- **Nobody sees the reload banner or What's New yet.** A lead has to open the
-  deployed app and hit ⋯ → "Announce this release", which writes
-  `config/release`. Until then everyone stays on whatever they loaded last.
-- **The #composites note has not been sent** — that needs Simon, and the
-  script prints it and never posts.
+Not started: the **dashboard** (Design B, the four-lane pit board, with
+`signableSteps`/`waitingOnMe`/`trainingGaps` as a data-only first PR) and
+**guest mode** (anonymous auth, a `canEdit()` role, and a rules deploy).
+The approved plan is at
+`C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+
+**The one thing in the plan that is a rules deploy is guest mode, and it is
+deliberately last.** Rules go alone and first; everything else in this pass is
+hosting only.
 
 **`min == max` is asserted byte-identical to the pre-range packer.** That test
 in `test_packer.mjs` is the rollback story for the whole density-range feature —
@@ -44,99 +48,23 @@ Do not let it drift.
 the real one, but `tools/serve_populated.mjs`, `tools/lib/browser.mjs`,
 `test_appui`, `test_detailui`, `test_safearea`, `shoot_ui` and `make_mockups`
 each define their own `window.fb`, and a missing method is a TypeError in every
-local run and screenshot while production is fine. `fb.delMany` was written and
-the app called it before any shim had it. Grep `window.fb = {` for the list.
+local run and screenshot while production is fine. Grep `window.fb = {` for the
+list. The shims must also MATCH: `allocIdBlock` minted its ids from the counter
+key rather than `ID_PREFIX[coll]`, which is the same string for every caller
+that passes a `cls` — so it was wrong for years and invisible until the
+blueprint asked for a block of parts and got `parts-SN6-001`.
 
-**`test_q_landing.mjs` was never testing offline, and that was both the flake
-and the four failures.** All six of its routes blocked a glob of the form
-star-star-slash gstatic.com-slash-star-star, which matches NOTHING: the URL is
-https://WWW.gstatic.com/..., and the leading star-star-slash wants a slash where
-"www." sits. Zero requests matched. Every "with no network" assertion in the file
-ran with a perfectly good network — real Firebase SDK, a live channel to
-PRODUCTION Firestore, four rows of real data on the page. The offline watchdog it
-exists to defend had never executed once, and the assertions raced real network
-latency, which is exactly what the intermittency was.
-
-Fixed by `sealNetwork()` in `tools/lib/browser.mjs`, which seals BY ORIGIN rather
-than by naming hosts, so a new CDN dependency cannot quietly re-open the hole.
-32 passed 0 failed, four consecutive runs. **Never block a host by glob** — use
-`sealNetwork`.
-
-**Fixture gaps, found twice, same shape — and now guarded.** The fixtures
-described records the app considers impossible, and nothing failed because
-nothing asserted on a count that was always zero:
-
-- v1.0.0: neither issue carried a `workOrderId`, so `issuesForWO()` matched
-  nothing and every browser suite and mockup photographed an empty Issues
-  section.
-- v2.0.0: all 33 parts in `sn5-parts.json` are `retro: true`, and both the
-  Season tab and the tracker feed exclude retro — so the blueprint photographed
-  empty. `SEASON_PARTS` in `tools/lib/fixtures.mjs` is the fix.
-
-The open question — *which other fixtures describe last season only?* — now has
-a test instead of a reading pass. `test_app.mjs` imports `tools/lib/fixtures.mjs`
-(it never did before, which is exactly why the gap survived) and the block
-**"fixtures satisfy every filter the app applies"** asserts records exist on
-BOTH sides of every filter the fixtures feed, naming the bug in its own failure
-message. Add a filter, add a row to its `SIDES` table.
-
-**R&D is not a second `retro`, and that is the thing to protect.** `rnd` on a
-part means "not a season deliverable"; it does NOT mean "do not enforce". Every
-`if (x.retro) return null` gate stays as written and never gains an `rnd` test —
-an R&D run has real blockers and a real cure clock. The test named *"AN R&D RUN
-STILL ENFORCES"* is the guard. Accessors are `isRnd` / `inSeason` / `woIsRnd` /
-`recIsRnd` in `core.js`; `inSeason()` is fused so no site ever tests two flags by
-hand. Hidden in exactly three places (`seasonRows()`, the Season denominator,
-`trackerRow()`), marked everywhere else. Full reasoning in `DESIGN-NOTES.md`.
-
-**The Season tab has TWO retro/R&D filters, not one.** `seasonRows()` and the
-`all` denominator behind the toolbar count. Patch one and not the other and the
-tab reports rows it is not showing. Both directions are asserted.
-
-**Every Major and Minor release now ships one or two pictures.** Hand-written
-into `tools/lib/release-shots.mjs`, shot by `tools/shoot_release.mjs` at step 9b
-of `release.mjs` — after the live check, so the picture is of the version that
-shipped — and listed under the Slack note to attach. `release.mjs` refuses to
-ship if that file has not moved since the last tag, the same guard `WHATS_NEW`
-already had and for the same reason. `shoot_release.mjs` DIES without Chromium
-rather than skipping: a skipped picture is a release announced without one and
-nobody finding out. `--no-shots` is the deliberate way past it; patches skip it.
-
-**`test_safearea` is RED ON PURPOSE — it found a real app bug.** At landscape-max
-(932x430, 59px side insets) two step-action buttons on `wo-detail` sit past the
-safe area, which ends at x=873:
+**`test_safearea` is RED ON PURPOSE — it found a real app bug.** At
+landscape-max (932x430, 59px side insets) two step-action buttons on
+`wo-detail` sit past the safe area, which ends at x=873:
 
     "Add photos to step 1"      rect 876,389,910,429
     "Report an issue on step 1" rect 916,389,945,429
 
 The second extends to 945 — beyond the 932px viewport edge entirely. On an
 iPhone held sideways the camera and flag buttons on a work-order step are under
-the rounded corner. The test is correct; the CSS is not. Left failing so it stays
-visible. Fixing it is an app change on the detail screen and needs Simon.
-
-(`test_q_landing`'s four failures at HEAD had the same root cause as its flake —
-see above. Both are fixed.)
-
-**The Python tools mangled every non-ASCII character on Windows, and now do
-not.** `build_docx.py` and friends called `read_text()` / `write_text()` with no
-encoding, so Python used the locale codepage — cp1252 here — and every `§`, `—`,
-`°` and `±` in the markdown sources came out as `Â§`, `â€"`, `Â°`. Silent, and it
-looks like a font problem. The committed .docx were fine only because they were
-built where UTF-8 was already the default; the first Windows rebuild would have
-corrupted all seventeen. All five Python tools now pass `encoding="utf-8"`
-explicitly, and the writers pass `newline="\n"` so they cannot reintroduce the
-CRLF that kills `test_app.mjs`.
-
-**The check that catches it:** rebuild a standard you did NOT change and compare
-`word/document.xml` against the committed one — byte identical or the toolchain
-is lying to you. That is how this was found, and it is why only the three
-revised standards show in the diff: a .docx is a zip, so every rebuild looks
-modified until you compare the rendered XML.
-
-CS-001, CS-013 → **Rev D**; CS-INDEX → **Rev E** (its Rev column and the doc
-headers change together, CS-000 §7.1). `.docx` rebuilt, app copies in sync,
-`check_traceability.py` passes. Setup is now written out in `tools/README.md`.
-
+the rounded corner. The test is correct; the CSS is not. Left failing so it
+stays visible. Fixing it is an app change on the detail screen and needs Simon.
 
 ---
 
@@ -172,18 +100,18 @@ it should be tightened.
 
 ## Next up (not started)
 
-- Remove the "Work in progress" banner at the top of the Season tab (top of
-  `renderSeason` in `season.js`, plus its test) once the tab settles. It is a
-  `.gate` strip added in v2.1.1 and it is meant to be temporary.
+- The dashboard and guest mode — see **Now**, and the plan file it names.
 - Decide the four app-only families (Receiving, Export, Storage map, Search
   results, plus `table.sub`): lift them into `components.css` or drop them from
   `conventions.md`. 24 classes, roughly 73 selectors, and a real call rather
   than a chore — the Receiving grid is app plumbing by its own comment, so
   "lift everything" is not obviously right. `conventions.md` marks them
-  app-only meanwhile, so nothing is misleading while it waits.
+  app-only meanwhile, so nothing is misleading while it waits. The Season
+  blueprint's own family joined that list rather than resolving it.
 - Port the traveler to the offline single-file `work-orders.html`, which still
   has the old print CSS.
-- `reports.js` "Print status board" still calls raw `window.print()`.
+- `reports.js` "Print status board" still calls raw `window.print()`. It is now
+  the only printable in the app that does — the cut list was the other one.
 - `05 Printables/printables.html` is open to redesign. Simon said there is no
   house style to conform to.
 - Sweep `02 CS Standards/src/` for AI writing patterns — but these are
@@ -256,6 +184,12 @@ of candidate row counts, measured most-generous-first; they mean nothing for a
 fixed label grid. Do not replace the ladder with fixed row counts either — the
 point is that a sparse work order gets room to write and a dense one still
 lands on two pages.
+
+**`.dwg-tabwrap`'s `flex: 1 1 auto` is scoped to `.dwg-cols >` on purpose.**
+It exists to take the width left beside the fixed key and inset inside a flex
+ROW. `.dwg-page` is a flex COLUMN, so unscoped it made a full-width table grow
+vertically and pushed the cut schedule's two tables to opposite ends of the
+sheet. Widen the selector and the tables drift apart again.
 
 **Every distinction must survive grayscale.** Shop travelers print on a
 black-and-white laser first, so blockers use hatching plus heavy rules plus the
@@ -340,7 +274,14 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-08-26 (latest) — v2.0.0: the season plan comes into the app.** A
+**2026-08-27 (latest) — the splash waits, the blueprint became a read, and the
+cut list reached paper.** A floor and a Continue affordance on the boot splash;
+the Season tab's thirteen editable columns became one line per part that opens
+the part; and cut sheets now ride on a mold's drawing set and print as their own
+batch document. The last of those replaced the only printable that bypassed
+`mountSheet`. Nothing deployed.
+
+**2026-08-26 — v2.0.0: the season plan comes into the app.** A
 Season tab replaces the Composites Master Tracker sheet: one editable row per
 part, blueprint-sparse by design, and a row IS a part. The dashboard stopped
 saying things twice — shop status split, T-minus once, issues folded into the
@@ -367,9 +308,3 @@ Fixed in both copies of the CSS with the dashboard's existing vocabulary. The
 sync to claude.ai/design then found the remote stale by far more than this
 change and pushed three files. See **Now** for the app-only-classes finding it
 turned up.
-
-**2026-08-25 — Molds/Inventory targeted pass.** Four commits, from Simon's
-report that selecting the clamshell and asking for the rotate feature "shifts
-me to the plans with no mold section". Density became a typed field, boards
-moved into Inventory, the 3D viewer moved onto the mold, and the rail now
-groups molds by stage. `mvSweep()` closes a GL-context leak.

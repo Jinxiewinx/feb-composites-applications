@@ -40,7 +40,7 @@
 import { mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { serveApp, loadChromium, skipMessage } from "./lib/browser.mjs";
+import { serveApp, loadChromium, skipMessage, splashGone } from "./lib/browser.mjs";
 
 const SHOTS = process.argv.includes("--shots");
 const SHOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".drawing-shots");
@@ -317,6 +317,7 @@ for (const vp of PROFILES) {
     try {
       await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
       await page.waitForFunction("window.fb && fb.state === 'ready'", null, { timeout: 20000 });
+      await splashGone(page);
       const seedError = await page.evaluate("window.__seedError || null");
       if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
 

@@ -468,23 +468,74 @@
   .statusdrop.st-na select { background: var(--retro-bg); color: var(--retro); border-color: var(--retro-border); }
   .list .statusdrop select { padding: 4px 22px 4px 9px; font-size: 12px; }
 
-  /* ---- the Season blueprint table ----
-     Thirteen columns of mostly-empty cells, inside .mtxwrap, which owns the
-     sideways scroll and the sticky first column (the People matrix recipe).
-     Cells are controls rather than text, so they get a little more room than a
-     read-only list row and the inputs fill their cell rather than sitting in it
-     at some browser default width. */
-  table.season td { padding: 4px 6px; }
-  table.season td input, table.season td select { width: 100%; min-width: 96px; font: inherit; font-size: 12px;
-    padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); color: var(--ink); }
-  table.season td .statusdrop { display: block; }
-  table.season td .statusdrop select { min-width: 132px; }
-  /* The name column is the one you scroll back to, so it is the widest and the
-     one that sticks. .mtxperson supplies the stickiness; this is just size. */
-  table.season .mtxperson { min-width: 190px; }
-  table.season td:first-child input { font-weight: 600; }
-  /* Headers sort, so they are buttons in everything but name. */
-  table.season th.sortable { white-space: nowrap; }
+  /* ---- the Season blueprint ----
+     One line per part, in a MULTI-COLUMN FLOW rather than a table or a grid.
+     Three reasons, in order of how much they cost to learn:
+
+     A flow that wraps cannot overflow sideways. The thirteen-column table this
+     replaces had a floor near 1,700px against about 1,300px of content width,
+     so it scrolled sideways at every real viewport, forever; the UI suite fails
+     any horizontal overflow of <main> and exempted it only because .mtxwrap was
+     a scroller. There is nothing to exempt now.
+
+     `columns` and not `grid`, because down-then-across is the reading order of
+     a sorted list — the same call .rgrid makes, for the same reason. A grid
+     would put the second-most-urgent part beside the first instead of under it.
+
+     And break-inside: avoid, or a line splits across the column gap. */
+  .seasongrid { columns: 430px; column-gap: 14px; }
+  .sgroup { break-inside: avoid-column; margin-bottom: 10px; }
+  .sgroup .pgrouphd { margin-top: 0; }
+
+  /* Five things wide: name, subteam, the C/M/L rail, the state in a word, the
+     date. .sline and not .srow — that name has belonged to the dashboard's
+     module rows since round four, and the .dboard/.board collision is already
+     one cautionary tale in this file. */
+  .sline { break-inside: avoid; position: relative;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+    gap: 0 10px; align-items: center; padding: 5px 9px; margin-bottom: 2px;
+    border: 1px solid transparent; border-radius: 7px;
+    transition: background var(--t-fast) var(--ease); }
+  .sline:hover { background: var(--hover); border-color: var(--line); }
+  /* Late is a spine, not a tint: position and weight survive a photocopy and a
+     black-and-white laser, and the status chip beside it says the word "late"
+     anyway. Nothing here is carried by hue alone. */
+  .sline.late { box-shadow: inset 3px 0 0 var(--bad); }
+  /* Not real yet — the dashed border is this file's existing vocabulary for
+     that, and is deliberately NOT used for R&D, because R&D is real. An unnamed
+     blueprint row genuinely is not: it is a commitment with nothing in it. */
+  .sline.unnamed { border-style: dashed; border-color: var(--border-2); }
+
+  /* A stretched link: one real button, whose ::after covers the whole line. The
+     .lc-open idiom off a storage card, including the reason it needs an
+     explicit height below — see the coarse-pointer block. */
+  .sl-open { all: unset; cursor: pointer; font-weight: 600; font-size: 13.5px;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sl-open::after { content: ""; position: absolute; inset: 0; border-radius: 7px; }
+  .sl-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sline.unnamed .sl-open { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sl-sub { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .sl-stat { white-space: nowrap; }
+  .sl-due { font-size: 11.5px; color: var(--muted); white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 3px; }
+  .sl-due.warn { color: var(--bad); font-weight: 600; }
+  .sl-who { display: inline-flex; }
+  .sl-who .avatar { margin-left: -5px; box-shadow: 0 0 0 2px var(--card); }
+  .sl-who .avatar:first-child { margin-left: 0; }
+
+  /* Below about 1200px of content the line folds in two, the way .pitem does
+     on the Parts rail — name and date on top, everything that qualifies them
+     underneath. Narrower columns, so more of them still fit. */
+  @media (max-width: 1350px) {
+    .seasongrid { columns: 380px; }
+    .sline { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+    .sl-open { grid-row: 1; grid-column: 1; }
+    .sl-due { grid-row: 1; grid-column: 2; justify-self: end; }
+    .sl-sub, .sline .prog3, .sl-stat { grid-row: 2; }
+    .sl-sub { grid-column: 1; }
+    .sline .prog3 { grid-row: 2; grid-column: 1; justify-self: start; }
+    .sl-who { grid-row: 2; grid-column: 2; justify-self: end; }
+  }
   /* Budget goals: one bar per category, spent against the lead-set goal, and
      a Season bar whose tick marks where base ends and contingency begins (the
      split is deliberately quiet — tooltip, not headline). The owed card is
@@ -1520,7 +1571,13 @@
   .prog3 .sg i { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; opacity: .9; }
   .prog3 .sg.st-mid { background: var(--warn-bg); border-color: var(--warn-border); color: var(--amber); }
   .prog3 .sg.st-done { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
-  .prog3 .sg.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); opacity: .6; }
+  /* "Doesn't apply" and "not started" both draw an empty chip, so on a
+     photocopy — or to anyone who does not separate violet from grey — they were
+     the same mark. The bias hatch is the second channel, and a 45 is the right
+     thing for it to be. The old opacity:.6 was trying to do this job and could
+     not: it makes a mark quieter, not different. */
+  .prog3 .sg.st-na { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro);
+    background-image: repeating-linear-gradient(45deg, var(--retro-border) 0 1px, transparent 1px 5px); }
 
   /* ============================================================
      WORK ORDERS — rail row extras, and the in-pane section tabs.
@@ -2465,20 +2522,15 @@
        rather than blowing out their card. */
     table.sub { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-    /* SEASON: stays a table on a phone, like the spreadsheet it replaces.
-       Not table.list's generic card collapse, on purpose — same call the
-       timeline makes below, for a different reason. That collapse leans on
-       `td:empty { display: none }` so a sparse row shows only what is filled,
-       which would be a lovely fit for a blueprint except that a <td> holding an
-       <input> is never :empty. Every row would become thirteen labelled inputs
-       stacked down a 393px screen. Inside .mtxwrap it scrolls sideways with the
-       part name pinned, which is what the sheet does and what the team already
-       knows how to read. */
-    table.season, table.season tr, table.season td, table.season th { display: revert; }
-    table.season tr { border: none; margin: 0; padding: 0; background: none; box-shadow: none; }
-    table.season td { border-top: 1px solid var(--line); }
-    table.season td::before { display: none; }
-    table.season td:empty { display: revert; }
+    /* SEASON: one column of cards, like every other list here.
+       This used to be an exemption FROM table.list's card collapse, because a
+       <td> holding an <input> is never :empty and every row would have become
+       thirteen labelled inputs stacked down a 393px screen. There are no inputs
+       and no table now, so the exemption is gone with them and the flow simply
+       stops having columns to wrap into. */
+    .seasongrid { columns: auto; }
+    .sline { background: var(--card); border-color: var(--line); box-shadow: var(--shadow);
+      padding: 9px 12px; margin-bottom: 8px; }
 
     /* TIMELINE: the grid becomes one card per week, from the same DOM. The
        markup is week-major, so `display: block` alone puts the weeks in
@@ -2726,6 +2778,12 @@
        is a tap target and measured as one — 14px of bare text otherwise. Same
        min-height idiom as the filename above, for the same reason. */
     .pgrouphd .pg-open { min-height: 40px; display: inline-flex; align-items: center; }
+    /* Same trap, same fix, on the blueprint's part name. `all: unset` throws
+       away the button's own minimum, and the stretched ::after is not part of
+       the element's own rect — so the tap-target audit measures the 16px of
+       text and nothing else, however large the line around it is. */
+    .sl-open { min-height: 40px; display: inline-flex; align-items: center; }
+    .sline { min-height: 44px; }
     /* No Cmd key on a phone, so this is an instruction nobody can follow. */
     .kbdhint { display: none; }
     /* Same reasoning as the phone rules above, but keyed on the pointer: a
@@ -2825,6 +2883,15 @@
        on paper is just the record's name. Without this the status board's
        every work order, blocker and deadline vanished from the printout. */
     #main .chip { display: inline !important; border: none; background: none; padding: 0; font: inherit; color: inherit; }
+    /* ...and the same for a blueprint line's name, which is a <button> for
+       exactly the reasons the chip is: focusable, Enter-able, and a real tap
+       target the audit can measure. On paper it is the part's name and nothing
+       else. Without this the printed Season tab is a page of dates and status
+       chips with no idea what any of them is about. */
+    #main .sl-open { display: inline !important; font: inherit; font-weight: 600; color: inherit; }
+    /* Two columns on paper: the lines are short and a season is long. */
+    #main .seasongrid { columns: 2; }
+    #main .sline { break-inside: avoid; box-shadow: none; border-color: transparent; }
     /* The budget list's inline editors print as the plain values they show:
        a form control on paper is chrome around a number. */
     .list .statusdrop select, .buy-cost input, .buy-cat { border: none; background: none; padding: 0; appearance: none; color: inherit; }
@@ -2965,6 +3032,53 @@
   .sp-slow { font-size: 12px; color: var(--sb-text); opacity: 0; transition: opacity .4s ease; }
   #splash.slow .sp-slow { opacity: .8; }
   @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---- saying go ----
+     The affordance appears only under .ready, and core.js never adds .ready
+     before SPLASH_HINT_AT — so it is a REPORT that the app behind the sheet has
+     arrived, not a promise that it might. That is the whole reason a press is
+     safe: there is nothing to be stranded on. */
+  .sp-go { opacity: 0; pointer-events: none; transition: opacity .3s ease;
+    font: inherit; font-weight: 600; padding: 9px 20px; border-radius: 999px;
+    border: 1px solid var(--gold); background: none; color: var(--gold); cursor: pointer; }
+  .sp-go:hover { background: var(--gold); color: var(--sb-bg); }
+  .sp-hint { font-size: 11.5px; color: var(--sb-text); opacity: 0; transition: opacity .3s ease; }
+  #splash.ready .sp-go { opacity: 1; pointer-events: auto; }
+  #splash.ready .sp-hint { opacity: .7; }
+  /* Arrival outranks a four-second worry: if the connection took long enough to
+     earn the slow line and then landed, the slow line is no longer true. */
+  #splash.ready .sp-slow { display: none; }
+
+  /* A press the sheet cannot obey yet — the app is still connecting. The dip
+     says the input was heard, which is the difference between a tap that is
+     queued and a tap that was swallowed. */
+  @keyframes sp-press { 50% { transform: scale(.975); } }
+  #splash.press .sp-mark { animation: sp-press .14s ease; }
+
+  /* ---- leaving: the mold opens ----
+     The mark ARRIVES as two plies laid on the bias (sp-lay). Leaving, they part
+     along that same bias and the sheet is drawn off on the 45 — the way a ply
+     comes off a mold. Each ply leaves along its OWN diagonal rather than
+     reversing sp-lay, because a reversal reads as an undo and this is meant to
+     read as an opening. */
+  @keyframes sp-part-a { to { transform: translate( 30px, -20px) scale(1.06); opacity: 0; } }
+  @keyframes sp-part-b { to { transform: translate(-30px,  20px) scale(1.06); opacity: 0; } }
+  #splash.enter .sp-ply.a { animation: sp-part-a .34s cubic-bezier(.4,0,.9,.4) both; }
+  #splash.enter .sp-ply.b { animation: sp-part-b .34s cubic-bezier(.4,0,.9,.4) both; }
+  /* The text goes first and quietly. It is not the subject of the shot. */
+  @keyframes sp-drop { to { opacity: 0; transform: translateY(6px); } }
+  #splash.enter .sp-word, #splash.enter .sp-fact, #splash.enter .sp-go,
+  #splash.enter .sp-hint, #splash.enter .sp-slow { animation: sp-drop .18s ease both; }
+  /* The sheet itself moves. A cross-fade would spend 280ms as grey, because
+     what is behind a navy full-bleed sheet is a white app.
+
+     pointer-events goes off with the FIRST frame, not at the end: a sheet that
+     is still catchable while it flies away eats the first tap on whatever it is
+     uncovering, which is the same hazard the DOM removal in hideSplash exists
+     to prevent. The transition is cancelled so it cannot fight the animation. */
+  @keyframes sp-lift { to { transform: translate(46%, -46%); opacity: 0; } }
+  #splash.enter { animation: sp-lift .38s cubic-bezier(.55,0,.85,.35) .14s both;
+    transition: none; pointer-events: none; will-change: transform, opacity; }
   /* The global reduce-motion rule clamps durations to .01ms, which lands every
      element on its `to` frame — the stacked mark, all three lines up. That is
      the right still image, so there is nothing to undo here beyond the
@@ -2988,18 +3102,49 @@
   <div class="sp-word">FEB <span>Composites</span></div>
   <p class="sp-fact" id="sp-fact">Twill weave drapes around curves better than plain weave, and has fewer fiber crimps.</p>
   <div class="sp-slow">Still connecting — the shop wifi at RFS drops sometimes.</div>
+  <button type="button" class="sp-go" id="sp-go" onclick="splashGo()">Continue</button>
+  <div class="sp-hint kbdhint">or press Enter</div>
 </div>
 <script>
+  /* When the splash appeared, measured from here rather than from core.js.
+     core.js is the tenth of thirty-three scripts, so a stamp taken there has
+     already lost most of the parse the floor is meant to be covering. */
+  window.__splashT0 = Date.now();
+
   /* Upgrade the fact to the day's own, once facts.js has parsed. Static text
      ships in the markup above because that is what paints on a cold load;
-     FACTS is not defined yet at this point in the document. */
+     FACTS is not defined yet at this point in the document.
+
+     factOfTheDay(), NOT a random pick over FACTS. Three reasons, and the first
+     is that the CSS comment above has always claimed this drew from "the same
+     pool the dashboard's fact of the day draws from" and it never did: a raw
+     random over FACTS misses FACT_POOL's double-weighting of the team's own
+     lore. Second, consistency is what makes a 1.6-second glimpse worth having —
+     the fact you half-read here is the one waiting on the dashboard, so you can
+     finish it. Third, it is deterministic per UTC day, so the whole team sees
+     the same fact and nothing has to be stored to keep it that way. */
   window.addEventListener("DOMContentLoaded", function () {
     try {
-      var pool = (typeof FACTS !== "undefined" && FACTS) || [];
-      if (!pool.length) return;
+      var f = typeof factOfTheDay === "function" ? factOfTheDay(0) : null;
       var el = document.getElementById("sp-fact");
-      if (el) el.textContent = pool[Math.floor(Math.random() * pool.length)].t;
+      if (f && f.t && el) el.textContent = f.t;
     } catch (e) { /* the shipped fact is a fine fact */ }
+  });
+
+  /* Anywhere on the sheet, or Enter / Space / Escape. All three keys route to
+     the same armed path in splashGo, so none of them can strand anyone on the
+     "Connecting…" card. Bound here rather than in core.js so the sheet answers
+     a press from the first frame, before the app's scripts have run — at which
+     point splashGo does not exist yet, hence the typeof guard. */
+  document.getElementById("splash").addEventListener("click", function () {
+    if (typeof splashGo === "function") splashGo();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!document.getElementById("splash")) return;
+    if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+      e.preventDefault();
+      if (typeof splashGo === "function") splashGo();
+    }
   });
   /* The splash owns the screen only while there is genuinely nothing to show.
      render() takes it down the moment fb.state leaves "loading" — including
@@ -3009,7 +3154,15 @@
      than spin forever, and get out of the way so the page underneath is
      reachable. */
   setTimeout(function () { var el = document.getElementById("splash"); if (el) el.classList.add("slow"); }, 4000);
-  setTimeout(function () { if (typeof hideSplash === "function") hideSplash(); }, 12000);
+  setTimeout(function () {
+    if (typeof hideSplash === "function") { hideSplash(true); return; }
+    /* core.js never parsed, so hideSplash does not exist and the timer above
+       would simply no-op — leaving a full-bleed navy sheet over the page
+       forever. Take it down by hand instead; .gone is still the plain fade. */
+    var el = document.getElementById("splash");
+    if (el) { el.classList.add("gone"); setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el); }, 400); }
+  }, 12000);
 </script>
 <div id="drawer-backdrop" onclick="closeDrawer()"></div>
 <div id="app">

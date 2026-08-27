@@ -21,7 +21,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadChromium, skipMessage } from "./lib/browser.mjs";
+import { loadChromium, skipMessage, splashGone } from "./lib/browser.mjs";
 
 
 function arg(name, dflt) {
@@ -119,6 +119,7 @@ const main = async () => {
       await page.addInitScript(`localStorage.setItem("feb-theme", ${JSON.stringify(theme)});`);
       await page.goto(url + "/index.html", { waitUntil: "domcontentloaded" });
       await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+      await splashGone(page);
       for (const st of STATES) {
         await page.evaluate("closeModal(); RX_UNDO = null;");
         await page.evaluate(st.js);

@@ -24,7 +24,22 @@ const els = {};
 function el(id) {
   if (!els[id]) els[id] = {
     id, innerHTML: "", value: "", tagName: "INPUT", files: [], style: {},
-    classList: { add() {}, remove() {} },
+    /* A real Set behind classList, because contains() is now load-bearing:
+       splashGo() reads .ready to decide whether pressing Continue can be obeyed
+       or only remembered, and a stub that always answered false or always true
+       would test the wrong half of that. */
+    classList: (() => {
+      const c = new Set();
+      return {
+        add: (...n) => n.forEach(x => c.add(x)),
+        remove: (...n) => n.forEach(x => c.delete(x)),
+        contains: (n) => c.has(n),
+        toString: () => [...c].join(" "),
+      };
+    })(),
+    attrs: {},
+    setAttribute(k, v) { this.attrs[k] = String(v); },
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
     closest: () => null, focus() {}, setSelectionRange() {}, click() {},
     querySelector: () => null, querySelectorAll: () => [],
     // toast() appends a .toast child here; capture its text for assertions.
@@ -92,11 +107,18 @@ globalThis.fb = {
   async deleteFiles(paths) { (paths || []).forEach(p => calls.push(["deleteFile", p])); return { ok: (paths || []).length, failed: [] }; },
   async delMany(items) { (items || []).forEach(it => calls.push(["del", it.coll, it.id])); },
   async del(coll, id) { calls.push(["del", coll, id]); },
-  async allocId(coll, cls) { const key = cls || coll; counters[key] = (counters[key] || 0) + 1; const pfx = cls || ({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll]; const id = `${pfx}-SN6-${String(counters[key]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
+  /* Mirrors fb.js's ID_PREFIX. Kept as one map used by BOTH allocators, because
+     the block version used to derive its prefix from the counter KEY instead —
+     identical for every caller that passes a cls, which was every caller until
+     the blueprint asked for a block of parts and got parts-SN6-001 where
+     production mints P-SN6-001. A stub that is wrong in a way no test can see
+     is worse than no stub. */
+  _pfx(coll, cls) { return cls || ({workOrders:"WO",parts:"P",projects:"PROJ",budget:"BUY",documents:"DOC",stock:"BRD",stackplans:"STK",molds:"MOLD"})[coll] || coll.toUpperCase(); },
+  async allocId(coll, cls) { const key = cls || coll; counters[key] = (counters[key] || 0) + 1; const id = `${fb._pfx(coll, cls)}-SN6-${String(counters[key]).padStart(3,"0")}`; calls.push(["allocId", coll, id]); return id; },
   async allocIdBlock(coll, cls, n) {
-    const key = cls || coll; const out = [];
+    const key = cls || coll, pfx = fb._pfx(coll, cls), out = [];
     for (let i = 0; i < n; i++) { counters[key] = (counters[key] || 0) + 1;
-      out.push(key + "-SN6-" + String(counters[key]).padStart(3, "0")); }
+      out.push(pfx + "-SN6-" + String(counters[key]).padStart(3, "0")); }
     calls.push(["allocIdBlock", coll, cls, n]); return out;
   },
   async publishPub(recs) { calls.push(["publishPub", recs.length]); },
@@ -3263,38 +3285,74 @@ await t("the Season tab is this season's blueprint: retro records stay out", () 
   assert(html.includes("NOSECONE"), "this season's part is on the blueprint");
   assert(!html.includes("OLD DASH"), "last season's is not — the archive is a finished season, not a plan");
   assert(!html.includes("VG TRIAL"), "and neither is R&D — a real part, but not one the team put on the car");
-  assert(html.includes('class="mtxwrap"'), "the table lives in the scroller that owns sideways scroll and the sticky column");
-  assert(html.indexOf('class="mtxwrap"') < html.indexOf("<table"), "and the scroller wraps it, or the UI suite's overflow guard fires");
+  /* The blueprint used to live in .mtxwrap because thirteen columns could not
+     fit at any width and something had to own the sideways scroll. It is a
+     wrapping flow now, so the correct assertion is the opposite one: there is
+     no scroller, because there is nothing to scroll. */
+  assert(html.includes('class="seasongrid"'), "the lines are in the wrapping flow");
+  assert(!html.includes("mtxwrap") && !html.includes("<table"),
+    "and NOT in a table or a scroller — a flow that wraps cannot overflow sideways at all");
+  assert(/class="sl-open" data-open="P-SN6-900"/.test(html),
+    "the part name is a real button carrying data-open, which is what makes ctrl-click open a tab");
+  assert(html.includes("openRecord('parts','P-SN6-900')"), "and a plain click opens the part");
 });
 
-await t("a blueprint row is a real part, blank on purpose", async () => {
+await t("laying out a season is one action for twenty names, and each row is a real part", async () => {
   signInAsLead();
   DB.parts = [];
-  view = { ...view, tab: "season", mode: "list", id: null };
-  const before = DB.parts.length;
-  await seasonAddRow();
-  assert(DB.parts.length === before + 1, "a row was added");
-  const p = DB.parts[DB.parts.length - 1];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonQ: "", seasonSub: "" };
+  openSeasonLayout();
+  document.getElementById("sl-names").value = ["Nosecone", "Undertray", "", "  Side panel L  ", ""].join("\n");
+  await submitSeasonLayout();
+  assert(DB.parts.length === 3, "three names, three parts — the blank line is not one: " + DB.parts.length);
+  const p = DB.parts[0];
   assert(/^P-/.test(p.id), "with a real part id from the moment it exists: " + p.id);
-  assert(p.partName === "", "and no name yet — that is the point of a blueprint");
-  assert(p.retro === false && p.cadProgress === "Not Started", "but a complete, valid part record");
-  // Every column the tab offers must have somewhere to land, or an edit writes
-  // a field nothing else in the app reads.
+  assert(p.partName === "Nosecone", "named from the line, trimmed");
+  assert(DB.parts[2].partName === "Side panel L", "and surrounding space is not part of a name");
+  assert(p.retro === false && p.cadProgress === "Not Started", "a complete, valid part record");
+  // Every field the blueprint is about must have somewhere to land, or an edit
+  // made on the part page writes something nothing else in the app reads.
   SEASON_COLS.forEach(c => assert(c.key in p, "the blank part has a home for " + c.key));
-  assert(view.tab === "season", "and you stay on the blueprint rather than being thrown at the part page");
+  assert(view.tab === "season", "and you stay on the blueprint rather than being thrown at a part page");
 });
 
-await t("newPart and seasonAddRow build the same record — one literal, two doors", async () => {
+await t("laying out the same season twice does not give you the season twice", async () => {
   signInAsLead();
   DB.parts = [];
-  await seasonAddRow();
-  const fromTable = { ...DB.parts[DB.parts.length - 1] };
+  openSeasonLayout();
+  document.getElementById("sl-names").value = ["Nosecone", "Undertray"].join("\n");
+  await submitSeasonLayout();
+  openSeasonLayout();
+  /* The case that actually happens: somebody pastes the list again with two new
+     things on the end, because that is easier than working out which two are
+     new. It has to be safe. */
+  document.getElementById("sl-names").value = ["Nosecone", "undertray", "Floor pan", "Floor pan"].join("\n");
+  await submitSeasonLayout();
+  const names = DB.parts.map(x => x.partName);
+  assert(DB.parts.length === 3, "two existing names skipped, one new one made: " + JSON.stringify(names));
+  assert(names.filter(n => n === "Floor pan").length === 1,
+    "and a name repeated inside one paste is still one part");
+});
+
+await t("newPart and the blueprint build the same record — two literals, one shape", async () => {
+  /* createBlankPart() allocates its own id and writes at once, which is right
+     for one part off a button and wrong for twenty off an id block, so the
+     blueprint has its own literal. Two literals is a real risk — the header on
+     createBlankPart says so — and this is what stops them drifting into meaning
+     different things. */
+  signInAsLead();
+  DB.parts = [];
   await newPart();
   const fromParts = { ...DB.parts[DB.parts.length - 1] };
   assert(view.mode === "detail" && view.edit === true, "newPart still opens the new part for editing");
-  delete fromTable.id; delete fromParts.id;
-  assert(JSON.stringify(Object.keys(fromTable).sort()) === JSON.stringify(Object.keys(fromParts).sort()),
-    "identical shape, because both go through createBlankPart");
+  const fromBlueprint = seasonBlankPart("P-TEST-1");
+  delete fromBlueprint.id; delete fromParts.id;
+  assert(JSON.stringify(Object.keys(fromBlueprint).sort()) === JSON.stringify(Object.keys(fromParts).sort()),
+    "identical field set: " + JSON.stringify(Object.keys(fromBlueprint).sort()));
+  for (const k of Object.keys(fromBlueprint)) {
+    assert(JSON.stringify(fromBlueprint[k]) === JSON.stringify(fromParts[k]),
+      `and identical defaults — ${k} is ${JSON.stringify(fromBlueprint[k])} here, ${JSON.stringify(fromParts[k])} there`);
+  }
 });
 
 /* ---------- season vs R&D ----------
@@ -3617,58 +3675,80 @@ await t("AN R&D RUN STILL ENFORCES — this is the one that says rnd is not a se
     "and its blocker still bites. A retro record documents; an R&D record is live work at the bench with a real cure clock and a real blocker. If this ever fails, somebody added an rnd test beside a retro one and the feature has silently become retro with a different word.");
 });
 
-await t("a Season cell writes one field and does NOT re-render", () => {
+await t("the blueprint is a read: it renders no control that writes a part", () => {
+  /* The whole reason the tab fits on a screen again. Thirteen editable columns
+     had a floor near 1,700px against about 1,300px of content width, so it
+     scrolled sideways at every width it was ever opened at. Editing did not go
+     away — it went one click deeper, to the page that already carries the
+     CS-003 evidence gate and both confirms. */
   DB.parts = [{ id: "P-SN6-901", partName: "UT", subteam: "AERO", layupType: "MOLD INFUSION",
     cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started", moldLocation: "" }];
   view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
   render();
-  const before = main.innerHTML;
-  calls.length = 0;
-  seasonUpd("P-SN6-901", "moldLocation", "RFS rack 3");
-  const saves = calls.filter(c => c[0] === "save" && c[1] === "parts");
-  assert(saves.length === 1 && saves[0][3] === "moldLocation", "exactly one scoped save: " + JSON.stringify(saves));
-  assert(partById("P-SN6-901").moldLocation === "RFS rack 3", "and the value landed");
-  // The no-render contract: a render on change eats the cell Tab is moving into.
-  assert(main.innerHTML === before, "the page did not repaint");
+  const html = main.innerHTML;
+  const body = html.slice(html.indexOf(String.fromCharCode(99, 108, 97, 115, 115) + '="card"'));
+  assert(!/<input|<textarea/.test(body), "no field on a blueprint line");
+  assert(!/<select/.test(body), "and no stage dropdown, which was 132px of the old floor three times over");
+  assert(!/seasonUpd|seasonStage|setPartStage/.test(body), "and nothing wired to a part write");
+  assert(typeof seasonUpd === "undefined" && typeof seasonStage === "undefined",
+    "the write paths are gone rather than merely unrendered — an unused writer is one somebody re-renders");
 });
 
-await t("a Season stage change goes through the gate, not around it", () => {
-  DB.parts = [{ id: "P-SN6-902", partName: "GATED", subteam: "AERO", layupType: "MOLD INFUSION",
-    cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started", files: [], docs: [] }];
-  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
-  render();
-  // "Mold CAD/CAM Done" needs CAD evidence (PART_STAGE_NEEDS), so the gate must
-  // refuse it from the table exactly as it does from the part's own page.
-  const sel = { value: "Mold CAD/CAM Done" };
-  seasonStage("P-SN6-902", "cadProgress", sel);
-  assert(partById("P-SN6-902").cadProgress === "Not Started", "the evidence gate still bites in the table");
-  assert(sel.value === "Not Started", "and the select is put back to what the record actually says");
-  // An ungated forward step still works.
-  seasonStage("P-SN6-902", "layupProgress", { value: "In Layup" });
-  assert(partById("P-SN6-902").layupProgress === "In Layup", "an allowed move goes through");
-});
-
-await t("a Season stage cell is a coloured statusdrop WRAPPER, not a classed select", () => {
-  // Silent bug, caught by looking: .statusdrop is a wrapper class everywhere in
-  // this app and every colour rule is written `.statusdrop.<state> select`. With
-  // the class on the <select> itself the selectors matched nothing, so all three
-  // stage columns rendered plain white and the colour coding did nothing at all
-  // while looking entirely fine in the DOM.
-  DB.parts = [{ id: "P-SN6-905", partName: "COLOURS", subteam: "AERO", layupType: "MOLD INFUSION",
-    cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" }];
-  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+await t("the blueprint says where a part is without anyone having to read a colour", () => {
+  /* Two carriers, deliberately: the C/M/L rail is scannable down a column and
+     the chip is a word. The house rule is that no distinction may rest on hue
+     alone — this gets printed, photocopied, and read by people who do not all
+     separate red from green. */
+  DB.parts = [
+    { id: "P-SN6-905", partName: "COLOURS", subteam: "AERO", layupType: "MOLD INFUSION",
+      cadProgress: "Mold CAD/CAM Done", moldProgress: "N/A (Flat)", layupProgress: "Not Started" },
+    { id: "P-SN6-906", partName: "", subteam: "AERO",
+      cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
+  ];
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "", seasonSort: null };
   render();
   const html = main.innerHTML;
-  assert(/<span id="sq-P-SN6-905-cadProgress" class="statusdrop st-done">\s*<select/.test(html),
-    "the wrapper carries the state class and the select is its child: " + html.slice(html.indexOf("sq-P-SN6-905-cadProgress") - 60, html.indexOf("sq-P-SN6-905-cadProgress") + 160));
-  assert(/class="statusdrop st-na"/.test(html), "N/A gets its own state, not lumped in with not-started");
-  assert(!/<select[^>]*class="statusdrop/.test(html), "and no select wears the class itself, which matches no rule in the stylesheet");
-  // The colour rules the wrapper depends on must exist for all four states.
+  assert(/sl-stat">Not Started/.test(html), "the state is spelled out beside the rail");
+  assert(/class="prog3"/.test(html), "and the C/M/L rail the Parts index already draws is reused, not reinvented");
+  assert(/sl-stat">Unnamed/.test(html), "an unnamed row says so rather than rendering an empty line");
+  assert(/sline unnamed/.test(html),
+    "and is marked not-real-yet, which is what a dashed border has always meant in this app");
+
+  const st = seasonStatus(DB.parts[0]);
+  assert(st.cls === "st-0" && st.label === "Not Started",
+    "the earliest unfinished stage IS the state — CAD is done and the mold is N/A, so layup speaks: " + JSON.stringify(st));
+  assert(seasonStatus({ ...DB.parts[0], layupProgress: "In Layup" }).cls === "st-mid",
+    "and work actually under way reads as under way, not as not-started");
+  assert(seasonStatus(DB.parts[1]).label === "Unnamed", "and a nameless row reports that first of all");
+
+  /* Two states drew an identical empty chip, so on a photocopy "doesn't apply"
+     and "not started" were the same mark. The hatch is the second channel. */
+  const css = readFileSync(join(root, "index.html"), "utf8");
+  assert(/[.]prog3 [.]sg[.]st-na {[^}]*repeating-linear-gradient/.test(css),
+    "st-na carries a hatch as well as a hue, or greyscale cannot tell it from st-0");
+  /* st-0 is the bare .sg — "not started" is the resting state of the mark, so
+     it is the absence of a modifier rather than one more of them. The other
+     three each have to say something. */
+  ["st-mid", "st-done", "st-na"].forEach(k =>
+    assert(css.includes(".prog3 .sg." + k), "the rail has a rule for " + k));
+  assert(css.includes(".prog3 .sg {"), "and a base rule for the not-started state to fall back to");
+});
+
+await t("no select in the app wears the statusdrop class itself", () => {
+  /* Silent bug, caught once by looking: .statusdrop is a WRAPPER class and every
+     colour rule is written .statusdrop.<state> select. With the class on the
+     select the selectors matched nothing, so the control rendered plain white
+     and the colour coding did nothing at all while looking entirely fine in the
+     DOM. Season no longer has one; budget, projects and work orders do, so the
+     invariant outlived the tab that found it. */
+  const src = ["budget.js", "projects.js", "workorders.js"]
+    .map(f => readFileSync(join(root, f), "utf8")).join("\n");
+  assert(!/<select[^>]*class="[^"]*statusdrop/.test(src),
+    "a select wearing statusdrop matches no rule in the stylesheet");
   const css = readFileSync(join(root, "index.html"), "utf8");
   ["st-0", "st-mid", "st-done", "st-na"].forEach(k =>
     assert(css.includes(".statusdrop." + k + " select"), "a colour rule exists for " + k));
 });
-
 await t("Season keeps its own filter state, so Parts' filters do not leak into it", () => {
   DB.parts = [
     { id: "P-SN6-903", partName: "AERO ONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" },
@@ -5047,21 +5127,16 @@ await t("a member cannot bulk-delete, and the rail does not offer it", async () 
   assert(!main.innerHTML.includes("wopick"), "and cancelling puts the rail back");
 });
 
-await t("the Season tab says it is a work in progress", () => {
-  /* Marked at Simon's ask while the tab settles. It has to be the first thing
-     on the tab — a caveat below the fold is a caveat nobody reads. */
+await t("the Season tab's work-in-progress banner is gone, and stays gone", () => {
+  /* Added in v2.1.1 at Simon's ask while the tab settled, and always meant to
+     come off once it did. The tab is settled: it is a read, it has its shape,
+     and a caveat that never leaves stops being read and becomes furniture. */
   view = { ...view, tab: "season", mode: "list", id: null, seasonQ: "", seasonSub: "" };
   render();
   const h = main.innerHTML;
-  assert(/Work in progress/i.test(h), "the Season tab should say so");
-  assert(h.indexOf("Work in progress") < h.indexOf("seasonAddRow"),
-    "and say it above the toolbar, not under the table");
-  assert(/class="gate no-print"/.test(h),
-    "on the app\x27s existing amber notice strip, and off the printed blueprint");
-  assert(/safe to fill in/i.test(h),
-    "and say edits are kept — otherwise \x27work in progress\x27 reads as \x27do not use\x27");
+  assert(!/Work in progress/i.test(h), "no work-in-progress strip on the blueprint");
+  assert(!/safe to fill in/i.test(h), "and nothing telling people to fill in a tab they cannot type into");
 });
-
 await t("the Boards list groups and sorts, and does nothing at all until asked", () => {
   /* view.sortKey is reset on every tab switch (core.js), so "nobody touched the
      control" is the state everybody lands in — and it has to be the order this
@@ -8256,5 +8331,219 @@ await t("Start fresh from the modal produces exactly the plain new run", async (
     "no carries leak into a fresh start");
 });
 
+/* ---------- cut sheets: the plumbing ----------
+   The sheets themselves are checked in tools/test_drawings.mjs, in a browser,
+   where a label crossing a rule is something you can measure. What is here is
+   the arithmetic underneath them — which mold owns a rectangle, what the batch
+   stamp is for, and the promise that a set with no pack is byte-for-byte the
+   set that shipped before the feature existed. */
+console.log("cut sheets:");
+
+await t("ownership keys on planId, because two blanks in one pack can share an id", () => {
+  /* THE BUG THIS PREVENTS. blanksFromPlans mints "<plan.name> L2b", and
+     re-planning a mold leaves BOTH plans in DB.stackplans under the same name —
+     renderCutList packs every plan, superseded ones included. So two rectangles
+     on one board can carry byte-identical ids, and a nest that decided ownership
+     by id would hatch one of them and outline the other at random. */
+  const bp = { placed: [
+    { part: { id: "NOSECONE L1", planId: "STK-new" }, x: 0, y: 0, w: 10, h: 10 },
+    { part: { id: "NOSECONE L1", planId: "STK-old" }, x: 20, y: 0, w: 10, h: 10 },
+    { part: { id: "SIDEPOD L1", planId: "STK-other" }, x: 40, y: 0, w: 10, h: 10 },
+  ] };
+  const sp = nestSplit(bp, "STK-new");
+  assert(sp.mine.length === 1, "exactly one blank is mine, not both of the same-named pair");
+  assert(sp.mine[0].part.planId === "STK-new", "and it is the one from the current plan");
+  assert(sp.others.length === 2, "the superseded twin counts as another mold's, which is the safe reading");
+});
+
+await t("a blank tag drops the plan-name prefix, because it has to fit inside a rectangle", () => {
+  assert(blankTagOf({ id: "UT DIFFUSER L2b" }) === "L2b", "the prefix comes off");
+  assert(blankTagOf({ id: "L1" }) === "L1", "the bare form blanksFromLayers emits is already right");
+  assert(blankTagOf({ id: "" }) === "", "and nothing is not a crash");
+});
+
+await t("mold key letters come from the PACK, so the two documents agree", () => {
+  /* A lead lays the batch set beside one mold's set on the bench. If "A" meant
+     different molds on the two documents the legend would be worse than none. */
+  const pack = { plans: [
+    { placed: [{ part: { planId: "STK-a" } }, { part: { planId: "STK-b" } }] },
+    { placed: [{ part: { planId: "STK-b" } }, { part: { planId: "STK-c" } }] },
+  ] };
+  const k = moldKeyMap(pack);
+  assert(k.get("STK-a") === "A" && k.get("STK-b") === "B" && k.get("STK-c") === "C",
+    "letters follow first appearance across the boards: " + JSON.stringify([...k]));
+});
+
+await t("the batch stamp changes when the inputs do, and only then", () => {
+  const plans = [{ id: "STK-1", layers: [{ blanks: [{}, {}] }] }];
+  const boards = [{ id: "BRD-1", len: 2438, wid: 1219, thk: 25.4, density: 30, qty: 4 }];
+  const a = batchStamp(plans, boards);
+  assert(/^[0-9A-F]{4}$/.test(a.tag), "four hex digits: " + a.tag);
+  assert(batchStamp(plans, boards).tag === a.tag, "the same inputs stamp the same");
+  /* Order must not matter: two clients holding the same records disagree about
+     array order all the time, and would otherwise print different tags for one
+     pack — which is the exact question the tag exists to answer. */
+  const extra = { id: "BRD-2", len: 2438, wid: 1219, thk: 50.8, density: 45, qty: 1 };
+  assert(batchStamp(plans, [extra, boards[0]]).tag === batchStamp(plans, [boards[0], extra]).tag,
+    "and the order of the rack does not change it");
+  assert(batchStamp(plans, [extra, boards[0]]).tag !== a.tag, "but a board that appeared does");
+  const replanned = [{ id: "STK-1", layers: [{ blanks: [{}, {}, {}] }] }];
+  assert(batchStamp(replanned, boards).tag !== a.tag, "and so does a re-plan that changed the blanks");
+  assert(a.text.includes(a.tag) && a.text.includes("BATCH"), "the printed line carries it: " + a.text);
+});
+
+await t("a board ROW is not a board, and two opened off one row say which is which", () => {
+  /* A rack row carries a quantity, so the packer can open three sheets off one
+     id — separate BoardPlans, same src.id. Printed as a bare id that reads as
+     the same board listed three times, and a cross-reference keyed on the id
+     sends all three rows to the first board's sheet.
+
+     Found by looking at a rendered schedule, not by a failing assertion: the
+     arithmetic was right the whole time and the page was misleading. */
+  const mk = (id) => ({ board: { src: { id } }, placed: [], leftover: [], cuts: [] });
+  const a = mk("BRD-1"), b = mk("BRD-1"), c = mk("BRD-2");
+  const cut = { pack: { plans: [a, b, c] } };
+  assert(boardLabel(cut, a) === "BRD-1 #1 of 2", "the first of a repeated id says so: " + boardLabel(cut, a));
+  assert(boardLabel(cut, b) === "BRD-1 #2 of 2", "and so does the second: " + boardLabel(cut, b));
+  assert(boardLabel(cut, c) === "BRD-2", "an id opened once is left alone — no noise where there is no ambiguity");
+
+  const sheets = [{ kind: "nest", bp: a }, { kind: "nest", bp: b }, { kind: "nest", bp: c }];
+  assert(nestSheetNo(sheets, 10, a) === "10" && nestSheetNo(sheets, 10, b) === "11",
+    "and the cross-reference resolves by identity, so the two do not both point at the first sheet");
+  assert(nestSheetNo(sheets, 10, mk("BRD-1")) === "—", "a board that has no sheet says so rather than guessing");
+});
+
+await t("a drawing set with no pack is exactly the set that shipped before cut sheets existed", () => {
+  /* The whole feature is additive, and this is the guard. Every caller that
+     predates it — and every fixture that does not build a rack — passes no
+     opts.cut and must get 2 + layers.length sheets, with sheetLayer's hardcoded
+     "3 + i" still landing on the right number. */
+  const plan = { id: "STK-x", name: "X", layers: [{ blanks: [{ x0: 0, y0: 0, x1: 10, y1: 10 }] }, { blanks: [] }] };
+  assert(drawingSheetCount(plan, {}) === 4, "two drawing sheets plus one per layer: " + drawingSheetCount(plan, {}));
+  assert(drawingSheetCount(plan) === 4, "and no opts at all is the same");
+  assert(drawingSheetCount({ id: "STK-y", layers: [] }, {}) === 1, "a plan with no layers is the one apology sheet");
+});
+
+await t("the title block holds exactly four caller cells, and degrades rather than growing", () => {
+  /* Eight cells, two rows. A ninth starts a THIRD row under the brand, which
+     grows the block, shrinks the drawing area on every sheet in the set and
+     crowds the layer labels. The cap is enforced now instead of asked for. */
+  const ctx = { board: { cellText: "30 LB" }, printed: "2026-07-30", moldNote: "", meshNote: "", sheets: 1,
+    tbCells: [{ lab: "One", val: "1" }, { lab: "Two", val: "2" }, { lab: "Three", val: "3" },
+              { lab: "Four", val: "4" }, { lab: "Five", val: "5" }] };
+  const html = dwgPage({ id: "STK-1", name: "N" }, ctx, 1, "T", "1:1", "<p>b</p>");
+  assert(html.includes(">Four<"), "the fourth cell renders");
+  assert(!html.includes(">Five<"), "the fifth is dropped, not printed into a third row");
+  const cells = (html.match(/class="tb-c"/g) || []).length;
+  assert(cells === 8, "eight cells exactly: " + cells);
+});
+
+await t("the batch printable goes through the house print system, and says what it printed", () => {
+  /* printCutList used to bypass mountSheet entirely — screen markup dropped
+     into #printroot, a regex to strip the toolbar, window.print(). It was the
+     one printable in the app that worked that way. */
+  assert(typeof printCutList === "undefined", "the old path is gone, not merely unreferenced");
+  assert(typeof printCutSet === "function" && typeof cutPack === "function", "and replaced");
+  assert(/mountSheet/.test(printCutSet.toString()),
+    "through mountSheet, so it gets the preview, the grayscale proof and Save");
+  assert(/view\.cutSel/.test(printCutSet.toString()),
+    "honouring the on-screen filter, so the button cannot disagree with the list above it");
+});
+
+/* ---------- the boot splash ----------
+   There was no coverage here at all before the floor existed, which was
+   defensible while hideSplash() was four lines that always fired. It is not
+   defensible now: the sheet deliberately outlives its cue, so "when does it
+   leave" is real logic with a real way to strand somebody on a blank app.
+
+   SPLASH_DONE, SPLASH_ASKED, SPLASH_PENDING and SPLASH_FLOOR_MS are module-level
+   state that nothing in the app ever resets — a page load is the reset. So each
+   test has to put them back by hand, the pending timer included, or the second
+   test in this block inherits the first one's decision. */
+function resetSplash() {
+  if (SPLASH_PENDING) clearTimeout(SPLASH_PENDING);
+  SPLASH_DONE = false; SPLASH_ASKED = false; SPLASH_PENDING = null; SPLASH_FLOOR_MS = null;
+  localStorage.removeItem("feb-splash");
+  document.getElementById("splash").classList.remove("ready", "enter", "press", "gone");
+  window.__splashT0 = Date.now();
+}
+const splashClasses = () => String(document.getElementById("splash").classList);
+
+await t("the splash holds until the floor is spent, so the fact can be read", async () => {
+  resetSplash();
+  hideSplash();                     // fb.state just left "loading", as render() does
+  assert(SPLASH_DONE === false, "the sheet does not leave the instant the app is ready");
+  assert(SPLASH_PENDING, "it has armed itself to leave once the floor is spent");
+  assert(!splashClasses().includes("enter"), "and it has not started the exit animation");
+});
+
+await t("once the floor is spent the same call takes it down", async () => {
+  resetSplash();
+  window.__splashT0 = Date.now() - 5000;   // a slow boot: the floor is long gone
+  hideSplash();
+  assert(SPLASH_DONE === true, "nothing is held back when the wait already happened");
+  assert(splashClasses().includes("enter"), "the mold-opens animation is what plays");
+  assert(document.getElementById("splash").getAttribute("aria-hidden") === "true",
+    "and the sheet is hidden from a screen reader before it starts moving");
+});
+
+await t("the 12s backstop forces past the floor", async () => {
+  resetSplash();
+  hideSplash(true);
+  assert(SPLASH_DONE === true, "force skips the floor — a stuck boot is not a reading opportunity");
+});
+
+await t("a press before the app is ready is REMEMBERED, never obeyed", async () => {
+  resetSplash();
+  splashGo();                       // nothing called hideSplash, so there is no .ready
+  assert(SPLASH_DONE === false,
+    "pressing early must not dismiss onto the bare Connecting card — that is the RFS case");
+  assert(SPLASH_ASKED === true, "but the press is recorded rather than swallowed");
+  assert(splashClasses().includes("press"), "and it is acknowledged on screen");
+});
+
+await t("that remembered press waives the floor once there is something to show", async () => {
+  resetSplash();
+  splashGo();                       // pressed early...
+  assert(SPLASH_DONE === false, "still holding, because the app is not ready");
+  hideSplash();                     // ...and now the app arrives
+  assert(SPLASH_DONE === true, "the sheet leaves at once — the wait was already asked for");
+});
+
+await t("pressing once the app is ready leaves immediately", async () => {
+  resetSplash();
+  hideSplash();                     // arms .ready on a timer; set it as that timer would
+  document.getElementById("splash").classList.add("ready");
+  splashGo();
+  assert(SPLASH_DONE === true, "a press against a ready app is obeyed on the spot");
+});
+
+await t("the first load of a day waits longer than the fortieth", async () => {
+  resetSplash();
+  const first = splashFloor();
+  SPLASH_FLOOR_MS = null;           // a fresh page load, same day, same build
+  const again = splashFloor();
+  assert(first === SPLASH_FLOOR_FIRST, "a fact you have not seen gets time to be read: " + first);
+  assert(again === SPLASH_FLOOR, "one you have gets the short floor: " + again);
+  assert(again < first, "and the short one is genuinely shorter");
+});
+
+await t("the floor is read once, so repeated calls cannot shorten a wait in flight", async () => {
+  resetSplash();
+  const a = splashFloor(), b = splashFloor();
+  assert(a === b, "memoised: " + a + " then " + b);
+  assert(a === SPLASH_FLOOR_FIRST, "and it is the first-of-day value both times");
+});
+
+await t("the splash fact comes from the same pool the dashboard draws from", async () => {
+  const f = factOfTheDay(0);
+  assert(f && f.t, "factOfTheDay returns a fact");
+  assert(FACT_POOL.length > FACTS.length,
+    "the pool double-weights the team's own lore, which a raw pick over FACTS would miss");
+});
+
+/* Nothing below should inherit a splash the tests above left half-dismissed. */
+resetSplash();
 console.log(`\n${pass} passed, ${fail} failed`);
+
 process.exit(fail ? 1 : 0);

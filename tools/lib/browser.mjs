@@ -148,6 +148,37 @@ for (let attempt = 0; attempt < 3; attempt++) {
 window.onFbChange("ready");
 `;
 
+/* Wait for the boot splash to actually leave the screen.
+
+   fb.state going "ready" is what USED to take the splash down, so waiting on
+   it alone was sufficient for exactly as long as hideSplash() had no floor.
+   It has one now (SPLASH_FLOOR in core.js), so the sheet deliberately
+   outlives its cue — and without this every screenshot this module feeds to
+   shoot_ui, make_mockups, shoot_release and the UI suites would be a
+   photograph of a navy panel with a fun fact on it.
+
+   Waiting on the ELEMENT rather than on a duration is what keeps this honest:
+   hideSplash() removes the node from the DOM rather than leaving it at
+   opacity 0 (see its note in core.js), so absence is an unambiguous signal
+   and the floor can change without touching this line. */
+export async function splashGone(page) {
+  /* Skip the floor, then prove the sheet actually leaves.
+
+     The floor is a delay for a PERSON — long enough to read the fun fact — and
+     a harness is not a person. Waiting it out costs every page load in every
+     visual suite about two and a half seconds (a fresh browser context has
+     empty localStorage, so each one looks like the first load of the day and
+     draws the longer floor), for nothing anyone will ever look at.
+
+     hideSplash(true) is the same call the twelve-second backstop makes, so this
+     takes an existing path rather than inventing a test-only one. And it is
+     deliberately NOT the whole check: the wait below still has to pass, so a
+     splash that fails to tear itself down fails the suite exactly as it would
+     have. The floor itself is asserted properly, and cheaply, in test_app.mjs. */
+  await page.evaluate(() => { if (typeof hideSplash === "function") hideSplash(true); }).catch(() => {});
+  await page.waitForFunction("!document.getElementById('splash')", null, { timeout: 20000 });
+}
+
 /* Boot the real index.html with the stub in place of fb.js. */
 export async function openApp(ctx, port, path) {
   await ctx.route("**/fb.js", r => r.fulfill({ body: FB_STUB, contentType: "text/javascript" }));
@@ -157,6 +188,7 @@ export async function openApp(ctx, port, path) {
   page.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
   await page.goto(`http://127.0.0.1:${port}/${path || "index.html"}`, { waitUntil: "load" });
   await page.waitForFunction("window.fb && fb.state === 'ready'", null, { timeout: 20000 });
+  await splashGone(page);
   const seedError = await page.evaluate("window.__seedError || null");
   if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
   return { page, errors };

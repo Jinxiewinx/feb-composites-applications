@@ -79,6 +79,15 @@ const FIXTURES = [
   { id: "overhang", label: "a layer that hangs over the board below", src: { synth: "overhang" } },
   { id: "tiny", label: "a small mold — tight spans, text pushed off to the side", src: { synth: "tiny" } },
   { id: "nomesh", label: "no stored mesh — the layer-outline fallback", src: { file: "nosecone-plug.stl" }, noMesh: true },
+
+  /* The cut sheets. Every one of these needs a SECOND mold in the pack, because
+     the whole point of the feature is drawing the blanks that are not yours. */
+  { id: "cutlist", label: "a mold's set WITH cut sheets — boards shared with another mold",
+    src: { file: "nosecone-plug.stl" }, cut: true, with: { synth: "tiny" } },
+  { id: "cutcrowd", label: "cut sheets on a crowded board — leader fallback and table continuation",
+    src: { synth: "thin" }, cut: true, with: { synth: "thin" } },
+  { id: "cutbatch", label: "the batch cut list — its own document, no mold drawing in front",
+    src: { file: "nosecone-plug.stl" }, batch: true, with: { synth: "towers" } },
 ];
 
 /* ---------------- the harness page ----------------
@@ -96,6 +105,7 @@ const HARNESS = `<!doctype html><html><head><meta charset="utf-8"><title>drawing
 </script>
 <script src="slicer.js"></script><script src="stlio.js"></script>
 <script src="stackview.js"></script><script src="meshview.js"></script>
+<script src="packer.js"></script>
 <script src="drawings.js"></script>
 <script>
 window.buildFixture = async function (spec) {
@@ -128,9 +138,52 @@ window.buildFixture = async function (spec) {
   }, tris };
 };
 
+/* A rack, and the pack over it. This is the one thing the harness could not do
+   before: the cut sheets are a function of real board stock, and without a rack
+   they simply do not render — so the collision audit, MIN_PT and the overflow
+   check would all have been passing on sheets that were never built. */
+window.buildCut = function (plans, mineId) {
+  const rack = [];
+  let n = 0;
+  for (const g of [30, 45]) for (const t of [12.7, 19.05, 25.4, 38.1, 50.8, 76.2]) {
+    rack.push({ id: "BRD-SN6-" + String(++n).padStart(3, "0"), label: "rack A",
+      location: g === 30 ? "R2-S3" : "R1-S1",
+      len: 96 * 25.4, wid: 48 * 25.4, thk: t, density: g, qty: 4, index: n % 3 });
+  }
+  const blanks = [];
+  plans.forEach(({ plan }) => blanks.push(
+    ...blanksFromLayers(plan.layers, { min: 30, max: 45 }, plan.name || plan.id, plan.id)));
+  return {
+    pack: packAll(blanks, rack, {}),
+    mineId: mineId || null,
+    planNames: Object.fromEntries(plans.map(x => [x.plan.id, x.plan.name || x.plan.id])),
+    planSetups: Object.fromEntries(plans.map(x =>
+      [x.plan.id, (x.plan.layers || []).map(L => (L.section || 0) + 1)])),
+    stamp: batchStamp(plans.map(x => x.plan), rack),
+  };
+};
+
 window.renderFixture = async function (spec, noMesh) {
   const { plan, tris } = await window.buildFixture(spec);
-  document.getElementById("out").innerHTML = drawingSetHtml(plan, { tris: noMesh ? null : tris });
+  const out = document.getElementById("out");
+  if (spec.cut || spec.batch) {
+    /* A SECOND MOLD, so boards are genuinely shared and the "leave this one on
+       the board" case is drawn rather than assumed. A pack of one mold can
+       never exercise it. */
+    const plans = [{ plan, tris }];
+    if (spec.with) {
+      const second = await window.buildFixture(spec.with);
+      second.plan.id = "STK-sidepod";
+      second.plan.name = "SIDEPOD PLUG";
+      plans.push(second);
+    }
+    const cut = window.buildCut(plans, spec.batch ? null : plan.id);
+    out.innerHTML = spec.batch
+      ? cutSetHtml(cut, { by: "simon@example.com", printed: "2026-07-30" })
+      : drawingSetHtml(plan, { tris: noMesh ? null : tris, cut });
+  } else {
+    out.innerHTML = drawingSetHtml(plan, { tris: noMesh ? null : tris });
+  }
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   return document.querySelectorAll(".dwg-page").length;
 };
@@ -249,6 +302,14 @@ window.auditSheets = function (minPt, inset) {
          That is the drafting rule, not a threshold picked to make the run green
          — the datum box, the arrowheads and every block outline are solid, and
          all of them still fail if they touch a label. */
+      /* This sweep does not know about <defs>, and cannot cheaply be made to:
+         it maps every element through the SVG's own matrix rather than the
+         element's, so anything inside a <pattern> is reported at whatever page
+         coordinates its template happens to use. That is why the hatch template
+         in drawings.js is a <path> — segsOf() has no path branch, so a defs-only
+         shape is invisible here and identical on paper. Draw a hatch with a
+         <line> template and letter anything near the sheet's top-left corner
+         and this audit will fail on geometry that does not exist. */
       const segs = [];
       svg.querySelectorAll("line, polyline, polygon, rect, circle").forEach(el => {
         const dash = el.getAttribute("stroke-dasharray");
@@ -312,7 +373,14 @@ await page.goto(`http://127.0.0.1:${port}/__harness.html`, { waitUntil: "load" }
 
 let pass = 0, fail = 0;
 for (const fx of FIXTURES) {
-  const sheets = await page.evaluate(([spec, noMesh]) => window.renderFixture(spec, noMesh), [fx.src, !!fx.noMesh]);
+  /* The whole spec, not just fx.src. This used to pass the source alone, which
+     was fine while a source was all a fixture had — and then quietly dropped
+     the cut/batch/with flags on the floor, so the cut-sheet fixtures rendered
+     an ordinary drawing set and reported the same sheet count as the plain
+     fixture beside them. Merged rather than nested, because buildFixture reads
+     the source fields off the spec it is given. */
+  const spec = { ...fx.src, cut: !!fx.cut, batch: !!fx.batch, with: fx.with || null };
+  const sheets = await page.evaluate(([sp, noMesh]) => window.renderFixture(sp, noMesh), [spec, !!fx.noMesh]);
   const findings = await page.evaluate(([mp, ins]) => window.auditSheets(mp, ins), [MIN_PT, TEXT_INSET_PX]);
   const bad = pageErrors.splice(0).map(e => ({ sheet: 0, kind: "page-error", text: e, detail: "" })).concat(findings);
   if (!bad.length) {

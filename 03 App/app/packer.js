@@ -529,18 +529,29 @@ const SHEET_REF_MM3 = SHEET_AREA_MM2 * 25.4;   // a 4x8 sheet of 1in board
 /* Flatten a sliced stack into the blanks a cut list would ask for. Same shape
    and the same L1a / L1b naming as stock.js's blanksFromPlans, which is what
    drawings.js's blankLabel matches. */
-function blanksFromLayers(layers, dens, tag) {
+function blanksFromLayers(layers, dens, tag, planId) {
   /* `dens` is a number (one grade) or { min, max } (a declared range). `density`
      is still emitted, equal to min, so every caller that only ever wanted one
-     number keeps working and no stored record needs migrating. */
+     number keeps working and no stored record needs migrating.
+
+     `planId` is optional and is what tells a cut sheet WHOSE blank a rectangle
+     is. The id cannot do that job: it is prefixed with the plan's NAME, and
+     re-planning a mold leaves both plans in DB.stackplans under the same name —
+     so two blanks in one pack can carry the same id. stock.js's blanksFromPlans
+     has always emitted planId; this one did not, which is why a pure test could
+     not build a pack the drawing code would read correctly. */
   const lo = (dens && dens.min != null) ? dens.min : (dens || 30);
   const hi = (dens && dens.max != null) ? dens.max : lo;
   const out = [];
-  (layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => out.push({
-    id: `${tag ? tag + " " : ""}L${i + 1}${(L.blanks.length > 1 ? String.fromCharCode(97 + k) : "")}`,
-    w: b.x1 - b.x0, h: b.y1 - b.y0,
-    thickness: L.thickness, density: lo, densityMin: lo, densityMax: hi,
-  })));
+  (layers || []).forEach((L, i) => (L.blanks || []).forEach((b, k) => {
+    const o = {
+      id: `${tag ? tag + " " : ""}L${i + 1}${(L.blanks.length > 1 ? String.fromCharCode(97 + k) : "")}`,
+      w: b.x1 - b.x0, h: b.y1 - b.y0,
+      thickness: L.thickness, density: lo, densityMin: lo, densityMax: hi,
+    };
+    if (planId) { o.planId = planId; o.layer = i; }
+    out.push(o);
+  }));
   return out;
 }
 

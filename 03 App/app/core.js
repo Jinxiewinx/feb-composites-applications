@@ -2386,20 +2386,115 @@ function markAllNotifsRead() {
   closeModal();
 }
 // Overridden meaningfully in dashboard.js once watchers exist; safe default here.
-/* Take the boot splash down. Idempotent, and safe to call before the element
-   exists (the node test harness has no such div) or after it is already gone.
+/* ---------- the boot splash ----------
+   HOW LONG IT OWNS THE SCREEN.
 
-   Removed from the DOM after the fade rather than left at opacity:0, because a
-   full-bleed fixed sheet still answers hit tests until it is gone, and the
-   first thing under it is the sign-in field. */
-let SPLASH_DONE = false;
-function hideSplash() {
+   The sheet used to come down the instant fb.state left "loading", which on a
+   warm load with a cached session is a few hundred milliseconds — before
+   .sp-fact has finished the 0.75s-delayed fade-in that is the only reason the
+   fact is there at all. The team watched this on a projector and asked to be
+   able to read the thing.
+
+   So the splash now deliberately OUTLIVES its cue. The fact is fully opaque at
+   1250ms and the floor leaves a beat of stillness after that. The first load of
+   a day, or the first after a deploy, gets longer — that is the load where the
+   fact is actually new to you, and the fortieth load of a Tuesday is a tax.
+
+   Both floors are waived the moment somebody says go. See splashGo. */
+const SPLASH_FLOOR = 1600;
+const SPLASH_FLOOR_FIRST = 2400;
+const SPLASH_HINT_AT = 1100;   // "Continue" must never beat the fact onto the screen
+
+let SPLASH_DONE = false, SPLASH_PENDING = null, SPLASH_ASKED = false, SPLASH_FLOOR_MS = null;
+
+function splashEl() {
+  return (typeof document !== "undefined" && document.getElementById)
+    ? document.getElementById("splash") : null;
+}
+/* Stamped in the inline script at the top of the body, NOT here: core.js is the
+   tenth of thirty-three scripts, so a timestamp taken at this line has already
+   lost most of the parse it is meant to be measuring. */
+function splashAge() { return Date.now() - (window.__splashT0 || Date.now()); }
+
+/* Memoised, because hideSplash() can be called several times while the floor
+   is still running and reading the key twice would shorten the wait mid-flight.
+   Wrapped, because localStorage throws outright in some private modes and a
+   fun fact is not worth failing a boot over. */
+function splashFloor() {
+  if (SPLASH_FLOOR_MS != null) return SPLASH_FLOOR_MS;
+  SPLASH_FLOOR_MS = SPLASH_FLOOR;
+  try {
+    const key = APP_VERSION + "|" + today();
+    if (localStorage.getItem("feb-splash") !== key) {
+      localStorage.setItem("feb-splash", key);
+      SPLASH_FLOOR_MS = SPLASH_FLOOR_FIRST;
+    }
+  } catch (e) { /* no storage, so every load counts as a repeat load */ }
+  return SPLASH_FLOOR_MS;
+}
+
+/* Take the boot splash down — or arrange to, once the floor is spent.
+   Idempotent, and safe to call before the element exists (the node harness has
+   no real div) or after it is already gone.
+
+   `force` skips the floor: the 12s backstop uses it, and so does splashGo once
+   there is genuinely something to leave to.
+
+   Removed from the DOM after the animation rather than left transparent,
+   because a full-bleed fixed sheet still answers hit tests until it is gone and
+   the first thing under it is the sign-in field. */
+function hideSplash(force) {
   if (SPLASH_DONE) return;
-  const el = typeof document !== "undefined" && document.getElementById && document.getElementById("splash");
+  const el = splashEl();
   if (!el) return;
+
+  const left = (force || SPLASH_ASKED) ? 0 : splashFloor() - splashAge();
+  if (left > 0) {
+    if (!SPLASH_PENDING) {
+      /* The app behind the sheet is ready now, so the affordance is a REPORT
+         and not a promise — which is what makes it safe to press. Held back to
+         SPLASH_HINT_AT so it cannot land before the fact it sits under. */
+      setTimeout(() => {
+        const e = splashEl();
+        if (e && !SPLASH_DONE) e.classList.add("ready");
+      }, Math.max(0, SPLASH_HINT_AT - splashAge()));
+      SPLASH_PENDING = setTimeout(() => { SPLASH_PENDING = null; hideSplash(); }, left);
+    }
+    return;
+  }
+
   SPLASH_DONE = true;
-  el.classList.add("gone");
-  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+  /* Disabled and hidden BEFORE the animation rather than after. .sp-go is
+     focusable and sits ahead of everything in the document, so for the half
+     second the sheet spends lifting off it would otherwise be a keyboard trap
+     inside an element nobody can see. */
+  const go = typeof document !== "undefined" && document.getElementById
+    ? document.getElementById("sp-go") : null;
+  if (go) go.disabled = true;
+  if (el.setAttribute) el.setAttribute("aria-hidden", "true");
+  el.classList.add("enter");
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 560);
+}
+
+/* Somebody said go — a tap anywhere on the sheet, Enter, Space or Escape.
+
+   If the app behind it is ready, leave now. If it is NOT, the tap is REMEMBERED
+   rather than obeyed: SPLASH_ASKED waives the floor so the sheet leaves the
+   instant there is something to leave to. The sheet is pressable from its first
+   frame and on the shop wifi at RFS "not ready yet" is the common case, not the
+   edge case — dismissing onto the bare "Connecting…" card would be strictly
+   worse than the splash it replaced.
+
+   The press animation is the acknowledgement that the input was heard even
+   though it could not be acted on. */
+function splashGo() {
+  const el = splashEl();
+  if (!el || SPLASH_DONE) return;
+  SPLASH_ASKED = true;
+  if (el.classList.contains && el.classList.contains("ready")) { hideSplash(true); return; }
+  el.classList.remove("press");
+  void el.offsetWidth;            // restart the animation rather than ignore a second press
+  el.classList.add("press");
 }
 
 function render() {

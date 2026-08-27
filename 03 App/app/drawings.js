@@ -1166,7 +1166,15 @@ function sheetIso(plan, ctx) {
 
   const svg = `<svg class="dwg-view" viewBox="0 0 ${DWG_SHEET_W} ${DWG_ISO_H}" width="100%" role="img"
     aria-label="Assembled isometric view of the mold stock, ${layers.length} layers">
-    <defs><pattern id="dwgHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" stroke-width="0.5"/></pattern></defs>
+    ${/* The hatch template is a <path>, and it has to stay one. It was a <line>,
+          which renders identically and is a live trap: test_drawings.mjs's
+          collision audit collects every line/polyline/polygon/rect/circle in
+          the sheet and maps it through the SVG's OWN matrix, not the element's
+          — so a <line> parked inside <defs> is read as real geometry sitting at
+          page (0,0)-(0,7). This sheet passes only because nothing is lettered
+          in that corner. segsOf() has no path branch, so a <path> is invisible
+          to the audit and identical on paper. */""}
+    <defs><pattern id="dwgHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0L0 7" stroke="currentColor" stroke-width="0.5" fill="none"/></pattern></defs>
     ${body.join("\n    ")}
     ${nb.join("\n    ")}
     ${scaleBar(s, 6, DWG_ISO_H - 10)}
@@ -1495,6 +1503,703 @@ function sheetLayer(plan, ctx, i) {
 }
 
 /* ============================================================================
+   CUT SHEETS — the nest, on paper
+   ============================================================================
+   WHAT THIS IS FOR. The rest of this file tells you what the mold stack IS.
+   Nothing on paper told the person at the saw which boards to cut it out of:
+   renderCutList() is a screen, and printCutList() used to dump that screen's
+   markup into a bare <div class="sheet"> — no title block, no sheet numbering,
+   no pagination, the one printable in the app that did not go through the house
+   print system. These sheets close that.
+
+   ONE RENDERER, TWO DOCUMENTS. The batch set is the whole document; a mold's
+   continuation sheets are that same document filtered to the boards that mold
+   touches. Same pack, same builders, same geometry, one shared scale — so a
+   given board's nest sheet is identical in both, and "one document, filtered"
+   is a fact rather than a claim.
+
+   THE PACK IS THE BATCH PACK, ALWAYS. The requirement is to show the blanks
+   belonging to OTHER molds that share a board, and that is only answerable from
+   a pack over every planned mold. So these sheets are not costed "as if this
+   were the only mold being cut" — they use the authority. What they inherit
+   instead is staleness: plan another mold, or mark boards cut, and the same
+   drawing regenerates with a different nest. That is what the batch stamp is
+   for, and it is on every cut sheet.
+
+   PURE, like everything else here. Nothing below touches the DOM or reads DB.
+   The pack is resolved by the caller (openDrawings, printCutSet) and handed
+   through opts, exactly as tris/partName/woId already are. */
+
+const DWG_NEST_H = 370;
+/* The right gutter is for leader labels — a blank too small to letter inside
+   gets a leader out to this column, the same mechanism sheet 1 uses for its
+   layer callouts. The bottom is the overall-width dimension and the scale bar.
+
+   The LEFT is not spare space either, and 30 was wrong: dimV writes its label
+   rotated at xLine - 15, and xLine is itself 26 off the board, so the glyph box
+   starts about 45px left of the geometry. At 30 the board's height dimension
+   printed off the sheet entirely — which the out-of-frame check caught the
+   first time these sheets were built for real. sheetLayer carries 92 on the
+   same side for the same reason. */
+const NEST_M = { l: 68, r: 96, t: 26, b: 44 };
+
+/* HOW MANY ROWS FIT, AND WHY THESE NUMBERS.
+
+   The body budget is about 805px, derived rather than guessed: .dwg sets
+   box-sizing:border-box, so min-height 10.92in with .45in padding gives a
+   10.02in ≈ 962px content box, less the 0.9pt frame ≈ 959px, less .dwg-top
+   (~22px) and the title block (~130px worst case, two 0.34in rows plus a
+   four-line .tb-note at 6.6pt/1.32).
+
+   A .dwg-t row is 7.4pt x 1.3 plus 3.2pt padding plus a hairline = 13.3pt =
+   17.7px. On a nest sheet the two tables sit side by side, so the taller one
+   governs: (805 - 370 svg - 30 caps - 35 headers - 30 notes) / 17.7 = 19, less
+   two rows of slack for a long mold name or board id.
+
+   These are floors with slack, not measurements — the alternative is a fit loop
+   like the traveler's, which needs a DOM and would cost this file its purity. */
+const NEST_ROWS = 17;
+const TABLE_ROWS = 38;
+const SCHED_ROWS = 30;
+const SCHED_CONT_ROWS = 42;
+const COVER_ROWS = 26;
+
+/* ---------------- the batch stamp ----------------
+   ARE THESE TWO PRINTOUTS FROM THE SAME PACK?
+
+   Nothing else on the sheet can answer that. A date cannot — two packs on one
+   afternoon differ. The plan and board counts cannot — re-planning a mold
+   changes neither. So a short digest of the actual inputs goes on every cut
+   sheet, and the question becomes checkable by eye when sheet 9 of a mold set
+   and sheet 4 of the batch set are on the same bench.
+
+   FNV-1a folded to 16 bits: twelve lines, no dependency, and there is no hash
+   helper anywhere else in this app. Collisions are possible and do not matter —
+   this is a "did something change" mark, not a signature, and the date and
+   counts beside it are what a person actually reads. */
+function fnv16(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return (((h >>> 16) ^ h) & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+}
+/* Canonical: sorted, so two clients that hold the same records in a different
+   order agree, and narrow, so a field nobody cuts against cannot churn the tag.
+   What is in it is exactly what the packer reads. */
+function batchStamp(plans, boards) {
+  const ps = (plans || []).map(p =>
+    `${p.id}:${(p.layers || []).length}:${(p.layers || []).reduce((n, L) => n + (L.blanks || []).length, 0)}`).sort();
+  const bs = (boards || []).map(b =>
+    `${b.id}:${Math.round(b.len)}:${Math.round(b.wid)}:${Math.round(b.thk)}:${b.density}:${b.qty || 1}`).sort();
+  return {
+    date: today(),
+    nPlans: ps.length,
+    nBoards: bs.length,
+    tag: fnv16(ps.join("|") + "#" + bs.join("|")),
+    get text() {
+      return `BATCH ${this.date} · ${this.nPlans} PLAN${this.nPlans === 1 ? "" : "S"} · ${this.nBoards} BOARD ROW${this.nBoards === 1 ? "" : "S"} · #${this.tag}`;
+    },
+  };
+}
+
+/* ---------------- reading a pack ----------------
+   OWNERSHIP KEYS ON planId, NEVER ON THE BLANK'S ID.
+
+   blanksFromPlans mints `<plan.name> L2b`, and re-planning a mold leaves both
+   plans in DB.stackplans under the same name — so two blanks in one pack can
+   carry byte-identical ids. planId is on the blank already and cannot collide. */
+function nestSplit(bp, mineId) {
+  const mine = [], others = [];
+  (bp.placed || []).forEach(pl => {
+    ((mineId && pl.part && pl.part.planId === mineId) ? mine : others).push(pl);
+  });
+  return { mine, others };
+}
+/* Every mold in the pack gets a letter, assigned in the order the boards are
+   worked. Computed from the PACK and not from the document, so `A` means the
+   same mold on the batch set and on every mold's own sheets — lay the two side
+   by side on a bench and the letters agree. */
+function moldKeyMap(pack) {
+  const m = new Map();
+  let n = 0;
+  ((pack && pack.plans) || []).forEach(bp => (bp.placed || []).forEach(pl => {
+    const id = pl.part && pl.part.planId;
+    if (id && !m.has(id)) m.set(id, String.fromCharCode(65 + (n++ % 26)));
+  }));
+  return m;
+}
+/* The boards this document is about, in the order the shop works them: the
+   lowest setup a board feeds, then how deep it is buried in its own location
+   (pl.index is already "how many boards do I lift"), then the id so two runs
+   with the same inputs never disagree. mineId null means the whole batch. */
+function nestBoardsFor(cut, mineId) {
+  const pack = cut && cut.pack;
+  if (!pack) return [];
+  const rows = (pack.plans || []).filter(bp =>
+    !mineId || (bp.placed || []).some(pl => pl.part && pl.part.planId === mineId));
+  return rows.slice().sort((a, b) => {
+    const sa = Math.min(...(nestSetups(cut, a, mineId).concat([99])));
+    const sb = Math.min(...(nestSetups(cut, b, mineId).concat([99])));
+    return sa - sb || (a.index || 0) - (b.index || 0)
+      || String(a.board.src.id).localeCompare(String(b.board.src.id));
+  });
+}
+/* Which machine setups a board feeds — the user's "what sections are relevant
+   to this mold", read off the layer each blank came from. cut.planSetups maps a
+   planId to a layer-index -> setup-number array, so this works for a mold whose
+   own plan record is not in scope (the batch set is about many molds). */
+function nestSetups(cut, bp, planId) {
+  const out = new Set();
+  (bp.placed || []).forEach(pl => {
+    const b = pl.part || {};
+    if (planId && b.planId !== planId) return;
+    const setups = (cut.planSetups || {})[b.planId];
+    if (setups && b.layer != null && setups[b.layer] != null) out.add(setups[b.layer]);
+  });
+  return [...out].sort((a, b) => a - b);
+}
+
+/* cutSequence()'s prose is a SCREEN string — "Rip at 610.0mm (24.02in) from the
+   left edge", 43 characters, millimetres first. In a 7.4pt cell it wraps, which
+   breaks the row arithmetic above, and it inverts the inch-first convention
+   every other number on these sheets uses. Same data, three nowrap columns. */
+function cutRowsDwg(bp) {
+  return (bp.cuts || []).map((c, i) => ({
+    n: i + 1,
+    kind: c.axis === "x" ? "RIP" : "CROSSCUT",
+    at: fmtDwgLine(c.at),
+    span: c.axis === "x" ? "from the left edge" : "from the near edge",
+  }));
+}
+
+/* ONE SCALE FOR EVERY NEST SHEET IN THE DOCUMENT, exactly as ctx.layerScale is
+   one scale for every layer sheet: flipping between sheets must not also change
+   the size of everything. Computed over the whole batch's boards rather than
+   the subset a mold touches, so a board prints the same size in both documents.
+
+   The cost is honest and worth stating: a 22x14in offcut next to a 96x48in
+   sheet prints as a stamp in a mostly empty box. That is true, and it is the
+   information — you can see at a glance that board 3 is a remnant. */
+function nestSharedScale(pack) {
+  const rows = (pack && pack.plans) || [];
+  if (!rows.length) return 1;
+  const w = DWG_SHEET_W - NEST_M.l - NEST_M.r;
+  const h = DWG_NEST_H - NEST_M.t - NEST_M.b;
+  return Math.min(...rows.map(bp =>
+    dwgFit({ x0: 0, y0: 0, x1: bp.board.w, y1: bp.board.h }, w, h)));
+}
+
+/* ---------------- the nest diagram ----------------
+   GRAYSCALE IS THE ONLY CHANNEL. Shop travelers print on a black-and-white
+   laser first, so nothing here is carried by hue:
+
+     this mold's blank     heavy outline, WHITE           tagged L2b
+     another mold's blank  thin outline, HATCHED          key letter, named in the table
+     offcut kept           thin outline, DASHED           OFFCUT if it fits
+     saw cut               thin, DASHED, numbered flag    keyed to the cut table
+     board edge            heavy outline                  named in the caption
+
+   The fill is inverted from what you might expect — yours is the empty one —
+   because this sheet shows ONE board large and the reader's job is to find and
+   mark their own blanks. Those have to be the open, writable, tag-carrying
+   shapes, and the tag then lands on white paper rather than on hatching.
+
+   Cut lines being dashed is also load-bearing for the harness: solid geometry
+   crossing a label is a layout error and fails, dashed geometry is broken by
+   text as a matter of course and does not. That is the drafting rule, not a
+   threshold picked to make the run green. */
+function nestSvg(bp, cut, o) {
+  o = o || {};
+  const s = o.scale;
+  const mineId = o.mineId || null;
+  const keys = o.keys || new Map();
+  const board = bp.board;
+  const bw = board.w * s, bh = board.h * s;
+  const v = dwgView({ x0: 0, y0: 0, x1: board.w, y1: board.h }, s,
+    NEST_M.l + (DWG_SHEET_W - NEST_M.l - NEST_M.r - bw) / 2,
+    NEST_M.t + (DWG_NEST_H - NEST_M.t - NEST_M.b - bh) / 2, true);
+  const out = [];
+  const rect = (x0, y0, x1, y1, width, dash, fill) => {
+    const pts = [{ x: v.X(x0), y: v.Y(y0) }, { x: v.X(x1), y: v.Y(y0) },
+                 { x: v.X(x1), y: v.Y(y1) }, { x: v.X(x0), y: v.Y(y1) }];
+    if (fill) out.push(`<polygon points="${pts.map(p => `${f1(p.x)},${f1(p.y)}`).join(" ")}" fill="${fill}" stroke="none"/>`);
+    out.push(dwgPoly(pts, width, dash, true));
+  };
+
+  // The board itself.
+  rect(0, 0, board.w, board.h, DW.heavy);
+
+  // Offcuts first, so a blank drawn over one still reads as the blank.
+  (bp.leftover || []).forEach(l => {
+    rect(l.x, l.y, l.x + l.w, l.y + l.h, DW.thin, DASH_THIN);
+    const wpx = l.w * s, hpx = l.h * s;
+    if (estTextW("OFFCUT", DW.tiny) + 6 <= wpx && DW.tiny * 1.6 <= hpx) {
+      out.push(dwgText(v.X(l.x + l.w / 2), v.Y(l.y + l.h / 2) + DW.tiny * 0.35, "OFFCUT", DW.tiny, { anchor: "middle" }));
+    }
+  });
+
+  // Every placed blank. `w`/`h` are already swapped when the packer turned it,
+  // so nothing here has to know about rotation.
+  const leaders = [];
+  (bp.placed || []).forEach(pl => {
+    const b = pl.part || {};
+    const isMine = !!mineId && b.planId === mineId;
+    rect(pl.x, pl.y, pl.x + pl.w, pl.y + pl.h, isMine ? DW.heavy : DW.thin,
+      null, isMine ? null : "url(#dwgHatch)");
+    const cx = v.X(pl.x + pl.w / 2), cy = v.Y(pl.y + pl.h / 2);
+    const wpx = pl.w * s, hpx = pl.h * s;
+    const key = keys.get(b.planId) || "";
+    // In the batch set nobody is "mine", so every blank is tagged and the key
+    // letter goes with it — that is what makes a batch sheet readable at all.
+    const tag = mineId ? (isMine ? blankTagOf(b) : key) : (key ? key + "·" + blankTagOf(b) : blankTagOf(b));
+    if (!tag) return;
+    const size = (isMine || !mineId) ? DW.font : DW.tiny;
+    if (estTextW(tag, size) + 6 <= wpx && size * 1.55 + 4 <= hpx) {
+      out.push(dwgText(cx, cy + size * 0.35, tag, size, { anchor: "middle", bold: isMine || !mineId }));
+    } else if (isMine || !mineId) {
+      /* Too small to letter inside. A leader out to the gutter — NEVER a
+         smaller type size: DW.tiny is already 5.7pt against the harness's 5.5pt
+         floor, and shrinking a label to make it fit is how a sheet ends up
+         technically passing and practically unreadable. */
+      leaders.push({ y: cy, px: cx, py: cy, text: tag });
+    }
+    // Another mold's blank that cannot hold its letter is simply unlabelled.
+    // It is not this sheet's job, and the table names it in full.
+  });
+  spreadLabels(leaders, null, NEST_M.t + 6, DWG_NEST_H - NEST_M.b)
+    .forEach(it => out.push(leader(it.px, it.py, DWG_SHEET_W - NEST_M.r + 16, it.y, it.text)));
+
+  /* The saw cuts, numbered outside the board so a flag never sits on the work.
+     Rips are flagged along the top edge and crosscuts down the left, each run
+     spread so two near-coincident cuts cannot overprint each other. */
+  const ripFlags = [], crossFlags = [];
+  (bp.cuts || []).forEach((c, i) => {
+    if (c.axis === "x") {
+      out.push(dwgLine(v.X(c.at), v.Y(c.to), v.X(c.at), v.Y(c.from), DW.thin, DASH_THIN));
+      ripFlags.push({ y: v.X(c.at), text: String(i + 1) });
+    } else {
+      out.push(dwgLine(v.X(c.from), v.Y(c.at), v.X(c.to), v.Y(c.at), DW.thin, DASH_THIN));
+      crossFlags.push({ y: v.Y(c.at), text: String(i + 1) });
+    }
+  });
+  spreadLabels(ripFlags, 12, v.ox, v.ox + bw)
+    .forEach(it => out.push(dwgText(it.y, v.oy - 7, it.text, DW.tiny, { anchor: "middle", bold: true })));
+  spreadLabels(crossFlags, 12, v.oy, v.oy + bh)
+    .forEach(it => out.push(dwgText(v.ox - 9, it.y + 2.5, it.text, DW.tiny, { anchor: "end", bold: true })));
+
+  /* Overall size only. The blanks are deliberately NOT dimensioned in place:
+     you cut to the fence off a numbered sequence, not to a datum, and a nest
+     with forty dimensions on it is unreadable and would be describing a method
+     nobody uses. */
+  out.push(dimH(v.ox, v.ox + bw, v.oy + bh + 26, v.oy + bh, board.w));
+  out.push(dimV(v.oy, v.oy + bh, v.ox - 26, v.ox, board.h));
+  out.push(scaleBar(s, 6, DWG_NEST_H - 10));
+
+  return `<svg class="dwg-view" viewBox="0 0 ${DWG_SHEET_W} ${DWG_NEST_H}" role="img"
+    aria-label="Cutting layout for ${esc(o.label || board.src.id)}">${out.join("")}</svg>`;
+}
+/* The blank's own label, with the plan-name prefix blanksFromPlans adds taken
+   back off — the sheets already say which mold this is, in the caption, the
+   table and the title block, and "UT DIFFUSER L2b" does not fit in a 45mm
+   rectangle. blanksFromLayers (the pure one) emits the bare form already. */
+function blankTagOf(b) {
+  const id = String((b && b.id) || "");
+  const m = id.match(/L\d+[a-z]?$/);
+  return m ? m[0] : id;
+}
+
+/* ---------------- pagination ----------------
+   THE SHEET COUNT HAS TO BE KNOWN BEFORE ANY SHEET RENDERS, because every title
+   block prints "4 / 12" and the schedule sheets cross-reference the nest sheets
+   by number. So this plans the whole document first and returns descriptors;
+   the builders below take one each and render it.
+
+   No measuring, and two guarantees that make that safe. The diagram is a
+   constant-height letterboxed viewBox, so its printed height is fixed whatever
+   size the board is. And a table row is a fixed 17.7px given the .nw rule in
+   print.css, so a count of rows is a height.
+
+   A 4x8 sheet holding fourteen blanks generates about twenty-four cuts, so
+   continuation is a path the shop will actually reach — not a defensive
+   branch — and it has a fixture. */
+function planCutSheets(cut, opts) {
+  opts = opts || {};
+  const mineId = opts.mineId || null;
+  const sheets = [];
+  if (!cut || !cut.pack) return sheets;
+
+  if (opts.scope === "batch") sheets.push({ kind: "cover" });
+
+  /* One schedule per mold: tearable, so a lead can hand one page to whoever is
+     cutting that mold, and it is the same builder the mold's own set uses. */
+  const molds = mineId ? [mineId] : [...moldKeyMap(cut.pack).keys()];
+  molds.forEach(planId => {
+    const rows = scheduleRows(cut, planId);
+    const first = Math.max(1, Math.min(rows.length, SCHED_ROWS));
+    sheets.push({ kind: "schedule", planId, from: 0, to: Math.min(rows.length, SCHED_ROWS) });
+    for (let i = first; i < rows.length; i += SCHED_CONT_ROWS) {
+      sheets.push({ kind: "schedule", planId, from: i, to: Math.min(rows.length, i + SCHED_CONT_ROWS), cont: true });
+    }
+  });
+
+  nestBoardsFor(cut, mineId).forEach((bp, k, arr) => {
+    const nB = (bp.placed || []).length, nC = (bp.cuts || []).length;
+    sheets.push({ kind: "nest", bp, n: k + 1, of: arr.length,
+      blankFrom: 0, blankTo: Math.min(nB, NEST_ROWS), cutFrom: 0, cutTo: Math.min(nC, NEST_ROWS) });
+    let b = NEST_ROWS, c = NEST_ROWS;
+    while (b < nB || c < nC) {
+      sheets.push({ kind: "nest", bp, n: k + 1, of: arr.length, cont: true,
+        blankFrom: b, blankTo: Math.min(nB, b + TABLE_ROWS),
+        cutFrom: c, cutTo: Math.min(nC, c + TABLE_ROWS) });
+      b += TABLE_ROWS; c += TABLE_ROWS;
+    }
+  });
+  return sheets;
+}
+/* One row per blank this mold owns, layer order then position — the order you
+   would cut them and the order the layer sheets already list them in. */
+function scheduleRows(cut, planId) {
+  const rows = [];
+  ((cut.pack && cut.pack.plans) || []).forEach(bp => (bp.placed || []).forEach(pl => {
+    const b = pl.part || {};
+    if (b.planId !== planId) return;
+    rows.push({ bp, pl, b });
+  }));
+  return rows.sort((a, b) =>
+    (a.b.layer ?? 0) - (b.b.layer ?? 0) || String(a.b.id).localeCompare(String(b.b.id)));
+}
+/* A BOARD ROW IS NOT A BOARD. A rack row carries a quantity — four sheets of
+   96 x 48 x 1in — and the packer opens as many of them as the job needs, so one
+   id can appear two or three times in a pack as separate BoardPlans. That is
+   true and it is what you actually pull off the shelf, but printed as a bare id
+   it reads as the same board listed twice, and a cross-reference keyed on the
+   id sends every one of them to the first board's sheet.
+
+   So the sheets identify an OPENED board: its id, plus which of them it is when
+   the id is opened more than once. Caught by looking at a rendered sheet — the
+   arithmetic was right and the page was misleading. */
+function boardLabel(cut, bp) {
+  const rows = (cut.pack && cut.pack.plans) || [];
+  const same = rows.filter(x => x.board.src.id === bp.board.src.id);
+  if (same.length < 2) return bp.board.src.id;
+  return `${bp.board.src.id} #${same.indexOf(bp) + 1} of ${same.length}`;
+}
+/* Where a board's nest sheet ended up, so a schedule can point at it. By object
+   identity, NOT by id, for the reason above. Wants the planned sheet list,
+   which is why planCutSheets runs before anything renders. */
+function nestSheetNo(sheets, base, bp) {
+  const i = sheets.findIndex(d => d.kind === "nest" && !d.cont && d.bp === bp);
+  return i < 0 ? "—" : String(base + i);
+}
+
+/* ---------------- the sheets ---------------- */
+
+/* Everything renderCutList()'s summary card says, in the house drawing language
+   and with a title block on it. Batch set only: a mold's own set has its
+   drawing sheets in front and does not need a cover for two more. */
+function sheetCutCover(head, ctx, sheetNo) {
+  const cut = ctx.cut, pack = cut.pack;
+  const keys = ctx.moldKeys;
+  const util = typeof utilisation === "function" ? utilisation(pack.plans) : 0;
+  const nBlanks = (pack.plans || []).reduce((n, bp) => n + (bp.placed || []).length, 0);
+
+  const moldRows = [...keys.entries()].slice(0, COVER_ROWS).map(([planId, key]) => {
+    const rows = scheduleRows(cut, planId);
+    const boards = new Set(rows.map(r => r.bp.board.src.id));
+    const setups = nestSetups(cut, { placed: rows.map(r => r.pl) }, planId);
+    return `<tr>
+      <td class="num">${esc(key)}</td>
+      <td>${esc((cut.planNames || {})[planId] || planId)}</td>
+      <td class="nw">${esc(planId)}</td>
+      <td class="nw">${setups.length ? esc(setups.join(", ")) : "—"}</td>
+      <td class="num">${rows.length}</td>
+      <td class="num">${boards.size}</td>
+    </tr>`;
+  }).join("");
+
+  const boardRows = (pack.plans || []).slice(0, COVER_ROWS).map((bp, i) => `<tr>
+      <td class="nw">${esc(boardLabel(cut, bp))}</td>
+      <td class="nw">${esc(fmtDwgLine(bp.board.w))} &times; ${esc(fmtDwgLine(bp.board.h))} &times; ${esc(fmtDwgLine(bp.thickness))}</td>
+      <td class="nw">${bp.density} LB</td>
+      <td>${esc(bp.board.src.location || "—")}</td>
+      <td class="num">${(bp.placed || []).length}</td>
+      <td class="num">${(bp.leftover || []).length}</td>
+      <td class="num">${nestSheetNo(ctx.cutSheets, ctx.sheet0Cut, bp)}</td>
+    </tr>`).join("");
+
+  const body = `
+    <div class="dwg-cap">CUT LIST — ${nBlanks} BLANK${nBlanks === 1 ? "" : "S"} FROM ${keys.size} MOLD${keys.size === 1 ? "" : "S"} · ${pack.boardsUsed} BOARD${pack.boardsUsed === 1 ? "" : "S"} OPENED · ${(util * 100).toFixed(0)}% OF OPENED BOARD USED · KERF ${esc(fmtDwgLine(typeof KERF_MM !== "undefined" ? KERF_MM : 3.175))}</div>
+    <div class="dwg-tabwrap">
+      <div class="dwg-cap">MOLDS IN THIS CUT</div>
+      <table class="ws-t rows dwg-t">
+        <thead><tr><th class="num">Key</th><th>Mold</th><th class="nw">Plan</th><th class="nw">Setups</th><th class="num">Blanks</th><th class="num">Boards</th></tr></thead>
+        <tbody>${moldRows}</tbody>
+      </table>
+    </div>
+    <div class="dwg-tabwrap" style="margin-top:6pt">
+      <div class="dwg-cap">BOARDS OPENED</div>
+      <table class="ws-t rows dwg-t">
+        <thead><tr><th class="nw">Board</th><th class="nw">Size &times; thk</th><th class="nw">Grade</th><th>Where</th><th class="num">Yields</th><th class="num">Offcuts</th><th class="num">Sheet</th></tr></thead>
+        <tbody>${boardRows}</tbody>
+      </table>
+    </div>
+    ${cutNotes(ctx, null)}`;
+  return dwgPage(head, ctx, sheetNo, "CUT LIST — COVER", "NONE", body);
+}
+
+/* One mold's blanks and the boards they come off. This is the sheet that
+   answers "what sections are relevant to this mold" — setup is a column here
+   and the organising fact in the SETUP → BOARD table above it. */
+function sheetCutSchedule(head, ctx, d, sheetNo) {
+  const cut = ctx.cut;
+  const rows = scheduleRows(cut, d.planId).slice(d.from, d.to);
+  const name = (cut.planNames || {})[d.planId] || d.planId;
+  const mine = ctx.mineId === d.planId;
+
+  const setups = nestSetups(cut, { placed: scheduleRows(cut, d.planId).map(r => r.pl) }, d.planId);
+  const setupTable = d.cont ? "" : `
+    <div class="dwg-tabwrap">
+      <div class="dwg-cap">SETUP &rarr; BOARD</div>
+      <table class="ws-t rows dwg-t">
+        <thead><tr><th class="num">Setup</th><th>Blanks</th><th>Boards</th><th class="nw">Sheets</th></tr></thead>
+        <tbody>${(setups.length ? setups : [null]).map(s => {
+          const rs = scheduleRows(cut, d.planId).filter(r =>
+            s == null || ((cut.planSetups || {})[d.planId] || [])[r.b.layer] === s);
+          const boards = [...new Set(rs.map(r => r.bp))];
+          return `<tr>
+            <td class="num">${s == null ? "—" : s}</td>
+            <td>${rs.map(r => esc(blankTagOf(r.b))).join(" ")}</td>
+            <td class="nw">${boards.map(b => esc(boardLabel(cut, b))).join(", ")}</td>
+            <td class="nw">${boards.map(b => nestSheetNo(ctx.cutSheets, ctx.sheet0Cut, b)).join(", ")}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>`;
+
+  const setupOf = (r) => {
+    const s = ((cut.planSetups || {})[d.planId] || [])[r.b.layer];
+    return s == null ? "—" : s;
+  };
+  const blankRows = rows.map(r => `<tr>
+      <td class="num">${esc(blankTagOf(r.b))}</td>
+      <td class="num">${setupOf(r)}</td>
+      <td class="num">${(r.b.layer ?? 0) + 1}</td>
+      <td class="nw">${esc(fmtDwgLine(r.pl.w))} &times; ${esc(fmtDwgLine(r.pl.h))}</td>
+      <td class="nw">${esc(fmtDwgLine(r.b.thickness))}</td>
+      <td class="nw">${esc(boardLabel(cut, r.bp))}</td>
+      <td class="nw">${r.bp.density} LB</td>
+      <td class="num">${r.pl.rotated ? "90&deg;" : "—"}</td>
+    </tr>`).join("");
+
+  const boards = [...new Set(scheduleRows(cut, d.planId).map(r => r.bp))];
+  const boardTable = d.cont ? "" : `
+    <div class="dwg-tabwrap" style="margin-top:6pt">
+      <div class="dwg-cap">BOARDS TO PULL</div>
+      <table class="ws-t rows dwg-t">
+        <thead><tr><th class="nw">Board</th><th class="nw">Size &times; thk</th><th class="nw">Grade</th><th>Where</th><th class="num">Mine</th><th>Also yields</th><th class="num">Offcuts</th><th class="num">Sheet</th></tr></thead>
+        <tbody>${boards.map(bp => {
+          const sp = nestSplit(bp, d.planId);
+          const also = new Map();
+          sp.others.forEach(pl => {
+            const k = ctx.moldKeys.get(pl.part.planId) || "?";
+            also.set(k, (also.get(k) || 0) + 1);
+          });
+          return `<tr>
+            <td class="nw">${esc(boardLabel(cut, bp))}</td>
+            <td class="nw">${esc(fmtDwgLine(bp.board.w))} &times; ${esc(fmtDwgLine(bp.board.h))} &times; ${esc(fmtDwgLine(bp.thickness))}</td>
+            <td class="nw">${bp.density} LB</td>
+            <td>${esc(bp.board.src.location || "—")}</td>
+            <td class="num">${sp.mine.length}</td>
+            <td>${[...also.entries()].map(([k, n]) => `${esc(k)} &times;${n}`).join(", ") || "—"}</td>
+            <td class="num">${(bp.leftover || []).length}</td>
+            <td class="num">${nestSheetNo(ctx.cutSheets, ctx.sheet0Cut, bp)}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>`;
+
+  const body = `
+    ${setupTable}
+    <div class="dwg-tabwrap" style="margin-top:6pt">
+      <div class="dwg-cap">BLANKS${mine ? " FOR THIS MOLD" : " — " + esc(String(name).toUpperCase())}${d.cont ? " (CONT.)" : ""}</div>
+      <table class="ws-t rows dwg-t">
+        <thead><tr><th class="num">Blank</th><th class="num">Setup</th><th class="num">Layer</th><th class="nw">Size as cut (X &times; Y)</th><th class="nw">Thk</th><th class="nw">Board</th><th class="nw">Grade</th><th class="num">Turned</th></tr></thead>
+        <tbody>${blankRows}</tbody>
+      </table>
+    </div>
+    ${boardTable}
+    ${cutNotes(ctx, d.planId)}`;
+
+  const title = mine
+    ? `CUT SCHEDULE — BOARDS FOR THIS MOLD${d.cont ? " (CONT.)" : ""}`
+    : `CUT SCHEDULE — ${String(name).toUpperCase()}${d.cont ? " (CONT.)" : ""}`;
+  return dwgPage(head, ctx, sheetNo, title.slice(0, 60), "NONE", body);
+}
+
+/* One board, drawn big enough to work from, with everything on it named and
+   the saw sequence beside it. */
+function sheetNest(head, ctx, d, sheetNo) {
+  const cut = ctx.cut, bp = d.bp;
+  const sp = nestSplit(bp, ctx.mineId);
+  const blanks = (bp.placed || []).slice(d.blankFrom, d.blankTo);
+  const cuts = cutRowsDwg(bp).slice(d.cutFrom, d.cutTo);
+  const setups = nestSetups(cut, bp, ctx.mineId);
+
+  const blankRows = blanks.map(pl => {
+    const b = pl.part || {};
+    const mine = ctx.mineId && b.planId === ctx.mineId;
+    const key = ctx.moldKeys.get(b.planId) || "";
+    return `<tr>
+      <td class="num">${mine || !ctx.mineId ? esc(blankTagOf(b)) : "—"}</td>
+      <td>${mine ? "<b>THIS MOLD</b>" : esc(key + " · " + ((cut.planNames || {})[b.planId] || b.planId || "—"))}</td>
+      <td class="num">${(() => {
+        const s = ((cut.planSetups || {})[b.planId] || [])[b.layer];
+        return s == null ? "—" : s;
+      })()}</td>
+      <td class="nw">${esc(fmtDwgLine(pl.w))} &times; ${esc(fmtDwgLine(pl.h))}</td>
+      <td class="num">${pl.rotated ? "90&deg;" : "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const cutRows = cuts.map(c => `<tr>
+      <td class="num"><b>${c.n}</b></td>
+      <td class="nw">${c.kind}</td>
+      <td class="nw">${esc(c.at)}</td>
+      <td>${esc(c.span)}</td>
+    </tr>`).join("");
+
+  const cap = `${esc(boardLabel(cut, bp))}${bp.board.src.label ? " · " + esc(bp.board.src.label) : ""} · ${esc(fmtDwgLine(bp.board.w))} &times; ${esc(fmtDwgLine(bp.board.h))} &times; ${esc(fmtDwgLine(bp.thickness))} · ${bp.density} LB${bp.board.src.location ? " · " + esc(bp.board.src.location) : ""}`;
+
+  const body = `
+    ${d.cont ? "" : `<div class="dwg-cap">${cap}</div>${nestSvg(bp, cut, { scale: ctx.nestScale, mineId: ctx.mineId, keys: ctx.moldKeys, label: boardLabel(cut, bp) })}`}
+    <div class="dwg-cols">
+      <div class="dwg-tabwrap">
+        <div class="dwg-cap">BLANKS ON THIS BOARD${d.cont ? " (CONT.)" : ""}</div>
+        <table class="ws-t rows dwg-t">
+          <thead><tr><th class="num">Blank</th><th>Mold</th><th class="num">Setup</th><th class="nw">Size as cut</th><th class="num">Turned</th></tr></thead>
+          <tbody>${blankRows}</tbody>
+        </table>
+      </div>
+      <div class="dwg-tabwrap">
+        <div class="dwg-cap">CUT SEQUENCE${d.cont ? " (CONT.)" : ""}</div>
+        <table class="ws-t rows dwg-t">
+          <thead><tr><th class="num">#</th><th class="nw">Cut</th><th class="nw">At</th><th>Across</th></tr></thead>
+          <tbody>${cutRows}</tbody>
+        </table>
+      </div>
+    </div>
+    ${cutNotes(ctx, ctx.mineId, { board: bp, others: sp.others.length })}`;
+
+  const setupTxt = setups.length
+    ? ` · SETUP${setups.length > 1 ? "S" : ""} ${setups.join(", ")}` : "";
+  const title = `NEST ${d.n} OF ${d.of} — ${boardLabel(cut, bp)}${d.cont ? " (CONT.)" : setupTxt}`;
+  return dwgPage(head, ctx, sheetNo, title.slice(0, 60),
+    d.cont ? "NONE" : dwgRatio(ctx.nestScale), body,
+    ctx.preliminary ? "PRELIMINARY — the planner narrowed its search; see the note." : "");
+}
+
+/* The boxed notes every cut sheet carries. Order matters: the feed rate is the
+   thing that reaches the machine, the shortfall is the thing that stops the
+   job, and the staleness caveat is the thing that makes the rest trustworthy. */
+function cutNotes(ctx, planId, o) {
+  o = o || {};
+  const pack = ctx.cut.pack;
+  const n = [];
+
+  const many = (pack.densitiesUsed || []).length > 1;
+  n.push(`MACHINE AT THE ${pack.maxDensity} LB/FT3 FEED.${many
+    ? ` Boards opened: ${(pack.densitiesUsed || []).join(", ")} lb/ft3. The densest board in a stack sets the feed for the whole thing.`
+    : " Every board opened is that grade."}`);
+
+  const short = (pack.shortfall || []).filter(b => !planId || b.planId === planId);
+  if (short.length) {
+    n.push(`SHORT ${short.length} BLANK${short.length === 1 ? "" : "S"} — nothing on the rack fits ${short.length === 1 ? "it" : "these"}. Order board before starting: ${
+      short.slice(0, 4).map(b => `${blankTagOf(b)} ${fmtDwgLine(b.w)} x ${fmtDwgLine(b.h)} x ${fmtDwgLine(b.thickness)}`).join("; ")}${short.length > 4 ? "; …" : ""}.`);
+  }
+
+  /* Not a footnote. A narrowed search means the plan is valid and may not be
+     the cheapest, and a sheet that leaves the set has to carry that on its own
+     — which is why it is also in the sheet title, not only here. Deliberately
+     NOT a diagonal watermark: a big rotated word across the sheet would cross
+     every label on it, and solid geometry through a label is exactly what the
+     collision audit exists to catch. */
+  if (pack.degraded) {
+    n.push("PRELIMINARY — NARROWED SEARCH. This batch was large enough that the planner scored only the smallest few boards that could hold the biggest blank, rather than the whole rack. The plan is valid; it may not be the cheapest one.");
+  }
+
+  if (o.others) {
+    n.push(`${o.others} blank${o.others === 1 ? "" : "s"} on this board belong${o.others === 1 ? "s" : ""} to another mold — hatched, and left on the board. Some cuts in the sequence exist only to free them; cut the whole board or none of it.`);
+  }
+
+  const legend = [...ctx.moldKeys.entries()]
+    .filter(([id]) => id !== ctx.mineId)
+    .slice(0, 6)
+    .map(([id, k]) => `${k} = ${(ctx.cut.planNames || {})[id] || id}`);
+  if (legend.length) n.push(legend.join("   "));
+
+  n.push(`This nest is the whole shop's cut plan, not one mold's alone. ${ctx.cut.stamp.text}. Plan or re-plan any mold, or mark boards cut, and it repacks — this sheet is valid only while the batch stamp matches. Reprint if in doubt.`);
+
+  return `<div class="dwg-notes">${n.map(x => `<div>${esc(x)}</div>`).join("")}</div>`;
+}
+
+/* ---------------- the batch document ----------------
+   The same builders, unfiltered. mineId null means nobody is "mine", so every
+   blank draws heavy and carries its key letter and tag. */
+function cutSetHtml(cut, opts) {
+  opts = opts || {};
+  if (!cut || !cut.pack || !(cut.pack.plans || []).length) {
+    return `<div class="dwg"><div class="ws-page dwg-page"><div class="dwg-top"><span>FEB COMPOSITES · CUT LIST</span></div>
+      <p>Nothing to cut yet — plan a mold, and record some board stock, first.</p></div></div>`;
+  }
+  const head = {
+    id: "CUT-" + cut.stamp.date,
+    name: opts.title || "CUT LIST — ALL PLANNED MOLDS",
+    by: opts.by || "",
+    ts: opts.printed || cut.stamp.date,
+    source: `${cut.stamp.nPlans} stack plans · ${cut.stamp.nBoards} board rows`,
+  };
+  const ctx = cutCtx(cut, { scope: "batch", mineId: cut.mineId || null });
+  ctx.sheets = ctx.cutSheets.length;
+  ctx.sheet0Cut = 1;
+  return `<div class="dwg">${ctx.cutSheets.map((d, k) => cutSheet(head, ctx, d, 1 + k)).join("")}</div>`;
+}
+
+/* The ctx a cut sheet needs, built once so sheet numbers and cross-references
+   are known before anything renders. */
+function cutCtx(cut, opts) {
+  const mineId = opts.mineId || null;
+  const ctx = {
+    cut, mineId,
+    topLabel: "CUT LIST",
+    moldKeys: moldKeyMap(cut.pack),
+    nestScale: nestSharedScale(cut.pack),
+    preliminary: !!(cut.pack && cut.pack.degraded),
+    printed: cut.stamp.date,
+    moldNote: "", meshNote: "",
+    board: { cellText: cut.pack && cut.pack.maxDensity != null ? `${cut.pack.maxDensity} LB MAX` : "—" },
+    tbCells: [
+      { lab: "Board · max density", val: cut.pack && cut.pack.maxDensity != null ? `${cut.pack.maxDensity} LB MAX` : "—" },
+      { lab: "Molds", val: `${cut.stamp.nPlans} PLANNED`, sm: true },
+      { lab: "Boards", val: `${(cut.pack && cut.pack.boardsUsed) || 0} OPENED`, sm: true },
+      { lab: "Batch", val: `${cut.stamp.date} #${cut.stamp.tag}`, sm: true },
+    ],
+  };
+  ctx.cutSheets = planCutSheets(cut, { scope: opts.scope, mineId });
+  ctx.sheet0Cut = 1;
+  return ctx;
+}
+/* One descriptor, one sheet. Kept as a switch rather than three call sites so
+   the mold set and the batch set cannot drift into rendering the same
+   descriptor two different ways. */
+function cutSheet(head, ctx, d, sheetNo) {
+  if (d.kind === "cover") return sheetCutCover(head, ctx, sheetNo);
+  if (d.kind === "schedule") return sheetCutSchedule(head, ctx, d, sheetNo);
+  return sheetNest(head, ctx, d, sheetNo);
+}
+
+/* ============================================================================
    SHEET SHELL
    ============================================================================
    Each sheet is a .ws-page, the same box the work-order traveler prints into.
@@ -1504,10 +2209,15 @@ function sheetLayer(plan, ctx, i) {
    in print so it repeats on every page, which is right for a two-page traveler
    and wrong for a set where each sheet carries its own title block. */
 
-function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
+/* `head` is a stack plan on a mold's own set, and a SYNTHETIC head on the batch
+   cut list — which is about many molds and has no single plan. Only five fields
+   are read (id, name, by, ts, source), so both satisfy it; the parameter is
+   named for the job rather than for the usual argument. */
+function dwgPage(head, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
+  const plan = head;
   return `<div class="ws-page dwg-page">
     <div class="dwg-top">
-      <span>FEB COMPOSITES · MOLD STACK DRAWING</span>
+      <span>FEB COMPOSITES · ${esc(ctx.topLabel || "MOLD STACK DRAWING")}</span>
       <span>${esc(plan.name || plan.id)}</span>
     </div>
     ${body}
@@ -1526,10 +2236,16 @@ function dwgPage(plan, ctx, sheetNo, title, scaleTxt, body, sheetNote) {
             the slot. .val, not .val sm: the biggest type in the block, because
             the highest grade in the stack is the feed rate for all of it.
             Eight cells, two rows — if you add one here, remove one. */""}
-      <div class="tb-c"><span class="lab">Board · max density</span><span class="val">${esc(ctx.board.cellText)}</span></div>
-      <div class="tb-c"><span class="lab">Plan</span><span class="val sm">${esc(plan.id || "—")}</span></div>
-      <div class="tb-c"><span class="lab">Part</span><span class="val sm">${esc(ctx.partName || "—")}</span></div>
-      <div class="tb-c"><span class="lab">Work order</span><span class="val sm">${esc(ctx.woId || "—")}</span></div>
+      ${/* ROW 1 IS DATA, ROW 2 IS CODE. The subject of a sheet differs between
+            the two documents this file now produces — a mold's set says Plan /
+            Part / Work order, the batch cut list says Molds / Boards / Batch —
+            while what a sheet IS never differs. So the caller supplies four
+            cells and the cap enforces itself: slice(0, 4) DEGRADES a fifth
+            instead of starting a third row, which would grow the block, shrink
+            every drawing area in the set and crowd the layer labels. If you
+            want a new field here, take one out. */""}
+      ${(ctx.tbCells || []).slice(0, 4).map(c =>
+        `<div class="tb-c"><span class="lab">${esc(c.lab)}</span><span class="val${c.sm ? " sm" : ""}">${esc(c.val)}</span></div>`).join("")}
       ${/* Row 2 — what this sheet IS. */""}
       <div class="tb-c"><span class="lab">Sheet</span><span class="val">${sheetNo} / ${ctx.sheets}</span></div>
       <div class="tb-c"><span class="lab">Sheet title</span><span class="val sm">${title}</span></div>
@@ -1610,18 +2326,62 @@ function drawingSetHtml(plan, opts) {
     layerScale: dwgFit(frame, DWG_SHEET_W - M.l - M.r, DWG_LAYER_H - M.t - M.b),
     splits: sectionSplitsZ(plan),
     sectionCount: sectionCount(plan),
-    sheets: 2 + layers.length,
     printed: today(),
     moldNote: moldSourceNote(art),
     meshNote: opts.meshNote || "",
     partName: opts.partName || "",
     woId: opts.woId || "",
   };
+  ctx.tbCells = [
+    { lab: "Board · max density", val: ctx.board.cellText },
+    { lab: "Plan", val: plan.id || "—", sm: true },
+    { lab: "Part", val: opts.partName || "—", sm: true },
+    { lab: "Work order", val: opts.woId || "—", sm: true },
+  ];
+
+  /* THE CUT SHEETS ARE ADDITIVE, AND THEIR ABSENCE IS THE OLD BEHAVIOUR.
+     With no opts.cut — every caller before this feature, and every fixture in
+     test_drawings.mjs that does not build a pack — cutSheets is empty and
+     ctx.sheets is 2 + layers.length exactly as it always was. sheetLayer's
+     hardcoded `3 + i` therefore stays correct and is not touched. */
+  ctx.cut = opts.cut || null;
+  ctx.mineId = ctx.cut ? plan.id : null;
+  ctx.sheet0Cut = 3 + layers.length;
+  if (ctx.cut && ctx.cut.pack) {
+    ctx.moldKeys = moldKeyMap(ctx.cut.pack);
+    ctx.nestScale = nestSharedScale(ctx.cut.pack);
+    ctx.preliminary = !!ctx.cut.pack.degraded;
+    ctx.cutSheets = planCutSheets(ctx.cut, { scope: "mold", mineId: plan.id });
+  } else {
+    ctx.moldKeys = new Map();
+    ctx.cutSheets = [];
+  }
+  ctx.sheets = 2 + layers.length + ctx.cutSheets.length;
+
   return `<div class="dwg">
     ${sheetIso(plan, ctx)}
     ${sheetThreeView(plan, ctx)}
     ${layers.map((L, i) => sheetLayer(plan, ctx, i)).join("")}
+    ${ctx.cutSheets.map((d, k) => cutSheet(plan, ctx, d, ctx.sheet0Cut + k)).join("")}
   </div>`;
+}
+
+/* HOW MANY SHEETS THIS SET WILL BE.
+
+   openDrawings needs the number for its preview caption and drawingSetHtml
+   needs it for every title block, and the two used to be separate expressions —
+   `2 + dwgLayers(plan).length` written out twice. That was survivable while the
+   count was a constant plus one array length. It is not survivable now the cut
+   sheets depend on a pack, a rack and a pagination pass, so there is one
+   function and both callers use it. */
+function drawingSheetCount(plan, opts) {
+  opts = opts || {};
+  const n = dwgLayers(plan).length;
+  if (!n) return 1;
+  const cut = opts.cut;
+  const extra = (cut && cut.pack)
+    ? planCutSheets(cut, { scope: "mold", mineId: plan.id }).length : 0;
+  return 2 + n + extra;
 }
 
 /* The one function that touches the browser. Async because the mold mesh lives
@@ -1650,8 +2410,19 @@ async function openDrawings(planId) {
       if (run) woId = run.id;
     }
   }
-  const html = drawingSetHtml(plan, { tris, meshNote, partName, woId });
-  const n = 2 + dwgLayers(plan).length;
+  /* The pack is resolved HERE and handed down as plain data, the same idiom as
+     tris/partName/woId above — blanksFromPlans and boardsForPacking read the DB
+     global, and drawingSetHtml has to stay pure or test_drawings.mjs cannot
+     render a whole set under node.
+
+     It is the BATCH pack, over every planned mold, because the sheets have to
+     show the blanks belonging to other molds that share a board. A pack over
+     this mold alone could not answer that, and would also be the "costed as if
+     this were the only mold being cut" estimate rather than the authority. */
+  const cut = typeof cutPack === "function" ? cutPack(plan.id) : null;
+
+  const html = drawingSetHtml(plan, { tris, meshNote, partName, woId, cut });
+  const n = drawingSheetCount(plan, { cut });
   mountSheet(html, true, `US Letter · ${n} sheets · this is exactly what prints`, `${plan.name || plan.id} drawings`);
   document.body.classList.add("previewing");
   if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);

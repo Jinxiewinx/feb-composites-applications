@@ -1193,7 +1193,8 @@ function renderCutList() {
       <option value="">Every planned mold (${(DB.stackplans || []).length})</option>
       ${(DB.stackplans || []).map(p => `<option value="${esc(p.id)}" ${view.cutSel === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
     </select>
-    <button onclick="printCutList()">${icon("print", 15)} Print</button>
+    <button onclick="printCutSet()">${icon("print", 15)} Print cut list</button>
+    ${view.cutSel ? `<button class="ib" onclick="openDrawings('${esc(view.cutSel)}')">${icon("print", 15)} This mold's drawings</button>` : ""}
     ${res && res.plans.length ? `<button class="primary" style="margin-left:auto" onclick="openCommitCutsModal()">Mark these boards cut…</button>` : ""}</div>`;
   if (!blanks.length) return back + `<div class="card">Nothing to cut yet — plan a mold first.</div>`;
   if (!boards.length) return back + `<div class="card">No board stock recorded, so there is nothing to cut from. Add boards first.</div>`;
@@ -1439,15 +1440,58 @@ function cutsUndoBar() {
   </div>`;
 }
 
-function printCutList() {
-  const host = printRoot();
-  if (!host) { toast("Nothing to print.", "error"); return; }
-  host.innerHTML = `<div class="sheet"><h1>Cut list</h1>${renderCutList().replace(/<div class="toolbar[\s\S]*?<\/div>/, "")}</div>`;
-  document.body.classList.add("sheet");
-  window.print();
-  setTimeout(() => { document.body.classList.remove("sheet"); host.innerHTML = ""; }, 100);
+/* ---------- the cut list, as a real sheet set ----------
+   THE ONE PLACE A PACK IS BUILT, and the boundary between this file and the
+   pure drawing code. Everything in the return value is plain data — no DOM, no
+   DB — because drawings.js has to stay renderable under node.
+
+   `mineId` is whose blanks get called out on the nest; null means nobody is,
+   which is what the batch document wants. `plans` defaults to every stack plan:
+   a mold drawing needs the BATCH pack, because showing the blanks belonging to
+   OTHER molds that share a board is only answerable from one. */
+function cutPack(mineId, plans) {
+  const all = plans || DB.stackplans || [];
+  const boards = boardsForPacking();
+  const blanks = blanksFromPlans(all);
+  const res = (blanks.length && boards.length) ? packAll(blanks, boards, {}) : null;
+  if (!res) return null;
+  return {
+    pack: res,
+    mineId: mineId || null,
+    planNames: Object.fromEntries(all.map(p => [p.id, p.name || p.id])),
+    /* layer index -> machine setup number, per plan. A cut sheet has to say
+       which SETUP a blank feeds, and it cannot reach into DB for a plan it is
+       not about — the batch document is about many molds at once. */
+    planSetups: Object.fromEntries(all.map(p =>
+      [p.id, (p.layers || []).map(L => (L.section || 0) + 1)])),
+    stamp: batchStamp(all, boards),
+  };
 }
 
+/* Replaces a print path that bypassed the house print system entirely: it threw
+   renderCutList()'s screen markup into #printroot inside a bare <div
+   class="sheet">, stripped the toolbar with a regex and called window.print().
+   No title block, no sheet numbers, no pagination, no preview, no B&W proof and
+   no Save — the only printable in the app that worked that way.
+
+   It prints WHAT IS ON SCREEN, cutSel and all, so the button can never disagree
+   with the list above it. The cover sheet states the scope, so a page found in
+   a drawer next week still says what it was a plan for. */
+function printCutSet() {
+  const plans = (DB.stackplans || []).filter(p => !view.cutSel || view.cutSel === p.id);
+  const cut = cutPack(null, plans);
+  if (!cut) { toast("Nothing to cut yet — plan a mold, and record some board stock, first.", "info"); return; }
+  const one = view.cutSel ? (DB.stackplans || []).find(p => p.id === view.cutSel) : null;
+  const html = cutSetHtml(cut, {
+    by: typeof myEmail === "function" ? myEmail() : "",
+    printed: today(),
+    title: one ? `CUT LIST — ${String(one.name || one.id).toUpperCase()}` : "CUT LIST — ALL PLANNED MOLDS",
+  });
+  const n = planCutSheets(cut, { scope: "batch", mineId: null }).length;
+  mountSheet(html, true, `US Letter · ${n} sheets · this is exactly what prints`, `Cut list ${today()}`);
+  document.body.classList.add("previewing");
+  if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
+}
 /* Write the planned blocks of one section out as a binary STL, in the mold's own
    CAD coordinates and in millimetres — so it lands on the model in CAD with
    nothing to align, and CAM can use it as the stock body directly.

@@ -81,13 +81,26 @@ separate "planned part" record and no promotion step — "making the real part
 file" just means filling the row in, here or on the Parts tab. So a blueprint
 row is immediately linkable, schedulable and countable.
 
-Every cell edits in place, like the sheet. **+ Row** adds one and puts the
-cursor in the name. The three stage columns are colour-coded by what the value
-*means* — not started, under way, done, not applicable — and changing one still
-goes through the evidence gate, the skip-ahead confirm and the move-back confirm
-that the part's own page uses; a refused change puts the control back rather
-than lying about what was saved. The part name column stays pinned while the
-other twelve scroll sideways, on a phone as well as a laptop.
+**It is a read.** The tab used to be thirteen editable columns, and thirteen
+controls have a floor near 1,700px against roughly 1,300px of content width — so
+it scrolled sideways at every real viewport, on every machine, always. Now a row
+is a line: the part's name, its subteam, the C/M/L rail the Parts index already
+draws, where it has got to *in a word*, and its deadline. Around sixty parts on
+screen where eighteen used to fit, and no sideways scroll at any width, because
+the lines are a wrapping multi-column flow rather than a table.
+
+Nothing on a line is a control except the name, which **opens the part** —
+ordinary click, ctrl-click for a new tab, Enter from the keyboard. Editing did
+not go away; it went one click deeper, to the page that already carries the
+evidence gate, the skip-ahead confirm and the move-back confirm. A part's state
+never rests on colour alone: the rail carries a letter and a fill, and the chip
+beside it is a word.
+
+**Lay out the season** is the one thing the tab still writes — a list of names,
+one per line, created in a single id block. It is what **+ Row** became, and it
+is cheaper than **+ Row** ever was: laying out a season means typing twenty
+names, and it never meant opening twenty pages. Running it twice is safe; a name
+already on the blueprint is skipped.
 
 Only this season: `retro` records are excluded, the same rule the Google Sheet
 feed uses, because a blueprint for a season already built is not a blueprint.
@@ -418,6 +431,46 @@ a hand" — rendered only when it has something in it — collects the four
 questions that were previously answered in four places or nowhere: molds with no
 home location, molds past "Designed" with no stack plan on file, plans carrying
 a slicer warning nobody has read, and plans with no mold to be reached through.
+
+### The cut list, on paper
+
+Two documents, one renderer. The batch set is the whole thing; a mold's cut
+sheets are that same document filtered to the boards that mold touches — same
+pack, same drawings, same scale, so a given board's sheet is identical in both
+and you can lay them side by side.
+
+**On a mold's drawing set**, after the layer sheets: a **cut schedule** — every
+blank this mold needs, which setup it feeds, which board it comes off and at
+what grade, plus the boards to pull and where they are on the rack — and then
+**one sheet per board**, drawn large, with the nest, the numbered saw cuts and a
+table naming everything on it. Nothing new to press: the existing **Drawings**
+button produces the fuller set.
+
+**Off the Molds tab**, the cut-list screen's **Print cut list** now produces a
+proper sheet set of its own — a cover with the totals, the feed rate, any
+shortfall and any warning, then a tearable schedule page per mold, then the nest
+sheets. It replaces the one printable in this app that bypassed the house print
+system entirely, so it gets the preview, the grayscale proof and Save with it.
+
+Everything survives a black-and-white laser, because that is what it prints on.
+**Your blanks are the clean ones** — heavy outline, no fill, tagged. Another
+mold's are hatched and thin, and named in full in the table beside the diagram;
+offcuts that go back on the rack are dashed. The words **THIS MOLD** appear in the
+table as well, because that is the distinction that survives a photocopy of a
+photocopy.
+
+**The nest is the whole shop's plan, not one mold's.** That is the only way to
+show what else is on a board — and it means the sheet is a function of every
+planned mold and the whole rack, so it changes when an unrelated mold is
+planned. Every cut sheet therefore carries a batch stamp: the date, the plan and
+board counts, and a four-character tag. The tag answers the one question the
+date and the counts cannot — *are these two printouts from the same pack?* — and
+it is the thing to check before cutting to a sheet that has been in a drawer.
+
+If the planner had to narrow its search (a large batch, where it scores only the
+smallest few boards that could hold the biggest blank), the sheets say
+**PRELIMINARY** in the title as well as in the notes, so a page separated from
+the set still carries the caveat.
 
 The rack itself is not here. A board is a thing on a shelf, so it lives in
 Inventory beside the items and the materials; see below.
@@ -838,6 +891,32 @@ that can only be satisfied by naming a lot gets satisfied by naming the wrong
 one: with two jugs on the bench at 11pm, someone scans the nearest, and the
 record is then precise, confident and wrong. An honest gap is worth more. The
 lots print on the traveler too, unflattering source and all.
+
+## Opening the app
+
+**The splash lays up the mark.** A cold load at RFS used to show a white page,
+then an empty navy sidebar, then a bare card, so the app now paints its own mark
+before any of its thirty-three scripts have run: a Berkeley-blue ply over a
+California-gold one, arriving on the bias the way you actually lay a 45. Under
+it sits the **fact of the day** — the same one the dashboard shows, drawn from
+the team's own SN5 documentation.
+
+**It waits long enough to be read.** The sheet used to come down the instant the
+database answered, which on a warm load is a few hundred milliseconds — before
+the fact had finished fading in. There is a floor now: about a second and a half,
+and a little longer on the first load of a day or the first after a deploy, which
+is the load where the fact is actually new to you.
+
+**And it gets out of the way when you say so.** Once the app behind it is ready
+the splash offers **Continue** — a tap anywhere, or Enter, Space or Escape. The
+button only appears once there is genuinely something to continue *to*, so
+pressing it can never drop you onto a blank app; press it early and the press is
+remembered rather than ignored, and the sheet leaves the moment the data lands.
+Leaving, the two plies part along the bias they arrived on and the sheet is drawn
+off on the 45, the way a ply comes off a mold.
+
+If the connection is slow the splash says so after four seconds, and it gives up
+entirely after twelve rather than spinning forever.
 
 ## Getting around
 

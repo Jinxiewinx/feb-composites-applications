@@ -21,7 +21,7 @@
  * it. Nothing here touches Firebase: the app boots on tools/lib/fixtures.mjs.
  */
 
-import { serveApp, loadChromium, skipMessage } from "./lib/browser.mjs";
+import { serveApp, loadChromium, skipMessage, splashGone } from "./lib/browser.mjs";
 import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 
 function arg(name, dflt) {
@@ -257,6 +257,7 @@ for (const vp of widths) {
 
       await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
       await page.waitForFunction("window.fb && fb.state === 'ready'", null, { timeout: 20000 });
+      await splashGone(page);
       const seedError = await page.evaluate("window.__seedError || null");
       if (seedError) throw new Error(`app booted with an empty database: ${seedError}`);
 

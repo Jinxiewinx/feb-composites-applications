@@ -14,7 +14,7 @@
  *   node tools/test_receiving_ui.mjs
  */
 
-import { loadChromium, skipMessage } from "./lib/browser.mjs";
+import { loadChromium, skipMessage, splashGone } from "./lib/browser.mjs";
 
 function arg(name, dflt) {
   const i = process.argv.indexOf("--" + name);
@@ -143,6 +143,7 @@ const main = async () => {
       await page.addInitScript(`localStorage.setItem("feb-theme", ${JSON.stringify(theme)});`);
       await page.goto(URL_ + "/index.html", { waitUntil: "domcontentloaded" });
       await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+      await splashGone(page);
 
       for (const n of [7, 40]) {
         const at = `desk/${n}rows/${width.id}/${theme}`;
@@ -182,6 +183,7 @@ const main = async () => {
   const page = await ctx.newPage();
   await page.goto(URL_ + "/index.html", { waitUntil: "domcontentloaded" });
   await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+  await splashGone(page);
   const locked = await page.evaluate(`(() => {
     const b = invActiveBins()[0];
     RX = null; invReceive(b.id);

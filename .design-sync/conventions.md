@@ -39,13 +39,15 @@ The base layer styles `body` directly (`background: var(--canvas)`, `color: var(
 | Export | `.xgroup` > `.xg-hd` > `.xg-name` for one offered dataset; `.copyout` is the last-resort textarea for a browser that refuses the clipboard. |
 | Storage map | `.loccard` (+ `.alert`, + `.isempty` for a shelf with nothing on it) with `.lc-open` as a stretched-link button on the name — its `::after` covers the whole card, so a click anywhere opens it — and `.lc-act` as a sibling above it on the z-axis; `.inv-nowhere-bar` sits above the shelves. |
 | Search results | `.gsr` is a grid of two sibling buttons — `.gsr-go` (`.gsr-name` inside) and `.gsr-where`, the shelf chip. |
+| Season blueprint | `.seasongrid` is a multi-column FLOW (`columns`, not `grid`) holding one `.sline` per part — `.sl-open` (a stretched-link button on the name, the `.lc-open` idiom), `.sl-sub`, `.sl-stat`, `.sl-due` (+ `.warn`), `.sl-who`. `.sline.late` is an inset spine, `.sline.unnamed` a dashed border. Grouped, each subteam is a `.sgroup` with its own flow so a heading cannot strand at the foot of a column. |
 | Text | `.muted`, `.tny`, `.nocaps` (opt a span out of an uppercase label or `h3`), `.unread-dot` (the gold new-activity pip), `.w110` (a 110px width utility for a narrow cell). |
 
-**Four of those families are app-only.** Receiving, Export, Storage map and
-Search results describe patterns that still live in the SN6 app's own
-stylesheet and have not been lifted into `components.css`, so the classes are
-named here for vocabulary but `styles.css` ships no rules behind them — markup
-using them renders unstyled, and `table.sub` is app-only for the same reason.
+**Five of those families are app-only.** Receiving, Export, Storage map,
+Search results and the Season blueprint describe patterns that still live in
+the SN6 app's own stylesheet and have not been lifted into `components.css`,
+so the classes are named here for vocabulary but `styles.css` ships no rules
+behind them — markup using them renders unstyled, and `table.sub` is app-only
+for the same reason.
 Everything else in the table does have rules in the stylesheet, `.wo-subfold`,
 `.wo-subhd`, `.addrow` and `.fgroup-label` included. If you need one of the
 app-only patterns, style it yourself from the tokens.
@@ -57,7 +59,13 @@ For your own layout glue, use the tokens rather than literal values: `var(--canv
 1. **Button modifiers are element-scoped.** The selectors are `button.primary`, `button.gold`, `button.danger`, `button.link`. An `<a class="btn primary">` gets the base button look and nothing else. Use a real `<button>` whenever you want a variant.
 2. **`.status` needs its dot.** The first child must be `<span class="dot"></span>`, which the class colors per state. Without it the badge reads as a plain label.
 3. **`table.list` does not collapse on its own.** The responsive stacked-card behavior lives in the consuming app, via a media query that hides the header row and reads `data-label` off each cell. Carry that rule across if the table has to work narrow.
-4. **Never build a fold out of `<details>`.** A closed `<details>` skips painting its content rather than merely hiding it, and it vanished from browser print. Folds here are a class on a container — `.wosec.folded` hides `.wosec-body` — driven by a real `<button>`. The one exception is `.wo-subfold`, a genuine `details`/`summary` pair used only for reference blocks inside a card.
+4. **A stretched link needs its own tap-target floor.** `.lc-open` and `.sl-open`
+   both start from `all: unset`, which throws away the button's minimum size,
+   and their `::after` is not part of the element's own rect — so a tap-target
+   audit measures the text and nothing else, however large the card or line
+   around it is. Both carry an explicit `min-height` under `@media (pointer:
+   coarse)` for exactly this reason. Copy it with the pattern.
+5. **Never build a fold out of `<details>`.** A closed `<details>` skips painting its content rather than merely hiding it, and it vanished from browser print. Folds here are a class on a container — `.wosec.folded` hides `.wosec-body` — driven by a real `<button>`. The one exception is `.wo-subfold`, a genuine `details`/`summary` pair used only for reference blocks inside a card.
 
 ## Where the truth lives
 

@@ -28,7 +28,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { serveApp, loadChromium, FB_STUB } from "./lib/browser.mjs";
+import { serveApp, loadChromium, FB_STUB, splashGone } from "./lib/browser.mjs";
 import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 import { RELEASE_SHOTS } from "./lib/release-shots.mjs";
 
@@ -127,6 +127,7 @@ for (const shot of RELEASE_SHOTS) {
        the trap test_detailui.mjs documents. Wait on the flag the fixtures set
        LAST, or the picture is of a half-seeded database. */
     await page.waitForFunction("window.__fixturesReady === true", null, { timeout: 20000 });
+    await splashGone(page);
     const seedError = await page.evaluate("window.__seedError || null");
     if (seedError) die(`the app booted with an empty database: ${seedError}`);
     await page.evaluate(shot.js);
