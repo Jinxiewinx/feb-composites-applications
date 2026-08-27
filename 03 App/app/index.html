@@ -1438,10 +1438,23 @@
   .plist { flex: 1; overflow-y: auto; padding: 6px; scrollbar-gutter: stable; scrollbar-width: thin; }
   .plist::-webkit-scrollbar { width: 10px; }
   .plist::-webkit-scrollbar-thumb { background: var(--border-2); border: 3px solid var(--card); border-radius: 999px; }
-  /* Sticky at the foot of the scroller, pulled back over the last row: it fades
-     whatever is under it while there is more to scroll to, and sits harmlessly
-     at the end of a short list. */
-  .plistfade { position: sticky; bottom: -6px; height: 26px; margin: -26px 0 0; pointer-events: none;
+  /* Sticky at the foot of the scroller: it fades whatever is under it while
+     there is more to scroll to, and comes to rest below the last row once
+     there is not.
+
+     THE MARGIN IS ZERO, and that is the whole fix. It used to be -26px, which
+     pulled the fade back over the last row UNCONDITIONALLY — so scrolling to
+     the bottom, or opening any list short enough not to scroll, left the final
+     row's stage chips and subteam washed out under a gradient with nothing
+     below it to scroll to. The old comment claimed it "sits harmlessly at the
+     end of a short list"; it did not, and it was wrong in all four rails at
+     once (parts, work orders, molds, tickets).
+     With no negative margin it occupies its own 26px at the end of the
+     scroller, so the last row can always be read in full, and sticky still
+     floats it over the rows above whenever there IS more to scroll. The cost
+     is 26px of empty card at the very bottom, which is invisible: the gradient
+     ends in var(--card), on var(--card). */
+  .plistfade { position: sticky; bottom: -6px; height: 26px; margin: 0; pointer-events: none;
     background: linear-gradient(to top, var(--card) 20%, transparent); }
   /* One header per subteam, only when the rail is grouped. */
   .pgrouphd { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; position: sticky; top: -6px; z-index: 1;

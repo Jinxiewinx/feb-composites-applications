@@ -119,9 +119,18 @@ What changes:
   of 20 parts · 8 R&D` — and the R&D number takes you to them, so nothing ever
   just disappears.
 - **It is not in the Google Sheet mirror**, for the same reason.
-- **It is everywhere else**, marked with a black **R&D** capsule: the Parts rail,
-  the Work Orders rail, both detail pages, the dashboard, the deadline lists,
-  search, and both CSV exports (as a column, so you can still total it).
+- **Your Parts and Work Orders lists do not show it by default.** A season's
+  worth of coupons buries the parts you are actually building, so the rails keep
+  them out until you ask. The **R&D** chip above each list says how many are
+  being held back and brings them in; press it again to put them away. Open one
+  from the dashboard or from search and it stays on the rail while you are
+  looking at it, whatever the chip says.
+- **The dashboard, the deadline lists and Reports never hide it.** That is
+  deliberate and it is what makes the rails safe to filter: a trial that is late
+  or blocked still finds you on the landing page.
+- **Everywhere it does appear it is marked** with a black **R&D** capsule —
+  both rails, both detail pages, the dashboard, search — and it is a column in
+  both CSV exports, so you can still total it.
 - **Its work orders inherit it.** Start a run on an R&D part and the run is R&D;
   nobody has to remember. A run with no part of its own — a bar cast on the
   bench for a shrinkage test — can be marked on its own with **+ R&D run**.

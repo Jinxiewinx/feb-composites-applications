@@ -266,15 +266,44 @@ fan-out over every run it has, with no transaction across them and a
 half-promoted state in the middle — and it would drift the moment somebody
 confirmed a name guess or relinked a run.
 
-**R&D is hidden in exactly three places**: `seasonRows()`, the Season toolbar's
-denominator, and `trackerRow()`. Everywhere else it is marked and counted —
-Parts, Work Orders, the dashboard, deadlines, search, the CSVs, budget. If you
-find yourself adding a fourth exclusion, you are building a second archive.
+**R&D is hidden in five places, and the difference between them matters.**
+
+Two are absolute and are the point of the feature: `seasonRows()` and
+`trackerRow()` (plus the Season toolbar's denominator, which is really the same
+site twice — see below). A season blueprint that lists trials is overstating
+what the season is, and the Sheet mirrors the blueprint.
+
+Two are a DEFAULT the user can turn off: `partIndexRows()` and `woIndexRows()`,
+via `view.showRnd` / `view.woShowRnd`. The rails hide R&D until you ask,
+because in practice a season's worth of coupons buries the parts you are
+actually building.
+
+That default is a real risk — a deadline nobody sees is a deadline nobody meets
+— and three things pay for it. All three have to stay true:
+
+1. The chip is always rendered when R&D exists and carries its **count of what
+   exists**, not of what is on screen. The rail says how many it is holding
+   back rather than just holding them back.
+2. **The dashboard, `deadlineItems()`, Reports and the printed traveler never
+   filter R&D.** A late or blocked trial still surfaces on the landing page,
+   which is where lateness is supposed to be found. Do not "tidy" R&D out of
+   those; it is what makes hiding it on the rails survivable.
+3. Both rails re-add the **selected/open record** after filtering, so arriving
+   from a dashboard row, a ⌘K hit or a deep link opens the thing you clicked
+   even while the rail is hiding its kind.
+
+Anything beyond those five is building a second archive. Search, the CSVs,
+People, the schedule, inventory and budget all stay unfiltered.
 
 The two Season sites are **one change, not two**. Filter the rows and not the
 denominator and the toolbar reports parts it is not showing, which is the quiet
 sibling of the release where the blueprint photographed empty because every
 fixture was retro and nothing asserted on a count that was always zero.
+
+**`showRnd` and `woShowRnd` are named differently from `fLate`/`fMine`/`fDone`
+on purpose.** Every other flag on those rails NARROWS to something; these two
+WIDEN. A reader who assumes `fRnd` behaves like `fLate` gets it exactly
+backwards, so they do not get an `f` prefix.
 
 **Never encode R&D in a part's name.** `"R&D — NOSECONE"` is the obvious
 workaround and it breaks three things at once: `Sync.gs` matches rows on the

@@ -123,7 +123,7 @@ src = src.replace(/"use strict";\n/g, "");
 src = src.replace(/^let (DB|view|rosterCache|pendingRender|WHATS_NEW_SHOWN|NAV_STACK|MOLD_BUF|MOLD_BODIES|SCAN|RX|RX_UNDO|RX_PROPOSAL) = /gm, "$1 = ");
 // Same for the const tables the tests assert against — `const` stays lexical
 // inside the eval, so it would otherwise be invisible here.
-src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SECTIONS_BASE|PART_SECTIONS_BASE|SEASON_COLS|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
+src = src.replace(/^const (STD_STEPS|EVIDENCE|TRAININGS|TRAINING_CODES|MFG_ENG_TRAINING|PART_STAGE_NEEDS|PART_EVIDENCE|LB_SEL|NAV_MAX|CAD_EXT|DASH_BUCKETS|KIND_RANK|RESINS|GDOC_KINDS|GD_OPEN|COMMANDS|INPUT_RULES|SANITIZE_CFG|COMPOSER_OPEN|RTE_PLACEHOLDER|COMMENT_FIELD|DRAFT_NS|WO_STATUSES|WO_SORT_LABELS|WO_SECTIONS_BASE|PART_SECTIONS_BASE|SEASON_COLS|PROCESSES|LAYOUTS|MAX_PAGES|TABS|PICKERS|SUBTEAMS|PROJ_STATUS|STATUS_SLUG|MV_PITCH_LIMIT|MV_FOV|MESH_BYTE_BUDGET|SAMPLE_MOLDS|STAGE_CAD|STAGE_MOLD|STAGE_LAYUP|PART_STAGES|CSV_SPECS|RESTOCK_SEED|RX_CLASSES|TRACKER_FIELDS|TRACKER_MAX_BYTES) = /gm, "$1 = ");
 src = src.replace(/^let (SLACK_CFG_CACHE);$/gm, "var $1;");
 (0, eval)(src);
 
@@ -3355,24 +3355,33 @@ await t("R&D is set on the part page, never as a column in a thirteen-wide grid"
     "a mis-click in a scrolling table must not silently remove a part from the season");
 });
 
-await t("an R&D part is a full citizen of the Parts tab, badged, and the chip filters to it", () => {
+await t("R&D is out of the Parts rail by default, and the chip lets it back in", () => {
   rndSeed();
-  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
   render();
   let html = main.innerHTML;
-  assert(html.includes("VG TRIAL"), "R&D parts are NOT hidden here — real cost, real deadline");
-  assert(html.includes("NOSECONE"), "and neither are season parts");
-  assert(/tpill rnd/.test(html), "the R&D rows are badged");
-  assert(/<b>2<\/b> R&amp;D/.test(html), "and the chip counts them");
-  view.fRnd = true; render(); html = main.innerHTML;
-  assert(html.includes("VG TRIAL") && !html.includes("NOSECONE"), "the chip filters TO R&D");
-  assert(/tpill rnd/.test(html),
-    "and the badge still renders when every visible row is R&D — otherwise this screenshot is indistinguishable from the season");
+  assert(html.includes("NOSECONE"), "season parts are on the rail");
+  assert(!html.includes("VG TRIAL"), "and R&D is not — it is real work, but it is not what this list is for");
+  assert(/<b>2<\/b> R&amp;D/.test(html),
+    "the chip says how many are being held back. A rail that hides work without saying so is the failure this whole feature exists to avoid");
+  view.showRnd = true; render(); html = main.innerHTML;
+  assert(html.includes("VG TRIAL") && html.includes("NOSECONE"),
+    "the chip WIDENS — R&D joins the season parts rather than replacing them, because the question is 'and the trials?', not 'only the trials'");
+  assert(/tpill rnd/.test(html), "and the rows that came in are badged");
+});
+
+await t("an R&D part you navigated to stays put even while the rail is hiding its kind", () => {
+  rndSeed();
+  view = { ...view, tab: "parts", mode: "detail", id: "P-SN6-950", edit: false, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
+  render();
+  assert(main.innerHTML.includes("VG TRIAL"),
+    "arriving from a dashboard row or a Cmd-K hit must not open onto a rail that refuses to show the record you opened");
+  assert(partIndexRows().some(p => p.id === "P-SN6-950"), "and it is really in the row set, not just the pane");
 });
 
 await t("the R&D chip only exists when there is R&D work to point at", () => {
   DB.parts = [{ id: "P-SN6-900", partName: "NOSECONE", subteam: "AERO", cadProgress: "Not Started", moldProgress: "Not Started", layupProgress: "Not Started" }];
-  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, fRnd: false };
+  view = { ...view, tab: "parts", mode: "list", id: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, showRnd: false };
   render();
   // Match the CHIP specifically. The "R&D part" create button is always there
   // and carries the same word, which is exactly the false pass this guards.
@@ -3380,11 +3389,11 @@ await t("the R&D chip only exists when there is R&D work to point at", () => {
   assert(/R&amp;D part<\/button>|R&amp;D part/.test(main.innerHTML), "but the create door is still offered — you can always start a trial");
 });
 
-await t("resetPartFilters clears fRnd, or a season stays hidden behind a cleared filter", () => {
-  view = { ...view, fRnd: true };
+await t("resetPartFilters puts R&D back out of sight", () => {
+  view = { ...view, showRnd: true };
   DB.parts = [];
   resetPartFilters();
-  assert(view.fRnd === false, "the clear-filters button clears every filter it draws");
+  assert(view.showRnd === false, "the clear-filters button returns the rail to its default, which is R&D hidden");
 });
 
 await t("a run inherits its part's programme — nobody marks it and nobody can forget to", () => {
@@ -3471,26 +3480,45 @@ await t("the R&D flag is an ordinary field until real work exists, then it locks
   assert(!calls.some(c => c[0] === "save"), "with nothing written");
 });
 
-await t("an R&D run is marked everywhere a season run is, and excluded from neither", () => {
+await t("R&D runs are out of the Work Orders rail by default, and its chip lets them back in", () => {
   DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
   DB.workOrders = [
     { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", dueDate: "2026-11-02", steps: [] },
     { id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", dueDate: "2026-11-01", steps: [] },
   ];
-  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, sortKey: null, sortDir: null };
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
   render();
-  const html = main.innerHTML;
-  assert(html.includes("WO-SN6-950") || html.includes("VG TRIAL"), "the R&D run is in the rail — nothing in this app hides a run");
-  assert(/tpill rnd/.test(html), "and it is badged");
-  assert(/Group: R&amp;D \/ season/.test(html), "the grouping is offered, because there is R&D to group");
+  let html = main.innerHTML;
+  assert(html.includes("NOSECONE"), "season runs are on the rail");
+  assert(!html.includes("VG TRIAL"), "and R&D runs are not, the same bargain the Parts rail strikes");
+  assert(/<b>1<\/b> R&amp;D/.test(html), "with the chip saying how many are held back");
+  view.woShowRnd = true; render(); html = main.innerHTML;
+  assert(html.includes("VG TRIAL") && html.includes("NOSECONE"), "the chip widens rather than narrows");
+  assert(/tpill rnd/.test(html), "and the run that came in is badged");
 });
 
-await t("the R&D grouping is not offered when every run is a season run", () => {
+await t("the open run stays on the rail even while the chip is hiding its kind", () => {
+  DB.parts = [{ id: "P-SN6-950", partName: "VG TRIAL", subteam: "AERO", rnd: true }];
+  DB.workOrders = [
+    { id: "WO-SN6-950", partId: "P-SN6-950", partName: "VG TRIAL", status: "InWork", steps: [] },
+    { id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] },
+  ];
+  view = { ...view, tab: "workorders", mode: "detail", id: "WO-SN6-950", q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
+  assert(woIndexRows().some(w => w.id === "WO-SN6-950"),
+    "a deep link or a dashboard click must not open onto a rail that refuses to list the run you opened");
+});
+
+await t("the R&D chip is not offered when every run is a season run", () => {
   DB.parts = [];
   DB.workOrders = [{ id: "WO-SN6-900", partName: "NOSECONE", status: "InWork", steps: [] }];
-  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, sortKey: null, sortDir: null };
+  view = { ...view, tab: "workorders", mode: "list", id: null, q: "", fStatus: "", fSub: "", woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, sortKey: null, sortDir: null };
   render();
-  assert(!/Group: R&amp;D/.test(main.innerHTML), "an option that can only ever produce one group is noise in a select");
+  assert(!/<b>\d+<\/b> R&amp;D/.test(main.innerHTML), "a chip that can only ever reveal nothing is noise");
+});
+
+await t("R&D is a chip on this rail and NOT also a grouping — one control, not two", () => {
+  assert(!Object.keys(WO_SORT_LABELS).some(k => /rnd/i.test(k) || /R&D/.test(WO_SORT_LABELS[k])),
+    "a 'Group: R&D / season' option renders a single group whenever the chip is off, which is most of the time");
 });
 
 await t("the printed traveler stamps R&D alongside the sheet kind, never instead of it", () => {

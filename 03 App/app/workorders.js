@@ -733,10 +733,6 @@ const WO_GROUPS = {
   gstatus: w => w.status || "",
   gsub: w => w.subteam || "",
   gproc: w => w.processType || "",
-  /* Season first, R&D second — the group key is the sort key here, and the
-     deliverables are what the tab is mostly about. woGroupHead() maps the two
-     values back to words. */
-  grnd: w => (woIsRnd(w) ? "1" : "0"),
 };
 const WO_SORT_COLS = {
   gpart: woPartSortKey,
@@ -745,7 +741,6 @@ const WO_SORT_COLS = {
   gstatus: w => WO_STATUSES.indexOf(w.status),
   gsub: w => (w.subteam || "~").toLowerCase(),
   gproc: w => (w.processType || "~").toLowerCase(),
-  grnd: w => (woIsRnd(w) ? "1" : "0"),
   dueDate: w => w.dueDate || "9999",
   id: w => w.id,
   partName: w => (w.partName || "").toLowerCase(),
@@ -753,8 +748,10 @@ const WO_SORT_COLS = {
   progress: w => woProgress(w).pct,
 };
 const WO_SORT_LABELS = {
+  /* No "Group: R&D / season" here. The R&D chip above the rail is the control
+     for that now, and a grouping that renders one group whenever the chip is
+     off is a second way to say the same thing that is wrong most of the time. */
   gpart: "Group: part", gstatus: "Group: status", gsub: "Group: subteam", gproc: "Group: process",
-  grnd: "Group: R&D / season",
   dueDate: "Sort: Due", id: "Sort: ID", partName: "Sort: Part", status: "Sort: Status", progress: "Sort: Progress",
 };
 function woSortKey() { return WO_SORT_COLS[view.sortKey] ? view.sortKey : "gpart"; }
@@ -799,6 +796,12 @@ function woIndexRows() {
     .filter(w => (!view.woLate || isWoLate(w)))
     .filter(w => (!view.woMine || isMine([w.moldEngineer, w.manufacturingEngineer])))
     .filter(w => (!view.woIssues || openIssuesForWO(w.id).length))
+    /* R&D runs are out by default, the same bargain the Parts rail strikes —
+       see the note on its filter. A run is hidden here only; the dashboard,
+       the deadline lists, Reports and the printed traveler never filter R&D,
+       so a blocked or late trial still surfaces where lateness is looked for.
+       The open run is re-added below, so a deep link or a ⌘K hit still opens. */
+    .filter(w => (view.woShowRnd || !woIsRnd(w)))
     .filter(w => !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q));
   // The open run never falls out from under you — a filter that would hide what
   // you are reading keeps it in place instead. This is the whole point of a
@@ -820,7 +823,7 @@ function woSummary() {
     curing, blocked, issues,
   };
 }
-function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, fStatus: "", fSub: "", q: "" }; render(); }
+function resetWOFilters() { view = { ...view, woOpen: false, woLate: false, woMine: false, woDone: false, woIssues: false, woShowRnd: false, fStatus: "", fSub: "", q: "" }; render(); }
 
 /* ---------- selection ----------
    view.mode === "detail" stays the switch, exactly as it was when this tab was
@@ -972,11 +975,7 @@ function woIndexBody(rows) {
     const g = grouping(w);
     if (g !== run) {
       run = g;
-      // The R&D grouping's keys are sort positions, not labels. Map them back
-      // here rather than making the key itself the word, so "R&D" cannot sort
-      // above "Season" alphabetically and invert the grouping.
-      const head = woSortKey() === "grnd" ? (g === "1" ? "R&D" : "Season") : (g || "None");
-      out += woGroupHead(esc(head), rows.filter(r => grouping(r) === g));
+      out += woGroupHead(esc(g || "None"), rows.filter(r => grouping(r) === g));
     }
     out += woIndexItem(w);
   });
@@ -1015,6 +1014,11 @@ function renderWOIndex() {
         ${summaryChip("mine", s.mine, !!view.woMine, "view.woMine=!view.woMine;view.woLate=false;render()")}
         ${summaryChip("done", s.done, !!view.woDone, "view.woDone=!view.woDone;view.woOpen=false;render()")}
         ${summaryChip("issues", s.issues, !!view.woIssues, "view.woIssues=!view.woIssues;view.woDone=false;render()", s.issues ? "bad" : "")}
+        ${/* Same shape and same reasoning as the Parts rail's: only when there
+              are R&D runs, counting what exists rather than what is on screen,
+              because while it is off that is the number being held back. */""}
+        ${(() => { const n = (DB.workOrders || []).filter(woIsRnd).length;
+          return n ? summaryChip("R&D", n, !!view.woShowRnd, "view.woShowRnd=!view.woShowRnd;render()") : ""; })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -1027,9 +1031,7 @@ function renderWOIndex() {
           ${subs.map(st => `<option ${view.fSub === st ? "selected" : ""}>${esc(st)}</option>`).join("")}
         </select>
         <select title="Group or sort by" onchange="sortWOsBy(this.value)">
-          ${/* "Group: R&D / season" only when there is an R&D run to group. */""}
-          ${Object.keys(WO_SORT_LABELS).filter(k => k !== "grnd" || (DB.workOrders || []).some(woIsRnd))
-            .map(k => `<option value="${k}" ${key === k ? "selected" : ""}>${esc(WO_SORT_LABELS[k])}</option>`).join("")}
+          ${Object.keys(WO_SORT_LABELS).map(k => `<option value="${k}" ${key === k ? "selected" : ""}>${esc(WO_SORT_LABELS[k])}</option>`).join("")}
         </select>
         <button class="sm sortdir" title="Reverse order" onclick="toggleWOSortDir()">${view.sortDir === "desc" ? "▼" : "▲"}</button>
       </div>
