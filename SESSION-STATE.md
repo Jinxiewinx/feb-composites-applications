@@ -20,32 +20,35 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**EH&S (RSS Chemicals) barcodes: PHASES 1–2 ARE LIVE, 3–4 PAUSED on Simon's
-say-so** (2026-08-28: "stop after phase 2, add the rest to a handoff"). The
-full plan is `~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's
-Mac; the handoff with phase 3/4 specifics was posted in that chat. Live and
-verified off the host: `ehsBarcode` on RSN/CON lots and BIN items ("ehs" field
-type in SHOP), `ehsNorm`/`ehsKey`/`ehsResolve`/`ehsConflict` in core.js
-(store keeps dashes, comparisons drop them), the receiving desk's EH&S tag
-column (space-separated codes dealt to fanned-out records, warnings for short
-deals/dupes/already-worn), and the scanner: every scan goes through
-`scanResolve` (FEB grammar, then tag registry), formats widened to
-code_128/39/93 + data_matrix, unknown tag → scanToOpen offers the receiving
-desk prefilled via `openReceiving({ehs})`; sticky flows get a state-line
-nudge instead. The receiving grid stacks to cards below **1320px** now (was
-1200) — the eighth column pushed the honest table minimum to ~1300; do not
-claw it back by shaving measured columns.
-
-Phase 3 (not started): vendor zxing-wasm 3.1.3 so iPhones camera-scan —
-Simon approved breaking scan.js's no-library stance; its header already
-documents the coming fallback. `npm pack zxing-wasm@3.1.3` → vendor
-`dist/es/reader/index.js` + `dist/es/share.js` + `dist/reader/zxing_reader.wasm`
-(1.0MB) + LICENSE under `app/vendor/zxing/`, lazy `import()` only when
-`BarcodeDetector` is absent, expose a polyfill class so tickScan stays
-unchanged. Phase 4 (not started): RSS export CSV import + reconciliation
-export — **blocked on Simon**: a photo of a real tag, and one RSS inventory
-export file. No rules deploy anywhere (lots/items have no field whitelist).
-Any new writer of ehsBarcode must call ehsNorm.
+**EH&S (RSS Chemicals) barcodes: ALL FOUR PHASES BUILT.** Phases 1–2 (the
+`ehsBarcode` field + one-tag-one-container, the scanner reading UC tags via
+`scanResolve`, the receiving desk's tag column) are live and were verified
+off the host. Phase 3: iPhones camera-scan through `scan-fallback.js`, a
+lazy-loaded BarcodeDetector polyfill over vendored zxing-wasm 3.1.3
+(`app/vendor/zxing/`, 1.0MB wasm fetched only when a scan opens on a
+detector-less browser; load failure is sticky per session and degrades to the
+typed box). Phase 4: **EH&S import** on the Inventory toolbar (lead-only)
+parses the RSS web export — .xlsx read natively via a zip walker +
+DecompressionStream in `ehsimport.js`, CSV fallback — groups by sublocation
+(FEB's ticked by default, per Simon 2026-08-28: import only Formula Electric
+stuff), maps each to one of our BINs (flammable sublocations guess the
+Flammables-cabinet shelf), skips barcodes any record already wears, creates
+the rest (class/role from rxGuessClass, hazard from H22x codes, blank codes
+stay unknown, CON gets count 1, batch-tagged `rxBatch: EHS-<date>-…`,
+importMany + publishPub over 8 records). The Export modal gained an "EH&S
+reconciliation" sheet (`invExportEhs`), attention rows first. Simon's real
+export (628 containers, 17 sublocations) parses clean in Chromium: FEB's 50
+containers → 3 RSN resin, 16 RSN hardener, 31 CON, 15 flammable. **Nothing
+imported into production yet — Simon runs the import himself** (needs a
+lead sign-in; the file is `~/Downloads/Chemical Export Aug 28 2026.xlsx`).
+Still open: a photo of a physical tag to confirm which symbologies the
+stickers actually use (scanner currently enables QR + code_128/39/93 +
+data_matrix; barcodes are 24-char strings like CA0000000000000000228D47).
+The receiving grid stacks to cards below **1320px** (was 1200) — the eighth
+column pushed the table's minimum to ~1300; do not claw it back by shaving
+measured columns. No rules deploy anywhere (lots/items have no field
+whitelist). Any new writer of ehsBarcode must call ehsNorm; comparisons go
+through ehsKey (dash-blind).
 
 **v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
 and verified by fetching `core.js` off the host. v3.0.0 went out an hour

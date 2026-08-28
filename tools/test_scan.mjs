@@ -273,6 +273,49 @@ console.log("\nthe UC EH&S tag, typed (chemicals wear the university's sticker, 
   await ctx.close();
 }
 
+/* ---------- 3c. the RSS export parses in the browser, no library ---------- */
+console.log("\nthe EH&S export (.xlsx) is read by the app's own zip walker");
+{
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const fixture = await readFile(fileURLToPath(new URL("./lib/rss-export-fixture.xlsx", import.meta.url)));
+  const { ctx, page } = await boot(1200);
+  const res = await page.evaluate(async (b64) => {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const table = await ehsParseXlsx(buf.buffer);
+    const rows = ehsMapRows(table);
+    const st = ehsImpState("fixture.xlsx", rows);
+    const feb = st.subs.get("Formula Electric at Berkeley - Flammable Cabinet");
+    const at30 = rows.find(r => /AT30/.test(r.name));
+    return {
+      header: table[0].slice(0, 3),
+      mapped: rows.length,
+      dupes: st.dupes,
+      subs: [...st.subs.keys()],
+      febOn: feb ? feb.on : null,
+      febRows: feb ? feb.rows.length : 0,
+      at30: at30 ? { expires: at30.expires, vendor: at30.vendor, hazard: ehsHazard(at30.hazardCodes) } : null,
+      acetoneOpened: (rows.find(r => r.name === "Acetone") || {}).opened,
+    };
+  }, fixture.toString("base64")).catch(e => ({ err: e.message }));
+  ok(!res.err, "the xlsx parses in the page", res.err);
+  if (!res.err) {
+    eq(res.header.join("|"), "Name|Substance Name|CAS", "the header row comes out in order");
+    eq(res.mapped, 6, "six importable rows (the no-barcode row drops)");
+    eq(res.dupes, 1, "the repeated barcode inside the file is counted, first one wins");
+    eq(res.subs.length, 2, "two sublocations found");
+    eq(res.febOn, true, "FEB's sublocation starts ticked");
+    eq(res.febRows, 4, "with its four surviving rows");
+    eq(res.at30 && res.at30.expires, "2027-06-01", "the expiry timestamp becomes a date");
+    eq(res.at30 && res.at30.vendor, "Easy Composites", "the vendor rides along");
+    eq(res.at30 && res.at30.hazard, "not flammable", "H302/H314/H317 is classified, not flammable");
+    eq(res.acetoneOpened, "2026-01-05", "an Opened Date carries over");
+  }
+  await ctx.close();
+}
+
 /* ---------- 4. move ---------- */
 console.log("\nmoving something to a shelf");
 {

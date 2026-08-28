@@ -4918,6 +4918,84 @@ await t("a receiving row deals its tags to its records in order, and says when t
   DB.lots = [];
 });
 
+console.log("the EH&S import (RSS's export becomes lot records):");
+
+await t("the CSV parser reads quotes, escaped quotes and embedded commas", () => {
+  const rows = ehsParseCsv('a,b,c\n"x, y",z,"say ""hi"""\n\nlast,,');
+  assert(rows.length === 3, "blank lines drop, got " + rows.length);
+  assert(rows[1][0] === "x, y" && rows[1][2] === 'say "hi"', "quoting works: " + JSON.stringify(rows[1]));
+  assert(rows[2][0] === "last" && rows[2].length === 3, "trailing empties survive");
+});
+
+await t("columns are found by RSS's names, not by position", () => {
+  const table = [
+    ["Barcode", "Junk", "Name", "Sublocation", "Hazard Codes", "Received Date"],
+    ["CA0000000000000000228D47", "x", "Acetone", "Formula Electric at Berkeley - Flammable Cabinet", "H225,H319", "2025-12-06T20:06:28.076Z"],
+    ["", "x", "No barcode", "Formula Electric at Berkeley - Flammable Cabinet", "", ""],
+  ];
+  const rows = ehsMapRows(table);
+  assert(rows.length === 1, "a row without a barcode is not importable, got " + rows.length);
+  assert(rows[0].barcode === "CA0000000000000000228D47" && rows[0].name === "Acetone", "fields land");
+  assert(rows[0].received === "2025-12-06", "the ISO timestamp becomes a plain date");
+  assert(ehsMapRows([["Name", "Barcode"]]).length === 0, "no Sublocation column means no rows, not a crash");
+});
+
+await t("hazard comes from the H-codes, and no codes stays honestly unknown", () => {
+  assert(ehsHazard("H225,H319,H336") === "flammable", "H225 is a flammable liquid");
+  assert(ehsHazard("H302,H314,H317") === "not flammable", "codes present, none flammable");
+  assert(ehsHazard("") === "", "no codes renders as unknown, per the schema's own rule");
+  assert(ehsHazard("H242,H319") === "not flammable", "H242 (self-heating) is not the flammable class");
+});
+
+await t("a chemical export makes resin, hardener or consumable — never fabric", () => {
+  assert(ehsGuessCls("IN2 Epoxy Infusion Resin").cls === "RSN" && ehsGuessCls("IN2 Epoxy Infusion Resin").role === "resin");
+  assert(ehsGuessCls("AT30 SLOW EPOXY HARDENER").role === "hardener");
+  assert(ehsGuessCls("Acetone").cls === "CON", "a solvent is a consumable");
+  assert(ehsGuessCls("carbon fiber cleaner").cls === "CON", "even a name with fibre words cannot become FAB here");
+});
+
+await t("the import state ticks FEB's sublocations, skips known barcodes, dedupes the file", () => {
+  DB.lots = [{ id: "CON-SN6-090", cls: "CON", name: "old acetone", ehsBarcode: "CA-TAG-0001" }];
+  DB.items = [{ id: "BIN-SN6-030", cls: "BIN", name: "Flammables cabinet shelf", stage: "Active", site: "Flammables cabinet" }];
+  const mk = (name, sub, barcode) => ({ name, sub, barcode, vendor: "", hazardCodes: "", received: "", opened: "", expires: "" });
+  const st = ehsImpState("x.xlsx", [
+    mk("Acetone", "Formula Electric at Berkeley - Flammable Cabinet", "CATAG0001"),
+    mk("IN2", "Formula Electric at Berkeley - Flammable Cabinet", "CA-TAG-0002"),
+    mk("IN2 again", "Formula Electric at Berkeley - Flammable Cabinet", "CA-TAG0002"),
+    mk("FSAE thing", "Formula SAE - Large Yellow Flammable Cabinet", "CA-TAG-0003"),
+  ]);
+  assert(st.dupes === 1, "the repeated barcode (dash-blind) is counted once: " + st.dupes);
+  const feb = st.subs.get("Formula Electric at Berkeley - Flammable Cabinet");
+  const fsae = st.subs.get("Formula SAE - Large Yellow Flammable Cabinet");
+  assert(feb.on && !fsae.on, "FEB's sublocation starts ticked, everyone else's does not");
+  assert(feb.linked === 1, "the barcode an existing record wears counts as linked");
+  assert(feb.bin === "BIN-SN6-030", "their flammable cabinet guesses our Flammables cabinet shelf");
+  EHS_IMP = st;
+  const take = ehsImpTake();
+  assert(take.length === 1 && take[0].name === "IN2" && take[0].bin === "BIN-SN6-030",
+    "only the unlinked FEB row would be created, already located: " + JSON.stringify(take.map(r => r.name)));
+  EHS_IMP = null;
+  DB.lots = []; DB.items = [];
+});
+
+await t("the reconciliation export flags untagged and emptied containers first", () => {
+  DB.lots = [
+    { id: "RSN-SN6-060", cls: "RSN", name: "tagged jug", stage: "Open", ehsBarcode: "CA-1" },
+    { id: "RSN-SN6-061", cls: "RSN", name: "untagged jug", stage: "Sealed" },
+    { id: "CON-SN6-062", cls: "CON", name: "emptied can", stage: "Empty", ehsBarcode: "CA-2" },
+    { id: "FAB-SN6-063", cls: "FAB", name: "cloth", stage: "Open" },
+  ];
+  DB.items = [{ id: "BIN-SN6-031", cls: "BIN", name: "Flam shelf", stage: "Active", ehsBarcode: "CA-9" }];
+  const rows = invExportEhs();
+  assert(rows.length === 4, "chemicals and the tagged shelf; fabric is not in the campus system: " + rows.length);
+  assert(!rows.some(r => r.id === "FAB-SN6-063"), "no fabric row");
+  assert(rows[0].note && rows[1].note, "rows needing attention sort first");
+  assert(rows.find(r => r.id === "RSN-SN6-061").note.includes("no EH&S tag"), "untagged is flagged");
+  assert(rows.find(r => r.id === "CON-SN6-062").note.includes("retire"), "emptied says to retire it in RSS");
+  assert(rows.find(r => r.id === "BIN-SN6-031").note.includes("sublocation"), "the shelf row names itself");
+  DB.lots = []; DB.items = [];
+});
+
 console.log("the scan resolution chain (FEB grammar first, then the tag registry):");
 
 await t("a scan resolves FEB codes as before, and an EH&S tag to the record wearing it", () => {

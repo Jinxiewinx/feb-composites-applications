@@ -596,6 +596,9 @@ function invToolbar(active) {
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
     <button class="ib" onclick="invExportModal()">${icon("download", 15)} Export</button>
+    ${/* Bulk-links the containers campus EH&S already tagged, from the RSS
+          export. Lead-only, like the mold import — it mints records. */""}
+    ${isLead() && typeof openEhsImport === "function" ? `<button class="ib" onclick="openEhsImport()">${icon("upload", 15)} EH&S import</button>` : ""}
   </div>`;
 }
 
@@ -793,6 +796,45 @@ function invExportLocations() {
   }).sort((a, b) => String(a.site).localeCompare(String(b.site)) || String(a.name).localeCompare(String(b.name)));
 }
 
+/* The reconciliation sheet: our chemical containers against the campus RSS
+   inventory, one row per RSN/CON lot plus one per shelf wearing an RSS
+   sublocation tag. Sorted so the rows with something to fix come first — a
+   container with no EH&S tag is exactly what an EH&S walk will flag, and an
+   emptied one is what RSS still thinks exists. Compare on the barcode column;
+   ours and theirs agree on it by construction. */
+function invExportEhs() {
+  const names = invLocNames();
+  const rows = [];
+  for (const l of DB.lots || []) {
+    if (l.cls !== "RSN" && l.cls !== "CON") continue;
+    const where = invWhere(l, names);
+    rows.push({
+      ehsBarcode: l.ehsBarcode || "",
+      id: l.id, kind: l.cls === "RSN" ? "Resin / hardener" : "Consumable",
+      name: l.name || "", state: l.stage || "", howFull: l.qty || "",
+      location: where ? where.name : "(no location)",
+      receivedOn: l.receivedOn || "", openedOn: l.openedOn || "",
+      emptiedOn: l.emptiedOn || "", expiresOn: l.expiresOn || "",
+      hazard: l.hazard || "",
+      note: [
+        !l.ehsBarcode ? "no EH&S tag on record" : "",
+        l.stage === "Empty" && l.ehsBarcode ? "emptied — retire it in RSS too" : "",
+      ].filter(Boolean).join("; "),
+      url: SCAN_HOST + SCAN_PATH + l.id,
+    });
+  }
+  for (const b of (DB.items || []).filter(b => b.cls === "BIN" && b.ehsBarcode)) {
+    rows.push({
+      ehsBarcode: b.ehsBarcode, id: b.id, kind: "Storage location",
+      name: b.name || "", state: b.stage || "", howFull: "",
+      location: b.site || "", receivedOn: "", openedOn: "", emptiedOn: "", expiresOn: "",
+      hazard: "", note: "RSS sublocation tag",
+      url: SCAN_HOST + SCAN_PATH + b.id,
+    });
+  }
+  return rows.sort((a, b) => (a.note ? 0 : 1) - (b.note ? 0 : 1) || cmpId(a.id, b.id));
+}
+
 const INV_EXPORTS = {
   flat: { file: "inventory", label: "Everything on every shelf",
           blurb: "One row per physical thing, with the shelf it is on.",
@@ -800,6 +842,9 @@ const INV_EXPORTS = {
   locations: { file: "inventory-locations", label: "Locations",
                blurb: "One row per shelf, rack and bin, with counts and the last stock walk.",
                rows: () => invExportLocations() },
+  ehs: { file: "ehs-reconciliation", label: "EH&S reconciliation",
+         blurb: "Chemical containers with their EH&S barcodes, for checking against the campus RSS inventory. Rows needing attention sort first.",
+         rows: () => invExportEhs() },
 };
 function invExportCols(which, rows) {
   const seen = [];

@@ -774,6 +774,20 @@ space-separated, dealt to the records in order; the confirm warns when the
 deal is short. Shelves can carry their RSS sublocation tag the same way, on
 the BIN record.
 
+For the containers EH&S tagged before this feature existed, **EH&S import** on
+the Inventory toolbar (lead-only) takes the RSS web app's own .xlsx export,
+parsed in the browser with no library — the export is a zip of XML, and
+DecompressionStream has been in every supported browser since 2023. Pick the
+sublocations that are ours (Formula Electric's start ticked, every other RSO's
+start unticked), say which shelf each maps to, and every barcode the app does
+not already know becomes a record: class and role guessed from the name,
+hazard from the GHS H-codes (no codes stays honestly unknown), received and
+expiry dates carried over. Import never edits and never deletes; a barcode
+some record already wears is the same jug, not newer truth. The Export modal
+gained an **EH&S reconciliation** sheet going the other way: every chemical
+container with its barcode, untagged and emptied-but-still-in-RSS rows sorted
+first.
+
 After a submit you stay in the sheet with the caret in a fresh line, and the
 labels are queued on the undo bar rather than auto-printed. Undo deletes what it
 created and puts the lines back on the sheet.

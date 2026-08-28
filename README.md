@@ -105,7 +105,9 @@ two-step move is scan the mold, tap Move, scan the shelf. It works on iPhones
 as well, through a lazy-loaded wasm decoder, and it reads the UC EH&S barcode
 tags on chemical containers: campus EH&S stickers every chemical for the RSS
 Chemicals inventory, and rather than double-stickering each carton the app
-treats that tag as the container's identity. The cure buy-off
+treats that tag as the container's identity. A lead can bulk-import the RSS
+inventory export to enrol everything already tagged, and export a
+reconciliation sheet back the other way. The cure buy-off
 also captures which fabric roll and which resin and hardener lots went in, and
 "I don't know" is a recorded answer, because a confident wrong lot is worse
 than an honest gap.
