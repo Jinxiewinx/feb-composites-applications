@@ -20,20 +20,32 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**EH&S (RSS Chemicals) barcode integration is IN PROGRESS.** The plan is at
-`~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's Mac; four
-phases, each pushed and deployed on its own. Phase 1 (landed): `ehsBarcode` on
-RSN/CON lots and BIN items, `ehsNorm`/`ehsResolve`/`ehsConflict` in core.js,
-an EH&S tag column on the receiving desk that deals space-separated codes to
-fanned-out records, one-tag-one-container enforced at the editor and warned at
-the receiving confirm. Phase 2: scanner accepts EH&S codes (formats widened,
-`idFromScan` refactor, unknown-code → "log this container"). Phase 3: vendored
-zxing-wasm fallback so iPhones can camera-scan (Simon approved breaking
-scan.js's no-library stance). Phase 4: RSS export CSV import + reconciliation
+**EH&S (RSS Chemicals) barcodes: PHASES 1–2 ARE LIVE, 3–4 PAUSED on Simon's
+say-so** (2026-08-28: "stop after phase 2, add the rest to a handoff"). The
+full plan is `~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's
+Mac; the handoff with phase 3/4 specifics was posted in that chat. Live and
+verified off the host: `ehsBarcode` on RSN/CON lots and BIN items ("ehs" field
+type in SHOP), `ehsNorm`/`ehsKey`/`ehsResolve`/`ehsConflict` in core.js
+(store keeps dashes, comparisons drop them), the receiving desk's EH&S tag
+column (space-separated codes dealt to fanned-out records, warnings for short
+deals/dupes/already-worn), and the scanner: every scan goes through
+`scanResolve` (FEB grammar, then tag registry), formats widened to
+code_128/39/93 + data_matrix, unknown tag → scanToOpen offers the receiving
+desk prefilled via `openReceiving({ehs})`; sticky flows get a state-line
+nudge instead. The receiving grid stacks to cards below **1320px** now (was
+1200) — the eighth column pushed the honest table minimum to ~1300; do not
+claw it back by shaving measured columns.
+
+Phase 3 (not started): vendor zxing-wasm 3.1.3 so iPhones camera-scan —
+Simon approved breaking scan.js's no-library stance; its header already
+documents the coming fallback. `npm pack zxing-wasm@3.1.3` → vendor
+`dist/es/reader/index.js` + `dist/es/share.js` + `dist/reader/zxing_reader.wasm`
+(1.0MB) + LICENSE under `app/vendor/zxing/`, lazy `import()` only when
+`BarcodeDetector` is absent, expose a polyfill class so tickScan stays
+unchanged. Phase 4 (not started): RSS export CSV import + reconciliation
 export — **blocked on Simon**: a photo of a real tag, and one RSS inventory
-export file. No rules deploy needed anywhere (lots/items have no field
-whitelist). Field type is `"ehs"` in the SHOP schema; normalisation happens in
-updShop and rxEhsTokens, so any new writer of ehsBarcode must call ehsNorm.
+export file. No rules deploy anywhere (lots/items have no field whitelist).
+Any new writer of ehsBarcode must call ehsNorm.
 
 **v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
 and verified by fetching `core.js` off the host. v3.0.0 went out an hour
