@@ -29,20 +29,6 @@
  },
  {
   "category": "Datasheets",
-  "title": "airtac2imp",
-  "kind": "pdf",
-  "src": "docs/datasheets/airtac2imp.pdf",
-  "size": 417720
- },
- {
-  "category": "Datasheets",
-  "title": "airtac2spray",
-  "kind": "pdf",
-  "src": "docs/datasheets/airtac2spray.pdf",
-  "size": 199109
- },
- {
-  "category": "Datasheets",
   "title": "EC SDS IN2 Epoxy Infusion Resin and Hardener",
   "kind": "pdf",
   "src": "docs/datasheets/EC-SDS-IN2-Epoxy-Infusion-Resin-and-Hardener.pdf",
@@ -162,16 +148,30 @@
  },
  {
   "category": "Datasheets",
-  "title": "west system slow epoxy hardener 206 tds",
-  "kind": "pdf",
-  "src": "docs/datasheets/west-system_slow-epoxy-hardener_206_tds.pdf",
-  "size": 66097
- },
- {
-  "category": "Datasheets",
   "title": "WestSystems 105 205 Epoxy Resin",
   "kind": "pdf",
   "src": "docs/datasheets/WestSystems-105-205-Epoxy-Resin.pdf",
   "size": 64869
+ },
+ {
+  "category": "Datasheets",
+  "title": "airtac2imp",
+  "kind": "pdf",
+  "src": "docs/datasheets/airtac2imp.pdf",
+  "size": 417720
+ },
+ {
+  "category": "Datasheets",
+  "title": "airtac2spray",
+  "kind": "pdf",
+  "src": "docs/datasheets/airtac2spray.pdf",
+  "size": 199109
+ },
+ {
+  "category": "Datasheets",
+  "title": "west system slow epoxy hardener 206 tds",
+  "kind": "pdf",
+  "src": "docs/datasheets/west-system_slow-epoxy-hardener_206_tds.pdf",
+  "size": 66097
  }
 ]
