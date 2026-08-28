@@ -144,6 +144,7 @@ def _add_photo_placeholder(doc, caption):
 def build(src: Path, out: Path):
     lines = src.read_text(encoding="utf-8").splitlines()
     doc = Document()
+    fig_n = 0
     _style_base(doc)
     for section in doc.sections:
         section.top_margin = section.bottom_margin = Inches(0.8)
@@ -177,7 +178,11 @@ def build(src: Path, out: Path):
             continue
         im = IMG_RE.fullmatch(stripped)
         if im:
-            _add_figure(doc, src.parent, im.group(1), im.group(2))
+            fig_n += 1
+            # The markdown alt carries no "Figure n." prefix — pandoc's PDF
+            # path numbers implicit figures itself, so a prefix there doubles.
+            # Here we are the numbering.
+            _add_figure(doc, src.parent, f"Figure {fig_n}. {im.group(1)}", im.group(2))
             i += 1
             continue
         if stripped.startswith(">"):
