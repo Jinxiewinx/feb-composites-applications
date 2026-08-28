@@ -20,6 +20,19 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**Branch `cs-standards-eng-rewrite` holds the CS standards engineering pass,
+pushed, NOT merged** (2026-08-28, Simon's /documentation request; he asked for
+a branch because other agents were working on main). Four commits: 13 SVG
+figures + `tools/render_figures.mjs`, the figure pipeline (build_docx.py
+images, gen_docs_manifest.py resource-path + figure copying, documents.js
+mdToHtml image support + two mdfig CSS rules in index.html), the pass itself
+(every doc +1 revision letter, CS-INDEX Rev F, CS-000 defines shall/should/may,
+12 docs carry figures, CS-007/CS-009 out of outline, em-dash sweep), and docs.
+All outputs regenerated; 651 app + 26 design-system + 42 traceability checks
+pass. **No process rule or number changed anywhere — the history rows say so.**
+Merging is Simon's call; after merge, deploy hosting so the app's docs/
+copies go live, and the approval tables still need real signatures.
+
 **EH&S (RSS Chemicals) barcodes: PHASES 1–2 ARE LIVE, 3–4 PAUSED on Simon's
 say-so** (2026-08-28: "stop after phase 2, add the rest to a handoff"). The
 full plan is `~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's
@@ -199,9 +212,6 @@ it should be tightened.
   the only printable in the app that does — the cut list was the other one.
 - `05 Printables/printables.html` is open to redesign. Simon said there is no
   house style to conform to.
-- Sweep `02 CS Standards/src/` for AI writing patterns — but these are
-  versioned documents with approval tables, so a prose edit means a revision
-  bump under CS-000. **Ask before touching them.**
 - Per-record history/audit trail (Phase 5 of the inventory plan), deliberately
   deferred. Nothing depends on it and an empty array is a valid start.
 

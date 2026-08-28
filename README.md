@@ -15,7 +15,7 @@ for everything in here.
 | `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
-| `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output | `CS-INDEX` |
+| `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output. Figures are SVG in `src/figures/` with rendered PNGs beside them | `CS-INDEX` |
 | `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
 | `05 Printables/` | Shop reference sheets meant to be printed: resin ratios, flowcharts, checklists | `README.md` |
 | `06 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
@@ -173,6 +173,9 @@ list.
 **Maintenance:** edit standards in `02 CS Standards/src/`, rebuild with
 `tools/.venv/bin/python tools/build_docx.py --all`, then
 `python3 tools/gen_docs_manifest.py` and `python3 tools/check_traceability.py`.
+A standard's figures are edited as SVG in `src/figures/` and re-rendered to
+PNG with `node tools/render_figures.mjs` (needs the same Playwright the
+browser tests use) before the docx rebuild; the markdown references the PNG.
 Regenerate retro work orders only if the source data was wrong.
 
 ## Tests
