@@ -1496,8 +1496,12 @@
   .step .body { flex: 1; min-width: 0; } .step .meta { font-size: 13px; color: var(--muted); }
   /* The right cluster: buy-off (or the signed state) plus the camera and the
      issue flag — every control on one edge (Simon's call), the body is pure
-     reading. */
-  .step .buyoff { flex: none; display: flex; gap: 6px; align-items: center; font-size: 13px; flex-wrap: wrap; justify-content: flex-end; }
+     reading. Shrinkable, not flex:none: in the desktop wo-detail grid a steps
+     column can be ~240px, and a rigid cluster pushed the icon buttons out of
+     the card and into the landscape safe-area inset. Letting it shrink is what
+     makes the flex-wrap actually engage; the floor is the widest single
+     control (the buy-off button), which still fits the column. */
+  .step .buyoff { flex: 0 1 auto; display: flex; gap: 6px; align-items: center; font-size: 13px; flex-wrap: wrap; justify-content: flex-end; }
   /* A blocker is a person withholding a signature (amber ring + edge), a hold
      is the clock (slate node wearing the ◷). They stopped sharing a wash long
      ago; now neither is a wash at all. */
