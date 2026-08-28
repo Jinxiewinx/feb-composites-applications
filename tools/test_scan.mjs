@@ -126,13 +126,17 @@ console.log("\nthe camera light goes out");
   await ctx.close();
 }
 
-/* ---------- 3. the fallback, which is most of the phones ---------- */
+/* ---------- 3. the typed path, when there is no camera at all ---------- */
 console.log("\ntyping the code when the camera is unavailable");
 {
   const ctx = await browser.newContext({ viewport: { width: 393, height: 850 } });
-  // Safari has no BarcodeDetector. Simulate that rather than assume it away:
-  // the typed path is the one most of the team will actually use.
-  await ctx.addInitScript(() => { try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; } });
+  // No detector AND no mediaDevices — a desktop with no webcam, an insecure
+  // origin, a locked-down browser. (No-detector alone is Safari, and Safari
+  // now gets the wasm fallback — that path is section 3b below.)
+  await ctx.addInitScript(() => {
+    try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; }
+    try { Object.defineProperty(navigator, "mediaDevices", { value: undefined }); } catch {}
+  });
   const { page } = await openApp(ctx, port);
   await page.evaluate(APPLY_FIXTURES);
   await page.evaluate(SEED);
@@ -158,6 +162,50 @@ console.log("\ntyping the code when the camera is unavailable");
   const v = await page.evaluate(() => ({ tab: view.tab, mode: view.mode, id: view.id }));
   eq(v.mode, "detail", "a typed code opens the record");
   eq(v.id, "WO-SN5-003", "the right one, upcased");
+  await ctx.close();
+}
+
+/* ---------- 3a. the wasm fallback, which is every iPhone ---------- */
+console.log("\nthe vendored decoder stands in where BarcodeDetector is missing");
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 393, height: 850 }, permissions: ["camera"],
+  });
+  await ctx.addInitScript(() => { try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; } });
+  const { page } = await openApp(ctx, port);
+  await page.evaluate(APPLY_FIXTURES);
+  await page.evaluate(SEED);
+  await page.waitForTimeout(200);
+
+  eq(await page.evaluate(() => scanSupported()), true,
+    "no native detector still reports scannable — the fallback is loadable");
+  eq(await page.evaluate(() => ZX_FALLBACK.state), "idle", "and nothing was fetched at boot");
+
+  const loaded = await page.evaluate(() => loadScanFallback());
+  eq(loaded, true, "the wasm module loads from vendor/zxing/");
+  eq(await page.evaluate(() => ZX_FALLBACK.state), "ready", "and reports ready");
+  eq(await page.evaluate(() => typeof window.BarcodeDetector), "function", "BarcodeDetector is installed");
+
+  // Round trip through the app's own QR generator: draw a code, decode it.
+  const read = await page.evaluate(async () => {
+    const q = qrcode(0, "Q");   // the app's own vendored generator
+    q.addData("HTTPS://FEB-COMPOSITES.WEB.APP/Q/RSN-SN6-001", "Alphanumeric");
+    q.make();
+    const n = q.getModuleCount(), scale = 8, border = 4;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = (n + border * 2) * scale;
+    const g = canvas.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, canvas.width, canvas.height);
+    g.fillStyle = "#000";
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+      if (q.isDark(r, c)) g.fillRect((c + border) * scale, (r + border) * scale, scale, scale);
+    const det = new window.BarcodeDetector({ formats: ["qr_code", "code_128"] });
+    const hits = await det.detect(canvas);
+    return hits.map(h => h.rawValue);
+  }).catch(e => ["ERR:" + e.message]);
+  eq(read.length, 1, "one code read from the frame", read.join(","));
+  eq(await page.evaluate(v => idFromScan(v), read[0] || ""), "RSN-SN6-001",
+    "and it resolves through the same chain as a native scan");
   await ctx.close();
 }
 

@@ -925,12 +925,22 @@ label, and the rules reject any write carrying anything else, so a bug cannot
 publish a layup stack or somebody's email. The mirror keeps itself in step, and
 a lead can re-publish everything with **Rebuild scan mirror** under Reports.
 
-**Inside the app**, the topbar has a **Scan** button next to search. Where the
-browser supports it (Chrome, Android) it opens the camera; where it does not
-(Safari) it offers a typed-code field and says why — the phone's own camera app
-reads the code perfectly well and lands on the nameplate anyway. A code resolves
-whether it arrives as the full URL, the bare code, lowercase, or with whitespace
-round it, because somebody will retype it off a scuffed label.
+**Inside the app**, the topbar has a **Scan** button next to search. Chrome and
+Android open the camera through the browser's own BarcodeDetector. iPhones have
+no such API, so `scan-fallback.js` lazy-loads a vendored zxing-wasm decoder
+(`vendor/zxing/`, 1MB fetched once, then cached) and installs it as a
+`BarcodeDetector` polyfill; the first scan on an iPhone says "Loading the
+scanner…" for a few seconds and every later one is instant. If the load fails,
+or the browser has no camera at all, the typed-code field is still there. A
+code resolves whether it arrives as the full URL, the bare code, lowercase, or
+with whitespace round it, because somebody will retype it off a scuffed label.
+
+The camera reads FEB's QR labels and the **UC EH&S tags** on chemical
+containers (QR and the common linear formats). An EH&S tag resolves to the lot
+wearing it; a tag nobody has logged offers to open the receiving desk with the
+code prefilled. RSS sublocation tags on shelves resolve to the BIN record the
+same way, so Move and "move things here" take either kind of label at either
+end.
 
 Every mold, item and lot detail page has **Move** outside edit mode; item and
 lot pages also carry a stage button that names its destination ("Open", not

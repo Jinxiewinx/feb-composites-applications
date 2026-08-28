@@ -101,7 +101,11 @@ Pointing a plain phone camera at a label opens a public nameplate that says
 what the object is, what stage it is at and where it lives, with no account
 and no app install. Names, costs and files stay behind the roster, enforced by
 a separate mirror collection. There is a Scan button inside the app too, so a
-two-step move is scan the mold, tap Move, scan the shelf. The cure buy-off
+two-step move is scan the mold, tap Move, scan the shelf. It works on iPhones
+as well, through a lazy-loaded wasm decoder, and it reads the UC EH&S barcode
+tags on chemical containers: campus EH&S stickers every chemical for the RSS
+Chemicals inventory, and rather than double-stickering each carton the app
+treats that tag as the container's identity. The cure buy-off
 also captures which fabric roll and which resin and hardener lots went in, and
 "I don't know" is a recorded answer, because a confident wrong lot is worse
 than an honest gap.

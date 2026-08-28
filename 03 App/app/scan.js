@@ -29,14 +29,18 @@
  * Safari does not. The old stance ("the phone's own camera app reads the QR
  * and lands on q.html, so vendor nothing") fails for EH&S tags — their codes
  * open nothing of ours, and some are 1-D barcodes a camera app won't treat as
- * a link. A lazy-loaded WASM fallback is the planned fix; until it lands,
- * browsers without BarcodeDetector fall back to typing the code.
+ * a link. So scan-fallback.js lazy-loads a vendored zxing-wasm decoder and
+ * installs it AS window.BarcodeDetector, only on browsers without the native
+ * one; everything below the feature-detect is identical on both paths. If
+ * that load fails, the typed box is still there.
  */
 
 function scanSupported() {
-  return typeof window !== "undefined" && "BarcodeDetector" in window &&
-    typeof navigator !== "undefined" && navigator.mediaDevices &&
-    typeof navigator.mediaDevices.getUserMedia === "function";
+  const det = typeof window !== "undefined" &&
+    ("BarcodeDetector" in window ||
+     (typeof ZX_FALLBACK !== "undefined" && ZX_FALLBACK.state !== "failed"));
+  return !!(det && typeof navigator !== "undefined" && navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function");
 }
 
 let SCAN = { stream: null, raf: 0, onCode: null, running: false,
@@ -68,8 +72,8 @@ async function openScan(opts) {
       <input id="scan-manual" ${can ? "" : "autofocus"} placeholder="e.g. MOLD-SN6-004"
              autocapitalize="characters" autocomplete="off" spellcheck="false"
              onkeydown="if(event.key==='Enter')scanManual()"></div>
-    ${can ? "" : `<p class="gate"><span class="gi">!</span><span>This browser can't open the camera for scanning.
-      Safari can't, Chrome and Android can. Your phone's own camera app reads the code either way — it opens the
+    ${can ? "" : `<p class="gate"><span class="gi">!</span><span>This browser can't open a camera for scanning.
+      Type the code from the label instead — or scan an FEB QR with your phone's own camera app, which opens the
       public page for that record.</span></p>`}
     <div class="foot">
       <button onclick="closeScan()">Cancel</button>
@@ -79,6 +83,14 @@ async function openScan(opts) {
 
   if (!can) return;
   try {
+    /* iPhones take this branch: the polyfill fetches once (1MB of wasm,
+       cached after), and while it does the state line says so. On failure
+       the modal quietly becomes what it always was on iOS — a typed box. */
+    if (typeof scanFallbackNeeded === "function" && scanFallbackNeeded()) {
+      setScanState("Loading the scanner… first time takes a few seconds.");
+      const loaded = await loadScanFallback();
+      if (!loaded) { setScanState("Couldn't load the scanner here. Type the code instead."); return; }
+    }
     // facingMode "environment" is the back camera. On a laptop there is only
     // one and the constraint is ignored rather than failing.
     SCAN.stream = await navigator.mediaDevices.getUserMedia({

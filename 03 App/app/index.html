@@ -3346,6 +3346,11 @@
 <script src="drawings.js"></script>
 <script src="stock.js"></script>
 <script src="shop.js"></script>
+<!-- Installs a BarcodeDetector polyfill (vendored zxing-wasm, lazy) on
+     browsers without the native one — iPhones. Before scan.js, which
+     feature-detects it. The wasm is NOT fetched at boot; only when a scan
+     opens on such a browser. -->
+<script src="scan-fallback.js"></script>
 <script src="scan.js"></script>
 <script src="molds.js"></script>
 <script src="inventory.js"></script>
