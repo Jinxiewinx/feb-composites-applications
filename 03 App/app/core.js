@@ -1031,6 +1031,45 @@ function tabForId(id) {
   return t ? t.id : null;
 }
 
+/* ---------- EH&S barcodes ----------
+   Every chemical container at RFS carries a UC EH&S tag (the RSS Chemicals
+   system — campus mandate), and the team does not want a second sticker on the
+   same carton. So a container's EH&S code is a second identity for a lot
+   record, stored in `ehsBarcode`, and RSS sublocation tags are the same thing
+   for BIN records. The code is OPAQUE: RSS does not document its serial
+   grammar, so nothing here parses meaning out of it — normalise, store,
+   compare. That is also why resolution is a scan over DB rather than a prefix
+   route: an EH&S code carries no prefix tabForId could use. */
+
+/* One normal form, applied on save and on lookup, so a code scanned off a tag
+   and a code retyped off a scuffed one meet in the middle. Uppercase, and
+   strip everything but letters, digits and dashes — the same character set
+   idFromScan already trusts. */
+function ehsNorm(raw) {
+  return String(raw || "").trim().toUpperCase().replace(/[^0-9A-Z-]/g, "");
+}
+
+/* The record wearing this EH&S tag, or null. Lots first (containers are the
+   common scan), then BIN locations (RSS sublocation tags). Returns
+   {coll, id, o} so a caller can route without a second lookup. */
+function ehsResolve(raw) {
+  const code = ehsNorm(raw);
+  if (!code) return null;
+  for (const coll of ["lots", "items"]) {
+    const o = (DB[coll] || []).find(r => r.ehsBarcode && ehsNorm(r.ehsBarcode) === code);
+    if (o) return { coll, id: o.id, o };
+  }
+  return null;
+}
+
+/* An EH&S tag identifies ONE physical container. Two records claiming the same
+   code means one of them is wrong, and the polite moment to say so is while
+   the person who can fix it is still holding the jug. */
+function ehsConflict(raw, excludeId) {
+  const hit = ehsResolve(raw);
+  return hit && hit.id !== excludeId ? hit : null;
+}
+
 /* Read at file-scope load, which is early enough: index.html's
    `<script>render()</script>` runs after this file, so nothing there needs to
    change. Mirrored into sessionStorage so the link also survives a reload or a

@@ -89,7 +89,7 @@ function rxBlankRow(preset) {
     rid: bomLineId(),
     cls: (preset && preset.cls) || "CON",
     name: "", qty: "1", bin: (preset && preset.bin) || "",
-    vendorLot: "", supplier: (preset && preset.supplier) || "",
+    vendorLot: "", ehs: "", supplier: (preset && preset.supplier) || "",
     unitCost: "", expiresOn: "", matKey: "",
     buyRef: null, ...(preset || {}),
   };
@@ -391,6 +391,7 @@ function rxCols() {
   const out = ["cls", "name", "qty"];
   if (!RX.lockBin) out.push("bin");
   out.push("vendorLot");
+  if (any("ehsBarcode")) out.push("ehs");
   if (any("expiresOn")) out.push("expiresOn");
   out.push("unitCost");
   return out;
@@ -488,7 +489,7 @@ function rxNameOptions() {
 }
 
 const RX_HEAD = { cls: "Class", name: "What is it", qty: "How many", bin: "Shelf",
-                  vendorLot: "Vendor lot", expiresOn: "Expires", unitCost: "$ each" };
+                  vendorLot: "Vendor lot", ehs: "EH&S tag", expiresOn: "Expires", unitCost: "$ each" };
 
 function rxGridHtml(cols) {
   return `<table class="sub rxgrid">
@@ -541,6 +542,15 @@ function rxRowHtml(r, cols) {
       </select>`,
     vendorLot: `<input id="rxv-${r.rid}" value="${esc(r.vendorLot)}" placeholder="lot #" aria-label="Vendor lot"
         onchange="rxUpd('${r.rid}','vendorLot',this.value)">`,
+    /* The UC EH&S tag going onto (or already on) this container. Free-typed or
+       scanned in with a keyboard-mode scanner; the camera path arrives with
+       the scan.js work. A row fanning out to several containers takes several
+       codes, space- or comma-separated, dealt to the records in order. */
+    ehs: shopFieldApplies(spec, cls, "ehsBarcode")
+      ? `<input id="rxh-${r.rid}" value="${esc(r.ehs || "")}" placeholder="tag code" aria-label="EH&S tag"
+          autocapitalize="characters" autocomplete="off" spellcheck="false"
+          onchange="rxUpd('${r.rid}','ehs',this.value)">`
+      : `<span class="rx-na">—</span>`,
     expiresOn: shopFieldApplies(spec, cls, "expiresOn")
       ? `<input id="rxe-${r.rid}" type="date" value="${esc(r.expiresOn)}" aria-label="Expires"
           onchange="rxUpd('${r.rid}','expiresOn',this.value)">`
@@ -711,7 +721,7 @@ function rxConfirmHtml() {
       ${items.map(({ r, i }) => `<label class="cutrow">
         <input type="checkbox" id="rxk-${i}" checked>
         <span><b>${esc(r.name)}</b> ×${esc(r.qty || "1")} → ${esc(rxFanText(r))}
-          <span class="tny muted">${esc(rxClassOf(r.cls).label)}${r.vendorLot ? " · lot " + esc(r.vendorLot) : ""}${r.buyRef ? " · from " + esc(r.buyRef.buyId) : ""}</span></span>
+          <span class="tny muted">${esc(rxClassOf(r.cls).label)}${r.vendorLot ? " · lot " + esc(r.vendorLot) : ""}${rxEhsTokens(r).length ? " · EH&amp;S " + esc(rxEhsTokens(r).join(" ")) : ""}${r.buyRef ? " · from " + esc(r.buyRef.buyId) : ""}</span></span>
       </label>`).join("")}`).join("")}
   </div>
   ${warn.map(w => `<div class="warn">${icon("warning", 14)} ${esc(w)}</div>`).join("")}
@@ -728,8 +738,43 @@ function rxConfirmHtml() {
    instead of turning up as a red chip on the map afterwards. This is only
    possible at all because the sheet captures role and hazard, which the old
    modal never asked for. */
-function rxProposedWarnings(p) {
+/* The EH&S codes a row carries, normalised, in the order they will be dealt
+   to the row's records. Classes outside the campus chemical system get none
+   even if something was typed — the cell renders as — for them anyway. */
+function rxEhsTokens(r) {
+  if (!shopFieldApplies(shopSpec("lots"), rxClassOf(r.cls).cls, "ehsBarcode")) return [];
+  return String(r.ehs || "").split(/[\s,;]+/).map(ehsNorm).filter(Boolean);
+}
+
+/* One tag, one container — checked across the sheet AND against what already
+   exists, before the write, while the person holding the jug can still fix
+   it. A mismatch between codes typed and records made is also said here:
+   dealing 2 tags across 3 jugs silently is how the third jug ends up
+   untagged in our records and nobody knows which. */
+function rxEhsWarnings(rows) {
   const out = [];
+  const seen = new Map();
+  for (const r of rows) {
+    const tags = rxEhsTokens(r);
+    if (!tags.length) continue;
+    const { records } = rxRecordCount(r);
+    if (tags.length > records) {
+      out.push(`${r.name}: ${tags.length} EH&S tags for ${records} record${records === 1 ? "" : "s"} — the extras will be dropped.`);
+    } else if (tags.length > 1 && tags.length < records) {
+      out.push(`${r.name}: ${tags.length} EH&S tags for ${records} records — the last ${records - tags.length} will have none.`);
+    }
+    for (const t of tags) {
+      if (seen.has(t)) out.push(`EH&S tag ${t} appears on two lines (${seen.get(t)} and ${r.name}) — one tag, one container.`);
+      else seen.set(t, r.name);
+      const dupe = typeof ehsConflict === "function" ? ehsConflict(t, null) : null;
+      if (dupe) out.push(`EH&S tag ${t} is already on ${dupe.o.name || dupe.id} (${dupe.id}) — one tag, one container.`);
+    }
+  }
+  return out;
+}
+
+function rxProposedWarnings(p) {
+  const out = [...rxEhsWarnings(p.rows)];
   const idx = invIndex();
   const byBin = new Map();
   for (const r of p.rows) {
@@ -803,6 +848,7 @@ async function rxSubmit() {
     const c = rxClassOf(r.cls);
     const { records, count } = rxRecordCount(r);
     const cost = parseLooseMoney(r.unitCost);
+    const tags = rxEhsTokens(r);
     for (let k = 0; k < records; k++) {
       const id = pool.get(c.cls).shift();
       const o = {
@@ -812,6 +858,7 @@ async function rxSubmit() {
       if (c.role) o.role = c.role;
       if (r.matKey) o.matKey = r.matKey;
       if (r.vendorLot) o.vendorLot = r.vendorLot;
+      if (tags[k]) o.ehsBarcode = tags[k];
       if (r.supplier || p.supplier) o.supplier = r.supplier || p.supplier;
       if (r.expiresOn && shopFieldApplies(shopSpec("lots"), c.cls, "expiresOn")) {
         o.expiresOn = r.expiresOn;

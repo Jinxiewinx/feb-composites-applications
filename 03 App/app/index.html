@@ -2002,6 +2002,9 @@
   .rxgrid .rxc-qty input { width: 46px; margin-right: 6px; }
   .rxgrid .rxc-bin { width: 170px; }
   .rxgrid .rxc-vendorLot { width: 92px; }
+  /* Sized for the tag serial, not for the multi-tag case — several codes in
+     one cell is rare (a 3-jug line) and scrolls inside the input fine. */
+  .rxgrid .rxc-ehs { width: 110px; }
   .rxgrid .rxc-expiresOn { width: 122px; }
   .rxgrid .rxc-unitCost { width: 64px; }
   /* Wide enough for the button it holds: 13px icon + 18px padding + borders,

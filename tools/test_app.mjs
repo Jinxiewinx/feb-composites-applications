@@ -4852,6 +4852,72 @@ await t("a one-shot scan is unchanged: it closes and reports once", () => {
   assert(got.join(",") === "MOLD-SN6-004", "the original callers are untouched");
 });
 
+console.log("EH&S tags (the university's barcode is a second identity):");
+
+await t("one normal form: scanned, typed and scuffed-label variants meet in the middle", () => {
+  assert(ehsNorm("  ucb-123456 ") === "UCB-123456", "trim and uppercase");
+  assert(ehsNorm("UCB 123 456") === "UCB123456", "internal spaces go — a retype never matches them");
+  assert(ehsNorm("") === "" && ehsNorm(null) === "", "nothing in, nothing out");
+});
+
+await t("a tag resolves to its container, its shelf, or nothing — never a guess", () => {
+  DB.lots = [{ id: "RSN-SN6-050", cls: "RSN", name: "IN2 jug", ehsBarcode: "UCB-111222" }];
+  DB.items = [{ id: "BIN-SN6-009", cls: "BIN", name: "Flam cabinet shelf 2", ehsBarcode: "UCB-333444" }];
+  const jug = ehsResolve("ucb-111222");
+  assert(jug && jug.coll === "lots" && jug.id === "RSN-SN6-050", "a container tag finds the lot, case-blind");
+  const shelf = ehsResolve("UCB-333444");
+  assert(shelf && shelf.coll === "items" && shelf.id === "BIN-SN6-009", "a sublocation tag finds the bin");
+  assert(ehsResolve("UCB-999999") === null, "an unknown tag is null, not a wrong record");
+  assert(ehsResolve("") === null, "an empty scan resolves to nothing");
+});
+
+await t("one tag, one container: the editor refuses a code another record wears", () => {
+  DB.lots = [
+    { id: "RSN-SN6-050", cls: "RSN", name: "IN2 jug", stage: "Sealed", ehsBarcode: "UCB-111222" },
+    { id: "RSN-SN6-051", cls: "RSN", name: "AT30 jug", stage: "Sealed", ehsBarcode: "" },
+  ];
+  DB.items = [];
+  view = { ...view, tab: "lots", mode: "detail", id: "RSN-SN6-051", edit: true };
+  updShop("lots", "ehsBarcode", "ucb-111222");
+  assert(DB.lots[1].ehsBarcode === "", "the duplicate is refused, not stored");
+  updShop("lots", "ehsBarcode", " ucb-555 666 ");
+  assert(DB.lots[1].ehsBarcode === "UCB-555666", "a fresh code stores in the normal form");
+  updShop("lots", "ehsBarcode", "UCB-555666");
+  assert(DB.lots[1].ehsBarcode === "UCB-555666", "re-saving a record's own code is not a conflict with itself");
+  view = { ...view, mode: "list", id: null, edit: false };
+});
+
+await t("the schema knows who wears a tag: chemicals and shelves, not dry cloth", () => {
+  const lots = shopSpec("lots"), items = shopSpec("items");
+  assert(shopFieldApplies(lots, "RSN", "ehsBarcode") && shopFieldApplies(lots, "CON", "ehsBarcode"),
+    "resin and consumables are in the campus chemical system");
+  assert(!shopFieldApplies(lots, "FAB", "ehsBarcode"), "fabric is not — a column of dashes teaches people to ignore the section");
+  assert(shopFieldApplies(items, "BIN", "ehsBarcode"), "shelves can wear an RSS sublocation tag");
+  assert(!shopFieldApplies(items, "PNL", "ehsBarcode") && !shopFieldApplies(items, "JIG", "ehsBarcode"),
+    "panels and jigs cannot");
+});
+
+await t("a receiving row deals its tags to its records in order, and says when the deal is short", () => {
+  DB.lots = []; DB.items = [];
+  const row = (over) => ({ rid: "r1", cls: "RSN:resin", name: "IN2", qty: "1", bin: "", vendorLot: "",
+    ehs: "", supplier: "", unitCost: "", expiresOn: "", matKey: "", buyRef: null, ...over });
+  assert(rxEhsTokens(row({ ehs: " ucb-1, ucb-2  ucb-3 " })).join("|") === "UCB-1|UCB-2|UCB-3",
+    "commas and spaces both separate, each token normalised");
+  assert(rxEhsTokens(row({ cls: "FAB", ehs: "UCB-1" })).length === 0, "a class outside the system contributes none");
+  assert(rxEhsWarnings([row({ ehs: "UCB-1", qty: "3" })]).length === 0,
+    "one tag on a multi-record row is the normal scan-one-type-rest-later case, not a warning");
+  const short = rxEhsWarnings([row({ ehs: "UCB-1 UCB-2", qty: "3" })]);
+  assert(short.length === 1 && short[0].includes("will have none"), "a short deal is said out loud: " + short.join(";"));
+  const extra = rxEhsWarnings([row({ ehs: "UCB-1 UCB-2", qty: "1" })]);
+  assert(extra.length === 1 && extra[0].includes("dropped"), "extra tags do not silently vanish");
+  const twice = rxEhsWarnings([row({ ehs: "UCB-1" }), row({ rid: "r2", name: "AT30", ehs: "UCB-1" })]);
+  assert(twice.length === 1 && twice[0].includes("two lines"), "the same tag on two lines is called out");
+  DB.lots = [{ id: "RSN-SN6-050", cls: "RSN", name: "old jug", ehsBarcode: "UCB-9" }];
+  const worn = rxEhsWarnings([row({ ehs: "UCB-9" })]);
+  assert(worn.length === 1 && worn[0].includes("already on"), "a tag an existing record wears is called out");
+  DB.lots = [];
+});
+
 console.log("restock rules (the reorder threshold lives on the material, not the jug):");
 
 await t("the seed is CS-011 §5, and every rule carries a threshold and a reason", () => {

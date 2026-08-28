@@ -100,6 +100,10 @@ const SHOP = {
       ["site", "Site", "select", SITES],
       ["locKind", "Type", "select", ["", "shelf", "rack", "cabinet", "bin", "box", "fridge"]],
       ["flam", "Rated for flammables", "select", ["", "Yes"]],
+      /* BIN-only: the RSS sublocation tag, where EH&S has stuck one on the
+         shelf or cabinet itself. Scanning it targets this bin, so one tag
+         works in both their app and ours. */
+      ["ehsBarcode", "EH&S barcode", "ehs"],
       ["walkedAt", "Contents last confirmed", "date"],
       ["walkedBy", "Confirmed by", "text"],
       ["stack", "Layup stack", "text"],           // PNL: the PP-09 answer
@@ -146,6 +150,11 @@ const SHOP = {
       ["role", "Role", "select", ["", "resin", "hardener"]],
       ["ratio", "Mix ratio", "text"],
       ["vendorLot", "Vendor lot number", "text"],
+      /* The UC EH&S tag on the container (RSS Chemicals). Chemicals HAVE to
+         wear the university's barcode, and one sticker per carton means that
+         barcode is also how our app identifies it — see ehsResolve in core.js.
+         RSN and CON only: dry fabric is not in the campus chemical system. */
+      ["ehsBarcode", "EH&S barcode", "ehs"],
       ["supplier", "Supplier", "text"],
       ["receivedOn", "Received", "date"],
       ["openedOn", "Opened", "date"],
@@ -291,6 +300,18 @@ function updShop(tab, key, val) {
       const d = canonDensity(s);
       if (d == null) { toast("Board density is a plain number in lb/ft³ — 30, 45, 60.", "error"); render(); return; }
       val = String(d);
+    }
+  }
+  /* "ehs" — a UC EH&S tag code. Stored in the one normal form ehsNorm defines
+     so lookup never has to guess, and refused outright if another record
+     already wears it: an EH&S tag identifies ONE physical container, and two
+     records claiming it means a scan would open the wrong jug forever after. */
+  if (fType === "ehs") {
+    val = ehsNorm(val);
+    const dupe = val ? ehsConflict(val, o.id) : null;
+    if (dupe) {
+      toast(`${val} is already on ${dupe.o.name || dupe.id} (${dupe.id}) — one tag, one container.`, "error");
+      render(); return;
     }
   }
   o[key] = val;
@@ -662,15 +683,15 @@ function shopHay(spec, o) {
 const SHOP_FIELDS_BY_CLASS = {
   PNL: ["name", "stage", "location", "stack", "session", "laidOn", "thicknessMm", "coupons", "wo", "fabricLots", "resinLot", "hardenerLot", "lotSource"],
   JIG: ["name", "stage", "location", "unitCost", "wo"],
-  BIN: ["name", "stage", "site", "locKind", "flam", "walkedAt", "walkedBy"],
+  BIN: ["name", "stage", "site", "locKind", "flam", "ehsBarcode", "walkedAt", "walkedBy"],
   /* FAB deliberately has no expiresOn and no hazard: dry cloth does not expire
      and is not a solvent, and a column of dashes teaches people the whole
      section is decorative. Add them the day prepreg arrives, not before.
      CON gains expiresOn because MEKP and adhesives genuinely do expire — and
      MEKP is the material PP-02 names by name. */
   FAB: ["name", "matKey", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "location", "parentId", "qty", "emptiedOn", "unitCost", "costUnit", "lowFlag"],
-  RSN: ["name", "matKey", "stage", "role", "ratio", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
-  CON: ["name", "matKey", "stage", "vendorLot", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "count", "countedAt", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
+  RSN: ["name", "matKey", "stage", "role", "ratio", "vendorLot", "ehsBarcode", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
+  CON: ["name", "matKey", "stage", "vendorLot", "ehsBarcode", "supplier", "receivedOn", "openedOn", "expiresOn", "expirySource", "location", "qty", "count", "countedAt", "emptiedOn", "unitCost", "costUnit", "hazard", "lowFlag"],
 };
 function shopFieldApplies(spec, cls, key) {
   const allowed = SHOP_FIELDS_BY_CLASS[cls];

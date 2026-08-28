@@ -20,6 +20,21 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**EH&S (RSS Chemicals) barcode integration is IN PROGRESS.** The plan is at
+`~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's Mac; four
+phases, each pushed and deployed on its own. Phase 1 (landed): `ehsBarcode` on
+RSN/CON lots and BIN items, `ehsNorm`/`ehsResolve`/`ehsConflict` in core.js,
+an EH&S tag column on the receiving desk that deals space-separated codes to
+fanned-out records, one-tag-one-container enforced at the editor and warned at
+the receiving confirm. Phase 2: scanner accepts EH&S codes (formats widened,
+`idFromScan` refactor, unknown-code → "log this container"). Phase 3: vendored
+zxing-wasm fallback so iPhones can camera-scan (Simon approved breaking
+scan.js's no-library stance). Phase 4: RSS export CSV import + reconciliation
+export — **blocked on Simon**: a photo of a real tag, and one RSS inventory
+export file. No rules deploy needed anywhere (lots/items have no field
+whitelist). Field type is `"ehs"` in the SHOP schema; normalisation happens in
+updShop and rxEhsTokens, so any new writer of ehsBarcode must call ehsNorm.
+
 **v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
 and verified by fetching `core.js` off the host. v3.0.0 went out an hour
 earlier the same day — Major by CHANGELOG's own rubric, since Season editing

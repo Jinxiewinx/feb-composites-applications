@@ -764,6 +764,16 @@ consumable. A paste from an order email becomes rows you then correct by typing
 — a prefill, never a mode. "Arrived" on an Incoming line seeds the *whole*
 order.
 
+Resin, hardener and consumable rows also take an **EH&S tag** — the UC barcode
+sticker that campus EH&S puts on every chemical container for the RSS Chemicals
+inventory. Chemicals have to wear the university's sticker, and one sticker per
+carton means it doubles as the container's identity in this app: the code is
+stored on the lot record, one tag per container, refused if another record
+already wears it. A row fanning out to several jugs takes several codes,
+space-separated, dealt to the records in order; the confirm warns when the
+deal is short. Shelves can carry their RSS sublocation tag the same way, on
+the BIN record.
+
 After a submit you stay in the sheet with the caret in a fresh line, and the
 labels are queued on the undo bar rather than auto-printed. Undo deletes what it
 created and puts the lines back on the sheet.
