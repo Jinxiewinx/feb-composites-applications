@@ -40,7 +40,14 @@ function loadManifest() {
 function openDocument(src) {
   openDoc = (DOCS_MANIFEST || []).find(d => d.src === src) || null;
   if (openDoc && openDoc.kind === "md" && !MD_CACHE[openDoc.src]) {
-    fetch(openDoc.src).then(r => r.text()).then(t => { MD_CACHE[openDoc.src] = mdToHtml(t); render(); }).catch(() => { MD_CACHE[openDoc.src] = "<p class='muted'>Could not load.</p>"; render(); });
+    fetch(openDoc.src).then(r => r.text()).then(t => {
+      /* Image paths in the markdown are relative to the markdown file
+         (figures/x.png), but the rendered HTML resolves against the page.
+         Prefix them with the doc's own directory before rendering. */
+      const base = openDoc.src.replace(/[^/]*$/, "");
+      t = t.replace(/(!\[[^\]]*\]\()(?!(?:https?:)?\/)/g, `$1${base}`);
+      MD_CACHE[openDoc.src] = mdToHtml(t); render();
+    }).catch(() => { MD_CACHE[openDoc.src] = "<p class='muted'>Could not load.</p>"; render(); });
   }
   render();
 }
@@ -232,6 +239,14 @@ function renderDocViewer() {
 /* ---------- minimal, safe markdown → HTML (for our CS docs) ---------- */
 function mdInline(s) {
   s = esc(s)
+    /* Images before links, or the link rule eats the [alt](src) half and
+       leaves a stray "!". Relative paths only get through if they are plain
+       file paths (no scheme, no leading slash): the CS figures are
+       docs/standards/figures/*.png after the base-path rewrite below. */
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, u) =>
+      /^(https?:\/\/|[\w][\w./ -]*$)/.test(u.trim())
+        ? `<figure class="mdfig"><img src="${u.trim()}" alt="${alt}">${alt ? `<figcaption>${alt}</figcaption>` : ""}</figure>`
+        : alt)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")

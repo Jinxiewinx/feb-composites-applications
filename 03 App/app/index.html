@@ -1310,6 +1310,11 @@
     border: 1px solid var(--line); border-radius: var(--r-md); background: var(--canvas);
   }
   .prose a > img { margin: 0; }
+  /* Figures in the CS standards markdown (documents.js mdToHtml). The browser
+     default figure margin indents 40px each side, which reads as a mistake
+     next to full-width tables. */
+  .prose figure.mdfig { margin: .85em 0; }
+  .prose figure.mdfig figcaption { font-size: 12.5px; color: var(--muted); margin-top: .35em; }
   /* A user-authored table carries no data-label, so the app's responsive
      card-collapse is unavailable to it, and reflowing a layup schedule into
      cards would destroy the column relationships anyway. It scrolls instead. */

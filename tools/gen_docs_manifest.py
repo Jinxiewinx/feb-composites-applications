@@ -77,6 +77,9 @@ def md_to_pdf(md_path, pdf_path):
             subprocess.run(
                 ["pandoc", str(md_path), "-o", str(pdf_path),
                  f"--pdf-engine={engine}", "-V", "geometry:margin=1in",
+                 # figures are named relative to the markdown (figures/*.png);
+                 # pandoc resolves them against the CWD unless told otherwise
+                 "--resource-path", str(md_path.parent),
                  "-V", "colorlinks=true"],
                 check=True, capture_output=True, timeout=120)
             if pdf_path.exists() and pdf_path.stat().st_size > 0:
@@ -100,6 +103,14 @@ for pdf in sorted(ds_dir.glob("*.pdf")):
 cs_src = RES / "02 CS Standards" / "src"
 cs_docx_dir = RES / "02 CS Standards"
 n_pdf = 0
+# The figures the standards embed ride along, so the app's markdown fallback
+# can resolve the same relative paths the source markdown uses.
+fig_src = cs_src / "figures"
+if fig_src.exists():
+    fig_dst = DOCS / "standards" / "figures"
+    fig_dst.mkdir(parents=True, exist_ok=True)
+    for png in sorted(fig_src.glob("*.png")):
+        shutil.copy2(png, fig_dst / png.name)
 for md in sorted(cs_src.glob("CS-*.md")):
     shutil.copy2(md, DOCS / "standards" / md.name)
     entry = {"category": "Standards", "title": title_from_md(md), "kind": "md",

@@ -104,6 +104,28 @@ def _add_table(doc, rows):
 
 
 PHOTO_RE = re.compile(r"\[PHOTO:([^\]]+)\]")
+IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _add_figure(doc, src_dir, caption, rel):
+    """A markdown image on its own line. The path is relative to the source
+    markdown (figures/*.png, rendered by tools/render_figures.mjs). A missing
+    file is a build error, not a silent skip — a standard citing Figure 1
+    with no Figure 1 in it is worse than no docx."""
+    img = (src_dir / rel).resolve()
+    if not img.exists():
+        raise SystemExit(f"figure not found: {rel} (looked at {img})")
+    par = doc.add_paragraph()
+    par.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    par.add_run().add_picture(str(img), width=Inches(6.2))
+    if caption.strip():
+        cap = doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = cap.add_run(caption.strip())
+        r.italic = True
+        r.font.size = Pt(9)
+        r.font.color.rgb = RGBColor(0x50, 0x50, 0x50)
+    doc.add_paragraph()
 
 
 def _add_photo_placeholder(doc, caption):
@@ -151,6 +173,11 @@ def build(src: Path, out: Path):
         pm = PHOTO_RE.fullmatch(stripped)
         if pm:
             _add_photo_placeholder(doc, pm.group(1))
+            i += 1
+            continue
+        im = IMG_RE.fullmatch(stripped)
+        if im:
+            _add_figure(doc, src.parent, im.group(1), im.group(2))
             i += 1
             continue
         if stripped.startswith(">"):
