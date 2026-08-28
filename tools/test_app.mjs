@@ -4918,6 +4918,43 @@ await t("a receiving row deals its tags to its records in order, and says when t
   DB.lots = [];
 });
 
+console.log("the scan resolution chain (FEB grammar first, then the tag registry):");
+
+await t("a scan resolves FEB codes as before, and an EH&S tag to the record wearing it", () => {
+  DB.lots = [{ id: "RSN-SN6-050", cls: "RSN", name: "IN2 jug", ehsBarcode: "UCB-111222" }];
+  DB.items = [{ id: "BIN-SN6-009", cls: "BIN", name: "Flam shelf", ehsBarcode: "UCB-333444" }];
+  assert(scanResolve("HTTPS://FEB-COMPOSITES.WEB.APP/Q/MOLD-SN6-004") === "MOLD-SN6-004", "FEB URLs are untouched");
+  assert(scanResolve("RSN-SN6-050") === "RSN-SN6-050", "FEB ids are untouched");
+  assert(scanResolve("UCB-111222") === "RSN-SN6-050", "a container tag resolves to its lot");
+  assert(scanResolve("ucb 333 444") === "BIN-SN6-009", "a shelf tag resolves to its bin, however it was retyped");
+  assert(scanResolve("UCB-999999") === "", "an unknown tag resolves to nothing — the onUnknown path owns it");
+  DB.lots = []; DB.items = [];
+});
+
+await t("what reads as a tag and what reads as noise", () => {
+  assert(scanEhsCode("UCB-123456") === "UCB-123456", "a bare serial is a tag");
+  assert(scanEhsCode("https://app.riskandsafety.com/inventory/UCB-123456?x=1") === "UCB-123456",
+    "a URL-wrapping tag is peeled to its last path segment");
+  assert(scanEhsCode("MOLD-SN6-004") === "", "an FEB-shaped code is a failed FEB lookup, not a UC serial");
+  assert(scanEhsCode("hello") === "", "a word is a word — no digits, no tag");
+  assert(scanEhsCode("A1") === "", "too short to be anyone's barcode");
+});
+
+await t("the manual box routes an unknown tag to onUnknown, one-shot only", () => {
+  DB.lots = []; DB.items = [];
+  const got = { unknown: [], codes: [] };
+  SCAN.sticky = false;
+  SCAN.accept = () => true;
+  SCAN.onCode = (id) => got.codes.push(id);
+  SCAN.onUnknown = (c) => got.unknown.push(c);
+  const origGet = document.getElementById;
+  document.getElementById = (id) => id === "scan-manual" ? { value: "UCB-777888" } : origGet.call(document, id);
+  try { scanManual(); } finally { document.getElementById = origGet; }
+  assert(got.unknown.join(",") === "UCB-777888", "the unknown tag reached onUnknown normalised");
+  assert(got.codes.length === 0, "and never leaked into onCode");
+  SCAN.onUnknown = null;
+});
+
 console.log("restock rules (the reorder threshold lives on the material, not the jug):");
 
 await t("the seed is CS-011 §5, and every rule carries a threshold and a reason", () => {

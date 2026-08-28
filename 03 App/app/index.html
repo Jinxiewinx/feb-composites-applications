@@ -2538,14 +2538,19 @@
     .stat-row { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   }
 
-  /* The receiving grid stacks to cards below 1200, not 900. Measured with the
+  /* The receiving grid stacks to cards below 1320, not 900. Measured with the
      sidebar open: the grid's fixed columns plus a usable material-name cell
      need about 1000px of card, which the layout only has above ~1120. Between
      900 and 1200 the old behaviour was the worst of both — the name squeezed
      toward zero, then the table shoved its last column through the card edge.
      The exact band the width sweep did not cover, which is its own lesson:
-     1440 and 900 both passing said nothing about 1000. */
-  @media (max-width: 1200px) {
+     1440 and 900 both passing said nothing about 1000.
+     Re-measured when the EH&S tag column landed: at 1201 the name cell had
+     exactly its 150px minimum BEFORE the new column, so an eighth column
+     pushed the honest table minimum to ~1300. Do not claw this back by
+     shaving the fixed columns — they were each measured against their own
+     content, and 110px cannot be scraped out of six of them. */
+  @media (max-width: 1320px) {
     /* table.sub scrolls sideways from here down, which is right for a BOM you
        read and wrong for a grid you type into: a cell you cannot see is a cell
        you cannot fill. One card per line instead, labelled from the data-label

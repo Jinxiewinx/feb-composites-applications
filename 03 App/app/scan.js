@@ -15,12 +15,22 @@
  * at a shelf, which is the version people will actually do with resin on their
  * hands.
  *
- * NO SCANNING LIBRARY IS VENDORED, deliberately. Chrome and Android expose
- * BarcodeDetector natively. Safari does not, and jsQR or zxing would be 200KB+
- * to close that gap for a browser whose own camera app already reads the code
- * perfectly well and lands on q.html. So: feature-detect, and where it is
- * missing fall back to typing the code, which is why the ID is printed on the
- * label in large type in the first place.
+ * TWO KINDS OF CODE. FEB's own QR labels carry /Q/<ID> and route by prefix.
+ * Chemical containers carry the UC EH&S tag instead (RSS Chemicals — campus
+ * mandate, and the team will not double-sticker a carton), which is an opaque
+ * serial with no prefix to route on. So every scan resolves through a chain:
+ * FEB grammar first, then ehsResolve (core.js) mapping the tag to the lot or
+ * BIN wearing it. Callers keep receiving FEB ids either way — accept() and
+ * onCode() never see a raw tag. A tag NO record wears goes to opts.onUnknown
+ * when the caller provides it (scanToOpen offers to log the container), and
+ * to a state-line rejection when it does not.
+ *
+ * ON THE MISSING LIBRARY: Chrome and Android expose BarcodeDetector natively;
+ * Safari does not. The old stance ("the phone's own camera app reads the QR
+ * and lands on q.html, so vendor nothing") fails for EH&S tags — their codes
+ * open nothing of ours, and some are 1-D barcodes a camera app won't treat as
+ * a link. A lazy-loaded WASM fallback is the planned fix; until it lands,
+ * browsers without BarcodeDetector fall back to typing the code.
  */
 
 function scanSupported() {
@@ -32,9 +42,10 @@ function scanSupported() {
 let SCAN = { stream: null, raf: 0, onCode: null, running: false,
              sticky: false, count: 0, lastId: "", lastAt: 0 };
 
-/* opts: { title, hint, accept(id) -> bool, onCode(id), sticky } */
+/* opts: { title, hint, accept(id) -> bool, onCode(id), sticky, onUnknown(code) } */
 async function openScan(opts) {
   SCAN.onCode = opts.onCode;
+  SCAN.onUnknown = opts.onUnknown || null;
   SCAN.accept = opts.accept || (() => true);
   /* sticky: keep the camera running and take code after code.
      Every original caller was one-shot — scan a thing, open it — so accepting
@@ -79,7 +90,11 @@ async function openScan(opts) {
     await v.play();
     setScanState("Looking for a code…");
     SCAN.running = true;
-    tickScan(new window.BarcodeDetector({ formats: ["qr_code"] }), v);
+    /* qr_code is FEB's own labels. The rest are for UC EH&S tags: newer RSS
+       stickers are QR, older ones are linear (Code 128/39 family), and the
+       exact mix on RFS's shelves is whatever Triumvirate happened to apply.
+       An unsupported format in this list is ignored, not an error. */
+    tickScan(new window.BarcodeDetector({ formats: ["qr_code", "code_128", "code_39", "code_93", "data_matrix"] }), v);
   } catch (e) {
     setScanState("Couldn't open the camera. Type the code instead.");
   }
@@ -92,7 +107,7 @@ async function tickScan(det, video) {
   try {
     const hits = await det.detect(video);
     for (const h of hits) {
-      const id = idFromScan(h.rawValue);
+      const id = scanResolve(h.rawValue);
       /* The detector re-reads the same code on every frame while the label is
          still in view, which does not matter when accepting closes the camera
          and matters enormously when it does not: one label would fire sixty
@@ -100,10 +115,42 @@ async function tickScan(det, video) {
          been out of frame for a moment. */
       if (id && SCAN.sticky && id === SCAN.lastId && Date.now() - SCAN.lastAt < 2500) continue;
       if (id && SCAN.accept(id)) { acceptScan(id); if (!SCAN.sticky) return; continue; }
-      if (id) setScanState(`${id} isn't the right kind of code for this.`);
+      if (id) { setScanState(`${id} isn't the right kind of code for this.`); continue; }
+      const code = scanEhsCode(h.rawValue);
+      if (!code) continue;
+      /* A readable code that no record wears. One-shot callers who said they
+         can do something with that (scanToOpen offers the receiving desk) get
+         it; sticky flows just say so and keep the camera up — a pile of moves
+         should not be derailed into an enrolment dialog mid-pile. */
+      if (SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+      setScanState(`${code} isn't on any record yet — log it at the receiving desk first.`);
     }
   } catch { /* a dropped frame is not an error worth reporting */ }
   SCAN.raf = requestAnimationFrame(() => tickScan(det, video));
+}
+
+/* The resolution chain every scan and every retype goes through: FEB's own
+   grammar first, then the EH&S tag registry. Returns an FEB id or "". */
+function scanResolve(raw) {
+  const id = idFromScan(raw);
+  if (id) return id;
+  const hit = typeof ehsResolve === "function" ? ehsResolve(scanEhsCode(raw)) : null;
+  return hit ? hit.id : "";
+}
+
+/* What an EH&S tag reads as. The serial grammar is RSS's business, not ours,
+   so this only peels a URL wrapper (in case a newer QR tag encodes a link the
+   way ours do) and hands the rest to ehsNorm. An FEB-shaped code is refused:
+   FAB-SN6-001 typed here is a failed FEB lookup, not a plausible UC serial. */
+function scanEhsCode(raw) {
+  let v = String(raw || "").trim();
+  const m = v.match(/^[A-Za-z]+:\/\/[^/]+\/(.*)$/);
+  if (m) v = m[1].split(/[?#]/)[0].split("/").filter(Boolean).pop() || "";
+  const code = typeof ehsNorm === "function" ? ehsNorm(v) : "";
+  if (/^[A-Z]+-SN\d-\d+/.test(code)) return "";
+  /* And a word is a word: "hello" typed into the box should read as not-a-code,
+     not as an unknown tag. Every barcode serial anyone has seen has digits. */
+  return code.length >= 4 && /\d/.test(code) ? code : "";
 }
 
 /* A scanned value is a whole URL (HTTPS://FEB-COMPOSITES.WEB.APP/Q/MOLD-SN6-004)
@@ -136,9 +183,16 @@ function acceptScan(id) {
 
 function scanManual() {
   const el = document.getElementById("scan-manual");
-  const id = idFromScan(el ? el.value : "");
+  const raw = el ? el.value : "";
+  const id = scanResolve(raw);
   if (SCAN.sticky && el) el.value = "";   // ready for the next one
-  if (!id) { toast("That doesn't look like a code from a label.", "error"); return; }
+  if (!id) {
+    const code = scanEhsCode(raw);
+    if (code && SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+    if (code) { toast(`${code} isn't on any record yet — log it at the receiving desk first.`, "error"); return; }
+    toast("That doesn't look like a code from a label.", "error");
+    return;
+  }
   if (!SCAN.accept(id)) { toast(`${id} isn't the right kind of code for this.`, "error"); return; }
   acceptScan(id);
 }
@@ -159,7 +213,7 @@ function closeScan() { stopScan(); closeModal(); }
 function scanToOpen() {
   openScan({
     title: "Scan",
-    hint: "Point the camera at any label to open that record.",
+    hint: "Point the camera at any label — ours, or the UC EH&S tag on a chemical — to open that record.",
     onCode: id => {
       const tab = tabForId(id);
       const coll = tab ? (TABS.find(t => t.id === tab) || {}).coll : null;
@@ -167,6 +221,14 @@ function scanToOpen() {
       if (!recById(coll, id)) { view = { ...view, tab, mode: "list", id: null, q: id }; render(); syncUrl();
         toast(`No record ${id} here — searching for it.`, "error"); return; }
       openRecord(tab, id);
+    },
+    /* An EH&S tag nobody has logged yet. The person holding the container is
+       exactly the person who can enrol it, so offer the receiving desk with
+       the code already in the tag cell rather than a dead end. */
+    onUnknown: code => {
+      if (typeof openReceiving !== "function") { toast(`${code} isn't on any record yet.`, "error"); return; }
+      confirmModal(`No record wears EH&S tag ${code} yet. Log the container at the receiving desk?`,
+        () => openReceiving({ ehs: code }), { title: "New container", ok: "Log it", danger: false });
     },
   });
 }

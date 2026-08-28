@@ -161,6 +161,70 @@ console.log("\ntyping the code when the camera is unavailable");
   await ctx.close();
 }
 
+/* ---------- 3b. the EH&S tag is a second identity ---------- */
+console.log("\nthe UC EH&S tag, typed (chemicals wear the university's sticker, not ours)");
+{
+  const ctx = await browser.newContext({ viewport: { width: 393, height: 850 } });
+  await ctx.addInitScript(() => { try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; } });
+  const { page } = await openApp(ctx, port);
+  await page.evaluate(APPLY_FIXTURES);
+  await page.evaluate(SEED);
+  await page.evaluate(() => {
+    const jug = DB.lots.find(o => o.id === "RSN-SN6-001");
+    jug.ehsBarcode = "UCB-111222";
+    const shelf = DB.items.find(o => o.id === "BIN-SN6-002");
+    shelf.ehsBarcode = "UCB-333444";
+  });
+  await page.waitForTimeout(200);
+
+  // A container tag opens its lot, dash-blind and case-blind.
+  await page.evaluate(() => scanToOpen());
+  await page.fill("#scan-manual", "ucb 111222");
+  await page.evaluate(() => scanManual());
+  await page.waitForTimeout(300);
+  let v = await page.evaluate(() => ({ tab: view.tab, mode: view.mode, id: view.id }));
+  eq(v.id, "RSN-SN6-001", "a typed container tag opens the jug's record");
+
+  // A shelf's RSS sublocation tag works where a BIN- code works.
+  await page.evaluate(() => quickMoveScan("lots", "RSN-SN6-001"));
+  await page.fill("#scan-manual", "UCB333444");
+  await page.evaluate(() => scanManual());
+  await page.waitForTimeout(300);
+  eq(await page.evaluate(() => recById("lots", "RSN-SN6-001").location), "BIN-SN6-002",
+    "a typed shelf tag moves the jug to that shelf");
+
+  // A tag nobody has logged offers the receiving desk, prefilled.
+  await page.evaluate(() => scanToOpen());
+  await page.fill("#scan-manual", "UCB-777888");
+  await page.evaluate(() => scanManual());
+  await page.waitForTimeout(200);
+  const offer = await page.evaluate(() => document.querySelector("#modal .modal").innerText);
+  ok(/UCB-777888/.test(offer) && /receiving desk/i.test(offer), "an unknown tag offers to log the container", offer);
+  await page.evaluate(() => { var cb = window.__confirmCb; window.__confirmCb = null; closeModal(); if (cb) cb(); });
+  await page.waitForTimeout(300);
+  v = await page.evaluate(() => ({ tab: view.tab, invView: view.invView }));
+  eq(v.tab, "inventory", "accepting lands on the Inventory tab");
+  eq(v.invView, "desk", "on the receiving desk");
+  const rowEhs = await page.evaluate(() => RX.rows.map(r => r.ehs).join(","));
+  ok(rowEhs.includes("UCB-777888"), "with the tag already in the row's tag cell", rowEhs);
+
+  // The desk's tag cell exists for chemicals and not for fabric.
+  const cells = await page.evaluate(() => {
+    RX.rows[0].cls = "RSN:resin";
+    render();
+    const chem = !!document.getElementById("rxh-" + RX.rows[0].rid);
+    RX.rows[0].cls = "FAB";
+    render();
+    const fabInput = !!document.getElementById("rxh-" + RX.rows[0].rid);
+    RX.rows[0].cls = "RSN:resin";
+    render();
+    return { chem, fabInput };
+  });
+  eq(cells.chem, true, "a resin row has an EH&S tag cell");
+  eq(cells.fabInput, false, "a fabric row shows — there instead: cloth is not in the campus system");
+  await ctx.close();
+}
+
 /* ---------- 4. move ---------- */
 console.log("\nmoving something to a shelf");
 {

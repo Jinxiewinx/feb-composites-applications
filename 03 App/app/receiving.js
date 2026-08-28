@@ -109,9 +109,23 @@ function openReceiving(opts) {
   if (o.binId) { RX.defBin = o.binId; RX.lockBin = o.binId; }
   if (o.buyId) rxSeedFromOrder(o.buyId, true);
   if (!RX.rows.length) RX.rows.push(rxBlankRow({ bin: RX.defBin, supplier: RX.supplier }));
+  /* Arriving from a scanned-but-unknown EH&S tag (scanToOpen's onUnknown):
+     the code lands in the tag cell of a fresh chemical row, and the person
+     types what the container actually is. Resin is the commonest guess and a
+     wrong one is fixed in a normal cell, per the house prefill rule. */
+  let focusRid = RX.rows[0].rid;
+  if (o.ehs) {
+    const code = typeof ehsNorm === "function" ? ehsNorm(o.ehs) : String(o.ehs);
+    let row = RX.rows.find(r => !String(r.name || "").trim() && !String(r.ehs || "").trim());
+    if (!row) { row = rxBlankRow({ bin: RX.defBin, supplier: RX.supplier }); RX.rows.push(row); }
+    row.cls = "RSN:resin";
+    row.ehs = code;
+    focusRid = row.rid;
+    rxDraftSave();
+  }
   view = { ...view, tab: "inventory", invView: "desk", mode: "list", id: null, edit: false };
   render();
-  rxFocus(RX.rows[0].rid, "name");
+  rxFocus(focusRid, "name");
 }
 
 /* Every open line of a purchase becomes a row, prefilled with what the team
@@ -764,8 +778,9 @@ function rxEhsWarnings(rows) {
       out.push(`${r.name}: ${tags.length} EH&S tags for ${records} records — the last ${records - tags.length} will have none.`);
     }
     for (const t of tags) {
-      if (seen.has(t)) out.push(`EH&S tag ${t} appears on two lines (${seen.get(t)} and ${r.name}) — one tag, one container.`);
-      else seen.set(t, r.name);
+      const k = typeof ehsKey === "function" ? ehsKey(t) : t;
+      if (seen.has(k)) out.push(`EH&S tag ${t} appears on two lines (${seen.get(k)} and ${r.name}) — one tag, one container.`);
+      else seen.set(k, r.name);
       const dupe = typeof ehsConflict === "function" ? ehsConflict(t, null) : null;
       if (dupe) out.push(`EH&S tag ${t} is already on ${dupe.o.name || dupe.id} (${dupe.id}) — one tag, one container.`);
     }

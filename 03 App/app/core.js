@@ -1049,14 +1049,20 @@ function ehsNorm(raw) {
   return String(raw || "").trim().toUpperCase().replace(/[^0-9A-Z-]/g, "");
 }
 
+/* The COMPARISON form drops the dashes ehsNorm keeps: the stored code holds
+   the tag's printed punctuation, but a code retyped off a scuffed sticker
+   loses its dashes first, and "did not match because of a hyphen" is a bug
+   report waiting to be filed. Same courtesy idFromScan documents. */
+function ehsKey(raw) { return ehsNorm(raw).replace(/-/g, ""); }
+
 /* The record wearing this EH&S tag, or null. Lots first (containers are the
    common scan), then BIN locations (RSS sublocation tags). Returns
    {coll, id, o} so a caller can route without a second lookup. */
 function ehsResolve(raw) {
-  const code = ehsNorm(raw);
+  const code = ehsKey(raw);
   if (!code) return null;
   for (const coll of ["lots", "items"]) {
-    const o = (DB[coll] || []).find(r => r.ehsBarcode && ehsNorm(r.ehsBarcode) === code);
+    const o = (DB[coll] || []).find(r => r.ehsBarcode && ehsKey(r.ehsBarcode) === code);
     if (o) return { coll, id: o.id, o };
   }
   return null;

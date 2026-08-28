@@ -671,7 +671,7 @@ function renderInvContents(bin) {
 function invMoveHere(binId) {
   openScan({
     title: "Move things here",
-    hint: "Scan the label on each thing you are putting on this shelf. The camera stays open.",
+    hint: "Scan the label on each thing you are putting on this shelf — ours, or the UC EH&S tag on a chemical. The camera stays open.",
     sticky: true,
     accept: id => /^(MOLD|PNL|JIG|FAB|RSN|CON|BRD|P)-/.test(String(id)),
     onCode: id => {
