@@ -91,6 +91,85 @@ function moldStageMarkClass(m) {
   const cls = shopStageClass(SHOP.molds, m);
   return cls === "Cancelled" ? "st-na" : cls === "Complete" ? "st-done" : cls === "Draft" ? "st-0" : "st-mid";
 }
+/* ---------- moving a stage ----------
+   The detail pane's stage control, in the Parts tab's stepper idiom: the whole
+   enum laid out as tappable steps, current filled, the rest outlined. It used
+   to be a <select> behind Edit plus a next-stage button — advancing was fine,
+   but "we skipped sealing" or "this actually went back to the board" meant
+   Edit → find the field → open the dropdown → pick. One control, always live,
+   and the display can't drift from the editor because they are the same thing.
+
+   "Retired" renders like the parts stepper's N/A step (dashed, off the track):
+   it is how a mold leaves the progression, not a step along it, which is also
+   why moldStagePct measures over MOLD_STAGE.length - 2 above. */
+function moldStageRow(m) {
+  const cur = MOLD_STAGE.includes(m.stage) ? m.stage : MOLD_STAGE[0];
+  const track = MOLD_STAGE.slice(0, -1);              // Retired is off the track
+  const at = track.indexOf(cur);
+  const step = v => {
+    const isCur = v === cur;
+    const retired = v === "Retired";
+    const i = track.indexOf(v);
+    const state = retired ? "st-na" : i === 0 ? "st-0" : i >= track.length - 1 ? "st-done" : "st-mid";
+    const past = !isCur && !retired && at >= 0 && i < at;
+    const cls = ["pstep", isCur ? "cur " + state : "", past ? "past" : "", retired ? "na" : ""].filter(Boolean).join(" ");
+    return `<button type="button" class="${cls}"${isCur ? ' aria-current="step"' : ""}
+      title="${isCur ? "Stage is " + esc(v) : "Set stage to " + esc(v)}"
+      onclick="setMoldStage('${esc(m.id)}','${esc(v)}',event)">${esc(v)}</button>`;
+  };
+  return `<div class="pstage" style="margin-top:8px">
+    <div class="ps-label">Stage</div>
+    <div class="ps-steps" role="group" aria-label="Mold stage">${MOLD_STAGE.map(step).join("")}</div>
+  </div>`;
+}
+/* Same grading as setPartStage, because a click here is a write everyone sees:
+   forward by one applies at once (undo bar via SHOP_UNDO, same as
+   quickAdvance — including the offcut offer on "Board glued"); skipping ahead
+   asks, naming the steps it would mark done; moving back asks (it erases
+   recorded work); Retired asks (it takes the mold off the rail). */
+function setMoldStage(id, val, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const m = moldRecById(id);
+  if (!m || !MOLD_STAGE.includes(val)) return null;
+  const cur = MOLD_STAGE.includes(m.stage) ? m.stage : MOLD_STAGE[0];
+  if (cur === val) return null;                       // clicking where you already are does nothing
+  const name = m.name || m.id;
+  const track = MOLD_STAGE.slice(0, -1);
+  const from = track.indexOf(cur);                    // -1 when coming back from Retired
+  const to = track.indexOf(val);
+  const apply = () => applyMoldStage(m, val);
+  if (val === "Retired") {
+    confirmModal(`Retire ${name}? It comes off the rail for everyone (still findable under the Retired filter).`,
+      apply, { ok: "Retire" });
+    return "confirm-retire";
+  }
+  if (from >= 0 && to < from) {
+    confirmModal(`Move ${name} back from “${cur}” to “${val}”? Everyone on the team sees this.`,
+      apply, { ok: "Move back", danger: false });
+    return "confirm-back";
+  }
+  if (from >= 0 && to - from > 1) {
+    const skipped = track.slice(from + 1, to).map(s => `“${s}”`);
+    confirmModal(`Move ${name} straight to “${val}”? That marks ${skipped.join(" and ")} done without anyone recording ${skipped.length === 1 ? "it" : "them"}.`,
+      apply, { ok: "Skip ahead", danger: false });
+    return "confirm-jump";
+  }
+  if (from < 0) {
+    confirmModal(`Bring ${name} back from Retired, at “${val}”?`, apply, { ok: "Un-retire" });
+    return "confirm-unretire";
+  }
+  apply();
+  return "applied";
+}
+function applyMoldStage(m, val) {
+  const from = MOLD_STAGE.includes(m.stage) ? m.stage : MOLD_STAGE[0];
+  m.stage = val;
+  save("molds", m, "stage");
+  SHOP_UNDO = { coll: "molds", id: m.id, from, to: val, name: m.name || m.id, prev: {} };
+  toast(`${m.name || m.id} → ${val}`);
+  render();
+}
+
 function moldsRailRows() {
   const q = (view.q || "").toLowerCase();
   const has = (o, extra) => !q || (JSON.stringify(o) + " " + (extra || "")).toLowerCase().includes(q);

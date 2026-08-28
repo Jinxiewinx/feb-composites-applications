@@ -411,8 +411,19 @@ Molds is a Parts-style split: a persistent rail on the left, the selected record
 on the right. The rail groups every mold by the stage it is at, in process
 order, so it reads as the pipeline it is; a stage nobody is at gets no header.
 Arrow keys or j/k walk the rail, `1` advances the selected mold one named stage
-with the same undo bar as the button, `/` searches, esc goes back. On a phone it
-collapses to list-then-detail, exactly like Parts.
+with the same undo bar as the stepper, `/` searches, esc goes back. On a phone
+it collapses to list-then-detail, exactly like Parts.
+
+The mold's stage is set on a **stepper**: the whole enum laid out as tappable
+steps at the top of the detail card, current filled, the rest outlined — the
+Parts tab's idiom, so the display and the editor are the same thing and can't
+drift. It replaced a `<select>` behind Edit plus a next-stage button, which
+made "we skipped sealing" or "that actually went back to the board" a
+four-interaction trip. The writes are graded exactly as on Parts: one step
+forward applies at once with the undo bar, skipping ahead asks and names the
+steps it would mark done, moving back asks (it erases recorded work), and
+Retired — rendered dashed and off the track, like the parts stepper's N/A —
+asks before taking the mold off the rail.
 
 A **mold** used to exist only as free text inside one work order, so two work
 orders using the same mold held two copies of the truth and its location was
@@ -911,11 +922,13 @@ reads the code perfectly well and lands on the nameplate anyway. A code resolves
 whether it arrives as the full URL, the bare code, lowercase, or with whitespace
 round it, because somebody will retype it off a scuffed label.
 
-Every mold, item and lot detail page has **Move** and a stage button that names
-its destination ("Sealed", not "Advance"), both outside edit mode. Move offers
-the storage records and can take the shelf by scan, so the sequence is: scan the
-mold, tap Move, scan the shelf. That makes location a controlled value, which is
-what CS-011 §7.3 says it needs to be. Advancing leaves an undo bar.
+Every mold, item and lot detail page has **Move** outside edit mode; item and
+lot pages also carry a stage button that names its destination ("Open", not
+"Advance"), while a mold sets stage on the stepper described under Molds. Move
+offers the storage records and can take the shelf by scan, so the sequence is:
+scan the mold, tap Move, scan the shelf. That makes location a controlled
+value, which is what CS-011 §7.3 says it needs to be. Advancing leaves an undo
+bar.
 
 ## Which lots went in
 

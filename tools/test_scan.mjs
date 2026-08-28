@@ -202,12 +202,18 @@ console.log("\nadvancing a stage");
   const { ctx, page } = await boot(393);
   await page.evaluate(() => openRecord("molds", "MOLD-SN6-001"));
   await page.waitForTimeout(200);
-  // The button names the destination rather than saying "Advance", so the tap
-  // is a decision you can see before making it.
-  const label = await page.evaluate(() => document.querySelector('button[onclick*="quickAdvance"]').textContent.trim());
-  eq(label, "Sealed", "the button names the next stage");
+  // The stage control is the whole enum laid out as tappable steps — the Parts
+  // tab's stepper idiom — so any stage is one tap, not Edit → dropdown → pick.
+  const steps = await page.evaluate(() => [...document.querySelectorAll(".pstage .pstep")].map(b => b.textContent.trim()));
+  eq(steps.join("|"), "Designed|Board glued|Machined|Sealed|Ready for layup|Retired",
+    "every stage is a tappable step, in order");
+  eq(await page.evaluate(() => document.querySelector(".pstage .pstep.cur").textContent.trim()),
+    "Machined", "the current stage is the filled step");
+  ok(await page.evaluate(() => !document.querySelector('button[onclick*="quickAdvance"]')),
+    "no separate advance button rides alongside the stepper");
 
-  await page.evaluate(() => quickAdvance("molds", "MOLD-SN6-001"));
+  // One step forward applies at once; skips, moves back and Retire ask first.
+  await page.evaluate(() => setMoldStage("MOLD-SN6-001", "Sealed"));
   await page.waitForTimeout(200);
   eq(await page.evaluate(() => recById("molds", "MOLD-SN6-001").stage), "Sealed", "the stage moves");
   ok(await page.evaluate(() => !!document.querySelector(".undobar")),
@@ -218,11 +224,25 @@ console.log("\nadvancing a stage");
   eq(await page.evaluate(() => recById("molds", "MOLD-SN6-001").stage), "Machined", "undo puts it back");
   ok(await page.evaluate(() => !document.querySelector(".undobar")), "and the bar goes away");
 
-  // The last stage has nowhere to go, and the button must not offer one.
+  eq(await page.evaluate(() => setMoldStage("MOLD-SN6-001", "Ready for layup")), "confirm-jump",
+    "skipping a step asks, naming what it would skip");
+  eq(await page.evaluate(() => setMoldStage("MOLD-SN6-001", "Board glued")), "confirm-back",
+    "moving back asks — it erases recorded work");
+  eq(await page.evaluate(() => setMoldStage("MOLD-SN6-001", "Retired")), "confirm-retire",
+    "retiring asks — it takes the mold off the rail");
+  await page.evaluate(() => closeModal());
+  eq(await page.evaluate(() => recById("molds", "MOLD-SN6-001").stage), "Machined",
+    "a dismissed confirm writes nothing");
+
+  // A retired mold still shows the whole track, with Retired as the off-track
+  // current step (dashed, like the parts stepper's N/A).
   await page.evaluate(() => openRecord("molds", "MOLD-SN6-002"));
   await page.waitForTimeout(200);
-  ok(await page.evaluate(() => !document.querySelector('button[onclick*="quickAdvance"]')),
-    "a retired mold offers no next stage");
+  eq(await page.evaluate(() => document.querySelector(".pstage .pstep.cur").textContent.trim()),
+    "Retired", "a retired mold shows Retired as current");
+  eq(await page.evaluate(() => setMoldStage("MOLD-SN6-002", "Sealed")), "confirm-unretire",
+    "coming back from Retired asks too");
+  await page.evaluate(() => closeModal());
   await ctx.close();
 }
 

@@ -468,14 +468,22 @@ function renderShopDetail(tab, opts) {
         a field and open a dropdown to say "it moved" or "that's done". */""}
   <div class="toolbar no-print">
     <button class="ib" onclick="quickMove('${esc(spec.coll)}','${esc(o.id)}')">${icon("layers", 15)} Move</button>
-    ${shopNextStage(spec, o) ? `<button class="ib" onclick="quickAdvance('${esc(spec.coll)}','${esc(o.id)}')">${icon("check", 15)} ${esc(shopNextStage(spec, o))}</button>` : ""}
+    ${/* Molds set stage on the stepper in the card below — a second "advance"
+          control for the same field is exactly the drift the stepper removed. */""}
+    ${tab !== "molds" && shopNextStage(spec, o) ? `<button class="ib" onclick="quickAdvance('${esc(spec.coll)}','${esc(o.id)}')">${icon("check", 15)} ${esc(shopNextStage(spec, o))}</button>` : ""}
   </div>
-  ${typeof shopUndoBar === "function" ? shopUndoBar() : ""}
+  ${/* The embedded host (the Molds tab) already renders the undo bar above
+        the split; a second copy here doubled every write's bar. */""}
+  ${!emb && typeof shopUndoBar === "function" ? shopUndoBar() : ""}
   <div class="card" data-lbgroup="${esc(spec.coll)}:${esc(o.id)}">
     <h2>${esc(o.name || "(unnamed " + spec.noun + ")")}</h2>
-    <div class="muted">${esc(o.id)} · <span class="pill ${shopStageClass(spec, o)}">${esc(o.stage || "—")}</span>${
+    <div class="muted">${esc(o.id)}${
+      /* For molds the stepper below IS the stage display; a pill here would be
+         the same fact twice, one of them not tappable. */
+      tab === "molds" ? "" : ` · <span class="pill ${shopStageClass(spec, o)}">${esc(o.stage || "—")}</span>`}${
       spec.classes ? " · " + esc(c.label) : ""}${
       o.updatedAt ? " · saved " + fmtWhen(o.updatedAt) + " by " + esc(o.updatedBy || "?") : ""}</div>
+    ${tab === "molds" && typeof moldStageRow === "function" ? moldStageRow(o) : ""}
     ${/* Where this came from and what it cost, when receiving stamped it.
           buyRef is written by the receive flow, never hand-edited, so it is
           a read-only chip here rather than a schema field. */""}
@@ -531,6 +539,9 @@ function shopFld(spec, tab, o, f, c) {
   // Fields that only make sense for one class stay hidden for the others: a
   // storage bin has no layup stack, and a fabric roll has no mix ratio.
   if (!shopFieldApplies(spec, c.cls, key)) return "";
+  // A mold's stage lives on the stepper at the top of the card; a <select>
+  // for it here would be a second editor for the same field.
+  if (key === "stage" && tab === "molds") return "";
   let v = o[key] ?? "";
   if (Array.isArray(v)) v = v.join(", ");
 

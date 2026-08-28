@@ -332,7 +332,16 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-08-27 (latest) — the splash waits, the blueprint became a read, and the
+**2026-08-28 (latest) — the mold's stage became a stepper.** Simon asked for
+the Parts progress-bubble idiom on molds: the detail card now sets stage on a
+tappable `.pstage` stepper (all six values, Retired dashed and off the track),
+with setPartStage's grading — one step forward instant with the undo bar,
+skips/backs/Retire ask first. The Edit-mode `<select>` and the next-stage
+button are gone for molds only; Materials/Items detail is unchanged, and the
+embedded detail no longer doubles the undo bar. Deployed to hosting,
+unreleased — it can ride in the next version's What's New.
+
+**2026-08-27 — the splash waits, the blueprint became a read, and the
 cut list reached paper.** A floor and a Continue affordance on the boot splash;
 the Season tab's thirteen editable columns became one line per part that opens
 the part; and cut sheets now ride on a mold's drawing set and print as their own
@@ -358,11 +367,3 @@ location moved from the items list to the map, where the shelves are. Empty
 shelves stopped collapsing into a text strip: they are quieter cards now, so
 every location is visible and clickable anywhere, which the strip was not. The
 HOW MANY readout was wrapping to three lines and reads "1 of 12" on one line.
-
-**2026-08-25 (later) — stat-tile states, and a design sync.** Simon asked why
-the warn colour never showed: `.bignum` set its own colour and won on source
-order, so tiles had been passing a state class for a year and staying navy.
-Fixed in both copies of the CSS with the dashboard's existing vocabulary. The
-sync to claude.ai/design then found the remote stale by far more than this
-change and pushed three files. See **Now** for the app-only-classes finding it
-turned up.
