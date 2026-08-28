@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-001 Fig 2: the three identification layers of a mold, and the two
+       keep-out zones. Left: back face (label + engraving). Right: section
+       through the mold showing working surface / flange keep-outs. -->
+  <rect width="880" height="420" fill="#ffffff"/>
+
+  <text x="220" y="34" text-anchor="middle" font-size="14" font-weight="bold" fill="#003262">BACK FACE (identification lives here)</text>
+  <text x="650" y="34" text-anchor="middle" font-size="14" font-weight="bold" fill="#003262">SECTION A–A (keep-out zones)</text>
+
+  <!-- Back face view -->
+  <rect x="60" y="60" width="320" height="240" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <!-- 25mm inboard margin -->
+  <rect x="88" y="85" width="264" height="190" fill="none" stroke="#333333" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="220" y="79" text-anchor="middle" font-size="10.5" fill="#333333">≥25 mm inboard of the outline on every side</text>
+
+  <!-- Engraving -->
+  <text x="220" y="140" text-anchor="middle" font-size="20" font-family="Courier New, monospace" fill="#333333" letter-spacing="2">MOLD-SN6-004</text>
+  <text x="220" y="160" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">engraved at machining: 6 mm caps, 1.0 mm deep (CS-005 §7.5)</text>
+
+  <!-- Printed label -->
+  <rect x="130" y="190" width="180" height="48" rx="4" fill="#f2f2f2" stroke="#333333" stroke-width="1.5"/>
+  <text x="220" y="209" text-anchor="middle" font-size="11" font-family="Courier New, monospace" fill="#111111">MOLD-SN6-004</text>
+  <text x="220" y="226" text-anchor="middle" font-size="9.5" fill="#333333">SEALED 2026-11-02 · USES 09</text>
+  <text x="220" y="258" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">printed label, applied after sealing onto a</text>
+  <text x="220" y="271" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">220-grit scuffed, IPA-wiped patch (CS-004 §7.5)</text>
+
+  <!-- Layer ladder under back face -->
+  <text x="60" y="336" font-size="12" fill="#333333"><tspan font-weight="bold" fill="#003262">1. Glue-up:</tspan> paint-marker name on two adjacent side faces (CS-003 §7.3)</text>
+  <text x="60" y="356" font-size="12" fill="#333333"><tspan font-weight="bold" fill="#003262">2. Machining:</tspan> engraved ID, the record of record; survives strip and re-seal</text>
+  <text x="60" y="376" font-size="12" fill="#333333"><tspan font-weight="bold" fill="#003262">3. Sealing:</tspan> printed label, reprinted at every re-seal with the new count</text>
+
+  <!-- Section view -->
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#333333" stroke-width="1.5"/>
+    </pattern>
+    <marker id="arr2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <!-- Mold body section: flange - cavity - flange -->
+  <path d="M 470 200 L 470 130 L 560 130 Q 590 130 600 160 L 640 220 Q 650 240 660 220 L 700 160 Q 710 130 740 130 L 830 130 L 830 200 Z"
+        fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <text x="650" y="188" text-anchor="middle" font-size="11" fill="#333333">tooling board</text>
+
+  <!-- Working surface keep-out: hatched band along cavity top -->
+  <path d="M 560 130 Q 590 130 600 160 L 640 220 Q 650 240 660 220 L 700 160 Q 710 130 740 130 L 740 118 Q 706 118 694 152 L 656 210 Q 650 222 644 210 L 606 152 Q 594 118 560 118 Z"
+        fill="url(#hatch)" stroke="none"/>
+  <text x="650" y="106" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#333333">working surface: NO LABELS, EVER</text>
+  <text x="650" y="120" text-anchor="middle" font-size="10" fill="#333333">(a 0.08 mm label edge prints through two plies)</text>
+
+  <!-- Flange keep-out bands -->
+  <rect x="470" y="122" width="90" height="8" fill="url(#hatch)"/>
+  <rect x="740" y="122" width="90" height="8" fill="url(#hatch)"/>
+  <line x1="470" y1="240" x2="560" y2="240" stroke="#003262" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr2)"/>
+  <text x="515" y="258" text-anchor="middle" font-size="11" fill="#003262">≥40 mm from flange</text>
+  <text x="515" y="272" text-anchor="middle" font-size="11" fill="#003262">perimeter, either face (§6)</text>
+  <text x="770" y="258" font-size="10.5" fill="#333333">tacky tape is 12.7 mm wide; a label</text>
+  <text x="770" y="272" font-size="10.5" fill="#333333">edge under the seal is a leak channel</text>
+  <text x="770" y="286" font-size="10.5" fill="#333333">invisible at 27 inHg</text>
+
+  <!-- Label OK zone on back -->
+  <line x1="650" y1="240" x2="650" y2="300" stroke="#333333" stroke-width="1" marker-end="url(#arr2)"/>
+  <text x="650" y="318" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#003262">label + engraving zone: back face only</text>
+</svg>

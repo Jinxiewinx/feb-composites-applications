@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-013 Fig 1: how the records point at each other. One WO builds one
+       part on one mold, consuming lots; every physical object has its own
+       ID and label. -->
+  <rect width="880" height="440" fill="#ffffff"/>
+  <defs>
+    <marker id="arr12" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" font-size="14" font-weight="bold" fill="#003262">One job, its records, and who points at whom (§4.1)</text>
+
+  <!-- WO (the job) -->
+  <rect x="330" y="60" width="220" height="84" rx="8" fill="#ffffff" stroke="#003262" stroke-width="3"/>
+  <text x="440" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#003262">WO-SN6-012</text>
+  <text x="440" y="104" text-anchor="middle" font-size="11" fill="#333333">the job: steps, buy-offs, stack</text>
+  <text x="440" y="119" text-anchor="middle" font-size="11" fill="#333333">as laid, photos, quality checks</text>
+  <text x="440" y="136" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">the only ID that names a job</text>
+
+  <!-- Part -->
+  <rect x="70" y="210" width="190" height="76" rx="8" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <text x="165" y="236" text-anchor="middle" font-size="14" font-weight="bold" fill="#111111">P-SN6-007</text>
+  <text x="165" y="254" text-anchor="middle" font-size="11" fill="#333333">the part · labeled CS-001</text>
+  <text x="165" y="270" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">re-laid = NEW ID + supersedes</text>
+
+  <!-- Mold -->
+  <rect x="345" y="210" width="190" height="76" rx="8" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <text x="440" y="236" text-anchor="middle" font-size="14" font-weight="bold" fill="#111111">MOLD-SN6-004</text>
+  <text x="440" y="254" text-anchor="middle" font-size="11" fill="#333333">location · seal record ·</text>
+  <text x="440" y="268" text-anchor="middle" font-size="11" fill="#333333">parts-pulled count</text>
+  <text x="440" y="282" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">remachined = same ID, new rev</text>
+
+  <!-- Lots -->
+  <rect x="620" y="196" width="200" height="104" rx="8" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <text x="720" y="220" text-anchor="middle" font-size="13" font-weight="bold" fill="#111111">material lots</text>
+  <text x="720" y="240" text-anchor="middle" font-size="12" font-family="Courier New, monospace" fill="#333333">FAB-SN6-003</text>
+  <text x="720" y="258" text-anchor="middle" font-size="12" font-family="Courier New, monospace" fill="#333333">RSN-SN6-011</text>
+  <text x="720" y="276" text-anchor="middle" font-size="12" font-family="Courier New, monospace" fill="#333333">CON-SN6-002</text>
+  <text x="720" y="294" text-anchor="middle" font-size="10.5" font-style="italic" fill="#333333">captured at the cure buy-off</text>
+
+  <!-- Panel -> coupons -->
+  <rect x="70" y="340" width="190" height="60" rx="8" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  <text x="165" y="364" text-anchor="middle" font-size="13" font-weight="bold" fill="#111111">PNL-SN6-006</text>
+  <text x="165" y="382" text-anchor="middle" font-size="11" fill="#333333">flat test panel</text>
+  <rect x="345" y="340" width="240" height="60" rx="8" fill="#f2f2f2" stroke="#333333" stroke-width="1.5"/>
+  <text x="465" y="364" text-anchor="middle" font-size="12" font-family="Courier New, monospace" fill="#333333">PNL-SN6-006-C01 … -C05</text>
+  <text x="465" y="382" text-anchor="middle" font-size="10.5" fill="#333333">coupons: suffix, never re-parented</text>
+  <line x1="260" y1="370" x2="341" y2="370" stroke="#333333" stroke-width="1.5" marker-end="url(#arr12)"/>
+  <text x="300" y="362" text-anchor="middle" font-size="10" fill="#333333">cut into</text>
+
+  <!-- Edges from WO -->
+  <line x1="360" y1="144" x2="200" y2="206" stroke="#333333" stroke-width="1.5" marker-end="url(#arr12)"/>
+  <text x="240" y="170" text-anchor="middle" font-size="10.5" fill="#333333">builds</text>
+  <line x1="440" y1="144" x2="440" y2="206" stroke="#333333" stroke-width="1.5" marker-end="url(#arr12)"/>
+  <text x="472" y="176" text-anchor="middle" font-size="10.5" fill="#333333">moldRef</text>
+  <line x1="520" y1="144" x2="680" y2="192" stroke="#333333" stroke-width="1.5" marker-end="url(#arr12)"/>
+  <text x="628" y="160" text-anchor="middle" font-size="10.5" fill="#333333">consumes</text>
+
+  <!-- Rules -->
+  <text x="30" y="426" font-size="11.5" fill="#111111"><tspan font-weight="bold" fill="#003262">Rules:</tspan> an ID names a physical object (WO excepted) · never reused · max 14 characters (QR budget) · dates are fields, never ID segments · R&amp;D is a field, never in the ID</text>
+</svg>

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-010 Fig 1: plan view of the diffuser-recipe conductive path and the
+       probe pattern that proves it. -->
+  <rect width="880" height="420" fill="#ffffff"/>
+  <defs>
+    <pattern id="mesh10" width="9" height="9" patternUnits="userSpaceOnUse">
+      <rect width="9" height="9" fill="#ffffff"/>
+      <path d="M0 4.5 H9 M4.5 0 V9" stroke="#7a7a7a" stroke-width="1"/>
+    </pattern>
+    <marker id="arr11" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+    <marker id="arr11s" markerWidth="10" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M9,0 L0,4 L9,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" font-size="14" font-weight="bold" fill="#003262">Plan view: mesh-in-stack path (the diffuser recipe, §7.2) and the §7.3 probe pattern</text>
+
+  <!-- Part outline -->
+  <rect x="80" y="70" width="520" height="280" rx="10" fill="#ffffff" stroke="#333333" stroke-width="2.5"/>
+  <text x="90" y="366" font-size="11" fill="#333333">part outline (laminate)</text>
+
+  <!-- Mesh sheet A -->
+  <rect x="100" y="90" width="260" height="240" fill="url(#mesh10)" stroke="#333333" stroke-width="1.5"/>
+  <text x="230" y="110" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#333333">mesh sheet A</text>
+  <!-- Mesh sheet B, overlapping A -->
+  <rect x="330" y="90" width="250" height="240" fill="url(#mesh10)" stroke="#333333" stroke-width="1.5"/>
+  <text x="470" y="110" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#333333">mesh sheet B</text>
+  <!-- Overlap zone -->
+  <rect x="330" y="90" width="30" height="240" fill="#333333" opacity="0.25"/>
+  <line x1="330" y1="76" x2="360" y2="76" stroke="#003262" stroke-width="1.2" marker-start="url(#arr11s)" marker-end="url(#arr11)"/>
+  <text x="345" y="64" text-anchor="middle" font-size="11" font-weight="bold" fill="#003262">≥25 mm overlap</text>
+
+  <!-- Mesh tail to grounding point -->
+  <path d="M 580 210 L 640 210" fill="url(#mesh10)" stroke="#333333" stroke-width="1.5"/>
+  <rect x="580" y="196" width="60" height="28" fill="url(#mesh10)" stroke="#333333" stroke-width="1.5"/>
+  <circle cx="668" cy="210" r="16" fill="#ffffff" stroke="#003262" stroke-width="3"/>
+  <circle cx="668" cy="210" r="5" fill="#333333"/>
+  <text x="700" y="200" font-size="12" font-weight="bold" fill="#003262">grounding point</text>
+  <text x="700" y="216" font-size="10.5" fill="#333333">bare, terminable mesh tail,</text>
+  <text x="700" y="230" font-size="10.5" fill="#333333">peel-ply window during infusion,</text>
+  <text x="700" y="244" font-size="10.5" fill="#333333">hardware torqued as it will fly</text>
+
+  <!-- Probe grid -->
+  <g fill="none" stroke="#333333" stroke-width="1.2">
+    <g>
+      <circle cx="140" cy="130" r="5"/><circle cx="240" cy="130" r="5"/><circle cx="340" cy="130" r="5"/><circle cx="440" cy="130" r="5"/><circle cx="540" cy="130" r="5"/>
+      <circle cx="140" cy="230" r="5"/><circle cx="240" cy="230" r="5"/><circle cx="340" cy="230" r="5"/><circle cx="440" cy="230" r="5"/><circle cx="540" cy="230" r="5"/>
+      <circle cx="140" cy="310" r="5"/><circle cx="240" cy="310" r="5"/><circle cx="340" cy="310" r="5"/><circle cx="440" cy="310" r="5"/><circle cx="540" cy="310" r="5"/>
+    </g>
+  </g>
+  <g fill="#333333">
+    <circle cx="80" cy="210" r="4"/><circle cx="600" cy="130" r="4"/><circle cx="340" cy="70" r="4"/><circle cx="340" cy="350" r="4"/>
+  </g>
+  <line x1="140" y1="130" x2="240" y2="130" stroke="#003262" stroke-width="1" marker-start="url(#arr11s)" marker-end="url(#arr11)"/>
+  <text x="190" y="122" text-anchor="middle" font-size="10.5" fill="#003262">100 mm grid</text>
+  <text x="30" y="396" font-size="12" fill="#111111"><tspan font-weight="bold">○ grid points + ● edge midpoints:</tspan> EVERY point ≤ target Ω to the grounding point (default &lt;5 Ω; diffuser validated &lt;1 Ω). One good point is not a pass.</text>
+</svg>

@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-008 Fig 1: datasheet demould time vs the FEB hold, per system.
+       Shows the holds are shift boundaries (24/48 h), not scaled datasheet
+       figures. Grayscale-safe: datasheet bar solid, hold extension hollow. -->
+  <rect width="880" height="400" fill="#ffffff"/>
+  <defs>
+    <marker id="arr9" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="32" font-size="14" font-weight="bold" fill="#003262">Demould: datasheet figure (solid) vs the FEB hold that governs (full bar)</text>
+  <text x="30" y="50" font-size="11" fill="#333333">scale: hours from end of layup/infusion · 0.24 px per minute · holds land on shift boundaries: 12 h = overnight, 24 h = tomorrow, 48 h = after the weekend</text>
+
+  <!-- axis: 14.4 px per hour, x0=200 -->
+  <g font-size="10.5" fill="#333333">
+    <line x1="200" y1="70" x2="200" y2="330" stroke="#bbbbbb" stroke-width="1"/>
+    <line x1="372.8" y1="70" x2="372.8" y2="330" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="4 4"/>
+    <line x1="545.6" y1="70" x2="545.6" y2="330" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="4 4"/>
+    <line x1="718.4" y1="70" x2="718.4" y2="330" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="4 4"/>
+    <line x1="891.2" y1="70" x2="891.2" y2="330" stroke="none"/>
+    <text x="200" y="348" text-anchor="middle">0 h</text>
+    <text x="372.8" y="348" text-anchor="middle">12 h</text>
+    <text x="545.6" y="348" text-anchor="middle">24 h</text>
+    <text x="718.4" y="348" text-anchor="middle">36 h</text>
+  </g>
+
+  <!-- rows: y, label, ds_lo, ds_hi, hold (hours). px = 200 + h*14.4 -->
+  <!-- IN2 SLOW: ds 18-24, hold 48 (clipped, arrow) -->
+  <g>
+    <text x="192" y="94" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">IN2 + AT30 SLOW</text>
+    <rect x="200" y="80" width="660" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="459.2" y="80" width="86.4" height="18" fill="#7a7a7a"/>
+    <text x="502" y="93" text-anchor="middle" font-size="10" fill="#ffffff">18–24 h</text>
+    <line x1="860" y1="89" x2="872" y2="89" stroke="#003262" stroke-width="2" marker-end="url(#arr9)"/>
+    <text x="806" y="93" font-size="11" font-weight="bold" fill="#003262">48 h</text>
+  </g>
+  <!-- IN2 FAST: ds 6-8, hold 24 -->
+  <g>
+    <text x="192" y="136" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">IN2 + AT30 FAST</text>
+    <rect x="200" y="122" width="345.6" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="286.4" y="122" width="28.8" height="18" fill="#7a7a7a"/>
+    <text x="330" y="135" font-size="10" fill="#333333">6–8 h</text>
+    <text x="552" y="135" font-size="11" font-weight="bold" fill="#003262">24 h</text>
+  </g>
+  <!-- West 206: ds 10-15, hold 24 -->
+  <g>
+    <text x="192" y="178" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">West 105 + 206</text>
+    <rect x="200" y="164" width="345.6" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="344" y="164" width="72" height="18" fill="#7a7a7a"/>
+    <text x="380" y="177" text-anchor="middle" font-size="10" fill="#ffffff">10–15 h</text>
+    <text x="552" y="177" font-size="11" font-weight="bold" fill="#003262">24 h</text>
+  </g>
+  <!-- West 205: ds 6-8, hold 24 -->
+  <g>
+    <text x="192" y="220" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">West 105 + 205</text>
+    <rect x="200" y="206" width="345.6" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="286.4" y="206" width="28.8" height="18" fill="#7a7a7a"/>
+    <text x="330" y="219" font-size="10" fill="#333333">6–8 h</text>
+    <text x="552" y="219" font-size="11" font-weight="bold" fill="#003262">24 h</text>
+  </g>
+  <!-- West 209: ds 20-24, hold 36 -->
+  <g>
+    <text x="192" y="262" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">West 105 + 209</text>
+    <rect x="200" y="248" width="518.4" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="488" y="248" width="57.6" height="18" fill="#7a7a7a"/>
+    <text x="516" y="261" text-anchor="middle" font-size="10" fill="#ffffff">20–24 h</text>
+    <text x="724" y="261" font-size="11" font-weight="bold" fill="#003262">36 h</text>
+  </g>
+  <!-- XCR: ds 8.5, hold 12 -->
+  <g>
+    <text x="192" y="304" text-anchor="end" font-size="12" font-weight="bold" fill="#111111">XCR (mold seal)</text>
+    <rect x="200" y="290" width="172.8" height="18" fill="none" stroke="#003262" stroke-width="2"/>
+    <rect x="316" y="290" width="6.4" height="18" fill="#7a7a7a"/>
+    <text x="330" y="303" font-size="10" fill="#333333">8.5 h</text>
+    <text x="379" y="303" font-size="11" font-weight="bold" fill="#003262">12 h</text>
+  </g>
+
+  <text x="30" y="380" font-size="12" fill="#111111"><tspan font-weight="bold" fill="#003262">Both FAST systems still hold 24 h</tspan>: FAST hardener does not buy a same-day demould. The app locks the WO demould step until the hold elapses (§5.1).</text>
+</svg>

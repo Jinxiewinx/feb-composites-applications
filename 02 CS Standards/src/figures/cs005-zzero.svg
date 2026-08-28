@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-005 Fig 1: Z is zeroed once per job from the top of the stock at its
+       highest point — never the bed. Right side shows the wrong way. -->
+  <rect width="880" height="380" fill="#ffffff"/>
+  <defs>
+    <marker id="arr6" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+    <pattern id="spoil" width="14" height="14" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="14" stroke="#bbbbbb" stroke-width="2"/>
+    </pattern>
+  </defs>
+
+  <text x="240" y="36" text-anchor="middle" font-size="15" font-weight="bold" fill="#003262">RIGHT: Z0 at stock top, highest point</text>
+  <text x="672" y="36" text-anchor="middle" font-size="15" font-weight="bold" fill="#333333">WRONG: Z0 at the bed</text>
+
+  <!-- RIGHT panel -->
+  <!-- bed -->
+  <rect x="60" y="290" width="360" height="22" fill="url(#spoil)" stroke="#333333" stroke-width="1.5"/>
+  <text x="240" y="330" text-anchor="middle" font-size="11" fill="#333333">spoilboard / vacuum table (zones under the part open)</text>
+  <!-- stepped glued stack -->
+  <path d="M 120 290 L 120 180 L 230 180 L 230 130 L 330 130 L 330 290 Z" fill="#f2f2f2" stroke="#333333" stroke-width="2"/>
+  <line x1="120" y1="235" x2="330" y2="235" stroke="#333333" stroke-width="0.8" stroke-dasharray="8 5"/>
+  <line x1="230" y1="180" x2="120" y2="180" stroke="none"/>
+  <text x="225" y="265" text-anchor="middle" font-size="11" fill="#333333">glued stack (CS-003 §7.3)</text>
+  <!-- spindle at highest point -->
+  <rect x="266" y="60" width="28" height="44" fill="#d9d9d9" stroke="#333333" stroke-width="1.5"/>
+  <path d="M 274 104 L 286 104 L 280 122 Z" fill="#333333"/>
+  <line x1="280" y1="122" x2="280" y2="130" stroke="#333333" stroke-width="1.5" marker-end="url(#arr6)"/>
+  <text x="280" y="54" text-anchor="middle" font-size="11" fill="#333333">touch off here, once per job</text>
+  <!-- Z0 datum line -->
+  <line x1="90" y1="130" x2="400 " y2="130" stroke="#003262" stroke-width="1.5" stroke-dasharray="10 5"/>
+  <text x="404" y="134" font-size="12" font-weight="bold" fill="#003262">Z = 0</text>
+
+  <!-- WRONG panel -->
+  <rect x="500" y="290" width="344" height="22" fill="url(#spoil)" stroke="#333333" stroke-width="1.5"/>
+  <path d="M 550 290 L 550 180 L 660 180 L 660 130 L 760 130 L 760 290 Z" fill="#f2f2f2" stroke="#333333" stroke-width="2"/>
+  <!-- Z0 at bed -->
+  <line x1="500" y1="290" x2="844" y2="290" stroke="#333333" stroke-width="1.5" stroke-dasharray="10 5"/>
+  <text x="848" y="294" font-size="12" font-weight="bold" fill="#333333">Z = 0</text>
+  <!-- plunge path -->
+  <rect x="586" y="60" width="28" height="44" fill="#d9d9d9" stroke="#333333" stroke-width="1.5"/>
+  <path d="M 594 104 L 606 104 L 600 122 Z" fill="#333333"/>
+  <line x1="600" y1="122" x2="600" y2="230" stroke="#333333" stroke-width="2" marker-end="url(#arr6)"/>
+  <!-- crash burst -->
+  <g stroke="#333333" stroke-width="2">
+    <line x1="600" y1="238" x2="580" y2="218"/><line x1="600" y1="238" x2="620" y2="218"/>
+    <line x1="600" y1="238" x2="576" y2="240"/><line x1="600" y1="238" x2="624" y2="240"/>
+  </g>
+  <text x="672" y="352" text-anchor="middle" font-size="11.5" fill="#333333">any error in assumed stack height plunges the tool into the part;</text>
+  <text x="672" y="366" text-anchor="middle" font-size="11.5" fill="#333333">the Feb 2026 incidents (R4) were exactly this</text>
+
+  <!-- footer rule -->
+  <text x="240" y="352" text-anchor="middle" font-size="11.5" fill="#003262" font-weight="bold">Tool changes need no re-zero: the ATC measures each tool.</text>
+  <text x="240" y="366" text-anchor="middle" font-size="11.5" fill="#333333">Your job is the tool TABLE matching the physical rack (§7.4).</text>
+</svg>

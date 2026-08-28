@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 400" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-002 Fig 1: exploded cross-section of the example ply table in §7.3.
+       Ply order counts FROM THE MOLD SURFACE (P1) OUTWARD. -->
+  <rect width="880" height="400" fill="#ffffff"/>
+  <defs>
+    <pattern id="core" width="10" height="10" patternUnits="userSpaceOnUse">
+      <rect width="10" height="10" fill="#ffffff"/>
+      <circle cx="5" cy="5" r="1.6" fill="#333333"/>
+    </pattern>
+    <pattern id="mesh" width="8" height="8" patternUnits="userSpaceOnUse">
+      <rect width="8" height="8" fill="#ffffff"/>
+      <path d="M0 4 H8 M4 0 V8" stroke="#333333" stroke-width="1"/>
+    </pattern>
+    <pattern id="tw45" width="10" height="10" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#7a7a7a" stroke-width="2"/>
+    </pattern>
+    <pattern id="tw90" width="10" height="10" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#7a7a7a" stroke-width="2"/>
+    </pattern>
+    <marker id="arr3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <!-- Mold at bottom -->
+  <rect x="120" y="330" width="560" height="34" fill="#f2f2f2" stroke="#333333" stroke-width="2"/>
+  <text x="400" y="352" text-anchor="middle" font-size="13" font-weight="bold" fill="#333333">MOLD (sealed + released per CS-004)</text>
+
+  <!-- Plies, exploded, bottom = P1 -->
+  <!-- P1 -->
+  <rect x="140" y="296" width="520" height="16" fill="#e6e6e6" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="309" font-size="12" fill="#333333"><tspan font-weight="bold">P1</tspan>  88 spread-tow · 0/90 · full · sacrificial</text>
+  <!-- P2 -->
+  <rect x="140" y="266" width="520" height="16" fill="url(#tw45)" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="279" font-size="12" fill="#333333"><tspan font-weight="bold">P2</tspan>  195 twill · ±45 · full</text>
+  <!-- P3 mesh, zones only -->
+  <rect x="200" y="236" width="300" height="14" fill="url(#mesh)" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="248" font-size="12" fill="#333333"><tspan font-weight="bold">P3</tspan>  Cu mesh · zones A–B · 25 mm overlap</text>
+  <line x1="500" y1="243" x2="560" y2="243" stroke="#333333" stroke-width="1" marker-end="url(#arr3)"/>
+  <text x="512" y="230" font-size="10" fill="#333333">tail to grounding point (CS-010)</text>
+  <!-- P4 core, zone only, chamfered -->
+  <path d="M 240 186 L 460 186 L 490 216 L 210 216 Z" fill="url(#core)" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="206" font-size="12" fill="#333333"><tspan font-weight="bold">P4</tspan>  Rohacell 31 IG-F 3 mm · core zone · 20° chamfer</text>
+  <!-- P5 -->
+  <rect x="140" y="156" width="520" height="16" fill="url(#tw90)" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="169" font-size="12" fill="#333333"><tspan font-weight="bold">P5</tspan>  195 twill · 0/90 · full</text>
+  <!-- P6 -->
+  <rect x="140" y="126" width="520" height="16" fill="url(#tw45)" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="139" font-size="12" fill="#333333"><tspan font-weight="bold">P6</tspan>  195 twill · ±45 · full</text>
+  <!-- P7 -->
+  <rect x="140" y="96" width="520" height="16" fill="#e6e6e6" stroke="#333333" stroke-width="1.2"/>
+  <text x="672" y="109" font-size="12" fill="#333333"><tspan font-weight="bold">P7</tspan>  88 spread-tow · 0/90 · full (bag side)</text>
+
+  <!-- Count direction arrow -->
+  <line x1="100" y1="322" x2="100" y2="100" stroke="#003262" stroke-width="2" marker-end="url(#arr3)"/>
+  <text x="92" y="210" font-size="12" font-weight="bold" fill="#003262" transform="rotate(-90 92 210)">mold side (P1) → bag side</text>
+
+  <!-- Header note -->
+  <text x="30" y="36" font-size="13" font-weight="bold" fill="#003262">Example stack from the §7.3 ply table: the format, not a recommended stack.</text>
+  <text x="30" y="56" font-size="12" fill="#333333">P1 touches the mold and becomes the show face. Function plies (mesh, core, sacrificial layers) are drawn, and specified, explicitly.</text>
+</svg>

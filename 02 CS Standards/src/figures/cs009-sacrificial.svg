@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 340" font-family="Helvetica, Arial, sans-serif">
+  <!-- CS-009 Fig 1: what sanding is allowed to eat. The sacrificial ply is
+       the budget; structural plies are not. Right panel: the thin-laminate
+       failure that killed the catch cans. -->
+  <rect width="880" height="340" fill="#ffffff"/>
+  <defs>
+    <pattern id="tw9" width="10" height="10" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#7a7a7a" stroke-width="2"/>
+    </pattern>
+    <marker id="arr10" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <text x="230" y="34" text-anchor="middle" font-size="14" font-weight="bold" fill="#003262">Sanding budget: the sacrificial ply</text>
+  <text x="660" y="34" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">The catch-can failure (R2)</text>
+
+  <!-- LEFT: healthy laminate -->
+  <!-- structural plies -->
+  <rect x="80" y="180" width="300" height="22" fill="url(#tw9)" stroke="#333333" stroke-width="1.2"/>
+  <rect x="80" y="158" width="300" height="22" fill="url(#tw9)" stroke="#333333" stroke-width="1.2"/>
+  <rect x="80" y="136" width="300" height="22" fill="url(#tw9)" stroke="#333333" stroke-width="1.2"/>
+  <!-- sacrificial ply, partially sanded -->
+  <path d="M 80 136 L 80 120 L 200 120 Q 260 120 300 128 L 380 134 L 380 136 Z" fill="#e6e6e6" stroke="#333333" stroke-width="1.2"/>
+  <line x1="60" y1="120" x2="60" y2="136" stroke="#003262" stroke-width="1.2" marker-start="url(#arr10)" marker-end="url(#arr10)"/>
+  <text x="80" y="106" font-size="11.5" fill="#003262" font-weight="bold">88 spread-tow sacrificial ply (CS-002 §7.1.3)</text>
+  <text x="390" y="150" font-size="11" fill="#333333">sanding may eat into THIS ply</text>
+  <text x="390" y="164" font-size="11" fill="#333333">and no further: exposed structural</text>
+  <text x="390" y="178" font-size="11" fill="#333333">weave = stop, record, assess</text>
+  <text x="80" y="226" font-size="11" fill="#333333">structural plies: not a sanding allowance</text>
+
+  <!-- RIGHT: thin laminate over metal, punctured -->
+  <path d="M 540 200 Q 660 150 780 200 L 780 226 Q 660 176 540 226 Z" fill="#d9d9d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="660" y="216" text-anchor="middle" font-size="10.5" fill="#111111">aluminum can wall</text>
+  <path d="M 540 200 Q 660 150 780 200 L 780 190 Q 660 140 540 190 Z" fill="url(#tw9)" stroke="#333333" stroke-width="1.2"/>
+  <!-- puncture -->
+  <g stroke="#333333" stroke-width="2">
+    <line x1="660" y1="168" x2="644" y2="146"/><line x1="660" y1="168" x2="676" y2="146"/>
+    <line x1="660" y1="168" x2="640" y2="164"/><line x1="660" y1="168" x2="680" y2="164"/>
+  </g>
+  <text x="660" y="130" text-anchor="middle" font-size="11" fill="#333333">machine sander on &lt;3-ply laminate at a taper:</text>
+  <text x="660" y="144" text-anchor="middle" font-size="11" font-weight="bold" fill="#333333">through the laminate, into the substrate</text>
+
+  <!-- Rules strip -->
+  <rect x="60" y="256" width="760" height="60" fill="#f2f2f2" stroke="#333333" stroke-width="1"/>
+  <text x="440" y="280" text-anchor="middle" font-size="12" fill="#111111"><tspan font-weight="bold">Before sanding, read the WO stack.</tspan> Zones under 3 plies: hand-sand only, count strokes, check often (§7.2).</text>
+  <text x="440" y="300" text-anchor="middle" font-size="12" fill="#111111">Edge finish: 120 → 400 grit, then a thin resin wipe where sealing or cosmetics matter (§7.3).</text>
+</svg>
