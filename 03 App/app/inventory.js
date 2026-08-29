@@ -652,6 +652,18 @@ function invLotPill(o) {
    matched nothing printed anywhere on the sticker. See the EH&S header in
    core.js. The full code, grouped as the face prints it, stays in the tooltip.
 
+   WHY TWELVE AND NOT SIX, because a parallel session reached the other answer
+   from the same photograph and its reasoning is worth answering rather than
+   overwriting. Across the three serials anyone has actually seen (…228D47 from
+   Simon's RSS export, …243EF0 off the photo, …243F1C in the fixtures) the shape
+   is CA, sixteen zeros, six hex, and only those six move — so the last six ARE
+   the identity and cannot collide. True, and not the point. The row is read
+   while comparing it against a sticker, and "…243EF0" is a string printed
+   nowhere on that sticker, so the eye has to translate before it can compare.
+   The edge strip is printed, in these groups, on the label itself. The leading
+   zeros are the label's own redundancy, not ours. If a future batch of tags
+   varies further left, twelve keeps working and six quietly stops.
+
    A tag that does not fit the printed grammar is marked rather than hidden:
    almost always a typo, and the shelf view is where somebody notices. */
 function invEhsShort(o) {

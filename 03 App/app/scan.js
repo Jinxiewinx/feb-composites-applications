@@ -102,10 +102,20 @@ async function openScan(opts) {
     await v.play();
     setScanState("Looking for a code…");
     SCAN.running = true;
-    /* qr_code is FEB's own labels. The rest are for UC EH&S tags: newer RSS
-       stickers are QR, older ones are linear (Code 128/39 family), and the
-       exact mix on RFS's shelves is whatever Triumvirate happened to apply.
-       An unsupported format in this list is ignored, not an error. */
+    /* qr_code is FEB's own labels. The rest are for UC EH&S tags, and the
+       one that actually reads them is DATA_MATRIX: a photo of a physical RSS
+       sticker (2026-08-29) settles a question that used to be a guess here.
+       The tag is a Data Matrix square, "RSS" printed beside it, the 24-char
+       serial spelled out underneath in groups of four (CA00 0000 0000 0000
+       0024 3EF0) and the last twelve repeated up the right edge. It is not
+       QR and it is not linear, which is what this comment used to assume.
+
+       The linear formats STAY. One photo is one sheet of tags, not a survey
+       of every container on RFS's shelves, and a sticker applied years ago
+       under a different contract is exactly the thing that would not scan.
+       An unsupported format in this list is ignored, not an error, so the
+       cost of keeping them is decode time on the zxing path, not breakage —
+       drop them only when someone has actually walked the shelves. */
     tickScan(new window.BarcodeDetector({ formats: ["qr_code", "code_128", "code_39", "code_93", "data_matrix"] }), v);
   } catch (e) {
     setScanState("Couldn't open the camera. Type the code instead.");

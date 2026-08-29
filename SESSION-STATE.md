@@ -183,9 +183,32 @@ export (628 containers, 17 sublocations) parses clean in Chromium: FEB's 50
 containers → 3 RSN resin, 16 RSN hardener, 31 CON, 15 flammable. **Nothing
 imported into production yet — Simon runs the import himself** (needs a
 lead sign-in; the file is `~/Downloads/Chemical Export Aug 28 2026.xlsx`).
-Still open: a photo of a physical tag to confirm which symbologies the
-stickers actually use (scanner currently enables QR + code_128/39/93 +
-data_matrix; barcodes are 24-char strings like CA0000000000000000228D47).
+**Symbology is settled** (2026-08-29, photo of a physical tag): RSS stickers
+are **Data Matrix**, not QR and not linear, and `data_matrix` was already in
+both the native and the zxing format lists, so nothing was broken — the guess
+in `scan.js` was. Serial is 24 chars printed in groups of four, with the last
+twelve repeated up the tag's edge. Across the three samples we hold
+(`…228D47` from the real export, `…243EF0` off the photo, `…243F1C` in the
+tests) the shape is `CA` + sixteen `0` + six hex, and only those six move.
+The linear formats stay until someone walks the shelves — one sheet of tags
+is not a survey.
+
+**v4.1.0 acted on that photo** (the two sessions crossed; this half merged on
+top). `invEhsShort` no longer shows the last six: it shows **the twelve
+characters reprinted down the tag's edge, in the label's four-character
+groups**, because a row is read while comparing it against a sticker and
+`…243EF0` is printed nowhere on one. Six being sufficient for uniqueness was
+right and is not the reason the row exists; the argument is written out in
+full above `invEhsShort` so it is not re-litigated. New in `core.js`:
+`ehsPrinted`, `ehsTailText`, `ehsShape` (advisory, never a gate) and
+**`ehsResolveTyped`**, which accepts those twelve edge characters as a lookup
+anywhere a code is typed — floor of 12 so the nine-character pre-2024 codes
+keep meaning themselves, and an ambiguous tail returns `{ambiguous:[…]}`
+carrying **no id**, because opening the wrong jug is worse than typing four
+more characters. `ehsConflict` runs through it, so an edge strip typed onto a
+second record is refused like the whole code. The reconciliation sheet gained
+a `printed` column beside the unpunctuated `ehsBarcode`, and flags off-length
+tags.
 The receiving grid stacks to cards below **1320px** (was 1200) — the eighth
 column pushed the table's minimum to ~1300; do not claw it back by shaving
 measured columns. No rules deploy anywhere (lots/items have no field
