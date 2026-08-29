@@ -20,6 +20,31 @@ to learn**, not about API compatibility:
 
 ---
 
+## v4.1.0 — 2026-08-29
+
+- Inventory reads an EH&S tag the way the sticker prints it
+- The RSS tags are Data Matrix, and now we know it from a tag
+- The standards move to Google Docs as the editing surface
+- Shorter reading everywhere Simon asked: README, What's New, and CS-012 §7.8
+- CS-001/002/013 catch up with the R&D bench; CS-012 stops ruling printer types out
+- Untrack tools/.venv: a symlink slipped past the ignore pattern
+
+<details><summary>9 more</summary>
+
+- Labels on a roll, and a label with nothing behind it
+- R&D round two: delete, labels, photos, export, and a template
+- Announce this release reaches the width the app is actually used at
+- SESSION-STATE: v4.0.0 is live, rules deployed first and separately
+- Figure captions: number once, not twice
+- README + SESSION-STATE: record the figure pipeline and the branch's state
+- CS-000..013 + INDEX: the engineering pass — normative language, figures in every process standard, two docs out of outline
+- CS standards, figure pipeline: markdown images now reach all three outputs
+- CS standards, figures: 13 hand-drawn SVG diagrams and the renderer that rasterizes them
+
+</details>
+
+---
+
 ## v4.0.0 — 2026-08-28
 
 - Release prep for v4.0.0: What's New, the two pictures, and a wasm MIME fix
