@@ -245,10 +245,132 @@ async function newShopRec(tab, cls, preset) {
 
 function delShopRec(tab, id) {
   const spec = shopSpec(tab);
+  /* Inventory (items/lots) goes through the one bulk path so a single delete
+     and a Select… delete share the same cascade and the same confirm wording.
+     Molds keep the plain confirm — they are lead-only deletes with no group
+     flow, and a mold is months of machining, not a jug. */
+  if (spec.coll === "items" || spec.coll === "lots") { shopBulkDelete(spec.coll, [id]); return; }
   confirmModal(`Delete ${id} for everyone? Back up first if unsure.`, () => {
     del(spec.coll, id);
     DB[spec.coll] = DB[spec.coll].filter(o => o.id !== id);
     view = { ...view, mode: "list", id: null };
+    render(); syncUrl();
+  });
+}
+
+/* ---------- Select…: many records, one confirm ----------
+ *
+ * The WO picker's shape (workorders.js startWOPick etc), on the Items and
+ * Materials lists — the EH&S import made "delete thirty test rows" a real
+ * task. view.shopPick is null (not picking) or an {id: true} map; the
+ * distinction is deliberate, not inferred from the DOM. Open to EVERY roster
+ * member, matching the 2026-08-28 rules change: inventory is shared property,
+ * so cleanup is not a lead-only chore. */
+function shopPickOn() { return !!view.shopPick; }
+function startShopPick() { view = { ...view, shopPick: {} }; render(); }
+function cancelShopPick() { view = { ...view, shopPick: null }; render(); }
+function toggleShopPick(id) {
+  const p = view.shopPick;
+  if (!p) return;
+  if (p[id]) delete p[id]; else p[id] = true;
+  render();
+}
+/* Only what is on screen: ticking All while a filter is on must not quietly
+   select the records the filter is hiding. */
+function shopPickAll(tab, on) {
+  const p = {};
+  if (on) shopListRows(tab).forEach(o => { p[o.id] = true; });
+  view = { ...view, shopPick: p };
+  render();
+}
+/* A group line's checkbox is all of its containers. Mixed → ticking completes
+   the set; a full set unticks whole. */
+function shopPickGroup(key) {
+  const p = view.shopPick;
+  if (!p) return;
+  const g = groupLots(shopListRows("lots")).find(x => x.key === key);
+  if (!g) return;
+  const all = g.members.every(m => p[m.id]);
+  g.members.forEach(m => { if (all) delete p[m.id]; else p[m.id] = true; });
+  render();
+}
+function shopPickedIds() { return Object.keys(view.shopPick || {}); }
+
+/* What deleting these would actually touch. Nothing is edited to say it:
+   - A storage location that still HOLDS things is left alone entirely —
+     deleting the shelf out from under its contents would orphan them on the
+     map. Empty it first (the confirm says which ones).
+   - A lot a cure or a panel points at is deleted anyway, and the pointer
+     keeps the id as text: that record is signed history, and rewriting it to
+     hide a deletion would be worse than a dangling reference.
+   - Budget lines drop the deleted ids from lotRefs, so a purchase's received
+     count re-derives honestly (the line reopens under Incoming if its
+     containers are gone). */
+function shopDeletionSet(coll, ids) {
+  const set = new Set(ids);
+  const recs = ids.map(id => shopById(coll, id)).filter(Boolean);
+  const keptBins = [];
+  let take = recs;
+  if (coll === "items") {
+    const idx = invIndex();
+    take = recs.filter(o => {
+      if (o.cls !== "BIN") return true;
+      const n = invBucketCount(idx.by.get(o.id) || invEmptyBucket());
+      if (n) keptBins.push({ o, n });
+      return !n;
+    });
+  }
+  let referenced = 0;
+  if (coll === "lots") {
+    for (const w of DB.workOrders || []) {
+      const c = w.cure || {};
+      if (set.has(c.lotFabric) || set.has(c.lotResin) || set.has(c.lotHardener)) referenced++;
+    }
+    for (const it of DB.items || []) {
+      if (it.cls === "PNL" && (set.has(it.fabricLots) || set.has(it.resinLot) || set.has(it.hardenerLot))) referenced++;
+    }
+  }
+  const budgets = (DB.budget || []).filter(b => (b.lines || []).some(l => (l.lotRefs || []).some(id => set.has(id))));
+  return { take, keptBins, referenced, budgets };
+}
+
+function shopDeletionSummary(d, coll) {
+  const n = d.take.length;
+  const noun = coll === "lots" ? "material record" : "item";
+  const bits = [`Delete ${n} ${noun}${n === 1 ? "" : "s"} for everyone?`];
+  if (d.keptBins.length) bits.push(`${d.keptBins.length} storage location${d.keptBins.length === 1 ? " is" : "s are"} left alone — ${d.keptBins.map(k => `${k.o.name || k.o.id} still holds ${k.n}`).join(", ")}. Empty a shelf before deleting it.`);
+  if (d.referenced) bits.push(`${d.referenced} cure or panel record${d.referenced === 1 ? "" : "s"} reference what is being deleted; they keep the id as text, because a signed record does not get rewritten.`);
+  if (d.budgets.length) bits.push(`${d.budgets.length} purchase${d.budgets.length === 1 ? "" : "s"} drop the deleted containers from their received lines.`);
+  bits.push("There is no undo.");
+  return bits.join(" ");
+}
+
+async function shopBulkDelete(coll, ids) {
+  const d = shopDeletionSet(coll, ids);
+  if (!d.take.length) {
+    toast(d.keptBins.length ? "Nothing deleted — every selected location still holds things." : "Nothing to delete.", "error");
+    return;
+  }
+  confirmModal(shopDeletionSummary(d, coll), async () => {
+    const set = new Set(d.take.map(o => o.id));
+    let failed = 0;
+    try {
+      await fb.delMany(d.take.map(o => ({ coll, id: o.id })));
+    } catch (e) {
+      failed = d.take.length;
+    }
+    if (!failed) {
+      for (const b of d.budgets) {
+        saveField("budget", b, "lines", arr => (arr || []).map(l =>
+          (l.lotRefs || []).some(id => set.has(id)) ? { ...l, lotRefs: l.lotRefs.filter(id => !set.has(id)) } : l));
+      }
+      DB[coll] = (DB[coll] || []).filter(o => !set.has(o.id));
+    }
+    view = { ...view, shopPick: null, mode: "list", id: null };
+    toast(failed ? `Delete failed — nothing was removed: try again.` :
+      `${d.take.length} record${d.take.length === 1 ? "" : "s"} deleted.` +
+      (d.keptBins.length ? ` ${d.keptBins.length} occupied location${d.keptBins.length === 1 ? "" : "s"} kept.` : ""),
+      failed ? "error" : undefined);
     render(); syncUrl();
   });
 }
@@ -337,15 +459,23 @@ function shopStageClass(spec, o) {
   return "InWork";
 }
 
-function renderShopList(tab) {
+/* The rows the list currently shows — one definition, shared with the picker
+   so All can never select what a filter is hiding. */
+function shopListRows(tab) {
   const spec = shopSpec(tab);
-  const D = DB[spec.coll] || [];
   const q = (view.q || "").toLowerCase();
-  const rows = D
+  return (DB[spec.coll] || [])
     .filter(o => !view.fSub || (o.cls || spec.prefix) === view.fSub)
     .filter(o => !view.fStatus || o.stage === view.fStatus)
     .filter(o => !q || shopHay(spec, o).includes(q))
     .sort((a, b) => cmpId(a.id, b.id));
+}
+
+function renderShopList(tab) {
+  const spec = shopSpec(tab);
+  const D = DB[spec.coll] || [];
+  const q = (view.q || "").toLowerCase();
+  const rows = shopListRows(tab);
 
   const classes = shopClasses(spec);
   const stages = [...new Set(classes.flatMap(c => c.stage || []))];
@@ -359,26 +489,65 @@ function renderShopList(tab) {
         [D.filter(o => o.stage === "Ready for layup").length, "Ready for layup"],
         [D.filter(o => !o.location).length, "No home location"],
       ]
+    : tab === "lots" && typeof groupLots === "function"
+    ? [
+        /* Containers vs materials is the pair the EH&S import made matter:
+           ten AT30 jugs are ten containers and one material, and both numbers
+           answer real questions ("how many jugs" vs "how many kinds"). */
+        [D.length, "Containers"],
+        [groupLots(D.filter(o => o.stage !== "Empty")).length, "Materials"],
+        [D.filter(o => o.cls === "RSN").length, "Resin / hardener"],
+        [D.filter(o => o.cls === "CON").length, "Consumables"],
+      ]
     : [
         [D.length, spec.label],
         ...classes.map(c => [D.filter(o => (o.cls || spec.prefix) === c.cls).length, c.label]),
       ].slice(0, 4);
+
+  /* The Materials list groups identical containers by default, exactly like
+     the location page: ×N per material, expandable to per-container rows with
+     their EH&S codes and locations. A search drops to the flat table — search
+     results need per-record rows — and the Flat toggle is the standing escape
+     for anyone who wants the spreadsheet view. */
+  const grouped = tab === "lots" && !q && !view.lotsFlat && typeof invLotList === "function";
+  const groupedBody = () => {
+    const secs = [
+      ["RSN", "Resin / hardener", "sec-resin"],
+      ["CON", "Consumables", "sec-consumables"],
+      ["FAB", "Fabric", "sec-fabric"],
+    ];
+    const out = secs.map(([cls, label, sec]) => {
+      const arr = rows.filter(o => o.cls === cls);
+      return arr.length ? invGroup(label, invLotList(arr, { showLoc: true, pick: shopPickOn() }), invLotMeta(arr), sec) : "";
+    }).join("");
+    return out || `<div class="card">Nothing matches that filter.</div>`;
+  };
 
   return `
   <div class="stat-row">
     ${tiles.map(([n, lab]) => `<div class="stat-tile"><div class="bignum">${n}</div><div class="stat-label">${esc(lab)}</div></div>`).join("")}
   </div>
   <div class="toolbar no-print">
-    ${(() => {
+    ${shopPickOn() && (tab === "items" || tab === "lots") ? (() => {
+      const n = shopPickedIds().length;
+      return `<button class="sm" onclick="shopPickAll('${tab}',true)">All ${rows.length}</button>
+        <button class="sm" onclick="shopPickAll('${tab}',false)">None</button>
+        <span class="muted tny">${n} selected</span>
+        <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="shopBulkDelete('${spec.coll}', shopPickedIds())">Delete ${n || ""}</button>
+        <button class="sm ib" onclick="cancelShopPick()">${icon("close", 14)}</button>`;
+    })() : (() => {
       /* A class whose records are created somewhere better than this list says
          so instead of offering a button that would strand the user on the wrong
          page afterwards. */
       const addable = classes.filter(c => !c.newOn);
       return addable.map((c, i) => `<button class="${i === 0 ? "primary" : ""}" onclick="newShopRec('${tab}','${c.cls}')">+ ${esc(c.label)}</button>`).join("")
         + classes.filter(c => c.newOn).map(c =>
-          `<span class="muted tny">${esc(c.label)}s are added on the ${esc(c.newOn)}.</span>`).join("");
+          `<span class="muted tny">${esc(c.label)}s are added on the ${esc(c.newOn)}.</span>`).join("")
+        + (D.length ? `<button class="ib" onclick="openLabelBuilder('${spec.coll}')">${icon("print", 15)} Labels</button>` : "")
+        + (D.length && tab === "lots" && typeof openMatLink === "function"
+          ? `<button class="ib" title="Fill blank material types from the materials table" onclick="openMatLink()">${icon("check", 15)} Link materials</button>` : "")
+        + (D.length && (tab === "items" || tab === "lots") ? `<button class="sm" onclick="startShopPick()">Select…</button>` : "");
     })()}
-    ${D.length ? `<button class="ib" onclick="openLabelBuilder('${spec.coll}')">${icon("print", 15)} Labels</button>` : ""}
   </div>
   <div class="filters no-print">
     ${spec.classes ? `<select onchange="view.fSub=this.value;render()">
@@ -390,18 +559,33 @@ function renderShopList(tab) {
       ${stages.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
     </select>
     <input id="searchbox" placeholder="search ${esc(spec.nounPlural)} / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+    ${tab === "lots" && !q ? `<button class="ib ${view.lotsFlat ? "" : "primary"}" title="One line per material, expandable"
+        onclick="view.lotsFlat=false;render()">Grouped</button>
+      <button class="ib ${view.lotsFlat ? "primary" : ""}" title="One row per container"
+        onclick="view.lotsFlat=true;render()">Flat</button>` : ""}
   </div>
   ${!D.length ? `<div class="card">No ${esc(spec.nounPlural)} yet. ${spec.coll === "molds"
       ? `Add one, or import the SN5 molds from their work orders with <b>Find molds in work orders</b> under Reports.`
       : `Use the buttons above to add one.`}</div>` : ""}
-  ${rows.length ? `<table class="list">
-    <tr>${spec.list.map(k => `<th>${esc(shopColLabel(spec, k))}</th>`).join("")}</tr>
-    ${rows.map(o => `<tr onclick="openRecord('${tab}','${esc(o.id)}')">
+  ${(() => {
+    const picking = shopPickOn() && (tab === "items" || tab === "lots");
+    if (grouped && D.length) return groupedBody();   // sections are their own cards
+    if (!rows.length) return D.length ? `<div class="card">Nothing matches that filter.</div>` : "";
+    return `<table class="list">
+    <tr>${picking ? "<th></th>" : ""}${spec.list.map(k => `<th>${esc(shopColLabel(spec, k))}</th>`).join("")}</tr>
+    ${rows.map(o => {
+      const ticked = picking && !!view.shopPick[o.id];
+      return `<tr ${ticked ? 'class="picked"' : ""} aria-selected="${picking ? ticked : false}"
+        onclick="${picking ? `toggleShopPick('${esc(o.id)}')` : `openRecord('${tab}','${esc(o.id)}')`}">
+      ${picking ? `<td class="pickcell"><input type="checkbox" ${ticked ? "checked" : ""} aria-label="Select ${esc(o.id)}"
+        onclick="event.stopPropagation();toggleShopPick('${esc(o.id)}')"></td>` : ""}
       ${spec.list.map((k, i) => `<td>${i === 0
         ? `<b>${esc(o.name || o.id)}</b><div class="muted tny">${esc(o.id)}</div>`
         : shopCell(spec, o, k)}</td>`).join("")}
-    </tr>`).join("")}
-  </table>` : (D.length ? `<div class="card">Nothing matches that filter.</div>` : "")}`;
+    </tr>`;
+    }).join("")}
+  </table>`;
+  })()}`;
 }
 
 function shopColLabel(spec, key) {
@@ -473,12 +657,14 @@ function renderShopDetail(tab, opts) {
       : `<button class="ib" onclick="navBack({tab:'${tab}',mode:'list',id:null})">${icon("chevronLeft", 16)} ${esc(navBackLabel(spec))}</button>`}
     <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
     ${labelBtn(spec.coll, o.id)}
-    ${/* Visible to a lead WITHOUT pressing Edit first. It used to hide behind
-          edit mode, and the observable result was "you can retire an item but
-          not delete it" — the button existed and nobody could find it. Still
-          lead-only (firestore.rules enforces that server-side) and still
-          behind a confirm. The board detail page works the same way. */""}
-    ${isLead() ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
+    ${/* Visible WITHOUT pressing Edit first. It used to hide behind edit
+          mode, and the observable result was "you can retire an item but not
+          delete it" — the button existed and nobody could find it. Items and
+          lots deletes opened to every member on 2026-08-28 (the rules changed
+          with the Select… mass-delete); molds stay lead-only server-side, so
+          the button matches the rule rather than promising a 403. */""}
+    ${isLead() || spec.coll === "items" || spec.coll === "lots"
+      ? `<button class="danger" onclick="delShopRec('${tab}','${esc(o.id)}')">Delete</button>` : ""}
     ${emb && move ? `<span class="mdnav no-print">
       <button class="sm" title="Previous (↑)" onclick="${move}(-1)">${icon("chevronLeft", 14)}</button>
       <button class="sm" title="Next (↓)" onclick="${move}(1)">${icon("chevronRight", 14)}</button>
@@ -510,6 +696,12 @@ function renderShopDetail(tab, opts) {
           a read-only chip here rather than a schema field. */""}
     ${o.buyRef && o.buyRef.buyId ? `<div class="muted tny">From purchase
       <span class="chip" onclick="openRecord('budget','${esc(o.buyRef.buyId)}')">${esc(o.buyRef.buyId)}</span></div>` : ""}
+    ${/* What the material IS, from the materials table: mix ratio, shelf
+          life, reorder threshold, and the actual datasheets — the facts
+          people used to walk to a laptop for. Read-only; the record's own
+          matKey field stays the editable side. */""}
+    ${spec.coll === "lots" && typeof matForLot === "function" && matForLot(o)
+      ? `<div class="matstrip">${esc(matForLot(o).label)} ${matInfoHtml(matForLot(o))}</div>` : ""}
     ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
 
     ${spec.classes && E ? `<h3>Kind</h3><div class="grid"><div class="f"><label>Kind</label>
@@ -618,6 +810,21 @@ function shopFld(spec, tab, o, f, c) {
   if (type === "money") {
     return `<div class="f"><label>${esc(label)}</label>
       <input type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)"></div>`;
+  }
+  /* "ehs" — the UC tag serial, with a camera next to it: 24 characters of
+     CA00… is a thing you scan, not a thing you retype. The layout is
+     scanLotInto's (workorders.js); the write goes through updShop either
+     way, so typed and scanned codes meet the same normalisation and the
+     same one-tag-one-container refusal. */
+  if (type === "ehs") {
+    return `<div class="f"><label>${esc(label)}</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" style="flex:1 1 auto;min-width:0" value="${esc(v)}"
+          autocapitalize="characters" autocomplete="off" spellcheck="false"
+          onchange="updShop('${tab}','${key}',this.value)">
+        ${typeof scanSupported === "function" && scanSupported()
+          ? `<button type="button" class="sm ib" title="Scan the EH&S tag" onclick="scanEhsInto('${tab}')">${icon("scan", 15)}</button>` : ""}
+      </div></div>`;
   }
   const inputType = type === "date" ? "date" : type === "num" ? "number" : "text";
   return `<div class="f"><label>${esc(label)}</label>

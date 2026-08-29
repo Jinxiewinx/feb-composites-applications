@@ -35,64 +35,106 @@
  *   node tools/shoot_release.mjs --version 3.0.0
  */
 
-/* A plausible SN6 season: three subteams, every stage represented, some late,
-   some undated, one still unnamed. Values are the real enums from parts.js. */
-const SEASON = `
-  const mk = (name, sub, cad, mold, layup, due) => ({
-    id: "P-SN6-" + String(900 + (DB.parts.length % 90)).padStart(3, "0") + "-" + DB.parts.length,
-    partName: name, subteam: sub, layupType: "MOLD INFUSION",
-    cadProgress: cad, moldProgress: mold, layupProgress: layup,
-    layupDeadline: due, retro: false, rnd: false,
-    moldEngineer: "", manufacturingEngineer: "", layupStack: [], commentLog: [],
-  });
-  const D = (n) => { const d = new Date(Date.now() + n * 86400000); return d.toISOString().slice(0, 10); };
-  DB.parts.push(
-    mk("NOSECONE INNER",     "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-4)),
-    mk("UNDERTRAY MAIN",     "AERO",      "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(3)),
-    mk("UNDERTRAY DIFFUSER", "AERO",      "Mold CAD/CAM Done", "Machining",       "Not Started",    D(9)),
-    mk("SIDEPOD LEFT",       "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
-    mk("SIDEPOD RIGHT",      "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
-    mk("FRONT WING MAIN",    "AERO",      "Mold CAD/CAM Done", "Ready For Layup", "Layup Complete", D(-21)),
-    mk("FRONT WING FLAP",    "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-2)),
-    mk("REAR WING MAIN",     "AERO",      "Part CAD Done",     "Machining",       "Not Started",    D(24)),
-    mk("REAR WING ENDPLATE", "AERO",      "Not Started",       "Not Started",     "Not Started",    ""),
-    mk("FLOOR PAN",          "AUTO-MECH", "Mold CAD/CAM Done", "N/A (Flat)",      "Layup Complete", D(-30)),
-    mk("FIREWALL",           "AUTO-MECH", "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(11)),
-    mk("SEAT PAN",           "AUTO-MECH", "Mold CAD/CAM Done", "Sealed",          "Polished",       D(-45)),
-    mk("BATTERY BOX LID",    "AUTO-MECH", "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(6)),
-    mk("BATTERY BOX SHELL",  "AUTO-MECH", "Part CAD Done",     "Machining",       "Not Started",    D(13)),
-    mk("IMPACT ATTENUATOR",  "AUTO-MECH", "Mold CAD/CAM Done", "Ready For Layup", "In Layup",       D(1)),
-    mk("STEERING SHROUD",    "AUTO-MECH", "Not Started",       "Not Started",     "Not Started",    ""),
-    mk("MONOCOQUE UPPER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-7)),
-    mk("MONOCOQUE LOWER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "Layup Complete", D(-14)),
-    mk("BULKHEAD FRONT",     "BERGO",     "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(5)),
-    mk("BULKHEAD REAR",      "BERGO",     "Part CAD Done",     "Machining",       "Not Started",    D(19)),
-    mk("SUSPENSION A-ARM",   "BERGO",     "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(27)),
-    mk("PEDAL BOX",          "BERGO",     "Not Started",       "Not Started",     "Not Started",    D(34)),
-  );
+/* The Flammables Cabinet as it actually stands after the EH&S import: the
+   real material names and container counts from the RSS export, each with a
+   plausible UC tag. Seeded fresh because the standing fixtures hold five
+   lots, and a picture about fifty containers folding into eight lines needs
+   the fifty. */
+const CABINET = `
+  DB.items.push({ id: "BIN-SN6-950", cls: "BIN", name: "Flammables Cabinet", stage: "Active",
+    site: "Flammables cabinet", locKind: "cabinet", flam: "Yes",
+    walkedAt: new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10), walkedBy: "Simon Starbuck" });
+  let tag = 0x243E80;
+  const jug = (name, cls, role, matKey, n, open) => {
+    for (let i = 0; i < n; i++) DB.lots.push({
+      id: (cls === "RSN" ? "RSN" : "CON") + "-SN6-" + (700 + DB.lots.length),
+      cls, name, role, matKey, stage: i < open ? "Open" : "Sealed",
+      location: "BIN-SN6-950", receivedOn: "2025-12-06",
+      ehsBarcode: "CA00000000000000" + (tag++).toString(16).toUpperCase().padStart(8, "0"),
+    });
+  };
+  jug("IN2 Epoxy Infusion Resin",        "RSN", "resin",    "IN2",      3, 1);
+  jug("AT30 SLOW EPOXY HARDENER",        "RSN", "hardener", "AT30",    10, 2);
+  jug("WEST SYSTEM 209 Extra Slow Hardener", "RSN", "hardener", "WEST-209", 4, 0);
+  jug("Acetone",                         "CON", "",         "ACETONE",  1, 1);
+  jug("91% Isopropyl Alcohol",           "CON", "",         "IPA-91",   3, 0);
+  jug("3M Bondo lightweight body filler","CON", "",         "BONDO",    5, 0);
+  jug("Vacuum pump oil",                 "CON", "",         "PUMP-OIL", 3, 1);
+  jug("frekote 700-nc",                  "CON", "",         "FREKOTE",  1, 1);
+  jug("REXCO FORMULA FIVE Mold Release Wax", "CON", "",     "F5-WAX",   1, 0);
+`;
+
+/* A bench with enough in it to be worth photographing. The standing fixtures
+   hold one project, two batches and fifteen coupons, which is the right size
+   for testing and slightly thin for a picture whose point is "this is a
+   spreadsheet you can actually use" — so the sweep is filled out to a full
+   three-temperature run with a couple of blanks and one scrapped coupon still
+   in it. What is shown has to be what a real study looks like halfway
+   through, not a tidy wall of filled cells that flatters the grid. */
+const BENCH = `
+  DB.rnd = DB.rnd.filter(o => o.cls === "RDS");
+  const cpn = (n, study, label, status, vals, notes) => DB.rnd.push({
+    id: "CPN-SN6-" + String(n).padStart(3, "0"), cls: "CPN", study, label, status,
+    vals, notes: notes || "", photos: [], createdBy: "starbuck@berkeley.edu" });
+  let n = 0;
+  const row = (study, stem, i, cure, thk, load, status, notes) =>
+    cpn(++n, study, stem + String(i).padStart(2, "0"), status || "Tested",
+        load == null ? (thk == null ? { Kcure: cure } : { Kcure: cure, Kthk: thk })
+                     : { Kcure: cure, Kthk: thk, Kload: load }, notes);
+  row("RDS-SN6-002", "A", 1, 120, 2.09, 588);
+  row("RDS-SN6-002", "A", 2, 120, 1.98, 561, "Tested", "dry corner, trimmed back");
+  row("RDS-SN6-002", "A", 3, 120, 2.17, 604);
+  row("RDS-SN6-002", "A", 4, 120, 2.11, 597);
+  row("RDS-SN6-003", "B", 1, 140, 2.22, 641);
+  row("RDS-SN6-003", "B", 2, 140, 2.19, 633);
+  row("RDS-SN6-003", "B", 3, 140, 2.14, 612);
+  row("RDS-SN6-003", "B", 4, 140, 1.62, null, "Scrapped", "bag leaked overnight");
+  row("RDS-SN6-003", "B", 5, 160, 2.26, null, "Made");
+  row("RDS-SN6-003", "B", 6, 160, null, null, "Made");
+  row("RDS-SN6-003", "B", 7, 160, null, null, "Planned");
+  /* The folder study keeps its rows: a study with no columns at all, sitting
+     next to the swept one, is half of what "one record shape, three uses" is
+     claiming — and a Parked folder reading "0 coupons" in a picture argues
+     against it. */
+  cpn(++n, "RDS-SN6-004", "L01", "Made", {}, "half a metre of 195 twill, RFS shelf 2");
+  cpn(++n, "RDS-SN6-004", "L02", "Made", {}, "core offcuts, assorted");
+  cpn(++n, "RDS-SN6-004", "L03", "Made", {});
 `;
 
 export const RELEASE_SHOTS = [
-  /* ONE picture this time, and that is the honest number. Two is the cap, not
-     the target, and the only thing that changed is the blueprint — reshipping
-     last release's dashboard shot beside it would pad the post with a picture
-     the team has already seen and read past. */
   {
-    id: "blueprint",
-    /* Tall enough for all twenty-six seeded parts plus the footer note. One per
-       line costs vertical space; a shot that crops the list mid-season is
-       arguing the opposite of its own caption. */
-    vh: 1250,
-    js: SEASON + `
-      view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "",
-               seasonQ: "", seasonSort: null, seasonDir: null };
+    id: "rnd-grid",
+    /* Tall enough for the study index, the head with its question, and enough
+       rows that it reads as a sheet rather than a form — including the ones
+       still blank, because a study halfway through is the normal state. */
+    vh: 1180,
+    js: BENCH + `
+      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
+               rdCmpOpen: null, rdColsOpen: null, rdPartsOpen: false };
       render();`,
-    title: "The season, in columns",
-    note: "One part per line, and every line on the same eight tracks — so subteam sits under " +
-          "subteam and a deadline under a deadline, and you read down a column instead of across " +
-          "a line. Two of those columns are new: LAYUP TYPE and MOLD LOC., which used to mean " +
-          "opening the part. Clicking a name still opens it, and that is still where you change " +
-          "anything.",
+    title: "R&D: coupons, without the paperwork",
+    note: "A new tab for the things that were never going on the car. Ten coupons is three " +
+          "presses and they arrive numbered; the columns are yours per study; the batch each " +
+          "one came from rides along so a sweep can span two rounds. No work order, no " +
+          "traveler, no buy-off — it is a sheet you type into, and it has to beat a " +
+          "spreadsheet or it has failed.",
+  },
+  {
+    id: "rnd-compare",
+    /* Tall enough that the compare table itself is in frame. The first cut of
+       this was 980 and stopped at the word COMPARE — a picture whose caption is
+       entirely about a table that is not in it. */
+    vh: 1400,
+    js: BENCH + `
+      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
+               rdCmpOpen: "RDS-SN6-001", rdCmpBy: "Kcure", rdCmpScrap: false,
+               rdColsOpen: null, rdPartsOpen: false };
+      render();`,
+    title: "Did the hotter cure actually change anything?",
+    note: "Mark a column a setting you chose and another something you measured, and Compare " +
+          "turns itself on: grouped by what you varied, with the mean and the range. It also " +
+          "says how many coupons each number actually came from, because a study is normally " +
+          "half-measured and averaging over the blanks is how a test lies to you.",
   },
 ];
 

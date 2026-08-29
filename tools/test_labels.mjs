@@ -124,6 +124,9 @@ const HARNESS = `<!doctype html><meta charset="utf-8">
   window.RENDER = (recs, opts) => {
     document.getElementById("printroot").innerHTML = labelSheetHtml(recs, opts);
   };
+  window.RENDER_ROLL = (recs, opts) => {
+    document.getElementById("printroot").innerHTML = labelRollHtml(recs, opts);
+  };
 </script>`;
 
 const chromium = await loadChromium();
@@ -442,9 +445,71 @@ const skipped = await page.evaluate(() => {
 eq(skipped.total, 8, "skipping 7 puts the label in cell 8");
 eq(skipped.empty, 7, "the first 7 cells are left blank for the labels already peeled off");
 
+/* ---------- the roll ---------- */
+console.log("\non a roll");
+
+/* tools/test_label_roll.mjs already proves the JS and the CSS agree about
+   millimetres by parsing both files. What it cannot do is check that a browser
+   AGREES WITH THEM — that the rule actually applies, that nothing in
+   index.html's cascade overrides it, that the label inside is not overflowing
+   its page. Layout is not arithmetic, so that part happens here.
+
+   The number to care about is 101.6mm: cut a 29mm continuous roll at 101.6 and
+   you have the Avery 5161 cell, which is the entire reason the roll needed no
+   new label design. */
+const roll = await page.evaluate(() => {
+  window.RENDER_ROLL([
+    { coll: "molds", o: { id: "MOLD-SN6-004", name: "UT INLET L/H", density: 30, location: "RFS" } },
+    { markup: labelMarkup({ name: "SOLVENT CABINET", key: "FLAMMABLES ONLY" }) }
+  ], { media: "dk2210" });
+  const mm = px => Math.round((px / 96) * 25.4 * 10) / 10;
+  const pages = [...document.querySelectorAll(".roll-page")];
+  const first = pages[0].getBoundingClientRect();
+  const lbl = pages[0].querySelector(".lbl").getBoundingClientRect();
+  const custom = pages[1];
+  return {
+    n: pages.length,
+    w: mm(first.width), h: mm(first.height),
+    // The label must fill the page: a .lbl smaller than its page prints a white
+    // margin onto tape that has no margin to give.
+    fills: Math.abs(lbl.width - first.width) < 1 && Math.abs(lbl.height - first.height) < 1,
+    // and must not burst it, which is what would eat the FEB tag or the QR.
+    bursts: pages.some(p => {
+      const b = p.getBoundingClientRect(), l = p.querySelector(".lbl").getBoundingClientRect();
+      return l.right > b.right + 0.5 || l.bottom > b.bottom + 0.5;
+    }),
+    qr: !!pages[0].querySelector(".lbl-qr"),
+    customHasNoIdRow: !custom.querySelector(".lbl-rid"),
+    customVisible: custom.querySelector(".lbl-name").checkVisibility(),
+    wsPage: document.querySelectorAll(".roll-page.ws-page").length
+  };
+});
+eq(roll.n, 2, "two labels, two pages");
+eq(roll.w, 101.6, "a DK-2210 page is 101.6mm long");
+eq(roll.h, 25.4, "and 25.4mm tall — the 5161 cell");
+ok(roll.fills, "the label fills its page edge to edge");
+ok(!roll.bursts, "and does not overflow it");
+ok(roll.qr, "the record label still carries its QR");
+ok(roll.customHasNoIdRow, "a custom label with no id emits no ID row");
+ok(roll.customVisible, "and actually paints");
+eq(roll.wsPage, 0, "no roll page is .ws-page (sheetFileHtml pads those 0.45in)");
+
+// The die-cut hedge, which is the only media whose geometry differs.
+const diecut = await page.evaluate(() => {
+  window.RENDER_ROLL([{ markup: labelMarkup({ name: "SHELF B3", key: "STORAGE" }, { narrow: true }) }],
+                     { media: "dk1201" });
+  const mm = px => Math.round((px / 96) * 25.4 * 10) / 10;
+  const p = document.querySelector(".roll-page").getBoundingClientRect();
+  return { w: mm(p.width), h: mm(p.height) };
+});
+eq(diecut.w, 86.6, "a DK-1201 page is 86.6mm long");
+eq(diecut.h, 26.4, "and 26.4mm tall");
+
 if (SHOTS) {
   await page.evaluate(recs => window.RENDER(recs, { calibrate: true }), RECS);
   await page.locator(".label-sheet").screenshot({ path: join(SHOTS, "sheet.png") });
+  await page.evaluate(recs => window.RENDER_ROLL(recs.slice(0, 4), { media: "dk2210" }), RECS);
+  await page.locator(".wsheet.rolls").screenshot({ path: join(SHOTS, "roll.png") });
   console.log(`\nscreenshots in ${SHOTS}`);
 }
 

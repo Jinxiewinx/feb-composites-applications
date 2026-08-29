@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- maximum-scale=1 exists to stop iOS Safari's automatic zoom-in when a
+     sub-16px input takes focus (the scan box, the receiving grid — Simon:
+     "the app zooms in slightly when any keyboard opens"). Since iOS 10 the
+     cap is IGNORED for user pinch gestures, so accessibility zoom still
+     works; only the focus auto-zoom is suppressed. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#002b50">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f16">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -261,6 +266,12 @@
      longest. Same swap the breakpoint does, driven by fit instead of by guess. */
   body.tb-overflow .tb-desktop { display: none; }
   body.tb-overflow .icon-btn.tb-morebtn { display: inline-flex; }
+  /* The version line in the desktop action row — the same links the ⋯ sheet's
+     footer carries, so Announce is reachable at the width the app is actually
+     used at. nowrap because it is measured: syncChromeMetrics collapses the
+     whole row to the ⋯ menu when it overflows, and a line that wrapped would
+     make the bar taller instead of wider and never trip that. */
+  .tb-ver { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .menu-actions { display: flex; flex-direction: column; gap: 6px; }
   .menu-actions button { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 11px 12px; }
   .menu-actions button .ico { color: var(--muted); }
@@ -1139,11 +1150,29 @@
      for the same reason. */
   .chk { display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; }
   .chk input { flex: 0 0 auto; }
+  /* The custom-label composer's live preview (labels.js clPreviewHtml). The
+     label itself is styled by print.css, which is a plain stylesheet and not
+     wrapped in @media print, so what sits in the modal is the label at print
+     size. These rules only give it somewhere to sit. */
+  .cl-prev { margin: 10px 0 4px; overflow-x: auto; }
+  .cl-prev .roll-page { margin: 0; box-shadow: 0 1px 6px rgba(0,0,0,.22); }
+  /* Reserves its line whether or not there is a problem to report, so the
+     fields below do not jump every time the text becomes valid. */
+  .cl-warn { min-height: 1.25em; margin-bottom: 8px; }
   .lbpick { margin-top: 14px; }
   .lblist { max-height: 34vh; overflow: auto; border: 1px solid var(--line);
     border-radius: var(--radius); padding: 4px 8px; background: var(--surface-2); }
   .lblist .chk { border-top: 1px solid var(--line); }
   .lblist .chk:first-child { border-top: none; }
+  /* One sublocation in the EH&S import picker (ehsimport.js). */
+  .lblist .ehsub { border-top: 1px solid var(--line); }
+  .lblist .ehsub:first-child { border-top: none; }
+  .lblist .ehsub .chk { border-top: none; }
+  /* The per-row unticks under a ticked sublocation. */
+  .ehsub-rows { margin: 0 0 8px 26px; border-left: 2px solid var(--border-2); padding-left: 8px; }
+  .ehsub-rows .ehsrow { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .ehsub-rows .ehsrow .muted { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .ehsub-rows .ehsrow-pad { width: 13px; flex: none; }
 
   /* ---- documents ---- */
   .doccat { margin-bottom: 8px; }
@@ -1981,6 +2010,58 @@
     border-radius: var(--radius); background: var(--surface-2); color: var(--ink); padding: 8px; }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
+  /* ---- location contents: sections and grouped materials ---- */
+  /* Each kind is a section with the house group-header strip and a left
+     accent. The accent is enhancement only — the uppercase label is the
+     distinction that survives grayscale, per the print rule. The
+     folded-groups-print-open rule lives in the app's ONE @media print block
+     further down — a second print block here confused the design-system
+     token check, which reads the first block it finds. */
+  /* Each kind is its own CARD — the Boards idiom, per Simon (2026-08-28):
+     a header strip inside one long card was not enough distinction. The
+     kind's accent runs down the card's left spine, the way an alerted
+     loccard wears its red one; the uppercase label is still what survives
+     grayscale. .card's own 14px bottom margin is the section gap. */
+  .invsec { border-left: 4px solid var(--border-2); }
+  .invsec .pgrouphd { margin-bottom: 6px; }
+  .invsec.sec-resin { border-left-color: var(--accent); }
+  .invsec.sec-consumables { border-left-color: var(--amber); }
+  .invsec.sec-fabric { border-left-color: var(--ok); }
+  .invsec.sec-molds, .invsec.sec-boards { border-left-color: var(--brand-ink); }
+  /* A material with several containers folds to one line. The caret column
+     keeps group and single rows aligned; the member list indents under it.
+     The fold is a class so print still paints it (see the @media print rule),
+     unlike a closed <details>. */
+  .invrow.invgrp { cursor: pointer; }
+  .invrow.invgrp .grp-caret { width: 14px; flex: none; color: var(--muted); }
+  .invrow.invgrp .grp-n { color: var(--brand-ink); }
+  .invgrp-body { margin-left: 22px; border-left: 2px solid var(--border-2); }
+  .invgrp-body.folded { display: none; }
+  .invrow.invmem .pm-name { font-weight: 500; }
+  .ehs-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted);
+    background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+  .invrow .bad { color: var(--bad); font-weight: 600; }
+  /* On a phone the NAME is the row (Simon, 2026-08-28: the width was hiding
+     it behind the mix ratio and the TDS button). The knowledge tail and the
+     state breakdown go; the name gets its width back and may wrap to a
+     second line rather than ellipsize. Count, expiry, code and pill stay —
+     those are what a person at the shelf is checking. */
+  @media (max-width: 700px) {
+    .invrow.invgrp .matinfo, .invrow.invgrp .grp-states { display: none; }
+    /* .pmini.invrow beats the base .pmini .pm-name nowrap, which sits later
+       in the file and would win a specificity tie. */
+    .pmini.invrow .pm-name { white-space: normal; overflow: visible; }
+  }
+  /* Material knowledge (materials.js): the info strip on a lot's detail page
+     and the lite ratio/TDS tail on a group row. */
+  .matstrip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 2px;
+    padding: 6px 10px; background: var(--surface-2); border-radius: var(--r-md); font-weight: 600; }
+  .matinfo { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 400; }
+  .matinfo .sm { padding: 1px 6px; }
+  /* Select… (mass delete) — same look as the WO picker. */
+  .invrow.picked, table.list tr.picked { background: var(--accent-soft); }
+  .invrow input[type="checkbox"], table.list .pickcell input { accent-color: var(--accent); flex: none; }
+  table.list .pickcell { width: 34px; }
 
   /* ---- the receiving desk ---- */
   /* The sheet is the budget line-item grid one size up, and wears the same
@@ -2010,6 +2091,9 @@
   /* Sized for the tag serial, not for the multi-tag case — several codes in
      one cell is rare (a 3-jug line) and scrolls inside the input fine. */
   .rxgrid .rxc-ehs { width: 110px; }
+  .rxgrid .rx-ehs { display: flex; gap: 4px; align-items: center; }
+  .rxgrid .rx-ehs input { flex: 1 1 auto; min-width: 0; }
+  .rxgrid .rx-ehs .sm { flex: none; padding: 2px 5px; }
   .rxgrid .rxc-expiresOn { width: 122px; }
   .rxgrid .rxc-unitCost { width: 64px; }
   /* Wide enough for the button it holds: 13px icon + 18px padding + borders,
@@ -2021,6 +2105,144 @@
      it 784px at 1440 and 490px at 1100, which eight columns and a material
      name cannot live in — so it overflowed sideways at the design width, and
      every fix available amounted to hiding the columns people came to fill. */
+  /* ---- the R&D bench ----
+     An index strip ABOVE a full-width sheet, not a pane beside it, for exactly
+     the reason written on the receiving desk above: a split leaves the grid
+     490px at 1100, and the coupon grid carries MORE columns than receiving's
+     eight, so it fails harder here. App-only classes, tokens only — nothing in
+     this family is lifted into 06 Design System, which is still an open
+     decision and must not be resolved by accident. */
+  .rdindex { padding: 6px 8px; }
+  .rdsheet { margin-top: 10px; }
+  .rdempty { max-width: 62ch; }
+  .rdempty p { color: var(--muted); font-size: 13.5px; }
+  .rdrow { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+    border-radius: var(--radius); border: 1px solid transparent;
+    transition: background var(--t-fast) var(--ease); }
+  .rdrow:hover { background: var(--hover); border-color: var(--line); }
+  .rdrow.on { background: var(--hover); border-color: var(--border-2); }
+  /* One indent, and only one: a batch sits under its project and nothing sits
+     under a batch. The rule is enforced in rnd.js; this is it made visible. */
+  .rdchild { margin-left: 20px; }
+  .rdchild::before { content: "└"; color: var(--muted); font-size: 12px; margin-right: -4px; }
+  .rd-open { all: unset; cursor: pointer; font-weight: 600; font-size: 13.5px;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px; }
+  .rd-open:hover { color: var(--accent); }
+  .rd-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  /* `all: unset` throws away the tap-target floor, the same trap .lc-open and
+     .sl-open carry a note about. */
+  @media (pointer: coarse) { .rd-open { min-height: 40px; } .rdrow { min-height: 44px; } }
+  /* A fold built from a class and a real button, NOT <details> — a closed
+     <details> skips painting and vanishes from print, which is why the house
+     rule forbids it and why .wosec.folded looks the way it does. */
+  .rdparts { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+  .rdparts-hd { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; font-size: 12px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); }
+  .rdparts-hd:hover { color: var(--ink); }
+  .rdparts-hd:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  @media (pointer: coarse) { .rdparts-hd { min-height: 40px; } }
+  .rdparts.folded .rdparts-body { display: none; }
+  .rdparts p { margin: 2px 8px 6px; }
+  .rdhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rdhead h2 { margin: 0; }
+  .rdq { margin: 4px 0 10px; font-size: 13.5px; color: var(--muted); }
+  .rdn { width: 62px; }
+  /* The study's own status, on its head rather than in the grid — it describes
+     the study, not any coupon in it. Sized to its longest value so the head
+     does not reflow when it changes. */
+  .rdstat { width: 104px; }
+  .rdnorows { margin: 10px 2px; }
+  .rdcols, .rdcmp, .rdmat { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .rdcols.folded .rdcols-body, .rdcmp.folded .rdcmp-body, .rdmat.folded .rdmat-body { display: none; }
+  /* The closed fold carries the answer, because "what went into this" is read
+     far more often than it is set. Truncated rather than wrapped: a summary
+     that grows to two lines pushes the grid down on every study. */
+  /* min-width: 0 is what makes the ellipsis actually happen. A nowrap child of
+     a flex row refuses to shrink below its content width without it, so on a
+     phone the summary pushed the fold header to 494px inside a 393px viewport
+     and the whole page scrolled sideways — which the UI suite fails, correctly.
+     max-width caps it on a desktop, where there is room to spare. */
+  .rdparts-hd { max-width: 100%; overflow: hidden; }
+  .rdmatsum { text-transform: none; letter-spacing: 0; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 0 1 auto; max-width: 46ch; }
+  .rdmat-body p { margin: 2px 8px 6px; }
+  .rdmat-body .grid { padding: 0 8px 6px; }
+  /* An inherited value is muted and says so, because a batch showing its
+     project's resin otherwise looks identical to one that set its own — and
+     then an override is invisible until it bites somebody. */
+  .rd-inh { font-style: italic; }
+  .rdcol { display: flex; align-items: center; gap: 8px; padding: 4px 8px; flex-wrap: wrap; }
+  .rdcolnew input, .rdcolnew select { min-width: 0; }
+  .rdunit { width: 68px; }
+  .rdcols p { margin: 2px 8px 6px; }
+
+  /* The coupon grid. table-layout: fixed is what makes a DYNAMIC column set
+     work without computing track sizes into the markup — the spine takes fixed
+     widths and the user columns share what is left.
+
+     Season's discipline, restated for a table: exactly ONE column may shrink to
+     nothing, and it is notes, not the label. Nothing scrolls sideways. */
+  .rdgridwrap { overflow-x: auto; }
+  table.sub.rdgrid { table-layout: fixed; }
+  .rdgrid th, .rdgrid td { vertical-align: middle; }
+  .rdgrid input, .rdgrid select { width: 100%; min-width: 0; box-sizing: border-box; }
+  .rdgrid .rdc-label { width: 84px; }
+  .rdgrid .rdc-batch { width: 122px; }
+  .rdgrid .rdc-status { width: 116px; }
+  .rdgrid .rdc-user { width: 108px; }
+  .rdgrid .rdc-notes { width: auto; min-width: 0; }
+  .rdgrid .rdc-act { text-align: right; }
+  /* A result column is what the study is FOR. A hairline on its leading edge
+     separates measured from chosen without spending a colour on it — statuses
+     already own colour in this app. */
+  .rdgrid .rdc-result { box-shadow: inset 1px 0 0 var(--line); }
+  .rdgrid tr:focus-within td { background: var(--hover); }
+  .rdgrid .rowact { padding: 2px 5px; color: var(--muted); }
+  .rdgrid .rowact:hover { color: var(--bad); }
+  .rdcmptable td { font-variant-numeric: tabular-nums; }
+  .rdcmp .toolbar { margin: 4px 0; }
+  .rdacts { margin: 8px 0 4px; flex-wrap: wrap; }
+  /* Three buttons in a 34px column would not fit, so the column widens only
+     when it has to — the grid's other tracks are fixed and notes takes the
+     slack, so this costs the notes field and nothing anybody types into more
+     often. */
+  .rdgrid .rdc-act { width: 96px; white-space: nowrap; }
+  .rdgrid .rowact { padding: 2px 4px; }
+  .rdgrid .rowact.has { color: var(--accent); }
+  /* The count rides ON the photo button rather than beside it: a coupon that
+     has a photo should be visible while scanning down the column, without
+     opening anything. */
+  .rdphn { font-size: 9.5px; font-weight: 700; margin-left: 1px; vertical-align: super; }
+  .rdphotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin: 8px 0; }
+  .rdphotos .phtile { margin: 0; width: 132px; }
+  .rdphotos .phimg { width: 132px; height: 96px; object-fit: cover; border-radius: var(--radius);
+    border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .rdphadd { align-self: center; }
+
+
+  /* Below the desktop band each row becomes a card, the receiving idiom: the
+     table parts go display:block, the head is hidden, and every cell prints its
+     column name ABOVE the field from data-label. Never beside it — a 96px label
+     gutter is ruinous at 393px, which is already written down on .rxgrid. */
+  @media (max-width: 1200px) {
+    .rdgrid, .rdgrid thead, .rdgrid tbody, .rdgrid tr, .rdgrid td { display: block; width: auto; }
+    .rdgrid thead { display: none; }
+    .rdgrid tr { position: relative; margin-bottom: 8px; padding: 8px 10px 10px;
+      border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); box-shadow: var(--shadow); }
+    .rdgrid td { border-top: 0; padding: 4px 0; }
+    .rdgrid td::before { content: attr(data-label); display: block; font-size: 11px;
+      letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+    /* The card's title, so it needs no label of its own. */
+    .rdgrid .rdc-label { font-size: 15px; padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+    .rdgrid .rdc-label::before { content: none; }
+    .rdgrid .rdc-result { box-shadow: none; }
+    .rdgrid .rdc-act { position: absolute; top: 6px; right: 8px; padding: 0; }
+    .rdgrid .rdc-act::before { content: none; }
+  }
+
   .rxsheet { margin-top: 10px; }
   .rxindex .toolbar { margin: 0; }
   .rxindex-body { max-height: 30vh; overflow: auto; margin-top: 8px; }
@@ -2781,6 +3003,10 @@
     .pfilters > input { grid-column: auto; }
   }
   @media (max-width: 640px) {
+    /* 101.6mm is 384px and the modal is narrower than that on a phone. Scaled
+       rather than scrolled: the point of the preview is seeing the whole label
+       while you type it. */
+    .cl-prev { zoom: .82; }
     .xgroup .linkrow { flex-direction: column; align-items: stretch; }
     .xg-hd { flex-direction: column; align-items: flex-start; gap: 2px; }
     .copyout { height: 40vh; font-size: 12px; }
@@ -2888,6 +3114,10 @@
 
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
+    /* Belt-and-braces for the viewport meta's maximum-scale=1: the two inputs
+       a phone actually types into get real 16px type, so even a browser that
+       ignores the meta has no sub-16px input to zoom in on. */
+    #scan-manual, .rxgrid input, .rxgrid select { font-size: 16px; }
     .lc-open { min-height: 40px; display: inline-flex; align-items: center; }
     button, .icon-btn, .hamburger { min-height: 40px; }
     .mtxcell { min-height: 40px; min-width: 40px; }
@@ -2957,6 +3187,9 @@
   }
 
   @media print {
+    /* A folded material group prints its containers: this page is the stock
+       walk, and a walk sheet missing eight of ten jugs is not a walk sheet. */
+    .invgrp-body.folded { display: block; }
     /* Force light tokens on paper no matter the on-screen theme, so a work order
        printed in dark mode is still black-on-white (print.css and the fallback
        path both read --ink / --surface). */
@@ -3143,6 +3376,11 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 18px; padding: 24px;
     background: var(--sb-bg); color: #fff;
+    /* The sheet is navy in BOTH themes, so it cannot use --amber: the light
+       value (#a25c00) is a brown meant for white paper and is almost unreadable
+       here. This is the dark-theme amber, pinned locally and on purpose,
+       because this element is always dark regardless of what the app is. */
+    --sp-warn: #e0a53a;
     /* Opacity only, and pointer-events off with it: a splash that lingers as an
        invisible sheet over the app eats the first tap on the login field. */
     transition: opacity .28s ease;
@@ -3173,17 +3411,80 @@
   #splash.slow .sp-slow { opacity: .8; }
   @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
 
+  /* ---- the start-light gantry ----
+     Five lamps, filling as five REAL boot milestones land, under a caption
+     naming what is still outstanding. It is a readiness readout that happens to
+     look like a start line, and that is the only reason it is allowed to look
+     like one — a gantry that filled on a timer would be a fake progress bar,
+     which is the same lie as a hardcoded clock.
+
+     LAMPS FILL BY COUNT, not one named milestone per position. The milestones
+     genuinely finish out of order — fonts usually beat auth, and on a warm
+     cache the first data can land before the roster read returns — so a gantry
+     that lit its third lamp before its first would read as broken rather than
+     as honest. Five done is five lit, and the caption carries the detail.
+
+     GOLD, NOT RED. Real start lights are red; in this app red is --bad and
+     carries a status meaning on every other screen, so five red lamps on boot
+     would be the loudest wrong signal in the product. Gold on navy is what the
+     mark already is. */
+  .sp-lights { display: flex; gap: 10px; animation: sp-fade .5s ease .35s both; }
+  .sp-lamp { box-sizing: border-box; width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.05);
+    transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
+                box-shadow var(--t) var(--ease); }
+  .sp-lamp.on  { background: var(--gold); border-color: var(--gold-2);
+    box-shadow: 0 0 10px rgba(253,181,21,.55); }
+  /* A step that FAILED, and it differs by SHAPE, not only by hue. Amber against
+     gold is very nearly the same colour at 15px — the first build of this had a
+     correctly-marked failed lamp that was simply invisible in a screenshot, and
+     an invisible failure signal is the same as no failure signal. So a failed
+     lamp is a hollow ring: unmistakably not a filled one, at any size, and
+     legible to anyone who cannot separate the two hues at all.
+     It also reads correctly as a thing that did not light. */
+  .sp-lamp.bad { background: transparent; border: 3px solid var(--sp-warn); box-shadow: none; }
+  /* min-height so the caption changing length never reflows the gantry above
+     it — a jumping start line reads as a glitch. */
+  .sp-step { margin: 0; min-height: 1.3em; font-size: 12px; letter-spacing: .04em;
+    text-align: center; color: var(--sb-text); animation: sp-fade .5s ease .35s both; }
+  #splash.failed .sp-step { color: var(--sp-warn); }
+  /* Continue and Retry sit on one row; Retry exists only in the failed state,
+     because a retry offered on a healthy boot is a button that does nothing
+     anybody wants. */
+  .sp-acts { display: flex; gap: 10px; align-items: center; }
+  .sp-retry { display: none; }
+  #splash.failed.ready .sp-retry { display: inline-block; }
+
   /* ---- saying go ----
-     The affordance appears only under .ready, and core.js never adds .ready
-     before SPLASH_HINT_AT — so it is a REPORT that the app behind the sheet has
-     arrived, not a promise that it might. That is the whole reason a press is
-     safe: there is nothing to be stranded on. */
-  .sp-go { opacity: 0; pointer-events: none; transition: opacity .3s ease;
+     THE BUTTON IS THE DOOR, not an accelerator. Nothing else takes this sheet
+     down: hideSplash no longer schedules its own dismissal, so the app waits
+     behind the splash until somebody says go, however long that is.
+
+     The affordance appears only under .ready, which core.js adds when the boot
+     is genuinely finished — so it is a REPORT that the app has arrived, never a
+     promise that it might. That is what makes a press safe, and it is also why
+     the button can now be trusted to be the only way out: there is nothing to
+     be stranded on. Under .failed it arms anyway, with different words, because
+     a gate nobody can open is worse than a broken app you were warned about. */
+  .sp-go, .sp-retry { opacity: 0; pointer-events: none; transition: opacity .3s ease;
     font: inherit; font-weight: 600; padding: 9px 20px; border-radius: 999px;
     border: 1px solid var(--gold); background: none; color: var(--gold); cursor: pointer; }
-  .sp-go:hover { background: var(--gold); color: var(--sb-bg); }
+  .sp-go:hover, .sp-retry:hover { background: var(--gold); color: var(--sb-bg); }
+  /* Retry is the quieter of the two: the sheet has just told you something is
+     wrong, and the useful press is usually still Continue. */
+  .sp-retry { border-color: rgba(255,255,255,.35); color: var(--sb-text); font-weight: 500; }
+  .sp-retry:hover { background: rgba(255,255,255,.12); color: #fff; }
+  /* The house 44px floor, and unconditionally rather than under
+     @media (pointer: coarse) — for two reasons. It matters more here than
+     anywhere else in the app, because this is now the only way into the
+     product, on a phone, in a shop, in gloves; and a splash has room to be
+     generous on a desktop too, where 44px is a comfortable primary action
+     rather than the dense-toolbar compromise the coarse block exists to undo.
+     Keeping it out of that block also leaves the app's one coarse-pointer
+     section the last one in the file, which test_app.mjs relies on to find it. */
+  .sp-go, .sp-retry { min-height: 44px; padding: 11px 22px; }
   .sp-hint { font-size: 11.5px; color: var(--sb-text); opacity: 0; transition: opacity .3s ease; }
-  #splash.ready .sp-go { opacity: 1; pointer-events: auto; }
+  #splash.ready .sp-go, #splash.ready .sp-retry { opacity: 1; pointer-events: auto; }
   #splash.ready .sp-hint { opacity: .7; }
   /* Arrival outranks a four-second worry: if the connection took long enough to
      earn the slow line and then landed, the slow line is no longer true. */
@@ -3205,20 +3506,54 @@
   @keyframes sp-part-b { to { transform: translate(-30px,  20px) scale(1.06); opacity: 0; } }
   #splash.enter .sp-ply.a { animation: sp-part-a .34s cubic-bezier(.4,0,.9,.4) both; }
   #splash.enter .sp-ply.b { animation: sp-part-b .34s cubic-bezier(.4,0,.9,.4) both; }
-  /* The text goes first and quietly. It is not the subject of the shot. */
+  /* LIGHTS OUT, and it goes first. On a real start line the lights do not fade
+     down, they all extinguish together, and that instant IS the go signal —
+     which is exactly what the press just was. Snapped off in 120ms rather than
+     released through the .17s token transition, because a gantry that dims
+     politely is a gantry that was never a start line. */
+  @keyframes sp-out { to { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.28); box-shadow: none; } }
+  #splash.enter .sp-lamp { animation: sp-out .12s linear both; }
+  /* The text goes next, quietly. It is not the subject of the shot. */
   @keyframes sp-drop { to { opacity: 0; transform: translateY(6px); } }
   #splash.enter .sp-word, #splash.enter .sp-fact, #splash.enter .sp-go,
-  #splash.enter .sp-hint, #splash.enter .sp-slow { animation: sp-drop .18s ease both; }
-  /* The sheet itself moves. A cross-fade would spend 280ms as grey, because
-     what is behind a navy full-bleed sheet is a white app.
+  #splash.enter .sp-retry, #splash.enter .sp-hint, #splash.enter .sp-slow,
+  #splash.enter .sp-step { animation: sp-drop .18s ease .06s both; }
 
-     pointer-events goes off with the FIRST frame, not at the end: a sheet that
-     is still catchable while it flies away eats the first tap on whatever it is
-     uncovering, which is the same hazard the DOM removal in hideSplash exists
-     to prevent. The transition is cancelled so it cannot fight the animation. */
-  @keyframes sp-lift { to { transform: translate(46%, -46%); opacity: 0; } }
-  #splash.enter { animation: sp-lift .38s cubic-bezier(.55,0,.85,.35) .14s both;
-    transition: none; pointer-events: none; will-change: transform, opacity; }
+  /* ---- and the sheet is drawn off on the bias ----
+     A CLIP, NOT A MOVE. The sheet used to translate 46% up and right, which
+     shrinks it into a corner — it read as the window being minimised rather
+     than as the app arriving. Clipping instead means the app is uncovered in
+     place, already rendered, from the first frame.
+
+     This also settles the objection the old comment raised against a
+     cross-fade: that it "would spend 280ms as grey, because what is behind a
+     navy full-bleed sheet is a white app". A wipe is never grey — at every
+     frame each pixel is either fully navy or fully app.
+
+     The cut runs along the same diagonal the plies arrive on (sp-lay comes in
+     from up and to the right), and it retreats that way too, so the sheet
+     leaves the way a ply comes off a mold. Both keyframes have four points, in
+     the same order, which is what makes clip-path interpolate at all. The
+     percentages overshoot the box hard so the start frame provably covers every
+     aspect ratio and the end frame provably covers none.
+
+     pointer-events goes off with the FIRST frame, not at the end: a sheet still
+     catchable while it leaves eats the first tap on whatever it is uncovering,
+     which is the same hazard the DOM removal in hideSplash exists to prevent. */
+  @keyframes sp-wipe {
+    from { clip-path: polygon(-200%  -50%, 300% 450%, 300% -300%, -200% -300%); }
+    to   { clip-path: polygon(-200% -350%, 300% 150%, 300% -300%, -200% -300%); }
+  }
+  #splash.enter { animation: sp-wipe .32s cubic-bezier(.55,0,.85,.35) .12s both;
+    transition: none; pointer-events: none; will-change: clip-path; }
+
+  /* The app arrives rather than merely being uncovered: the rail first, then
+     the page, on the same 12px rise. Short and once — this class is removed as
+     soon as it has played, so nothing in the app is left carrying an animation
+     it did not ask for. */
+  @keyframes sp-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  #app.sp-arrive .sidebar { animation: sp-rise .26s var(--ease) both; }
+  #app.sp-arrive .content { animation: sp-rise .26s var(--ease) .06s both; }
   /* The global reduce-motion rule clamps durations to .01ms, which lands every
      element on its `to` frame — the stacked mark, all three lines up. That is
      the right still image, so there is nothing to undo here beyond the
@@ -3240,9 +3575,16 @@
     </svg>
   </div>
   <div class="sp-word">FEB <span>Composites</span></div>
+  <div class="sp-lights" id="sp-lights" role="progressbar" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" aria-label="Starting up">
+    <span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span>
+  </div>
+  <p class="sp-step" id="sp-step" aria-live="polite">Starting up&hellip;</p>
   <p class="sp-fact" id="sp-fact">Twill weave drapes around curves better than plain weave, and has fewer fiber crimps.</p>
   <div class="sp-slow">Still connecting — the shop wifi at RFS drops sometimes.</div>
-  <button type="button" class="sp-go" id="sp-go" onclick="splashGo()">Continue</button>
+  <div class="sp-acts">
+    <button type="button" class="sp-go" id="sp-go">Continue</button>
+    <button type="button" class="sp-retry" id="sp-retry">Retry</button>
+  </div>
   <div class="sp-hint kbdhint">or press Enter</div>
 </div>
 <script>
@@ -3276,7 +3618,16 @@
      "Connecting…" card. Bound here rather than in core.js so the sheet answers
      a press from the first frame, before the app's scripts have run — at which
      point splashGo does not exist yet, hence the typeof guard. */
-  document.getElementById("splash").addEventListener("click", function () {
+  document.getElementById("splash").addEventListener("click", function (e) {
+    /* Retry is the one control on the sheet that is NOT "go". Without this test
+       it would be swallowed by the go-anywhere handler and reload nothing,
+       because the click bubbles to the sheet either way. Checked with closest()
+       rather than on the button itself so a press that lands on the button's
+       text node still counts. */
+    if (e.target && e.target.closest && e.target.closest("#sp-retry")) {
+      if (typeof splashRetry === "function") splashRetry();
+      return;
+    }
     if (typeof splashGo === "function") splashGo();
   });
   document.addEventListener("keydown", function (e) {
@@ -3286,19 +3637,24 @@
       if (typeof splashGo === "function") splashGo();
     }
   });
-  /* The splash owns the screen only while there is genuinely nothing to show.
-     render() takes it down the moment fb.state leaves "loading" — including
-     for "signedout" and "pending", or the login form would sit behind it. This
-     is the backstop for the case render() never gets there: no network, a
-     Firebase config that will not load, a module that threw. Say so rather
-     than spin forever, and get out of the way so the page underneath is
-     reachable. */
+  /* THE SHEET NO LONGER LEAVES ON ITS OWN. It owns the screen until somebody
+     presses Continue, and Continue does not arm until the boot has genuinely
+     finished — so these two timers are about what to SAY while waiting and how
+     to fail honestly, never about dismissing.
+
+     At 12s something is wrong rather than slow. The right answer is to arm the
+     button with different words, not to dismiss: splashFail marks whatever is
+     still outstanding as failed, says which step it was, and offers Continue
+     anyway alongside Retry. Nobody is locked out and nobody is told the app
+     loaded when it did not. */
   setTimeout(function () { var el = document.getElementById("splash"); if (el) el.classList.add("slow"); }, 4000);
   setTimeout(function () {
-    if (typeof hideSplash === "function") { hideSplash(true); return; }
-    /* core.js never parsed, so hideSplash does not exist and the timer above
-       would simply no-op — leaving a full-bleed navy sheet over the page
-       forever. Take it down by hand instead; .gone is still the plain fade. */
+    if (typeof splashFail === "function") { splashFail("Something is not responding."); return; }
+    /* core.js never parsed, so there is no gate to arm and no app to gate — a
+       thrown module, a bad deploy, a Firebase config that will not load. This
+       is the one case that still dismisses by hand, because leaving a
+       full-bleed navy sheet over the page forever is strictly worse than
+       showing whatever did manage to render underneath it. */
     var el = document.getElementById("splash");
     if (el) { el.classList.add("gone"); setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el); }, 400); }
@@ -3332,6 +3688,7 @@
 <script src="firebase-config.js"></script>
 <script src="core.js"></script>
 <script src="resins.js"></script>
+<script src="materials.js"></script>
 <script src="gdocs.js"></script>
 <script src="rte.js"></script>
 <script src="workorders.js"></script>
@@ -3351,10 +3708,17 @@
 <script src="drawings.js"></script>
 <script src="stock.js"></script>
 <script src="shop.js"></script>
+<!-- Installs a BarcodeDetector polyfill (vendored zxing-wasm, lazy) on
+     browsers without the native one — iPhones. Before scan.js, which
+     feature-detects it. The wasm is NOT fetched at boot; only when a scan
+     opens on such a browser. -->
+<script src="scan-fallback.js"></script>
 <script src="scan.js"></script>
 <script src="molds.js"></script>
 <script src="inventory.js"></script>
 <script src="receiving.js"></script>
+<script src="ehsimport.js"></script>
+<script src="rnd.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>

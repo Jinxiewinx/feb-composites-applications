@@ -383,9 +383,13 @@ function invLocWarnings(bin, bucket) {
   const lots = [...bucket.resin, ...bucket.fabric, ...bucket.consumables];
   const expired = lots.filter(lotExpired).length;
   if (expired) out.push({ text: `${expired} expired`, cls: "bad" });
-  /* §6: resin and hardener on different shelves. Role is recorded on RSN lots. */
-  const roles = new Set(bucket.resin.map(o => String(o.role || "").toLowerCase()).filter(Boolean));
-  if (roles.has("resin") && roles.has("hardener")) out.push({ text: "resin + hardener together", cls: "bad" });
+  /* There is deliberately NO resin+hardener co-location warning here any more.
+     The team stores them together (lead decision, Simon, 2026-08-28) — the
+     imported EH&S inventory has both in the one flammables cabinet, which is
+     where campus EH&S itself filed them. CS-011 §6 still says "separate
+     shelves" pending Simon's Rev D; the app follows the shop's actual
+     practice, and the standard gets fixed through its own revision process,
+     not from here. Do not reintroduce the check without both changing. */
   /* §6: flammables live in the rated cabinet. */
   const flams = lots.filter(o => o.hazard === "flammable").length;
   if (flams && bin.flam !== "Yes") out.push({ text: `${flams} flammable — not a rated location`, cls: "bad" });
@@ -474,17 +478,24 @@ function invCard(bin, bucket) {
      is exactly what the monthly walk needs. So: one real button on the name,
      stretched over the whole card by its ::after, and Confirm as a SIBLING
      sitting above it on the z-axis. Two real buttons, both tab-reachable, both
-     announced, and no stopPropagation anywhere. */
-  return `<div class="loccard ${alert ? "alert" : ""} ${n ? "" : "isempty"}" title="${esc(bin.id)}">
+     announced.
+     The container ALSO carries the open handler, as a pointer-only backstop:
+     the ::after stretch depends on stacking-context subtleties that have
+     already failed for Simon on at least one engine, and a chip gaining
+     position/z-index later would silently punch a dead zone in it. Keyboard
+     access stays on the real buttons; Confirm stops propagation so it never
+     also opens the shelf. Firing both the button and the backstop is harmless
+     — selectInvRec is idempotent. */
+  return `<div class="loccard ${alert ? "alert" : ""} ${n ? "" : "isempty"}" title="${esc(bin.id)}" onclick="selectInvRec('${esc(bin.id)}')">
     ${warns.map(w => `<div class="lc-warn ${w.cls}">${icon("warning", 12)} ${esc(w.text)}</div>`).join("")}
     <div class="lc-hd">
-      <button class="lc-open lc-name" onclick="selectInvRec('${esc(bin.id)}')">${esc(bin.name || bin.id)}</button>
+      <button class="lc-open lc-name" onclick="event.stopPropagation();selectInvRec('${esc(bin.id)}')">${esc(bin.name || bin.id)}</button>
       ${bin.locKind ? `<span class="kind">${esc(bin.locKind)}</span>` : ""}
       ${bin.flam === "Yes" ? `<span class="kind lc-flam" title="Rated for flammables">◆ flam</span>` : ""}</div>
     <div class="lc-body">${n ? parts.map(([c, l]) => `<span>${c} ${l}</span>`).join(" · ") : '<span class="muted">nothing on it</span>'}</div>
     ${age != null && age <= INV_WALK_STALE_DAYS ? "" :
       `<div class="lc-foot tny muted">${age == null ? "contents never confirmed" : `walked ${age}d ago ⚠`}</div>`}
-    <button class="sm lc-act no-print" onclick="invConfirmContents('${esc(bin.id)}')">${icon("check", 13)} Confirm</button>
+    <button class="sm lc-act no-print" onclick="event.stopPropagation();invConfirmContents('${esc(bin.id)}')">${icon("check", 13)} Confirm</button>
   </div>`;
 }
 
@@ -595,19 +606,29 @@ function invToolbar(active) {
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
+    ${customLabelBtn()}
     <button class="ib" onclick="invExportModal()">${icon("download", 15)} Export</button>
+    ${/* Bulk-links the containers campus EH&S already tagged, from the RSS
+          export. Lead-only, like the mold import — it mints records. */""}
+    ${isLead() && typeof openEhsImport === "function" ? `<button class="ib" onclick="openEhsImport()">${icon("upload", 15)} EH&S import</button>` : ""}
   </div>`;
 }
 
 /* ---------- one location's contents ---------- */
-function invRow(coll, o, pill) {
+function invRow(coll, o, pill, opts) {
   const tab = tabForId(o.id) || "inventory";
-  return `<div class="pmini invrow" onclick="openRecord('${esc(tab)}','${esc(o.id)}')">
+  const pick = !!(opts && opts.pick);
+  const ticked = pick && !!(view.shopPick || {})[o.id];
+  return `<div class="pmini invrow ${ticked ? "picked" : ""}" ${pick ? `aria-selected="${ticked}"` : ""}
+      onclick="${pick ? `toggleShopPick('${esc(o.id)}')` : `openRecord('${esc(tab)}','${esc(o.id)}')`}">
+    ${pick ? `<input type="checkbox" ${ticked ? "checked" : ""} aria-label="Select ${esc(o.id)}"
+      onclick="event.stopPropagation();toggleShopPick('${esc(o.id)}')">` : ""}
     <span class="pm-name">${esc(o.name || o.partName || o.label || o.id)}</span>
     <span class="tny muted">${esc(o.id)}</span>
     ${/* Prices ride along on the shelf view so browsing the map teaches what
           things cost — the anti-tribal-knowledge surface Simon picked. */""}
     ${typeof o.unitCost === "number" ? `<span class="tny muted">${esc(shopMoneyText(o, "unitCost"))}</span>` : ""}
+    ${coll === "lots" ? invLotFacts(o) : ""}
     ${pill || ""}
     <button class="sm no-print" onclick="event.stopPropagation();quickMove('${esc(coll)}','${esc(o.id)}')">Move</button>
   </div>`;
@@ -617,9 +638,144 @@ function invLotPill(o) {
   if (lotIsLow(o)) return `<span class="pill OnHold">low</span>`;
   return `<span class="pill ${o.stage === "Open" ? "InWork" : "Draft"}">${esc(o.stage || "—")}</span>`;
 }
-function invGroup(title, rows) {
+
+/* The facts a person otherwise clicks into a record for, said on the row:
+   the EH&S tag (the code on the physical container — until now the shelf view
+   never showed it, so ten identical jugs were told apart by an id that is on
+   no sticker), the expiry, and a flammable marker. */
+function invEhsShort(o) {
+  const c = String(o.ehsBarcode || "");
+  if (!c) return "";
+  return `<span class="ehs-code" title="EH&S tag ${esc(c)}">${esc(c.length > 8 ? "…" + c.slice(-6) : c)}</span>`;
+}
+function invLotFacts(o) {
+  return [
+    o.hazard === "flammable" ? `<span class="kind lc-flam" title="Flammable">◆</span>` : "",
+    o.expiresOn ? `<span class="tny ${lotExpired(o) ? "bad" : "muted"}">exp ${esc(o.expiresOn)}</span>` : "",
+    invEhsShort(o),
+  ].filter(Boolean).join("");
+}
+
+/* ---------- identical containers fold into one line ----------
+ *
+ * The EH&S import created ten AT30 jugs as ten records, which is correct —
+ * one tag, one container — and unreadable as ten identical rows. So lot rows
+ * group by material: matKey when set, else the name. One line per material
+ * carrying the count and the aggregate facts; opening it lists the containers
+ * with their EH&S codes, which is the only way to tell jug six from jug seven
+ * while holding one of them.
+ *
+ * The fold is a CLASS, not a <details>: this page prints as the stock walk,
+ * and a closed details element skips painting (the ban at index.html's mobile
+ * rail comment). A print rule forces the member lists visible on paper. */
+function lotGroupKey(o) {
+  const k = String(o.matKey || "").trim().toLowerCase();
+  return k ? "m:" + k : "n:" + String(o.name || o.id).trim().toLowerCase();
+}
+function groupLots(arr) {
+  const m = new Map();
+  for (const o of arr || []) {
+    const key = lotGroupKey(o);
+    if (!m.has(key)) m.set(key, { key, name: o.name || o.id, members: [] });
+    m.get(key).members.push(o);
+  }
+  return [...m.values()].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+function invLotOpenState(key) { return !!(view.invLotOpen || {})[key]; }
+function toggleLotGroup(key) {
+  view.invLotOpen = { ...(view.invLotOpen || {}) };
+  view.invLotOpen[key] = !view.invLotOpen[key];
+  render();
+}
+
+/* The group line: everything worth knowing without opening it. States,
+   soonest expiry, flammability, price — and the count in bold, because "how
+   many do we have" is the question the line exists to answer. */
+function invGroupRow(g, opts) {
+  const o = opts || {};
+  const open = invLotOpenState(g.key) || !!o.pick;   // picking auto-opens: you tick what you can see
+  const n = g.members.length;
+  const pickedAll = o.pick && g.members.every(m => (view.shopPick || {})[m.id]);
+  const pickedSome = o.pick && !pickedAll && g.members.some(m => (view.shopPick || {})[m.id]);
+  const groupBox = o.pick ? `<input type="checkbox" ${pickedAll ? "checked" : ""}
+      aria-label="Select all ${n} ${esc(g.name)}" ${pickedSome ? 'data-mixed="1"' : ""}
+      onclick="event.stopPropagation();shopPickGroup('${esc(g.key)}')">` : "";
+  const byStage = new Map();
+  for (const m of g.members) byStage.set(m.stage || "—", (byStage.get(m.stage || "—") || 0) + 1);
+  const states = [...byStage.entries()].map(([s, c]) => `${c} ${String(s).toLowerCase()}`).join(" · ");
+  const expDates = g.members.map(m => m.expiresOn).filter(Boolean).sort();
+  const anyExpired = g.members.some(lotExpired);
+  const anyLow = g.members.some(lotIsLow);
+  const flam = g.members.some(m => m.hazard === "flammable");
+  const cost = g.members.find(m => typeof m.unitCost === "number");
+  const pill = anyExpired ? `<span class="pill OnHold">expired</span>`
+    : anyLow ? `<span class="pill OnHold">low</span>` : "";
+  return `<div class="pmini invrow invgrp" role="button" tabindex="0" aria-expanded="${open}"
+      onclick="toggleLotGroup('${esc(g.key)}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLotGroup('${esc(g.key)}')}">
+    ${groupBox}
+    <span class="grp-caret">${open ? "▾" : "▸"}</span>
+    <span class="pm-name">${esc(g.name)} <b class="grp-n">×${n}</b></span>
+    ${flam ? `<span class="kind lc-flam" title="Flammable">◆</span>` : ""}
+    ${expDates.length ? `<span class="tny ${anyExpired ? "bad" : "muted"}">${anyExpired ? "expired" : "first exp " + esc(expDates[0])}</span>` : ""}
+    ${cost ? `<span class="tny muted">${esc(shopMoneyText(cost, "unitCost"))}</span>` : ""}
+    ${typeof matForLot === "function" ? matInfoHtml(matForLot(g.members[0]), { lite: true }) : ""}
+    <span class="tny muted grp-states">${esc(states)}</span>
+    ${pill}
+  </div>
+  <div class="invgrp-body ${open ? "" : "folded"}">
+    ${g.members.map(m => invMemberRow(m, o)).join("")}
+  </div>`;
+}
+
+/* One container inside an opened group. The EH&S code IS the row's identity —
+   it is the sticker on the jug in your hand — with the FEB id as the quieter
+   second fact. */
+function invMemberRow(o, opts) {
+  const loc = opts && opts.showLoc;
+  const pick = !!(opts && opts.pick);
+  const ticked = pick && !!(view.shopPick || {})[o.id];
+  const where = loc ? shopById("items", o.location || "") : null;
+  return `<div class="pmini invrow invmem ${ticked ? "picked" : ""}" ${pick ? `aria-selected="${ticked}"` : ""}
+      onclick="${pick ? `toggleShopPick('${esc(o.id)}')` : `openRecord('lots','${esc(o.id)}')`}">
+    ${pick ? `<input type="checkbox" ${ticked ? "checked" : ""} aria-label="Select ${esc(o.id)}"
+      onclick="event.stopPropagation();toggleShopPick('${esc(o.id)}')">` : ""}
+    <span class="pm-name tny">${esc(o.id)}</span>
+    ${loc ? `<span class="tny muted">${where ? esc(where.name || where.id) : "(no location)"}</span>` : ""}
+    ${o.openedOn ? `<span class="tny muted">opened ${esc(o.openedOn)}</span>` : ""}
+    ${o.expiresOn ? `<span class="tny ${lotExpired(o) ? "bad" : "muted"}">exp ${esc(o.expiresOn)}</span>` : ""}
+    ${invEhsShort(o) || `<span class="tny muted">no EH&S tag</span>`}
+    ${invLotPill(o)}
+    <button class="sm no-print" onclick="event.stopPropagation();quickMove('lots','${esc(o.id)}')">Move</button>
+  </div>`;
+}
+
+/* Group rows and singleton rows out of one list. A group of one renders as a
+   plain row — nothing changes for the mold release that exists once. */
+function invLotList(arr, opts) {
+  return groupLots(arr).map(g => g.members.length === 1
+    ? invRow("lots", g.members[0], invLotPill(g.members[0]), opts)
+    : invGroupRow(g, opts)).join("");
+}
+
+/* A section of the location page: its own CARD, the way the Boards tab gives
+   every group its own — one blob per kind (Simon, 2026-08-28: sections need
+   more visual distinction than a header strip inside one long card). The
+   kind's accent runs down the card's left spine, and the count is in the
+   header because "19 resin" should not require counting rows by eye. */
+function invGroup(title, rows, meta, secCls) {
   if (!rows) return "";
-  return `<h3>${esc(title)}</h3>${rows || '<span class="muted tny">nothing</span>'}`;
+  return `<div class="card invsec ${secCls || ""}">
+    <div class="pgrouphd"><span class="pg-name">${esc(title)}</span>${meta ? `<span class="pg-n">${esc(meta)}</span>` : ""}</div>
+    ${rows}
+  </div>`;
+}
+
+/* "14 containers · 4 materials", or just the count when they are the same. */
+function invLotMeta(arr) {
+  if (!arr.length) return "";
+  const mats = groupLots(arr).length;
+  return mats === arr.length ? String(arr.length) : `${arr.length} containers · ${mats} materials`;
 }
 
 function renderInvContents(bin) {
@@ -634,13 +790,15 @@ function renderInvContents(bin) {
   const age = nowhere ? null : invDaysSince(b.walkedAt);
   const addBtn = (cls, label) => `<button class="sm" onclick="newShopRec('${cls === "PNL" || cls === "JIG" ? "items" : "lots"}','${cls}',{location:'${esc(b.id)}'})">+ ${label}</button>`;
   const flag = view.invFlag === "reorder";
-  const lotRows = arr => arr.filter(o => !flag || lotIsLow(o) || lotExpired(o)).map(o => invRow("lots", o, invLotPill(o))).join("");
+  const lotVisible = arr => arr.filter(o => !flag || lotIsLow(o) || lotExpired(o));
+  const lotRows = arr => invLotList(lotVisible(arr));
 
   return `
   <div class="toolbar no-print">
     <button class="ib" onclick="clearInvSelection()">${icon("chevronLeft", 16)} Storage map</button>
     ${nowhere ? "" : `<button class="primary ib" onclick="view.edit=true;render()">${icon("edit", 15)} Edit location</button>`}
     ${nowhere ? "" : labelBtn("items", b.id)}
+    ${customLabelBtn()}
     ${nowhere ? "" : `<button class="ib" onclick="invMoveHere('${esc(b.id)}')">${icon("search", 15)} Move here (scan)</button>`}
     ${nowhere ? "" : `<button class="ib" onclick="invReceive('${esc(b.id)}')">${icon("plus", 15)} Receive delivery</button>`}
     ${nowhere ? "" : `<button class="ib" onclick="invConfirmContents('${esc(b.id)}')">${icon("check", 15)} Confirm contents</button>`}
@@ -648,22 +806,24 @@ function renderInvContents(bin) {
   <div class="card">
     <h2>${esc(b.name || b.id)}</h2>
     <div class="muted">${nowhere ? "Everything that has no recorded location. House these." : `${esc(b.id)}${b.site ? " · " + esc(b.site) : ""}${b.locKind ? " · " + esc(b.locKind) : ""}${b.flam === "Yes" ? " · rated for flammables" : ""}${age != null ? ` · contents confirmed ${age}d ago${b.walkedBy ? " by " + esc(b.walkedBy) : ""}` : " · contents never confirmed"}`}</div>
-    ${warns.map(w => `<div class="warn">${icon("warning", 14)} ${esc(w.text)}${w.text.includes("resin + hardener") ? " — CS-011 §6 wants them on separate shelves" : ""}</div>`).join("")}
+    ${warns.map(w => `<div class="warn">${icon("warning", 14)} ${esc(w.text)}</div>`).join("")}
     ${invBucketCount(bucket) === 0 ? `<p class="muted">Nothing recorded here yet.</p>` : ""}
-    ${invGroup("Molds", bucket.molds.map(o => invRow("molds", o, `<span class="pill ${shopStageClass(shopSpec("molds"), o)}">${esc(o.stage || "—")}</span>`)).join(""))}
-    ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="tny muted">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)}</span>`)).join(""))}
-    ${invGroup("Test panels", bucket.panels.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""))}
-    ${invGroup("Jigs", bucket.jigs.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""))}
-    ${invGroup("Resin / hardener", lotRows(bucket.resin))}
-    ${invGroup("Fabric", lotRows(bucket.fabric))}
-    ${invGroup("Consumables", lotRows(bucket.consumables))}
-    ${invGroup("Parts stored here", bucket.parts.map(o => invRow("parts", o, "")).join(""))}
-    ${nowhere && idx.legacyParts.length ? invGroup("Parts with free-text locations (legacy)",
-      idx.legacyParts.map(p => `<div class="pmini" onclick="openRecord('parts','${esc(p.id)}')">
-        <span class="pm-name">${esc(p.partName || p.id)}</span><span class="tny muted">"${esc(p.moldLocation)}"</span></div>`).join("")) : ""}
-    ${nowhere ? "" : `<div class="no-print" style="margin-top:12px"><div class="lg-label tny">Add here</div>
-      ${addBtn("PNL", "Test panel")}${addBtn("JIG", "Jig")}${addBtn("FAB", "Fabric")}${addBtn("RSN", "Resin / hardener")}${addBtn("CON", "Consumable")}</div>`}
-  </div>`;
+  </div>
+  ${/* Each kind is its own card, sibling to the header — the Boards idiom.
+        One blob per section, accent down the spine. */""}
+  ${invGroup("Molds", bucket.molds.map(o => invRow("molds", o, `<span class="pill ${shopStageClass(shopSpec("molds"), o)}">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.molds.length || ""), "sec-molds")}
+  ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="tny muted">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)}</span>`)).join(""), String(bucket.boards.length || ""), "sec-boards")}
+  ${invGroup("Test panels", bucket.panels.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.panels.length || ""), "sec-panels")}
+  ${invGroup("Jigs", bucket.jigs.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.jigs.length || ""), "sec-jigs")}
+  ${invGroup("Resin / hardener", lotRows(bucket.resin), invLotMeta(lotVisible(bucket.resin)), "sec-resin")}
+  ${invGroup("Fabric", lotRows(bucket.fabric), invLotMeta(lotVisible(bucket.fabric)), "sec-fabric")}
+  ${invGroup("Consumables", lotRows(bucket.consumables), invLotMeta(lotVisible(bucket.consumables)), "sec-consumables")}
+  ${invGroup("Parts stored here", bucket.parts.map(o => invRow("parts", o, "")).join(""), String(bucket.parts.length || ""), "sec-parts")}
+  ${nowhere && idx.legacyParts.length ? invGroup("Parts with free-text locations (legacy)",
+    idx.legacyParts.map(p => `<div class="pmini" onclick="openRecord('parts','${esc(p.id)}')">
+      <span class="pm-name">${esc(p.partName || p.id)}</span><span class="tny muted">"${esc(p.moldLocation)}"</span></div>`).join(""), String(idx.legacyParts.length), "sec-parts") : ""}
+  ${nowhere ? "" : `<div class="card no-print"><div class="lg-label tny">Add here</div>
+    ${addBtn("PNL", "Test panel")}${addBtn("JIG", "Jig")}${addBtn("FAB", "Fabric")}${addBtn("RSN", "Resin / hardener")}${addBtn("CON", "Consumable")}</div>`}`;
 }
 
 /* Standing at the shelf with a pile of things: scan each thing, it moves HERE.
@@ -793,6 +953,45 @@ function invExportLocations() {
   }).sort((a, b) => String(a.site).localeCompare(String(b.site)) || String(a.name).localeCompare(String(b.name)));
 }
 
+/* The reconciliation sheet: our chemical containers against the campus RSS
+   inventory, one row per RSN/CON lot plus one per shelf wearing an RSS
+   sublocation tag. Sorted so the rows with something to fix come first — a
+   container with no EH&S tag is exactly what an EH&S walk will flag, and an
+   emptied one is what RSS still thinks exists. Compare on the barcode column;
+   ours and theirs agree on it by construction. */
+function invExportEhs() {
+  const names = invLocNames();
+  const rows = [];
+  for (const l of DB.lots || []) {
+    if (l.cls !== "RSN" && l.cls !== "CON") continue;
+    const where = invWhere(l, names);
+    rows.push({
+      ehsBarcode: l.ehsBarcode || "",
+      id: l.id, kind: l.cls === "RSN" ? "Resin / hardener" : "Consumable",
+      name: l.name || "", state: l.stage || "", howFull: l.qty || "",
+      location: where ? where.name : "(no location)",
+      receivedOn: l.receivedOn || "", openedOn: l.openedOn || "",
+      emptiedOn: l.emptiedOn || "", expiresOn: l.expiresOn || "",
+      hazard: l.hazard || "",
+      note: [
+        !l.ehsBarcode ? "no EH&S tag on record" : "",
+        l.stage === "Empty" && l.ehsBarcode ? "emptied — retire it in RSS too" : "",
+      ].filter(Boolean).join("; "),
+      url: SCAN_HOST + SCAN_PATH + l.id,
+    });
+  }
+  for (const b of (DB.items || []).filter(b => b.cls === "BIN" && b.ehsBarcode)) {
+    rows.push({
+      ehsBarcode: b.ehsBarcode, id: b.id, kind: "Storage location",
+      name: b.name || "", state: b.stage || "", howFull: "",
+      location: b.site || "", receivedOn: "", openedOn: "", emptiedOn: "", expiresOn: "",
+      hazard: "", note: "RSS sublocation tag",
+      url: SCAN_HOST + SCAN_PATH + b.id,
+    });
+  }
+  return rows.sort((a, b) => (a.note ? 0 : 1) - (b.note ? 0 : 1) || cmpId(a.id, b.id));
+}
+
 const INV_EXPORTS = {
   flat: { file: "inventory", label: "Everything on every shelf",
           blurb: "One row per physical thing, with the shelf it is on.",
@@ -800,6 +999,9 @@ const INV_EXPORTS = {
   locations: { file: "inventory-locations", label: "Locations",
                blurb: "One row per shelf, rack and bin, with counts and the last stock walk.",
                rows: () => invExportLocations() },
+  ehs: { file: "ehs-reconciliation", label: "EH&S reconciliation",
+         blurb: "Chemical containers with their EH&S barcodes, for checking against the campus RSS inventory. Rows needing attention sort first.",
+         rows: () => invExportEhs() },
 };
 function invExportCols(which, rows) {
   const seen = [];

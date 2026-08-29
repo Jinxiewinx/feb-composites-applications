@@ -645,3 +645,89 @@ tr.blk td.seq {
   }
   #printroot .wsheet.labels .label-sheet:last-child { break-after: auto; page-break-after: auto; }
 }
+
+/* ================================================================
+   LABELS ON A ROLL — Brother QL, one label at a time
+   ================================================================
+
+   Same .lbl markup as the Avery sheet, a different page. On a QL the roll's
+   width runs ACROSS the print head and the length along the feed is whatever
+   you cut, so a 29mm continuous roll cut at 101.6mm IS the 5161 cell to within
+   a millimetre — which is why nothing above this comment had to change.
+
+   ONE NAMED PAGE PER MEDIA, because @page carries the `size` and the two rolls
+   are different sizes. The names are matched by the `page` property on the
+   element, so a media added to LABEL_ROLLS in labels.js needs its @page here
+   or the label prints on whatever the default page is (US Letter) with one
+   label marooned in the corner of a sheet.
+
+   `.roll-page` and NOT `.ws-page`: print.js sheetFileHtml() injects
+   `@media print { .ws-page { padding: 0 0.45in } }` into every saved standalone
+   sheet, and 0.45in either side of a 101.6mm label leaves nothing. The preview
+   would look right and the file that actually gets printed at the bench would
+   not, which is the worst shape a bug can have here. */
+
+@page roll2210 { size: 101.6mm 25.4mm; margin: 0; }
+@page roll1201 { size: 86.6mm 26.4mm; margin: 0; }
+
+.wsheet.rolls .roll-page {
+  position: relative; overflow: hidden;
+  padding: 0; margin: 0 auto 8px;
+  background: #fff;
+}
+.wsheet.rolls .roll-page[data-media="dk2210"] { page: roll2210; width: 101.6mm; height: 25.4mm; }
+.wsheet.rolls .roll-page[data-media="dk1201"] { page: roll1201; width: 86.6mm; height: 26.4mm; }
+
+/* Screen-only: the preview is a stack of small white rectangles on a grey
+   background, so without an edge it reads as floating text rather than as
+   labels. Hidden on paper for the same reason the sheet's cell outlines are —
+   a printed border is how you get ink on the backing. */
+#printroot.preview .wsheet.rolls .roll-page { box-shadow: 0 3px 14px rgba(0,0,0,.4); }
+.wsheet.rolls .roll-page { outline: 0.4pt dashed #bbb; outline-offset: -0.4pt; }
+@media print { .wsheet.rolls .roll-page { outline: none; } }
+
+/* index.html's `#printroot .ws-page { width:auto; min-height:0 }` does not
+   reach .roll-page, but the id-in-selector form is kept anyway to match what
+   the sheet rules above had to do, and because one page per label means a
+   trailing blank page is the visible failure if break-after leaks. */
+@media print {
+  #printroot .wsheet.rolls .roll-page {
+    padding: 0 !important; margin: 0 !important; zoom: 1 !important;
+    box-shadow: none;
+    break-after: page; page-break-after: always;
+  }
+  #printroot .wsheet.rolls .roll-page[data-media="dk2210"] { width: 101.6mm !important; height: 25.4mm !important; }
+  #printroot .wsheet.rolls .roll-page[data-media="dk1201"] { width: 86.6mm !important; height: 26.4mm !important; }
+  #printroot .wsheet.rolls .roll-page:last-child { break-after: auto; page-break-after: auto; }
+}
+
+/* ---------- the R&D study report ----------
+   Added 2026-08-28 with the R&D bench. Here and NOT in index.html's <style>,
+   because downloadSheet() fetches and inlines THIS file and nothing else — a
+   rule written next to the screen styles renders correctly in the preview and
+   then vanishes from every saved sheet, which is the failure mode the label
+   rules are already grouped here to avoid.
+
+   Its own table class rather than table.sub: that one is screen vocabulary and
+   print.css has never styled it, so a report leaning on it would print as
+   unruled rows. */
+.rdrep-page { break-after: page; page-break-after: always; }
+.rdrep-page:last-child { break-after: auto; page-break-after: auto; }
+.rdrep-page h1 { font-size: 15pt; margin: 0 0 2pt; }
+.rdrep-meta { font-size: 7.5pt; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6pt; }
+.rdrep-q { font-size: 9.5pt; margin: 0 0 8pt; }
+.rdrep-mat { display: flex; flex-wrap: wrap; gap: 2pt 14pt; font-size: 8pt; margin-bottom: 8pt; }
+
+.rdrep-tbl { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 10pt; }
+.rdrep-tbl th { text-align: left; font-size: 6.5pt; letter-spacing: .09em; text-transform: uppercase;
+  border-bottom: 0.9pt solid #000; padding: 2pt 4pt; }
+.rdrep-tbl td { padding: 2.5pt 4pt; border-bottom: 0.3pt solid #999; vertical-align: top; }
+/* Measurements line up on the decimal or they cannot be scanned down a column,
+   which is the only reason to print the table rather than the summary. */
+.rdrep-tbl td { font-variant-numeric: tabular-nums; }
+.rdrep-tbl tr { break-inside: avoid; page-break-inside: avoid; }
+
+.rdrep-photos { display: flex; flex-wrap: wrap; gap: 8pt; margin-top: 8pt; }
+.rdrep-photos figure { margin: 0; width: 132pt; break-inside: avoid; page-break-inside: avoid; }
+.rdrep-photos img { width: 132pt; height: 94pt; object-fit: cover; border: 0.6pt solid #000; display: block; }
+.rdrep-photos figcaption { font-size: 6.5pt; margin-top: 1.5pt; }

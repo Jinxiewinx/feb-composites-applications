@@ -15,7 +15,7 @@ const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8
    empty-blueprint bug: the fixtures said one thing, the tab did another, and no
    assertion sat between them. See the "fixtures satisfy every filter" block. */
 import * as FIX from "./lib/fixtures.mjs";
-import { loadApp } from "./lib/appload.mjs";
+import { loadApp, APP_ROOT } from "./lib/appload.mjs";
 
 /* ---------- DOM + browser stubs ---------- */
 let lastToast = "";
@@ -2482,7 +2482,10 @@ await t("a legacy parentId resolves to null rather than crashing", () => {
   DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "issue", status: "To Do", parentId: "TKT-GONE", workOrderId: "WO-1", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
   assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
   setTab("dashboard");
-  assert(!main.innerHTML.includes("part of"), "and nothing claims a parent it cannot name");
+  /* Matched against the parent-chip MARKUP, not the bare phrase: the Team
+     lore card rotates through fact strings and one of them contains "part
+     of", which made this assert fail on whichever day that fact came up. */
+  assert(!main.innerHTML.includes("part of <span"), "and nothing claims a parent it cannot name");
 });
 
 await t("isMine: exact name/first/email match, NOT shared-first-name overmatch", () => {
@@ -3601,6 +3604,319 @@ await t("AN R&D RUN STILL ENFORCES — this is the one that says rnd is not a se
   assert(woIsRnd(w) === true, "it is an R&D run");
   assert(blockerOpenBefore(w, 1) !== null,
     "and its blocker still bites. A retro record documents; an R&D record is live work at the bench with a real cure clock and a real blocker. If this ever fails, somebody added an rnd test beside a retro one and the feature has silently become retro with a different word.");
+});
+
+/* ---------- the R&D bench (the `rnd` collection) ----------
+   The sibling of the test above, and the most valuable one in this block. Two
+   different things in this app share the word "R&D": the boolean on a part,
+   which means a real part with a full traveler that is simply not a season
+   deliverable, and this collection, which holds coupons that have no traveler
+   at all. Somebody will eventually try to unify them. */
+function rdFixture() {
+  DB.parts = [{ id: "P-SN6-960", partName: "VG TRIAL", subteam: "AERO", rnd: true, layupDeadline: "" },
+              { id: "P-SN6-961", partName: "NOSECONE", subteam: "AERO", layupDeadline: "" }];
+  DB.rnd = [
+    { id: "RDS-SN6-001", cls: "RDS", name: "Cure temp", status: "Active", parent: "",
+      labelPrefix: "C", labelNext: 3, cols: [], defaults: { resinLot: "RSN-SN6-009" }, createdBy: "a@b.c" },
+    { id: "RDS-SN6-002", cls: "RDS", name: "Batch A", status: "Active", parent: "RDS-SN6-001",
+      labelPrefix: "A", labelNext: 1, cols: [], defaults: {}, createdBy: "a@b.c" },
+    { id: "CPN-SN6-001", cls: "CPN", study: "RDS-SN6-001", label: "C01", status: "Made", vals: {}, createdBy: "a@b.c" },
+    { id: "CPN-SN6-002", cls: "CPN", study: "RDS-SN6-001", label: "C02", status: "Tested",
+      vals: {}, resinLot: "RSN-SN6-011", createdBy: "a@b.c" },
+  ];
+  /* Push the stub's counters past the ids planted above. `counters` is shared
+     across this whole file, so the first allocId("rnd","RDS") in a test that
+     had not done this returned RDS-SN6-001 — the id the fixture had just used —
+     and a "duplicate" landed on top of the original, inheriting its coupons.
+     Production counters are always ahead of the records that exist; a stub that
+     is wrong in a way a test CAN see is still a stub that is wrong. */
+  counters.RDS = Math.max(counters.RDS || 0, 50);
+  counters.CPN = Math.max(counters.CPN || 0, 50);
+}
+
+await t("THE R&D COLLECTION IS NOT THE R&D FLAG — nothing here reaches the season", () => {
+  rdFixture();
+  /* The three accessors must answer identically whether or not DB.rnd holds
+     anything at all. If one of them ever starts reading the collection, the two
+     meanings have been fused and the part-side guarantees go with them. */
+  assert(inSeason(DB.parts[1]) === true, "an ordinary part is still in season");
+  assert(inSeason(DB.parts[0]) === false, "an rnd:true PART is still out of it");
+  assert(isRnd(DB.rnd[2]) === false,
+    "and a COUPON is not 'an R&D part' — it has no rnd flag and must never be given one");
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  assert(!main.innerHTML.includes("CPN-SN6-"), "no coupon reaches the Season blueprint");
+  assert(typeof trackerRow === "function" && trackerRows().every(r => !String(r[0]).startsWith("CPN-")),
+    "nor the public Sheet mirror, which is a disclosure boundary");
+});
+
+await t("rnd.js never tests `retro` — the alarm for the whole feature", () => {
+  /* DESIGN-NOTES: "every `if (x.retro) return null` gate stays exactly as
+     written and never gains an rnd test". The inverse matters just as much —
+     the day this file starts testing retro, the bench has quietly become a
+     second archive rather than live work. Read from source on purpose. */
+  const src = readFileSync(join(root, "rnd.js"), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert(!/\bretro\b/.test(code), "no retro test survives in rnd.js outside its comments");
+});
+
+await t("inheritance resolves at read time, and clearing a cell restores it", () => {
+  rdFixture();
+  const own = DB.rnd.find(o => o.id === "CPN-SN6-002");
+  const plain = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  assert(rdEff(plain, "resinLot") === "RSN-SN6-009", "a coupon shows its study's resin");
+  assert(rdIsInherited(plain, "resinLot") === true, "and knows the value is not its own");
+  assert(rdEff(own, "resinLot") === "RSN-SN6-011", "an override wins");
+  assert(rdIsInherited(own, "resinLot") === false, "and is reported as an override");
+  own.resinLot = "";
+  assert(rdEff(own, "resinLot") === "RSN-SN6-009",
+    "clearing the cell RESTORES inheritance — no third state, no tombstone");
+  /* One hop up: a batch with no defaults of its own falls through to the
+     project that holds it, which is the only thing that makes nesting useful. */
+  const batchCoupon = { id: "CPN-SN6-003", cls: "CPN", study: "RDS-SN6-002", label: "A01" };
+  DB.rnd.push(batchCoupon);
+  assert(rdEff(batchCoupon, "resinLot") === "RSN-SN6-009", "a batch inherits from its project");
+});
+
+await t("nesting is one level, in both directions", () => {
+  rdFixture();
+  assert(rdChildren("RDS-SN6-001").length === 1, "a project lists its batches");
+  assert(rdChildren("RDS-SN6-002").length === 0, "a batch has none, and rdChildren never recurses");
+  assert(rdRoots().length === 1, "only the project is a root");
+  assert(rdCouponsDeep("RDS-SN6-001").length === 2,
+    "a project counts its batches' coupons too, or the parent row reads smaller than the sum under it");
+});
+
+await t("a study is a folder until you give it columns", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  assert(rdCols(s).length === 0, "declare nothing and it is a plain named folder");
+  s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+  assert(rdCols(s).length === 1, "declare a column and it is a test with a variable");
+  assert(rdCols(rdStudy("RDS-SN6-002")).length === 1,
+    "and a batch inherits its project's columns, so a sweep can span batches");
+  s.cols[0].hidden = true;
+  assert(rdCols(s).length === 0, "hiding retires a column without destroying its values");
+});
+
+await t("A CELL EDIT NEVER REPAINTS — the receiving invariant, restated here", () => {
+  /* onchange fires while Tab is already carrying focus to the next cell, so a
+     repaint destroys the field mid-hop. This is the single thing most likely to
+     be broken by a well-meaning "just call render()". */
+  rdFixture();
+  const realRender = globalThis.render;
+  let painted = 0;
+  try {
+    globalThis.render = () => { painted++; };
+    calls.length = 0;
+    rdUpd("CPN-SN6-001", "notes", "dry corner");
+    assert(painted === 0, "editing notes did not repaint: " + painted);
+    assert(calls.some(c => c[0] === "save" && c[1] === "rnd" && c[3] === "notes"),
+      "and wrote exactly that one field, not the whole document");
+    const s = rdStudy("RDS-SN6-001");
+    s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+    rdVal("CPN-SN6-001", "K1", "140");
+    assert(painted === 0, "nor did editing a measured value");
+    assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 140, "which is stored as a NUMBER, not a string");
+  } finally { globalThis.render = realRender; }
+});
+
+await t("a numeric cell refuses a unit rather than silently eating it", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thickness", role: "result", type: "num", unit: "mm" }];
+  rdVal("CPN-SN6-001", "K1", "2.1mm");
+  assert(((DB.rnd.find(o => o.id === "CPN-SN6-001").vals || {}).K1) === undefined,
+    "parseFloat would have stored 2.1 and thrown the unit away — a number that quietly lost its unit is worse than a rejected keystroke");
+  rdVal("CPN-SN6-001", "K1", "2.1");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 2.1, "the number itself is fine");
+  rdVal("CPN-SN6-001", "K1", "");
+  assert(!("K1" in (DB.rnd.find(o => o.id === "CPN-SN6-001").vals || {})),
+    "and clearing removes the key rather than storing an empty string, so 'not measured' stays distinguishable from zero");
+});
+
+await t("a project rolls its batches up, and refuses coupons of its own", async () => {
+  rdFixture();
+  DB.rnd.push({ id: "CPN-SN6-010", cls: "CPN", study: "RDS-SN6-002", label: "A01", status: "Made", vals: {} });
+  const proj = rdStudy("RDS-SN6-001"), batch = rdStudy("RDS-SN6-002");
+  assert(rdIsParent(proj) === true && rdIsParent(batch) === false, "one is a project, one is a batch");
+  assert(rdSheetRows(proj).length === rdCouponsDeep(proj.id).length,
+    "the project's sheet shows every coupon its index row counted — one number, one place");
+  assert(rdSheetRows(batch).length === 1, "a batch shows its own");
+  view = { ...view, tab: "rnd", rdStudy: proj.id };
+  const before = DB.rnd.length;
+  await rdAddRows(3);
+  assert(DB.rnd.length === before,
+    "and Add rows refuses on a project — a coupon beside the batches has no provenance and no way to gain any");
+});
+
+await t("paste fills the rows on screen and never mints new ones", () => {
+  rdFixture();
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001" };
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thickness", role: "result", type: "num", unit: "mm" }];
+  const before = DB.rnd.length;
+  let prevented = false;
+  const ev = { preventDefault: () => { prevented = true; },
+               clipboardData: { getData: () => "2.01\n2.09\n2.14\n2.22" } };
+  rdPaste(ev, "CPN-SN6-001", "K1");
+  assert(prevented, "the paste is taken over rather than dropped into one cell");
+  assert(DB.rnd.length === before,
+    "FOUR values into TWO rows creates nothing — there is no commit step here to catch a mis-paste, and every row burns an id");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 2.01, "the first value lands where it was pasted");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-002").vals.K1 === 2.09, "and fills down from there");
+  assert(/2 of 4|had nowhere to go/.test(lastToast), "and the overrun is named exactly: " + lastToast);
+});
+
+await t("compare groups by what you chose, sorts numerically, and admits its gaps", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "Kc", name: "Cure", role: "input", type: "num", unit: "C" },
+            { cid: "Kt", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  /* Every coupon in this test is planted below, so the counts asserted are
+     exactly the ones written here and not the fixture's plus these. */
+  DB.rnd = DB.rnd.filter(o => o.cls === "RDS");
+  const mk = (n, cure, thk, status) => DB.rnd.push({ id: "CPN-SN6-1" + n, cls: "CPN", study: "RDS-SN6-001",
+    label: "C" + n, status: status || "Tested", vals: thk == null ? { Kc: cure } : { Kc: cure, Kt: thk } });
+  mk(1, 160, 2.2); mk(2, 120, 2.0); mk(3, 140, 2.1); mk(4, 120, 2.1); mk(5, 140, null); mk(6, 140, 9.9, "Scrapped");
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001", rdCmpOpen: "RDS-SN6-001", rdCmpBy: "Kc", rdCmpScrap: false };
+  const html = rdCompareHtml(s, rdCols(s), rdSheetRows(s));
+  assert(html, "a study with an input, a result and three coupons gets a compare view");
+  const order = (html.match(/<b>(\d+)<\/b>/g) || []).map(x => x.replace(/\D/g, ""));
+  assert(String(order) === "120,140,160",
+    "numeric groups sort NUMERICALLY — a string sort reads 120,160,140 and makes a sweep look unordered: " + order);
+  /* Five live coupons (the sixth is scrapped), four of which carry a thickness:
+     C5 was made and never pulled. That gap is the point — a study half-measured
+     is the normal state of a study. */
+  assert(/Thk: 4 of 5/.test(html),
+    "coverage rides with the number, because averaging over whatever happened to have a value is how a test lies — " +
+    (html.match(/Thk: [^<.]*/) || [""])[0]);
+  assert(!/9\.9/.test(html), "and the scrapped coupon is left out by default");
+  view.rdCmpScrap = true;
+  assert(/9\.9|5\.\d/.test(rdCompareHtml(s, rdCols(s), rdSheetRows(s))), "unless you ask for it");
+});
+
+await t("compare stays hidden until there is something to compare", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "Kc", name: "Cure", role: "input", type: "num", unit: "C" }];
+  assert(rdCompareHtml(s, rdCols(s), rdSheetRows(s)) === "",
+    "an input with no result has nothing to average — a button that is always there is one that usually disappoints");
+  s.cols.push({ cid: "Kt", name: "Thk", role: "result", type: "num", unit: "mm" });
+  assert(rdCompareHtml(s, rdCols(s), rdSheetRows(s)) === "", "and two coupons is not a comparison");
+});
+
+await t("a guest gets text, not fields — the cascade does not reach this grid", () => {
+  rdFixture();
+  const realGuest = fb.guest, realRoster = fb.roster;
+  try {
+    fb.guest = true; fb.roster = null;
+    const s = rdStudy("RDS-SN6-001");
+    s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+    const html = rdGridHtml(s, rdCols(s), rdSheetRows(s));
+    assert(!/<input/.test(html) && !/<select/.test(html),
+      "render()'s view.edit cascade closes ~130 inputs elsewhere, but this grid has no Edit button and is always editing — so rdCell has to close itself");
+    assert(/class="ro"/.test(html), "values render as read-only text instead");
+  } finally { fb.guest = realGuest; fb.roster = realRoster; }
+});
+
+await t("deleting a study takes its coupons, and UNDO brings the numbers back", async () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  DB.rnd = DB.rnd.filter(o => o.id !== "RDS-SN6-002");        // no batches: a plain study
+  DB.rnd.find(o => o.id === "CPN-SN6-001").vals = { K1: 2.09 };
+  const before = DB.rnd.length;
+  rdDelStudy("RDS-SN6-001");
+  const ask = document.getElementById("modal").innerHTML;
+  assert(/2 coupons/.test(ask), "the confirm NAMES THE COUNT — it is the only warning anyone gets: " + ask.slice(0, 200));
+  assert(!/&lt;b&gt;/.test(ask),
+    "and carries no markup: confirmModal escapes its message, so a <b> would print as a literal tag");
+  confirmProceed();
+  await new Promise(r => setTimeout(r, 0));
+  assert(DB.rnd.length === before - 3, "study and both coupons go: " + DB.rnd.length);
+  assert(RD_UNDO && RD_UNDO.kind === "delete", "and the undo slot holds them");
+
+  await rdUndo();
+  assert(DB.rnd.length === before, "undo restores every record");
+  const back = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  assert(back && back.vals && back.vals.K1 === 2.09,
+    "WITH its measurements — an undo that restored the row but not the numbers would look like it worked");
+});
+
+await t("a project refuses to be deleted while it holds batches", () => {
+  rdFixture();
+  const before = DB.rnd.length;
+  rdDelStudy("RDS-SN6-001");                                   // has RDS-SN6-002 under it
+  assert(DB.rnd.length === before, "nothing is deleted");
+  assert(/batch/i.test(lastToast), "and it says why: " + lastToast);
+});
+
+await t("duplicating a study copies the setup and none of the results", async () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+  await rdDuplicateStudy("RDS-SN6-001");
+  const copy = rdStudies().find(x => /\(copy\)$/.test(x.name || ""));
+  assert(copy, "a copy exists");
+  assert(copy.cols.length === 1 && copy.cols[0].cid === "K1",
+    "the columns come with it, KEEPING their cids — two studies sharing a column id is what makes 'cure temp across every sweep' answerable later");
+  assert(copy.defaults.resinLot === "RSN-SN6-009", "and so do the materials");
+  assert(rdCoupons(copy.id).length === 0, "but no coupons: a template is the setup, not the results");
+  assert(copy.labelNext === 1, "and the labels start at 01 again");
+  assert(copy.id !== s.id && /^RDS-/.test(copy.id), "it is its own record: " + copy.id);
+});
+
+await t("a study's materials can actually be SET, not just read", () => {
+  /* Round one shipped rdEff, RD_INHERITS and `defaults` with no UI to populate
+     them, so labels printed a blank resin and the export resolved an
+     inheritance nobody could establish. A model with no way in is not a
+     feature. */
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  const c = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  rdDefUpd("RDS-SN6-001", "stack", "4X 200 UD");
+  assert(s.defaults.stack === "4X 200 UD", "the study takes the value");
+  assert(rdEff(c, "stack") === "4X 200 UD", "and every coupon in it sees it at once");
+  assert(calls.some(x => x[0] === "save" && x[1] === "rnd" && x[3] === "defaults"),
+    "written as one field, not the whole document");
+
+  /* Clearing DELETES the key rather than storing "", which is what lets a batch
+     fall back to the project that holds it. */
+  const batchCpn = { id: "CPN-SN6-090", cls: "CPN", study: "RDS-SN6-002", label: "A01" };
+  DB.rnd.push(batchCpn);
+  rdDefUpd("RDS-SN6-002", "stack", "2X PLAIN");
+  assert(rdEff(batchCpn, "stack") === "2X PLAIN", "a batch can override its project");
+  rdDefUpd("RDS-SN6-002", "stack", "");
+  assert(!("stack" in rdStudy("RDS-SN6-002").defaults), "clearing removes the key, not just its value");
+  assert(rdEff(batchCpn, "stack") === "4X 200 UD", "so the batch falls back to the project again");
+});
+
+await t("export resolves what a coupon inherited, rather than exporting a blank", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  const cols = rdExportCols(s);
+  const csv = toCSV(rdSheetRows(s), cols);
+  const head = csv.split("\n")[0];
+  assert(head.includes("Thk (mm)"), "a column carries its unit into the header: " + head);
+  assert(head.includes("resinLot"), "and the inherited fields are columns too");
+  const row = csv.split("\n").find(l => l.startsWith("CPN-SN6-001"));
+  assert(row.includes("RSN-SN6-009"),
+    "a coupon that inherited its resin exports the RESOLVED value — a blank cell in a spreadsheet somebody opens next year is a lie by omission");
+});
+
+await t("a short id block writes nothing at all", async () => {
+  rdFixture();
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001" };
+  const before = DB.rnd.length;
+  const realAlloc = fb.allocIdBlock;
+  try {
+    fb.allocIdBlock = async () => ["CPN-SN6-900", "CPN-SN6-901"];   // asked for 5, got 2
+    await rdAddRows(5);
+    assert(DB.rnd.length === before, "no coupon is created: " + (DB.rnd.length - before));
+    assert(!calls.some(c => c[0] === "importMany"), "and nothing is batched to the server");
+  } finally { fb.allocIdBlock = realAlloc; }
 });
 
 await t("the blueprint is a read: it renders no control that writes a part", () => {
@@ -4918,6 +5234,219 @@ await t("a receiving row deals its tags to its records in order, and says when t
   DB.lots = [];
 });
 
+console.log("the EH&S import (RSS's export becomes lot records):");
+
+await t("the CSV parser reads quotes, escaped quotes and embedded commas", () => {
+  const rows = ehsParseCsv('a,b,c\n"x, y",z,"say ""hi"""\n\nlast,,');
+  assert(rows.length === 3, "blank lines drop, got " + rows.length);
+  assert(rows[1][0] === "x, y" && rows[1][2] === 'say "hi"', "quoting works: " + JSON.stringify(rows[1]));
+  assert(rows[2][0] === "last" && rows[2].length === 3, "trailing empties survive");
+});
+
+await t("columns are found by RSS's names, not by position", () => {
+  const table = [
+    ["Barcode", "Junk", "Name", "Sublocation", "Hazard Codes", "Received Date"],
+    ["CA0000000000000000228D47", "x", "Acetone", "Formula Electric at Berkeley - Flammable Cabinet", "H225,H319", "2025-12-06T20:06:28.076Z"],
+    ["", "x", "No barcode", "Formula Electric at Berkeley - Flammable Cabinet", "", ""],
+  ];
+  const rows = ehsMapRows(table);
+  assert(rows.length === 1, "a row without a barcode is not importable, got " + rows.length);
+  assert(rows[0].barcode === "CA0000000000000000228D47" && rows[0].name === "Acetone", "fields land");
+  assert(rows[0].received === "2025-12-06", "the ISO timestamp becomes a plain date");
+  assert(ehsMapRows([["Name", "Barcode"]]).length === 0, "no Sublocation column means no rows, not a crash");
+});
+
+await t("hazard comes from the H-codes, and no codes stays honestly unknown", () => {
+  assert(ehsHazard("H225,H319,H336") === "flammable", "H225 is a flammable liquid");
+  assert(ehsHazard("H302,H314,H317") === "not flammable", "codes present, none flammable");
+  assert(ehsHazard("") === "", "no codes renders as unknown, per the schema's own rule");
+  assert(ehsHazard("H242,H319") === "not flammable", "H242 (self-heating) is not the flammable class");
+});
+
+await t("a chemical export makes resin, hardener or consumable — never fabric", () => {
+  assert(ehsGuessCls("IN2 Epoxy Infusion Resin").cls === "RSN" && ehsGuessCls("IN2 Epoxy Infusion Resin").role === "resin");
+  assert(ehsGuessCls("AT30 SLOW EPOXY HARDENER").role === "hardener");
+  assert(ehsGuessCls("Acetone").cls === "CON", "a solvent is a consumable");
+  assert(ehsGuessCls("carbon fiber cleaner").cls === "CON", "even a name with fibre words cannot become FAB here");
+});
+
+await t("the import state ticks FEB's sublocations, skips known barcodes, dedupes the file", () => {
+  DB.lots = [{ id: "CON-SN6-090", cls: "CON", name: "old acetone", ehsBarcode: "CA-TAG-0001" }];
+  DB.items = [{ id: "BIN-SN6-030", cls: "BIN", name: "Flammables cabinet shelf", stage: "Active", site: "Flammables cabinet" }];
+  const mk = (name, sub, barcode) => ({ name, sub, barcode, vendor: "", hazardCodes: "", received: "", opened: "", expires: "" });
+  const st = ehsImpState("x.xlsx", [
+    mk("Acetone", "Formula Electric at Berkeley - Flammable Cabinet", "CATAG0001"),
+    mk("IN2", "Formula Electric at Berkeley - Flammable Cabinet", "CA-TAG-0002"),
+    mk("IN2 again", "Formula Electric at Berkeley - Flammable Cabinet", "CA-TAG0002"),
+    mk("FSAE thing", "Formula SAE - Large Yellow Flammable Cabinet", "CA-TAG-0003"),
+  ]);
+  assert(st.dupes === 1, "the repeated barcode (dash-blind) is counted once: " + st.dupes);
+  const feb = st.subs.get("Formula Electric at Berkeley - Flammable Cabinet");
+  const fsae = st.subs.get("Formula SAE - Large Yellow Flammable Cabinet");
+  assert(feb.on && !fsae.on, "FEB's sublocation starts ticked, everyone else's does not");
+  assert(feb.linked === 1, "the barcode an existing record wears counts as linked");
+  assert(feb.bin === "BIN-SN6-030", "their flammable cabinet guesses our Flammables cabinet shelf");
+  EHS_IMP = st;
+  const take = ehsImpTake();
+  assert(take.length === 1 && take[0].name === "IN2" && take[0].bin === "BIN-SN6-030",
+    "only the unlinked FEB row would be created, already located: " + JSON.stringify(take.map(r => r.name)));
+  /* The per-row untick: a container the team deleted on purpose stays dead
+     across a re-import by unticking its row, without unticking the whole
+     sublocation. */
+  feb.rows.find(r => r.name === "IN2").take = false;
+  assert(ehsImpTake().length === 0, "an unticked row is not created");
+  feb.rows.find(r => r.name === "IN2").take = true;
+  assert(ehsImpTake().length === 1, "and ticks back on");
+  EHS_IMP = null;
+  DB.lots = []; DB.items = [];
+});
+
+await t("the reconciliation export flags untagged and emptied containers first", () => {
+  DB.lots = [
+    { id: "RSN-SN6-060", cls: "RSN", name: "tagged jug", stage: "Open", ehsBarcode: "CA-1" },
+    { id: "RSN-SN6-061", cls: "RSN", name: "untagged jug", stage: "Sealed" },
+    { id: "CON-SN6-062", cls: "CON", name: "emptied can", stage: "Empty", ehsBarcode: "CA-2" },
+    { id: "FAB-SN6-063", cls: "FAB", name: "cloth", stage: "Open" },
+  ];
+  DB.items = [{ id: "BIN-SN6-031", cls: "BIN", name: "Flam shelf", stage: "Active", ehsBarcode: "CA-9" }];
+  const rows = invExportEhs();
+  assert(rows.length === 4, "chemicals and the tagged shelf; fabric is not in the campus system: " + rows.length);
+  assert(!rows.some(r => r.id === "FAB-SN6-063"), "no fabric row");
+  assert(rows[0].note && rows[1].note, "rows needing attention sort first");
+  assert(rows.find(r => r.id === "RSN-SN6-061").note.includes("no EH&S tag"), "untagged is flagged");
+  assert(rows.find(r => r.id === "CON-SN6-062").note.includes("retire"), "emptied says to retire it in RSS");
+  assert(rows.find(r => r.id === "BIN-SN6-031").note.includes("sublocation"), "the shelf row names itself");
+  DB.lots = []; DB.items = [];
+});
+
+console.log("identical containers fold into one line (the ten-AT30-jugs fix):");
+
+await t("grouping keys on matKey when set, else the name — and never merges different materials", () => {
+  const jug = (id, name, matKey) => ({ id, cls: "RSN", name, matKey, stage: "Sealed" });
+  const gs = groupLots([
+    jug("RSN-1", "AT30 SLOW EPOXY HARDENER"), jug("RSN-2", "AT30 SLOW EPOXY HARDENER"),
+    jug("RSN-3", "at30 slow epoxy hardener  "),     // case/space variants are the same jug type
+    jug("RSN-4", "IN2 Epoxy Infusion Resin"),
+    jug("RSN-5", "AT30 (new label)", "AT30-SLOW"), jug("RSN-6", "AT30 old-style name", "AT30-SLOW"),
+  ]);
+  const at30ByName = gs.find(g => g.key === "n:at30 slow epoxy hardener");
+  const at30ByKey = gs.find(g => g.key === "m:at30-slow");
+  assert(at30ByName && at30ByName.members.length === 3, "name variants fold together");
+  assert(at30ByKey && at30ByKey.members.length === 2, "matKey folds across different label names");
+  assert(gs.find(g => g.members.some(m => m.id === "RSN-4")).members.length === 1, "a different material stays its own group");
+});
+
+await t("a group of one renders as the plain row; a group of many folds with the count", () => {
+  DB.items = [{ id: "BIN-SN6-050", cls: "BIN", name: "Flam cab", stage: "Active", flam: "Yes", site: "Flammables cabinet" }];
+  DB.lots = [
+    { id: "RSN-SN6-070", cls: "RSN", name: "AT30", stage: "Sealed", location: "BIN-SN6-050", ehsBarcode: "CA0000000000000000243EF0" },
+    { id: "RSN-SN6-071", cls: "RSN", name: "AT30", stage: "Open", location: "BIN-SN6-050", ehsBarcode: "CA0000000000000000243EF1" },
+    { id: "RSN-SN6-072", cls: "RSN", name: "Frekote 700-NC", stage: "Sealed", location: "BIN-SN6-050" },
+  ];
+  view = { ...view, invLotOpen: {} };
+  const html = invLotList(DB.lots);
+  assert(html.includes("×2") && html.includes("invgrp"), "the AT30 pair folds to one line with its count");
+  assert(html.includes("1 sealed") && html.includes("1 open"), "the line says the states without opening it");
+  assert(html.includes("folded"), "and starts closed");
+  assert((html.match(/Frekote 700-NC/g) || []).length === 1 && !html.includes("Frekote 700-NC <b"),
+    "the singleton renders as a plain row, not a group of one");
+  const key = lotGroupKey(DB.lots[0]);
+  toggleLotGroup(key);
+  const open = invLotList(DB.lots);
+  assert(!open.includes("folded"), "toggling opens the member list");
+  assert(open.includes("…243EF0") && open.includes("…243EF1"),
+    "each container shows its EH&S code — the sticker on the jug in your hand");
+  view.invLotOpen = {};
+  DB.lots = []; DB.items = [];
+});
+
+await t("the location page says counts in its section headers and codes on singleton rows", () => {
+  seedInventory();
+  DB.lots.forEach(o => { if (o.id === "RSN-SN6-001") o.ehsBarcode = "CA0000000000000000243F1C"; });
+  view = { ...view, tab: "inventory", invView: "map", mode: "detail", id: "BIN-SN6-001", edit: false, invFlag: "", invLotOpen: {} };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("pgrouphd"), "sections wear the house group-header strip");
+  assert(h.includes("sec-resin") && h.includes("sec-consumables"), "with per-kind accents");
+  assert(h.includes("…243F1C"), "a lone container's EH&S code is on its row");
+  view = { ...view, mode: "list", id: null };
+});
+
+await t("the Materials list groups by default, goes flat on search or by toggle", () => {
+  DB.lots = [
+    { id: "RSN-SN6-070", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "RSN-SN6-071", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "CON-SN6-070", cls: "CON", name: "Acetone", stage: "Sealed" },
+  ];
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null, q: "", fSub: "", fStatus: "", lotsFlat: false, invLotOpen: {} };
+  render();
+  let h = main.innerHTML;
+  assert(h.includes("invgrp") && h.includes("×2"), "grouped by default");
+  assert(h.includes("Materials") && h.includes("Containers"), "the tiles count both jugs and kinds");
+  view.lotsFlat = true; render();
+  h = main.innerHTML;
+  assert(h.includes("<table class=\"list\"") && !h.includes("invgrp"), "the Flat toggle is the spreadsheet escape");
+  view.lotsFlat = false; view.q = "at30"; render();
+  h = main.innerHTML;
+  assert(h.includes("<table class=\"list\""), "a search drops to flat rows — results are per-record");
+  view.q = ""; DB.lots = [];
+});
+
+console.log("Select… on inventory (the WO picker, for jugs):");
+
+await t("pick mode is a mode: null means browsing, {} means picking nothing yet", () => {
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null, q: "", fSub: "", fStatus: "", shopPick: null };
+  assert(!shopPickOn(), "not picking");
+  startShopPick();
+  assert(shopPickOn() && shopPickedIds().length === 0, "picking, nothing selected");
+  toggleShopPick("RSN-SN6-001"); toggleShopPick("CON-SN6-001"); toggleShopPick("RSN-SN6-001");
+  assert(shopPickedIds().join(",") === "CON-SN6-001", "toggle on, toggle off");
+  cancelShopPick();
+  assert(!shopPickOn(), "cancel leaves the mode entirely");
+});
+
+await t("All selects only what the filter shows, and a group ticks its members", () => {
+  DB.lots = [
+    { id: "RSN-SN6-080", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "RSN-SN6-081", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "CON-SN6-080", cls: "CON", name: "Acetone", stage: "Sealed" },
+  ];
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", q: "", fSub: "RSN", fStatus: "", shopPick: {}, invLotOpen: {} };
+  shopPickAll("lots", true);
+  assert(shopPickedIds().sort().join(",") === "RSN-SN6-080,RSN-SN6-081",
+    "the consumable the class filter hides is not quietly selected");
+  view.fSub = "";
+  shopPickAll("lots", false);
+  shopPickGroup(lotGroupKey(DB.lots[0]));
+  assert(shopPickedIds().sort().join(",") === "RSN-SN6-080,RSN-SN6-081", "the group box is all its containers");
+  shopPickGroup(lotGroupKey(DB.lots[0]));
+  assert(shopPickedIds().length === 0, "a full set unticks whole");
+  view.shopPick = null; DB.lots = [];
+});
+
+await t("deleting spares occupied shelves, keeps signed history, trims purchase refs", () => {
+  DB.items = [
+    { id: "BIN-SN6-060", cls: "BIN", name: "Full shelf", stage: "Active" },
+    { id: "BIN-SN6-061", cls: "BIN", name: "Empty shelf", stage: "Active" },
+  ];
+  DB.lots = [
+    { id: "RSN-SN6-085", cls: "RSN", name: "AT30", stage: "Sealed", location: "BIN-SN6-060" },
+    { id: "RSN-SN6-086", cls: "RSN", name: "AT30", stage: "Sealed" },
+  ];
+  DB.workOrders = [{ id: "WO-SN6-500", status: "Complete", cure: { lotResin: "RSN-SN6-086" }, steps: [] }];
+  DB.budget = [{ id: "BUY-SN6-500", lines: [{ lineId: "L1", desc: "AT30", lotRefs: ["RSN-SN6-086", "RSN-SN6-085"] }] }];
+  const d = shopDeletionSet("items", ["BIN-SN6-060", "BIN-SN6-061"]);
+  assert(d.take.length === 1 && d.take[0].id === "BIN-SN6-061", "the shelf still holding a jug is left alone");
+  assert(d.keptBins.length === 1 && shopDeletionSummary(d, "items").includes("still holds 1"),
+    "and the confirm says which and why");
+  const dl = shopDeletionSet("lots", ["RSN-SN6-086"]);
+  assert(dl.referenced === 1, "the cure pointing at it is counted");
+  assert(dl.budgets.length === 1, "so is the purchase line");
+  assert(shopDeletionSummary(dl, "lots").includes("keep the id as text"),
+    "signed records are not rewritten, and the confirm says so");
+  DB.items = []; DB.lots = []; DB.workOrders = []; DB.budget = [];
+});
+
 console.log("the scan resolution chain (FEB grammar first, then the tag registry):");
 
 await t("a scan resolves FEB codes as before, and an EH&S tag to the record wearing it", () => {
@@ -4953,6 +5482,127 @@ await t("the manual box routes an unknown tag to onUnknown, one-shot only", () =
   assert(got.unknown.join(",") === "UCB-777888", "the unknown tag reached onUnknown normalised");
   assert(got.codes.length === 0, "and never leaked into onCode");
   SCAN.onUnknown = null;
+});
+
+console.log("scanning a tag INTO a field (the polarity flips: unknown is success):");
+
+await t("scanEhsInto writes a fresh tag through updShop, with its dupe refusal intact", async () => {
+  DB.lots = [
+    { id: "RSN-SN6-095", cls: "RSN", name: "AT30 jug", stage: "Sealed", ehsBarcode: "" },
+    { id: "RSN-SN6-096", cls: "RSN", name: "other jug", stage: "Sealed", ehsBarcode: "CA-EXISTING-1" },
+  ];
+  DB.items = [];
+  view = { ...view, tab: "lots", mode: "detail", id: "RSN-SN6-095", edit: true };
+  await openScan({ title: "t", onUnknown: (code) => updShop("lots", "ehsBarcode", code) });
+  const el = { value: "CA0000000000000000FRESH1" };
+  const origGet = document.getElementById;
+  document.getElementById = (id) => id === "scan-manual" ? el : origGet.call(document, id);
+  try { scanManual(); } finally { document.getElementById = origGet; }
+  assert(DB.lots[0].ehsBarcode === "CA0000000000000000FRESH1", "the scanned tag landed, normalised, saved");
+  // A tag some record already wears resolves to an id, so onCode fires — and refuses.
+  await openScan({ title: "t", onUnknown: (code) => updShop("lots", "ehsBarcode", code),
+    onCode: (id) => { const o = recById("lots", id); if (o && o.ehsBarcode) toast("dupe", "error"); } });
+  const el2 = { value: "CA-EXISTING-1" };
+  document.getElementById = (id) => id === "scan-manual" ? el2 : origGet.call(document, id);
+  try { scanManual(); } finally { document.getElementById = origGet; }
+  assert(DB.lots[0].ehsBarcode === "CA0000000000000000FRESH1", "a worn tag never overwrites through the scan path");
+  closeScan();
+  view = { ...view, mode: "list", id: null, edit: false };
+  DB.lots = [];
+});
+
+await t("the receiving cell's camera appends tag after tag, skipping repeats", async () => {
+  DB.lots = []; DB.items = [];
+  RX = { rows: [{ rid: "r9", cls: "RSN:resin", name: "IN2", qty: "3", bin: "", vendorLot: "", ehs: "",
+    supplier: "", unitCost: "", expiresOn: "", matKey: "", buyRef: null }],
+    supplier: "", receivedOn: today(), buyId: "", defBin: "", lockBin: "", index: "orders" };
+  view = { ...view, tab: "inventory", invView: "desk", mode: "list" };
+  await rxScanEhs("r9");
+  const origGet = document.getElementById;
+  const feed = (v) => { const el = { value: v };
+    document.getElementById = (id) => id === "scan-manual" ? el : origGet.call(document, id);
+    try { scanManual(); } finally { document.getElementById = origGet; } };
+  feed("CA-TAG-A1"); feed("CA-TAG-A2"); feed("CATAGA1");   // the third is A1 retyped without dashes
+  assert(RX.rows[0].ehs === "CA-TAG-A1 CA-TAG-A2", "two tags in the cell, the dash-blind repeat skipped: " + RX.rows[0].ehs);
+  closeScan();
+  RX = null;
+});
+
+console.log("the materials table (name -> matKey -> datasheet, ratio, shelf life):");
+
+await t("every doc path in the table exists in the manifest, and every number cites a sheet", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  // APP_ROOT comes from appload; the DOM stub shadows global URL, so no new URL() here.
+  const manifest = JSON.parse(readFileSync(join(APP_ROOT, "docs", "manifest.json"), "utf8"));
+  const srcs = (Array.isArray(manifest) ? manifest : manifest.docs || []).map(d => d.src);
+  const problems = materialsTableProblems(srcs);
+  assert(problems.length === 0, "table hygiene: " + problems.join("; "));
+});
+
+await t("aliases resolve the RSS names the import actually produced", () => {
+  const cases = [
+    ["IN2 Epoxy Infusion Resin", "IN2"],
+    ["AT30 SLOW EPOXY HARDENER", "AT30"],
+    ["WEST SYSTEM® 209 Extra Slow Hardener", "WEST-209"],
+    ["91% Isopropyl Alcohol", "IPA-91"],
+    ["Isopropyl Rubbing Alcohol 70%", "IPA-70"],
+    ["Isopropyl alcohol  (2-propanol, IPA, isopropyl alcohol)", "IPA"],
+    ["Acetone", "ACETONE"],
+    ["3M Bondo lightweight body filler", "BONDO"],
+    ["frekote 700-nc", "FREKOTE"],
+    ["REXCO FORMULA FIVE Mold Release Wax", "F5-WAX"],
+    ["Rexco Formula Five Clean' N Glaze", "CLEAN-N-GLAZE"],
+    ["West System 404 High-Density Filler", "WEST-404"],
+    ["Vacuum pump oil", "PUMP-OIL"],
+  ];
+  for (const [name, want] of cases) {
+    const m = matForName(name);
+    assert(m && m.matKey === want, `${name} -> ${m ? m.matKey : "(none)"}, want ${want}`);
+  }
+  assert(matForName("UNLEADED GASOLINE") === null, "a name the table does not know stays unknown");
+  assert(matForName("") === null, "no name, no match");
+});
+
+await t("the verified numbers carry their citations, and nothing is guessed", () => {
+  const in2 = matByKey("IN2");
+  assert(in2.ratio.includes("100:30") && in2.shelfLifeMonths === 12 && /TDS/.test(in2.src),
+    "IN2: 100:30 by weight, 12 months, cited to the EC TDS");
+  assert(matByKey("WEST-209").ratio.includes("3:1"), "West 209: 3:1 per the 105/209 TDS");
+  assert(matByKey("WEST-206").ratio.includes("5:1"), "West 206: 5:1 per its TDS");
+  assert(!matByKey("XCR").ratio, "XCR's ratio could not be read from the sheet, so it is blank, not guessed");
+  assert(!matByKey("ACETONE").doc, "no bundled datasheet means no link, not a dead one");
+});
+
+await t("Link materials proposes only blank matKeys, and fills expiry from shelf life", () => {
+  DB.lots = [
+    { id: "RSN-SN6-101", cls: "RSN", name: "IN2 Epoxy Infusion Resin", stage: "Sealed", receivedOn: "2025-12-06" },
+    { id: "RSN-SN6-102", cls: "RSN", name: "AT30 SLOW EPOXY HARDENER", stage: "Sealed", matKey: "AT30" },
+    { id: "CON-SN6-101", cls: "CON", name: "UNLEADED GASOLINE", stage: "Sealed" },
+    { id: "CON-SN6-102", cls: "CON", name: "Acetone", stage: "Sealed", expiresOn: "2027-01-01" },
+  ];
+  openMatLink();
+  assert(MAT_LINK.length === 2, "the keyed record and the unknown name are not proposed: " + MAT_LINK.map(x => x.o.id).join(","));
+  assert(matLinkExpiry(MAT_LINK.find(x => x.o.id === "RSN-SN6-101").o, matByKey("IN2")) === "2026-12-06",
+    "received 2025-12-06 + 12 months = 2026-12-06");
+  assert(matLinkExpiry(DB.lots[3], matByKey("IN2")) === "", "an expiry somebody set is never overwritten");
+  runMatLink();
+  const jug = DB.lots[0];
+  assert(jug.matKey === "IN2" && jug.expiresOn === "2026-12-06" && jug.expirySource === "shelf-life table",
+    "linked, dated, and the source says the table did it");
+  assert(!DB.lots[2].matKey, "gasoline stays unkeyed");
+  closeModal();
+  DB.lots = [];
+});
+
+await t("an imported or received chemical gets its matKey from the alias table", () => {
+  assert(typeof matForName === "function", "table loaded");
+  const r = { name: "at30 slow epoxy hardener", cls: "RSN:hardener", matKey: "", supplier: "", unitCost: "" };
+  DB.lots = [];
+  rxInferFromName(r);
+  assert(r.matKey === "AT30", "the receiving desk fills it: " + r.matKey);
+  assert(r.cls === "RSN:hardener", "and the restock rule keeps the class honest");
+  DB.lots = [];
 });
 
 console.log("restock rules (the reorder threshold lives on the material, not the jug):");
@@ -5134,13 +5784,16 @@ await t("the contents join answers 'what is on this shelf', boards and molds inc
   assert(idx.un.fabric.length === 1, "the unlocated roll is unhoused");
 });
 
-await t("the chemical and freshness warnings fire where CS-011 says they should", () => {
+await t("the chemical and freshness warnings fire where they should — and co-location is not one", () => {
   seedInventory();
   const idx = invIndex();
   const w = invLocWarnings(shopById("items", "BIN-SN6-001"), idx.by.get("BIN-SN6-001"));
   const texts = w.map(x => x.text).join(" | ");
-  assert(/resin \+ hardener together/.test(texts), "§6 separation: " + texts);
-  assert(/flammable — not a rated location/.test(texts), "§6 flammables: " + texts);
+  /* The shelf holds a resin AND a hardener, and that is now fine: the team
+     stores them together (lead decision 2026-08-28), same as the campus EH&S
+     filing. Reintroducing the old §6 co-location warning fails here. */
+  assert(!/resin \+ hardener/.test(texts), "co-location is allowed: " + texts);
+  assert(/flammable — not a rated location/.test(texts), "flammables: " + texts);
   assert(/1 expired/.test(texts), "expiry: " + texts);
   const w2 = invLocWarnings(shopById("items", "BIN-SN6-002"), idx.by.get("BIN-SN6-002"));
   assert(w2.length === 0, "the clean bin stays clean");
@@ -5404,7 +6057,8 @@ await t("the map renders sites, cards, and the No-location card; a tap opens con
   render();
   const h = main.innerHTML;
   assert(h.includes("RFS container") && h.includes("Jacobs basement"), "site headers");
-  assert(h.includes("Resin shelf A") && h.includes("resin + hardener together"), "card + warning");
+  assert(h.includes("Resin shelf A") && h.includes("flammable — not a rated location"), "card + warning");
+  assert(!h.includes("resin + hardener"), "co-location is not a warning any more");
   assert(h.includes("No location"), "the unhoused card");
   selectInvRec("BIN-SN6-002");
   const c = main.innerHTML;
@@ -5430,7 +6084,7 @@ await t("old items/lots links and scans land on Inventory", () => {
   setTab("lots");
   assert(view.tab === "inventory", "lots normalises");
   assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
-  assert(TABS.filter(t => !t.hidden).length === 11, "eleven visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0)");
+  assert(TABS.filter(t => !t.hidden).length === 12, "twelve visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0, R&D in v4.0.0)");
   openRecord("lots", "RSN-SN6-001");
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
@@ -5549,11 +6203,11 @@ await t("a fabric row cannot smuggle in an expiry the schema does not have", asy
     "dry cloth has no expiresOn in SHOP_FIELDS_BY_CLASS, and a field the detail page will never render is a black hole");
 });
 
-await t("THE regression: a received lot can finally trigger the CS-011 §6 warnings", async () => {
-  /* The old flow captured class, name and vendor lot only, so a received lot
-     was born with no role and no hazard — and invLocWarnings needs both. Every
-     chemical-storage check was therefore structurally blind to everything the
-     receive flow created. */
+await t("a received resin + hardener pair on one shelf is NOT a warning (co-storage allowed)", async () => {
+  /* This test used to assert the opposite. The team stores resin and hardener
+     together (lead decision 2026-08-28, matching the campus EH&S filing), so
+     the pair must land with a clean bill — while role and hazard are still
+     captured, because the flammables and expiry checks need them. */
   rxSeedShelves();
   rxSetup([
     { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
@@ -5563,11 +6217,13 @@ await t("THE regression: a received lot can finally trigger the CS-011 §6 warni
   const bin = shopById("items", "BIN-SN6-002");
   const bucket = invIndex().by.get("BIN-SN6-002");
   const warns = invLocWarnings(bin, bucket);
-  assert(warns.some(w => w.text.includes("resin + hardener together")),
-    "resin and hardener on one shelf now actually warns: " + JSON.stringify(warns));
+  assert(!warns.some(w => w.text.includes("resin + hardener")),
+    "co-location stays clean: " + JSON.stringify(warns));
+  const jug = DB.lots.find(o => o.name === "AT30");
+  assert(jug && jug.role === "hardener", "role is still captured — the cure buy-off filters on it");
 });
 
-await t("and the same warning is shown BEFORE the write, not discovered after", () => {
+await t("and the receiving confirm does not warn about the pair either", () => {
   rxSeedShelves();
   rxSetup([
     { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
@@ -5575,8 +6231,7 @@ await t("and the same warning is shown BEFORE the write, not discovered after", 
   ]);
   rxConfirm();
   const h = document.getElementById("modal").innerHTML;
-  assert(h.includes("resin and hardener together"), "the confirm says so up front");
-  assert(h.includes("CS-011 §6"), "and cites the standard that wants them apart");
+  assert(!h.includes("resin and hardener together"), "no co-location warning in the confirm");
   closeModal();
 });
 
@@ -5993,13 +6648,17 @@ await t("the chips are real filters now, not decoration", () => {
   /* low/expired set view.invFlag and lit up while invCard never read it, so the
      map did not change. chemical warnings was onclick="void 0". */
   seedFind();
-  DB.lots.push({ id: "RSN-SN6-002", cls: "RSN", name: "AT30", role: "hardener", stage: "Sealed", location: "BIN-SN6-002" });
+  /* An expired jug makes the cabinet chem-dirty. (It used to be a resin +
+     hardener pair, but co-location stopped being a warning in 2026-08.) */
+  DB.lots.push({ id: "RSN-SN6-002", cls: "RSN", name: "AT30", role: "hardener", stage: "Sealed",
+    location: "BIN-SN6-002", expiresOn: "2020-01-01" });
   view.invFlag = "chem";
   render();
   let h = main.innerHTML;
-  assert(h.includes("Flammables Cabinet"), "resin + hardener together, so that shelf shows");
+  assert(h.includes("Flammables Cabinet"), "an expired lot on it, so that shelf shows");
   assert(!h.includes("Basement Shelf B3"), "and the clean ones are filtered out");
   DB.lots[0].qty = "Low";
+  DB.lots.find(o => o.id === "RSN-SN6-002").expiresOn = "";   // cabinet back to clean for the narrowing check
   view.invFlag = "reorder";
   render();
   h = main.innerHTML;
@@ -6008,14 +6667,22 @@ await t("the chips are real filters now, not decoration", () => {
   view.invFlag = "";
 });
 
-await t("a card is two real buttons, not a button full of divs", () => {
+await t("a card is two real buttons, and the whole card opens as a pointer backstop", () => {
+  /* This test used to assert "no stopPropagation anywhere". The design
+     changed on 2026-08-28: the ::after stretch failed for Simon on at least
+     one engine, so the container carries the open handler as a pointer-only
+     backstop and the two real buttons stop propagation. Keyboard access is
+     still the buttons — the container has no tabindex. */
   seedFind();
   render();
   const h = main.innerHTML;
   assert(h.includes('class="lc-open lc-name"'), "the name is a real button");
   assert(h.includes("invConfirmContents("), "and the monthly walk is one click from the map, as a sibling");
   assert(!/<button class="loccard"/.test(h), "no button wrapping block content");
-  assert(!h.includes("stopPropagation"), "and nothing held off with stopPropagation");
+  assert(/<div class="loccard[^>]*onclick="selectInvRec\(/.test(h), "the card itself opens on click");
+  const confirm = h.match(/<button[^>]*invConfirmContents[^>]*>/)[0];
+  assert(confirm.includes("stopPropagation"), "Confirm never also opens the shelf");
+  assert(!/loccard[^>]*tabindex/.test(h), "the backstop adds no phantom tab stop");
 });
 
 await t("nothing-has-a-home is a bar above the shelves, not a card inside the last site", () => {
@@ -6651,10 +7318,12 @@ await t("a plan pointing at a deleted mold can still be adopted", async () => {
   assert(!planIsOrphan(DB.stackplans[0]), "so it stops being an orphan");
 });
 
-await t("a lead can delete a shop record without hunting for edit mode first", async () => {
+await t("anyone can delete an inventory record from read mode, one click and one confirm", async () => {
   // The bug as reported: an item could be retired but "not deleted" — the
   // Delete button existed but hid behind Edit. It must be one click from the
-  // record, for a lead, in read mode.
+  // record, in read mode. Since 2026-08-28 that includes MEMBERS for items
+  // and lots (the rules opened inventory deletes to the roster); molds stay
+  // lead-only and keep the isLead() gate.
   DB.items = [{ id: "JIG-SN6-001", cls: "JIG", name: "trim jig", stage: "Retired", createdBy: "a@b.c" }];
   view = { ...view, tab: "items", mode: "detail", id: "JIG-SN6-001", edit: false };
   render();
@@ -6662,9 +7331,10 @@ await t("a lead can delete a shop record without hunting for edit mode first", a
   const wasLead = fb.roster.role;
   fb.roster = { ...fb.roster, role: "member" };
   render();
-  assert(!main.innerHTML.includes("delShopRec"), "and absent for a member (rules deny it server-side anyway)");
+  assert(main.innerHTML.includes("delShopRec"), "and for a member — the rules allow inventory deletes now");
   fb.roster = { ...fb.roster, role: wasLead };
   delShopRec("items", "JIG-SN6-001"); confirmProceed();
+  await new Promise(r => setTimeout(r, 0));   // the bulk path awaits delMany before splicing
   assert(DB.items.length === 0, "deleting removes it locally");
   assert(calls.some(c => c[0] === "del" && c[1] === "items" && c[2] === "JIG-SN6-001"), "and server-side");
 });
@@ -8551,6 +9221,36 @@ await t("the topbar swaps the account actions for a way in", () => {
   assert(/exportAll\(\)/.test(topbar.innerHTML), "a member's topbar is untouched");
 });
 
+await t("ANNOUNCE IS REACHABLE ON A DESKTOP, not only inside the ⋯ sheet", () => {
+  /* It lived in exactly one place for four releases: the footer of the ⋯ menu.
+     That menu is the SMALL-SCREEN overflow — .icon-btn.tb-morebtn is
+     display:none until the 900px breakpoint or until syncChromeMetrics measures
+     the bar overflowing — so on a maximised window the one control that tells
+     the whole team a release exists was not in the DOM at all. A lead had to
+     narrow their browser to announce a release. */
+  signInAsLead();
+  renderTopbar();
+  const html = topbar.innerHTML;
+  assert(/publishRelease\(\)/.test(html), "a lead can announce from the topbar itself");
+  assert(/openWhatsNew\(\)/.test(html), "and read what shipped");
+  assert(html.includes("v" + APP_VERSION), "the version is named beside them");
+
+  /* One definition, so the sheet and the row cannot drift apart. */
+  openMoreMenu();
+  assert(/publishRelease\(\)/.test(document.getElementById("modal").innerHTML),
+    "the ⋯ sheet still carries it too");
+  closeModal();
+
+  fb.roster = { name: "Ana", role: "member" };
+  renderTopbar();
+  assert(!/publishRelease\(\)/.test(topbar.innerHTML), "a member cannot announce");
+  assert(/openWhatsNew\(\)/.test(topbar.innerHTML), "but What's new is for everybody");
+
+  signInAsGuest();
+  renderTopbar();
+  assert(!/publishRelease\(\)/.test(topbar.innerHTML), "and neither can a guest");
+});
+
 await t("the login screen offers the door, and says what is behind it", () => {
   fb.state = "signedout"; fb.guest = false;
   const html = renderLogin();
@@ -8886,88 +9586,199 @@ await t("the batch printable goes through the house print system, and says what 
 });
 
 /* ---------- the boot splash ----------
-   There was no coverage here at all before the floor existed, which was
-   defensible while hideSplash() was four lines that always fired. It is not
-   defensible now: the sheet deliberately outlives its cue, so "when does it
-   leave" is real logic with a real way to strand somebody on a blank app.
+   THE SHEET IS A GATE NOW, and that is what this block guards.
 
-   SPLASH_DONE, SPLASH_ASKED, SPLASH_PENDING and SPLASH_FLOOR_MS are module-level
-   state that nothing in the app ever resets — a page load is the reset. So each
-   test has to put them back by hand, the pending timer included, or the second
-   test in this block inherits the first one's decision. */
+   It used to leave on a timer, with Continue as an accelerator that waived the
+   remaining floor. The floors are gone. The app waits behind the splash until
+   somebody presses, so "does it ever leave on its own" is the question with a
+   real way to hurt somebody — in both directions. Leaving by itself breaks the
+   feature; never arming locks a person out of the app entirely.
+
+   Every one of these is module-level state that nothing in the app resets — a
+   page load is the reset — so each test puts it back by hand or inherits the
+   previous test's decision. */
 function resetSplash() {
-  if (SPLASH_PENDING) clearTimeout(SPLASH_PENDING);
-  SPLASH_DONE = false; SPLASH_ASKED = false; SPLASH_PENDING = null; SPLASH_FLOOR_MS = null;
-  localStorage.removeItem("feb-splash");
-  document.getElementById("splash").classList.remove("ready", "enter", "press", "gone");
-  window.__splashT0 = Date.now();
+  SPLASH = { code: 0, fonts: 0, auth: 0, access: 0, data: 0 };
+  SPLASH_DONE = false; SPLASH_READY = false; SPLASH_ASKED = false;
+  SPLASH_NOTE = ""; SPLASH_SEEN = null;
+  document.getElementById("splash").classList.remove("ready", "enter", "press", "gone", "failed");
+  document.getElementById("sp-go").textContent = "Continue";
+  /* Past SPLASH_DWELL, so the plies-still-laying-up hold is never what a test
+     is accidentally measuring. The dwell gets its own test. */
+  window.__splashT0 = Date.now() - 5000;
 }
 const splashClasses = () => String(document.getElementById("splash").classList);
+/* Settle every milestone. `boot()` is the happy path: five real things landed. */
+const bootAll = (state) => { for (const s of SPLASH_BOOT) splashStep(s.key, state === undefined ? 1 : state); };
 
-await t("the splash holds until the floor is spent, so the fact can be read", async () => {
+await t("THE SPLASH NEVER LEAVES ON ITS OWN — this is the whole feature", async () => {
   resetSplash();
-  hideSplash();                     // fb.state just left "loading", as render() does
-  assert(SPLASH_DONE === false, "the sheet does not leave the instant the app is ready");
-  assert(SPLASH_PENDING, "it has armed itself to leave once the floor is spent");
-  assert(!splashClasses().includes("enter"), "and it has not started the exit animation");
+  bootAll();                        // the boot is completely finished
+  assert(SPLASH_READY === true, "the gate arms once all five milestones settle");
+  assert(SPLASH_DONE === false,
+    "but the sheet is STILL THERE — nothing dismisses it except a press");
+  assert(!splashClasses().includes("enter"), "and the exit has not started");
+  splashCheck(); splashCheck();     // whatever else calls it, however many times
+  assert(SPLASH_DONE === false, "and repeated readiness reports still do not dismiss it");
 });
 
-await t("once the floor is spent the same call takes it down", async () => {
+await t("the button appears on a SLOW boot, which is the bug this replaced", async () => {
+  /* The old code added .ready only inside its floor branch, so a boot that
+     finished AFTER the floor expired — the shop-wifi case the button exists
+     for — fell straight through to dismissal and never showed the button at
+     all. It was reachable only on fast boots, which is backwards. */
   resetSplash();
-  window.__splashT0 = Date.now() - 5000;   // a slow boot: the floor is long gone
-  hideSplash();
-  assert(SPLASH_DONE === true, "nothing is held back when the wait already happened");
-  assert(splashClasses().includes("enter"), "the mold-opens animation is what plays");
-  assert(document.getElementById("splash").getAttribute("aria-hidden") === "true",
-    "and the sheet is hidden from a screen reader before it starts moving");
+  window.__splashT0 = Date.now() - 30000;   // an extremely slow boot
+  bootAll();
+  assert(splashClasses().includes("ready"), "a late arrival still arms the gate");
+  assert(SPLASH_DONE === false, "and still waits to be told to go");
 });
 
-await t("the 12s backstop forces past the floor", async () => {
+await t("the gate holds for the dwell, so the exit cannot cut off the entrance", async () => {
   resetSplash();
-  hideSplash(true);
-  assert(SPLASH_DONE === true, "force skips the floor — a stuck boot is not a reading opportunity");
+  window.__splashT0 = Date.now();   // the plies are still laying up
+  bootAll();
+  assert(SPLASH_READY === false, "not armed yet — sp-lay has not finished");
+  assert(!splashClasses().includes("ready"), "and the affordance is not on screen");
 });
 
-await t("a press before the app is ready is REMEMBERED, never obeyed", async () => {
+await t("a press before the gate arms is REMEMBERED, never obeyed", async () => {
   resetSplash();
-  splashGo();                       // nothing called hideSplash, so there is no .ready
+  splashGo();                       // nothing has booted, so there is no .ready
   assert(SPLASH_DONE === false,
     "pressing early must not dismiss onto the bare Connecting card — that is the RFS case");
   assert(SPLASH_ASKED === true, "but the press is recorded rather than swallowed");
   assert(splashClasses().includes("press"), "and it is acknowledged on screen");
 });
 
-await t("that remembered press waives the floor once there is something to show", async () => {
+await t("a remembered press is honoured the instant the boot finishes", async () => {
   resetSplash();
   splashGo();                       // pressed early...
-  assert(SPLASH_DONE === false, "still holding, because the app is not ready");
-  hideSplash();                     // ...and now the app arrives
-  assert(SPLASH_DONE === true, "the sheet leaves at once — the wait was already asked for");
+  assert(SPLASH_DONE === false, "still holding, because the boot is not finished");
+  bootAll();                        // ...and now it is
+  assert(SPLASH_DONE === true, "the sheet leaves at once — going was already asked for");
 });
 
-await t("pressing once the app is ready leaves immediately", async () => {
+await t("pressing an armed gate leaves immediately, on the bias wipe", async () => {
   resetSplash();
-  hideSplash();                     // arms .ready on a timer; set it as that timer would
-  document.getElementById("splash").classList.add("ready");
+  bootAll();
   splashGo();
-  assert(SPLASH_DONE === true, "a press against a ready app is obeyed on the spot");
+  assert(SPLASH_DONE === true, "a press against an armed gate is obeyed on the spot");
+  assert(splashClasses().includes("enter"), "the exit animation is what plays");
+  assert(document.getElementById("splash").getAttribute("aria-hidden") === "true",
+    "and the sheet is hidden from a screen reader before it starts moving");
+  assert(document.getElementById("sp-go").disabled === true,
+    "the button is disabled before the animation, so it cannot become a keyboard trap");
 });
 
-await t("the first load of a day waits longer than the fortieth", async () => {
-  resetSplash();
-  const first = splashFloor();
-  SPLASH_FLOOR_MS = null;           // a fresh page load, same day, same build
-  const again = splashFloor();
-  assert(first === SPLASH_FLOOR_FIRST, "a fact you have not seen gets time to be read: " + first);
-  assert(again === SPLASH_FLOOR, "one you have gets the short floor: " + again);
-  assert(again < first, "and the short one is genuinely shorter");
+await t("SIGNED OUT STILL ARMS — nothing waits for data that will never come", async () => {
+  /* The single worst thing this rewrite could do is hang in front of the people
+     who most need the sign-in card. startSync() never runs when auth resolves
+     to signedout or pending, so no snapshot will ever arrive; `data` has to be
+     marked not-needed or the gate waits forever. */
+  const realFb = window.fb;
+  try {
+    resetSplash();
+    window.fb = { state: "signedout" };
+    splashAuth();
+    splashStep("code", 1); splashStep("fonts", 1);
+    assert(SPLASH.data === 2, "data is marked NOT NEEDED, not left running");
+    assert(SPLASH_READY === true, "so the gate arms onto the sign-in card");
+    assert(SPLASH_DONE === false, "and still waits for a press like every other path");
+  } finally { window.fb = realFb; }
 });
 
-await t("the floor is read once, so repeated calls cannot shorten a wait in flight", async () => {
+await t("a pending member arms too — 'not on the roster' is an answer, not a failure", async () => {
+  const realFb = window.fb;
+  try {
+    resetSplash();
+    window.fb = { state: "pending" };
+    splashAuth();
+    splashStep("code", 1); splashStep("fonts", 1);
+    assert(SPLASH.access === 1, "access is KNOWN — it is just not granted");
+    assert(splashClasses().includes("failed") === false, "so the gantry does not go amber");
+    assert(SPLASH_READY === true, "and the gate arms onto the 'ask a lead' card");
+  } finally { window.fb = realFb; }
+});
+
+await t("a failed boot says so and arms anyway, rather than timing out silently", async () => {
   resetSplash();
-  const a = splashFloor(), b = splashFloor();
-  assert(a === b, "memoised: " + a + " then " + b);
-  assert(a === SPLASH_FLOOR_FIRST, "and it is the first-of-day value both times");
+  splashStep("code", 1);
+  splashFail("Can't reach the database.");
+  assert(SPLASH_READY === true, "the gate arms — nobody is ever locked out");
+  assert(SPLASH_DONE === false, "but it still does not dismiss itself");
+  assert(splashClasses().includes("failed"), "the sheet is in its failed state");
+  assert(document.getElementById("sp-step").textContent.includes("database"),
+    "and says which thing went wrong, in words");
+  assert(document.getElementById("sp-go").textContent === "Continue anyway",
+    "the button changes wording, so pressing it is an informed choice");
+});
+
+await t("the gantry counts real milestones, and never one it did not have", async () => {
+  /* The MODEL is asserted here; the lamps themselves are asserted in
+     test_appui.mjs, where there is a real DOM. This file's document is a
+     hand-rolled stub whose querySelectorAll returns [], so a lamp assertion
+     here would pass against nothing — which is worse than no assertion. */
+  resetSplash();
+  assert(splashDoneCount() === 0, "nothing is lit before anything has happened");
+  splashStep("code", 1); splashStep("fonts", 1);
+  assert(splashDoneCount() === 2, "two settled, two lamps: " + splashDoneCount());
+  assert(splashFailed() === false, "and nothing is amber");
+
+  /* Out of order on purpose. Fonts routinely beat auth and a warm cache can
+     land data before the roster read returns, which is exactly why the lamps
+     fill by count rather than one per named position. */
+  resetSplash();
+  splashStep("data", 1); splashStep("fonts", 1);
+  assert(splashDoneCount() === 2, "the count does not care which two: " + splashDoneCount());
+
+  resetSplash();
+  splashFail("nope");
+  assert(splashDoneCount() === SPLASH_BOOT.length, "a give-up settles everything");
+  assert(splashFailed() === true, "and the gantry knows it ended badly");
+
+  resetSplash();
+  splashStep("auth", 1); splashStep("auth", -1, "too late");
+  assert(SPLASH.auth === 1 && SPLASH_NOTE === "",
+    "a settled step cannot be re-settled — the first answer wins, so nothing flaps");
+});
+
+await t("the backstop stays silent when there was nothing wrong", async () => {
+  /* It fires on a timer and cannot know whether it is needed. Waiting at an
+     armed gate for twelve seconds is now NORMAL — it just means nobody pressed
+     Continue yet — so a backstop that spoke anyway would print "Something is
+     not responding" under five gold lamps. */
+  resetSplash();
+  bootAll();
+  splashFail("Something is not responding.");
+  assert(SPLASH_NOTE === "", "no reason is invented for a boot that worked");
+  assert(splashFailed() === false, "and nothing is marked failed after the fact");
+  assert(splashClasses().includes("failed") === false, "so the sheet stays out of its failed state");
+  assert(document.getElementById("sp-go").textContent === "Continue",
+    "and the button keeps its ordinary wording");
+});
+
+await t("a specific reason outranks the backstop's generic one", async () => {
+  resetSplash();
+  splashStep("auth", -1, "Can't reach sign-in.");
+  splashFail("Something is not responding.");
+  assert(SPLASH_NOTE === "Can't reach sign-in.",
+    "the step that actually failed said something more useful, and said it first");
+});
+
+await t("hideSplash(true) still forces, because eight visual suites depend on it", async () => {
+  /* tools/lib/browser.mjs calls exactly this to photograph the app behind the
+     sheet. It is the harness saying go on a person's behalf, which is why it is
+     the same door and not a test-only path. */
+  resetSplash();
+  hideSplash(true);
+  assert(SPLASH_DONE === true, "force takes it down with nothing booted at all");
+});
+
+await t("the floors are gone, not merely unused", async () => {
+  assert(typeof splashFloor === "undefined", "splashFloor()");
+  assert(typeof SPLASH_FLOOR === "undefined" && typeof SPLASH_FLOOR_FIRST === "undefined",
+    "and both floor constants — a gate has nothing to budget, so there is nothing to tune");
 });
 
 await t("the splash fact comes from the same pool the dashboard draws from", async () => {

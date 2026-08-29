@@ -160,10 +160,16 @@ record for when you are doing something to one part. Same records, two questions
 
 ### R&D parts
 
-Not everything the shop lays up is going on the car. Coupons, flat test panels,
-layup trials, a mold shakedown — those are **real parts**: real carbon, real
-resin, a real cost and a real deadline. What they are not is something the team
-promised to deliver this season.
+> **Not the same thing as the R&D tab.** A coupon you cut this afternoon belongs
+> on [the R&D bench](#the-rd-bench), where it is a row in a grid with no
+> paperwork attached. This section is about a **part** — something with a mold,
+> a work order and a traveler — that simply is not on the season's list. Both
+> are called R&D and they are genuinely different records.
+
+Not everything the shop lays up is going on the car. A layup trial, a mold
+shakedown, a full-size panel made to prove a process — those are **real parts**:
+real carbon, real resin, a real cost and a real deadline. What they are not is
+something the team promised to deliver this season.
 
 So a part can be marked **R&D**, and that means one thing and one thing only:
 *it is not a season deliverable.* It is not scrap, it is not a draft, and it is
@@ -657,9 +663,10 @@ needs Python 3).
 Inventory is the storage map, and it absorbed the Items and Materials tabs. The
 default view is one card per storage location (shelf, rack, cabinet, bin),
 grouped by CS-011 site, each showing a live summary of its contents and its
-problems: expired lots, resin and hardener sharing a shelf, a flammable lot
-outside the rated cabinet (§6 as warning chips), things flagged running low, and
-how long since anyone confirmed the shelf.
+problems: expired lots, a flammable lot outside the rated cabinet (§6 as
+warning chips), things flagged running low, and how long since anyone confirmed
+the shelf. Resin and hardener sharing a shelf is deliberately not a warning:
+the team stores them together, matching the campus EH&S filing.
 
 The map is filtered, not a wall. A search box matches a shelf on its own name,
 site or kind **or** on the name, vendor lot or material type of anything on it,
@@ -679,13 +686,42 @@ unhoused sits in a bar above the shelves.
 
 ![A shelf's contents page](../design/inventory-contents-mockup-20260825.png)
 
-Tap a card, or scan the shelf's own front-edge label, and you are on its
+Tap a card — anywhere on it, the whole card opens, with Confirm the one
+exception — or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
-each with a Move button. **Add here** creates a record already located. **Move
-here** scans the label on each thing you are putting down, the inverse of the
-Move flow — and the camera stays open between codes, so a pile is one scan each
-rather than one modal each. **Confirm contents** stamps who walked the shelf and
-when. The Items-list and Materials-list toggles keep the old flat tables.
+in sections with the count in each header, each row with a Move button.
+
+Each kind is its own card — the Boards idiom — with the kind's accent color
+down the card's spine and the count in its header. On a phone the name owns
+the row: the mix-ratio/TDS tail and the state breakdown drop out below 700px
+and a long name wraps instead of truncating.
+
+**Identical containers fold into one line.** The EH&S import made this matter:
+ten AT30 jugs are ten records (one tag, one container) and were ten identical
+rows. Lot rows now group by material — matKey when set, else the name — so the
+line reads "AT30 SLOW EPOXY HARDENER ×10" with the states, the soonest expiry,
+a flammable marker and the price on it, and opening it lists each container
+with its EH&S code, which is the only way to tell jug six from jug seven while
+holding one of them. A material with one container stays a plain row. The
+folded groups still print open, because this page is the stock-walk sheet.
+
+**Add here** creates a record already located. **Move here** scans the label
+on each thing you are putting down, the inverse of the Move flow — and the
+camera stays open between codes, so a pile is one scan each rather than one
+modal each. **Confirm contents** stamps who walked the shelf and when. The
+Items-list and Materials-list toggles keep the flat tables; the Materials list
+groups the same way by default, with a Grouped/Flat switch, and drops to flat
+rows while searching.
+
+**Select…** on the Items and Materials lists is the work-order picker for
+inventory: tick rows (a group's box is all of its containers, and All selects
+only what the current filter shows), then one Delete with one confirm. Open to
+every member, not just leads — inventory is shared property, and the rules
+changed to match on 2026-08-28. The confirm is honest about the blast radius:
+an occupied storage location is left alone entirely (empty it first), a lot a
+signed cure or panel references is deleted with the pointer keeping the id as
+text (history does not get rewritten), and purchases drop the deleted
+containers from their received lines. There is no undo.
 
 #### Boards
 
@@ -751,11 +787,11 @@ and jugs and consumables belonging on three different shelves.
 
 Enter commits a line and opens the next one already carrying the class, shelf
 and supplier, so a stock-take line is name, Tab, count, Enter. The class cell
-offers Fabric / Resin / Hardener / Consumable, which is what finally lets the §6
-resin-and-hardener check fire at all — the old flow never asked, so every
-received lot was born unable to trigger any warning. The confirm runs those
-checks against what each shelf *would* hold, so a chemical-storage problem is
-caught before the write.
+offers Fabric / Resin / Hardener / Consumable, capturing the role the cure
+buy-off filters on and the hazard the flammables check needs — the old flow
+never asked, so every received lot was born unable to trigger any warning. The
+confirm runs the chemical-storage checks against what each shelf *would* hold,
+so a problem is caught before the write.
 
 Quantity fans out by class, live as you type: 3 in a fabric row reads "3
 records" before the keystroke finishes, because fabric and resin are tracked one
@@ -773,6 +809,42 @@ already wears it. A row fanning out to several jugs takes several codes,
 space-separated, dealt to the records in order; the confirm warns when the
 deal is short. Shelves can carry their RSS sublocation tag the same way, on
 the BIN record.
+
+The materials table (`materials.js`) knows what a material IS: name aliases
+that map "AT30 SLOW EPOXY HARDENER" to the `AT30` key, the bundled TDS and SDS
+for it, and the two numbers people used to walk to a laptop for — mix ratio
+and shelf life — each read from the datasheet it cites, never guessed. A lot's
+detail page shows the strip (ratio, shelf life, reorder threshold, TDS/SDS
+buttons), a grouped row carries the ratio and the TDS, and receiving and the
+EH&S import fill a blank material type from the aliases automatically. **Link
+materials** on the Materials list backfills records imported before the table
+existed: it proposes a key for every blank whose name matches, fills missing
+expiry dates from received date plus shelf life (stamped "shelf-life table",
+the enum value that finally has a table behind it), and touches nothing
+already filled in.
+
+An **EH&S barcode field** on a chemical or shelf record carries a camera
+button in edit mode: scan the UC sticker instead of retyping 24 characters.
+The same button on a receiving row appends tag after tag with the camera held
+open, so a three-jug line is three scans into one cell. Scanned and typed
+codes go through the same normalisation and the same one-tag-one-container
+refusal.
+
+For the containers EH&S tagged before this feature existed, **EH&S import** on
+the Inventory toolbar (lead-only) takes the RSS web app's own .xlsx export,
+parsed in the browser with no library — the export is a zip of XML, and
+DecompressionStream has been in every supported browser since 2023. Pick the
+sublocations that are ours (Formula Electric's start ticked, every other RSO's
+start unticked), untick any individual container you deliberately do not track
+— which is what keeps a re-import from resurrecting records you deleted — say
+which shelf each sublocation maps to, and every remaining barcode the app does
+not already know becomes a record: class and role guessed from the name,
+hazard from the GHS H-codes (no codes stays honestly unknown), received and
+expiry dates carried over. Import never edits and never deletes; a barcode
+some record already wears is the same jug, not newer truth. The Export modal
+gained an **EH&S reconciliation** sheet going the other way: every chemical
+container with its barcode, untagged and emptied-but-still-in-RSS rows sorted
+first.
 
 After a submit you stay in the sheet with the caret in a fresh line, and the
 labels are queued on the undo bar rather than auto-printed. Undo deletes what it
@@ -894,15 +966,57 @@ number of parts pulled off it. The point is that the label answers "what is
 this" with the phone still in your pocket, because RFS wifi drops and gloves are
 covered in resin. Scanning is the fast path, not the only one.
 
-There is a Label button on a work order and on a part, and a bulk builder under
-Reports. The builder lets you pick the stock (Avery 5161, 20 up, or 5522
-WeatherProof polyester for chemicals) and the cell to start at, so a part-used
-sheet gets finished instead of binned. It also prints a 100 mm calibration bar:
-browsers silently apply "Fit to page" scaling, and ten seconds with a steel rule
-is cheaper than a wasted sheet of polyester.
+There is a Label button on a work order, a part, a mold, a board, an item and a
+lot, and a bulk builder under Reports.
 
-Coupon labels are text-only. A coupon ID is one character too long for the QR
-budget, and 12 mm tape could not hold a code anyway.
+### Two ways to print one
+
+**On a sheet**, for seeding an inventory. The builder lets you pick Avery 5161
+(20 up) or 5522 WeatherProof polyester for chemicals, and the cell to start at,
+so a part-used sheet gets finished instead of binned. It also prints a 100 mm
+calibration bar: browsers silently apply "Fit to page" scaling, and ten seconds
+with a steel rule is cheaper than a wasted sheet of polyester.
+
+**On a roll**, for every day after that. Once the shed is inventoried you need
+one label at a time — a lot gets opened, a panel comes off the table, a bin gets
+renamed — and printing one onto an Avery sheet wastes nineteen. The roll printer
+is a Brother QL on the shed wifi; you print to it from the phone's own print
+dialog over AirPrint, so there is no printer address to configure anywhere in
+the app. If it doesn't show up in the dialog it is off the network.
+
+The everyday stock is **DK-2210**, 29 mm continuous, cut at 101.6 mm — which is
+the Avery 5161 cell to within a millimetre, so it is the same label on different
+paper rather than a second design. **DK-1201** die-cut (29 x 90 mm) is there as
+a fallback and is 15 mm shorter, so long names wrap one tier earlier.
+
+Direct-thermal roll labels are for indoor bins, shelves, lots and consumables.
+They fade in UV, blacken with heat and smear under solvent, so anything going
+into a post-cure oven or getting wiped with IPA or acetone still gets a 5522
+polyester label off the sheet printer. That is not a fallback; it is the right
+stock for that job, and it is why the sheet path is not going away.
+
+**Label media** under Reports sets which one this browser uses. It is stored on
+the device, so the phone at the bench and a laptop at home can differ — which is
+the point. A lead can also set the team default, which only seeds a device
+nobody has configured.
+
+### A label with nothing behind it
+
+**Custom label**, under Inventory and Reports, prints typed text: a shelf edge, a
+cabinet, a warning. Same type sizes and the same FEB mark as every other label,
+with a live preview at print size, an optional QR, and the last ten kept for
+reprinting.
+
+It will not let you type something id-shaped into the second line. A hand-made
+label reading `MOLD-SN6-011` that no record answers to is the exact failure this
+whole system exists to end, and one that *does* match a record is refused too and
+sends you to that record's own Label button — which prints the identifying fact
+and a QR that resolves, instead of four words somebody remembered.
+
+Coupons carry a QR like everything else. That was not always true: when a coupon
+was a substring of a panel (`PNL-SN6-006-C03`, fifteen characters) it was one
+over the QR budget and coupon labels were text-only. A coupon is now a
+first-class R&D record — `CPN-SN6-042`, eleven characters, shorter than a mold.
 
 ## Scanning
 
@@ -925,12 +1039,22 @@ label, and the rules reject any write carrying anything else, so a bug cannot
 publish a layup stack or somebody's email. The mirror keeps itself in step, and
 a lead can re-publish everything with **Rebuild scan mirror** under Reports.
 
-**Inside the app**, the topbar has a **Scan** button next to search. Where the
-browser supports it (Chrome, Android) it opens the camera; where it does not
-(Safari) it offers a typed-code field and says why — the phone's own camera app
-reads the code perfectly well and lands on the nameplate anyway. A code resolves
-whether it arrives as the full URL, the bare code, lowercase, or with whitespace
-round it, because somebody will retype it off a scuffed label.
+**Inside the app**, the topbar has a **Scan** button next to search. Chrome and
+Android open the camera through the browser's own BarcodeDetector. iPhones have
+no such API, so `scan-fallback.js` lazy-loads a vendored zxing-wasm decoder
+(`vendor/zxing/`, 1MB fetched once, then cached) and installs it as a
+`BarcodeDetector` polyfill; the first scan on an iPhone says "Loading the
+scanner…" for a few seconds and every later one is instant. If the load fails,
+or the browser has no camera at all, the typed-code field is still there. A
+code resolves whether it arrives as the full URL, the bare code, lowercase, or
+with whitespace round it, because somebody will retype it off a scuffed label.
+
+The camera reads FEB's QR labels and the **UC EH&S tags** on chemical
+containers (QR and the common linear formats). An EH&S tag resolves to the lot
+wearing it; a tag nobody has logged offers to open the receiving desk with the
+code prefilled. RSS sublocation tags on shelves resolve to the BIN record the
+same way, so Move and "move things here" take either kind of label at either
+end.
 
 Every mold, item and lot detail page has **Move** outside edit mode; item and
 lot pages also carry a stage button that names its destination ("Open", not
@@ -961,6 +1085,86 @@ one: with two jugs on the bench at 11pm, someone scans the nearest, and the
 record is then precise, confident and wrong. An honest gap is worth more. The
 lots print on the traveler too, unflattering source and all.
 
+## The R&D bench
+
+**For coupons, not for parts.** Ten flat panels at two cure temperatures, six
+infusion trials, a box of offcuts you want to keep track of. There is no work
+order, no traveler, no revision and no buy-off — a coupon is a row, and the
+whole tab is meant to be quicker than opening a spreadsheet. If it ever isn't,
+say so, because that is the only thing it has to beat.
+
+**A study is whatever you need it to be.** Give it a name and it is a folder.
+Add a column and mark it a *setting you chose* and it becomes a test with a
+variable. Put it inside another study and it becomes a batch in a project. It is
+one record either way — there is nothing to pick when you make one, and nothing
+to migrate when it grows.
+
+**Ten coupons is three presses.** Open the study, set **Rows**, press **Add
+rows**. They arrive numbered C01…C10, ready to type into. Labels never repeat:
+if a create half-fails the numbering skips rather than reusing, because a gap is
+invisible and two coupons both marked C03 in Sharpie is not.
+
+**Columns are per study.** Name one, say whether it is an **input** (something
+you chose) or a **result** (something you measured), give it a unit. Eight is
+the limit — past that the grid gets wider than the screen, and the ninth column
+is really a second study. Retiring a column hides it and keeps every value ever
+measured into it.
+
+**Compare turns itself on** once a study has an input, a result and three
+coupons. It groups by the thing you varied and gives you the mean and the range
+of what you got, plus how many coupons each number actually came from — a study
+that is half-measured says so rather than averaging over whatever happened to
+be filled in. Scrapped coupons are left out unless you ask for them.
+
+**Paste fills, it does not create.** Copy a column of readings off the Instron,
+click the first cell and paste: the values fill *down the rows already there*.
+If there are more values than rows it stops and tells you how many had nowhere
+to go. Nothing is minted by a paste.
+
+**A project shows all its batches' coupons at once**, with a Batch column
+saying where each came from, which is what lets a sweep run across two rounds.
+Coupons themselves always live in a batch — a project holds batches, so the
+**Add rows** button moves out of the way and says so.
+
+**Everything gets a label.** The study's is for the bag, the tray or the box the
+coupons live in — the thing you pick up in March wondering what it was. It
+carries the study name, how many coupons should be inside, the materials and a
+QR. Each coupon gets its own, and **Coupon labels** prints the whole study on one
+sheet: you cut ten coupons and you want ten tags in one press. Both scan back to
+the record like every other label in the app.
+
+**Photos.** On the study, that's the panel before it was cut or the setup on the
+machine. On a coupon it's almost always the **failure surface** — the one
+photograph in coupon testing that is evidence rather than a record, because it's
+what says whether a number is a real result or a grip that slipped. The camera
+button on each row carries its photo count, so a coupon that has one is visible
+while you scan down the column.
+
+**Getting the data out**, three ways, because they're for three different
+moments. **CSV** downloads one row per coupon with every column. **Copy** puts
+the same thing on the clipboard as TSV to paste into a Google Sheet — which is
+the one that works on a phone, where a browser download often silently does
+nothing. **Report** prints a one-page sheet with the table, the comparison and
+the photos, for a design review or the advisor. All three resolve what a coupon
+*inherited*: a blank resin cell in a spreadsheet somebody opens next year is a
+lie by omission, because the coupon did have a resin — it just took it from its
+study.
+
+**Duplicate** copies a study's setup and none of its results: same columns, same
+materials, same label stem, no coupons, labels starting at 01 again. Same test,
+new batch, next week — which is the normal case, not the exception.
+
+**Delete** takes the coupons with it, after telling you how many. Undo puts
+everything back *with its measurements* — an undo that restored the rows but not
+the numbers would look like it worked. A project won't delete while it still
+holds batches; that's three rounds of work, not one press.
+
+**R&D parts are a different thing, and they are listed at the bottom.** A part
+flagged R&D is a real part with a real traveler that just isn't a season
+deliverable — a mold shakedown keeps every blocker and every cure hold. Those
+live on the Parts tab; the R&D tab lists them so there is one place to look, and
+every row opens over there.
+
 ## Opening the app
 
 **The splash lays up the mark.** A cold load at RFS used to show a white page,
@@ -970,22 +1174,29 @@ California-gold one, arriving on the bias the way you actually lay a 45. Under
 it sits the **fact of the day** — the same one the dashboard shows, drawn from
 the team's own SN5 documentation.
 
-**It waits long enough to be read.** The sheet used to come down the instant the
-database answered, which on a warm load is a few hundred milliseconds — before
-the fact had finished fading in. There is a floor now: about a second and a half,
-and a little longer on the first load of a day or the first after a deploy, which
-is the load where the fact is actually new to you.
+**The start lights tell you what it is waiting on.** Five lamps under the
+wordmark, filling as five real things land: the app's own code, sign-in, your
+place on the roster, the first of the shop data, and the type. A line underneath
+names whichever one is still outstanding. They are lit by what actually
+finished, never by a timer — so when a load stalls at RFS you can see *which*
+part stalled instead of watching a spinner.
 
-**And it gets out of the way when you say so.** Once the app behind it is ready
-the splash offers **Continue** — a tap anywhere, or Enter, Space or Escape. The
-button only appears once there is genuinely something to continue *to*, so
-pressing it can never drop you onto a blank app; press it early and the press is
-remembered rather than ignored, and the sheet leaves the moment the data lands.
-Leaving, the two plies part along the bias they arrived on and the sheet is drawn
-off on the 45, the way a ply comes off a mold.
+**Nothing opens until you say so.** Once all five are lit the splash offers
+**Continue** — a tap anywhere, or Enter, Space or Escape — and then it waits. It
+does not leave on its own, so the fact under it is there for as long as you want
+to read it rather than for however many seconds somebody budgeted. Press early
+and the press is remembered rather than ignored; the app opens the moment it is
+genuinely ready.
 
-If the connection is slow the splash says so after four seconds, and it gives up
-entirely after twelve rather than spinning forever.
+**Leaving is lights-out.** All five lamps go dark at once, the two plies part
+along the bias they arrived on, and the sheet is drawn off on the 45 — the way a
+ply comes off a mold — uncovering the app already in place beneath it.
+
+If the connection is slow the splash says so after four seconds. If something is
+genuinely broken, the lamp for that step goes hollow and amber, the line says
+what went wrong in plain words, and the button changes to **Continue anyway**
+with a **Retry** beside it. You are never locked out, and you are never told the
+app loaded when it did not.
 
 ## Getting around
 

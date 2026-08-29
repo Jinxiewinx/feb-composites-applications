@@ -36,7 +36,7 @@ const ok = (name, cond, detail = "") => {
 };
 
 const TABS = ["dashboard", "season", "workorders", "parts", "stock", "molds", "lots", "items",
-  "projects", "timeline", "weekplan", "budget", "documents", "reports", "people"];
+  "rnd", "projects", "timeline", "weekplan", "budget", "documents", "reports", "people"];
 
 /* The same four widths shoot_ui.mjs photographs, so a failing number and the
    picture of it always come from the same layout. `coarse` drives the tap

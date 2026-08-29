@@ -197,6 +197,7 @@ number live". None of them are derivable from the code that reads them.
 | `config/trainings` | Trainings added beyond the six built-ins. Archives instead of deleting, so a historic grant keeps rendering its name |
 | `config/resins` | Per-resin cure-hold overrides. Never below the datasheet floor — see below |
 | `config/tracker` | The sheet feed's secret token. Never in source |
+| `config/labels` | The team's default label media. Only seeds a device nobody has set — the operative setting is per-device in `localStorage` |
 
 Three field names carry more weight than they look:
 
@@ -211,7 +212,9 @@ Three field names carry more weight than they look:
   the default-and-confirm design would quietly launder guesses into records.
 - **`role`** and `hazard` are written by the Receiving class cell. Before that
   flow existed nothing asked for them, so every received lot was born unable to
-  trigger the CS-011 §6 resin/hardener check at all.
+  trigger the flammables check, and the cure buy-off could not tell a hardener
+  from a resin. (The one-time §6 resin/hardener co-location warning is gone —
+  the team stores them together, lead decision 2026-08-28.)
 
 The Activity feed is built from the `updatedAt` / `updatedBy` pair every record
 already carried, plus comments and step buy-offs — no separate event log.
@@ -320,6 +323,54 @@ tints it amber forever; `partOf()` falls back to a name match, so it silently
 unlinks the part from its work order; and `nameTier()` gives a one-line label
 only 20 characters, so six characters of prefix pushes most names to two lines
 and deletes the mid row from the printed label.
+
+## "R&D" means two things, and they must stay apart
+
+Since 2026-08-28 there are two, and the shared word is all they have in common.
+
+| | `parts.rnd === true` | the `rnd` collection |
+|---|---|---|
+| what it is | a real part | a coupon |
+| lives on | the Parts tab | the R&D tab |
+| ids | `P-SN6-###` | `RDS-SN6-###`, `CPN-SN6-###` |
+| has a traveler | **yes** — blockers, cure holds, evidence gates, buy-offs | **no** |
+| read by `inSeason()` | yes | **never** |
+| on the tracker feed | never | never |
+
+An R&D **part** is real carbon on a real deadline, and every gate above still
+bites — that is the whole point of the section before this one. An R&D
+**coupon** is a test piece somebody cut this afternoon: no revision, no
+signature, no cure hold, and a grid you type into like a spreadsheet.
+
+**Somebody will try to unify them.** It looks like duplication and it is not.
+Three lines hold it:
+
+- `rnd.js` never tests `retro`, and never gains an `isRnd()` call. A test reads
+  the source and asserts the first of those.
+- Nothing in the `rnd` collection is ever read by `inSeason()`, `seasonRows()`,
+  `trackerRow()`, `partIndexRows()` or `woIndexRows()`.
+- A coupon never gets an `rnd` boolean. It is not a part that is flagged; it is
+  a different record.
+
+The R&D tab lists the R&D **parts** underneath its studies, read-only, every row
+leaving for the Parts tab. That is deliberate — the tab is meant to be the one
+place you look — and it is also the most likely place for the two to get fused,
+so the section carries a sentence saying which is which.
+
+**The `onlyRnd` chip on the Parts rail is unchanged and stays.** It is how you
+filter while you are already over there, and none of the five hide sites moved.
+
+### One cliff, written down before it is hit
+
+`rnd` is the twelfth whole-collection `onSnapshot` at boot, and coupons will be
+the most numerous record type in the app inside a month — ten at a time, several
+times a week, forever. Five hundred is nothing on shop wifi. Five thousand is
+not.
+
+**If `DB.rnd` passes about 2,000, take `rnd` out of `COLLECTIONS` and give the
+tab a per-study query.** Nothing else in the app reads the collection, so it is
+a contained change — but only while that stays true, which is the real reason it
+is written here rather than discovered later.
 
 ## The public surfaces
 
@@ -450,8 +501,47 @@ worse once it has resin on it.
 assertion is the whole guard.
 
 The same arithmetic caps an ID at 14 characters (47 − 30 of host − 3 of `/Q/`).
-Everything in the grammar fits except a coupon, `PNL-SN6-006-C03` at 15, which
-is why coupon labels are text-only.
+Everything in the grammar fits. It did not always: when a coupon was a substring
+of a panel, `PNL-SN6-006-C03` at 15 characters was one over, and coupon labels
+were text-only. A coupon is now a first-class `rnd` record at `CPN-SN6-042`,
+eleven characters, so it carries a QR like everything else. The rule did not
+move; which ids satisfy it did. `test_qr.mjs` keeps the old spelling as a
+counterfactual so the cliff stays proven rather than assumed.
+
+## Why the roll printer has no address in the app
+
+A browser cannot open a raw TCP socket, so the usual way to drive a label
+printer — port 9100 — is not available to us at all. Nor is its HTTP interface:
+the app is served over HTTPS from `feb-composites.web.app`, and an HTTPS page
+`fetch`ing `http://192.168.x.x` is blocked as mixed content. Every "just POST to
+the printer" design dies on one of those two.
+
+What is left is the operating system's own print path. The phone discovers the
+printer over Bonjour, `window.print()` reaches it through AirPrint, and the app
+never learns an IP, a port or a token. That is why **Label media** has a stock
+picker and no address field: there is nothing to type, and a printer that does
+not appear in the print dialog is off the network rather than misconfigured
+here.
+
+The cost is a print dialog per label. Removing it needs an always-on machine in
+the shed — the app writes a job to Firestore, something in the shed watches for
+it and prints — and there is no such machine. If one ever appears, the API key
+for whatever service does the printing belongs in a Functions secret and not in
+`config/`, for the reason the receipt parser already sets out.
+
+The geometry is why none of this cost a redesign. On a QL the roll's width runs
+across the print head and the length along the feed is whatever you cut, so
+29 mm stock cut at 101.6 mm **is** the Avery 5161 cell. `labelHtml()` was
+already written against that number for exactly this day. `labelMarkup()` is the
+one place the markup lives, and `tools/test_label_roll.mjs` asserts the sheet
+and roll labels come out byte-identical, because a fork is how the printed label
+and the public scan card start disagreeing about what an object is.
+
+`.roll-page` is deliberately not `.ws-page`: `sheetFileHtml()` injects
+`@media print { .ws-page { padding: 0 0.45in } }` into every saved standalone
+sheet, and 0.45 in either side of a 101.6 mm label leaves nothing. The preview
+would look right and only the saved file — the copy printed at the bench with no
+wifi — would be wrong.
 
 ## The dashboard
 

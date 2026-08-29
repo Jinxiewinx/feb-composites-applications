@@ -58,6 +58,8 @@ const IDS = [
   "FAB-SN6-021",
   "RSN-SN6-009",
   "BRD-SN6-002",
+  "RDS-SN6-004",      // an R&D study: the bag or tray the coupons live in
+  "CPN-SN6-042",      // a coupon, first-class since v4.0.0 and shorter than a mold
 ];
 
 for (const id of IDS) {
@@ -252,6 +254,45 @@ console.log("\nprojection");
   ok(ctx.pubProjection("projects", { id: "PROJ-SN6-001", title: "x" }) === null,
     "tickets are not physical and get no public record");
   ok(ctx.pubProjection("budget", { id: "BUY-SN6-001" }) === null, "budget gets no public record");
+}
+
+console.log("\nthe R&D bench: the ID GRAMMAR changed, the arithmetic did not");
+{
+  /* Until v4.0.0 a coupon was a SUBSTRING of a panel id — PNL-SN6-006-C03,
+     fifteen characters, one over budget — so coupon labels were text-only on
+     12mm tape and carried no QR. That was never a fact about coupons; it was a
+     fact about that spelling. A coupon is now its own record with its own
+     prefix, and it fits with room to spare. The rule is unchanged; what moved
+     is which ids satisfy it. The old form is kept below as the counterfactual,
+     because it is what proves fourteen is a real cliff and not a number
+     somebody typed in. */
+  const coupon = "CPN-SN6-042", study = "RDS-SN6-004";
+  eq(coupon.length, 11, "a first-class coupon id is 11 characters");
+  ok(ctx.fitsQrBudget(coupon) && ctx.fitsQrBudget(study), "both fit the budget");
+  ok(ctx.labelHtml("rnd", { id: coupon, cls: "CPN", label: "C03", status: "Tested" }).includes("<svg"),
+    "so a COUPON label carries a QR now — this is the line that used to say the opposite");
+  ok(ctx.labelHtml("rnd", { id: study, cls: "RDS", name: "CURE SWEEP" }).includes("<svg"),
+    "and so does a STUDY, which labels the bag the coupons live in");
+
+  /* Loaded ALONE, with no core.js and no rnd.js, exactly as this file loads it.
+     Every R&D accessor labels.js reaches for is guarded for this reason. */
+  ok(ctx.labelHtml("rnd", { id: coupon, cls: "CPN", label: "C03" }).includes("C03"),
+    "and both render in a bare sandbox rather than throwing on a missing accessor");
+  eq(ctx.labelClass("rnd", { id: "RDS-SN6-001", cls: "" }), null,
+    "a record with no cls still gets no label, same as items and lots");
+
+  /* COUPON vs CONSUMABLE is the pair that has to survive 7pt and mould release,
+     because CPN and CON are one letter apart. */
+  const words = [ctx.labelClass("rnd", { cls: "CPN" }), ctx.labelClass("lots", { cls: "CON" })];
+  ok(words[0] !== words[1] && words[0] && words[1], "the class words differ: " + words.join(" / "));
+
+  const legacy = "PNL-SN6-006-C03";
+  eq(legacy.length, 15, "the old panel-substring form was 15 characters");
+  ok(!ctx.fitsQrBudget(legacy), "and would still be over budget");
+  const lq = ctx.qrcode(0, "Q"); lq.addData(scanUrl(legacy), "Alphanumeric"); lq.make();
+  ok(lq.getModuleCount() > 29, "and would still cost a version", `${lq.getModuleCount()} modules`);
+  ok(!ctx.labelHtml("items", { id: legacy, cls: "PNL", partName: "TEST PANEL" }).includes("<svg"),
+    "labelHtml still drops the QR rather than silently printing a denser one");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

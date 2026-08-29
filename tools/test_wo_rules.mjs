@@ -72,16 +72,20 @@ await expect(403, "member", "DELETE", "/workOrders/WO-T-001");
 await expect(403, "member", "PATCH", "/roster/friend@feb.test", { name: S("Friend"), role: S("member") });
 await expect(403, "member", "DELETE", "/roster/lead@feb.test");
 
-console.log("new collections (member CRUD, lead-only delete):");
+console.log("new collections (member CRUD, lead-only delete — inventory excepted):");
 /* molds/items/lots joined this list on 2026-08-03 with printed labels. They
    carry the same access shape as everything else — a public scan reads the
    separate `pub` mirror, never these — and that separation is exactly what the
-   `rando` line below is checking. */
+   `rando` line below is checking. items and lots left the lead-only-delete
+   club on 2026-08-28 (any member deletes inventory — Simon's call for the
+   Select… mass-delete); their delete coverage lives in the inventory block
+   further down. */
 for (const coll of ["parts", "projects", "schedule", "budget", "stock", "stackplans",
-                    "molds", "items", "lots"]) {
+                    "molds", "items", "lots", "rnd"]) {
+  const anyDelete = coll === "items" || coll === "lots";
   await expect(200, "member", "PATCH", `/${coll}/X-001`, { id: S("X-001"), name: S("t") });
   await expect(200, "member", "GET", `/${coll}/X-001`);
-  await expect(403, "member", "DELETE", `/${coll}/X-001`);
+  if (!anyDelete) await expect(403, "member", "DELETE", `/${coll}/X-001`);
   await expect(403, "rando", "GET", `/${coll}/X-001`);
   await expect(200, "lead", "DELETE", `/${coll}/X-001`);
 }
@@ -138,26 +142,42 @@ await expect(403, "member", "PATCH", "/meta/lots", { next: N(102), note: S("hi")
    without the "is int" clause the counter could silently drift to 101.5. */
 await expect(403, "member", "PATCH", "/meta/lots", { next: { doubleValue: 105.5 } });
 
-console.log("deleting your own mistake (undo), but never someone else's:");
-/* Undo means delete, so a lead-only delete made every Undo bar in the app a
-   lead-only button — and a lying one: the client splices its local array
-   before the server refuses. createdBy is stamped at creation, so a member
-   can take back what they just made and nothing else. */
+console.log("inventory deletes are open to any member; the rest of the app is not:");
+/* items and lots went from isLead()||mine() to onRoster() on 2026-08-28 —
+   Simon's call for the Select…/mass-delete: shop consumables are shared
+   property, and "only whoever logged the jug can delete it" made cleanup
+   after the EH&S import a lead-only chore. stock keeps the undo shape
+   (isLead()||mine()); molds and parts stay lead-only. */
 await expect(200, "owner", "PATCH", "/lots/FAB-SN6-900", { id: S("FAB-SN6-900"), cls: S("FAB"), createdBy: S("member@feb.test") });
 await expect(200, "owner", "PATCH", "/lots/FAB-SN6-901", { id: S("FAB-SN6-901"), cls: S("FAB"), createdBy: S("lead@feb.test") });
 await expect(200, "owner", "PATCH", "/lots/FAB-SN6-902", { id: S("FAB-SN6-902"), cls: S("FAB") }); // predates createdBy
-await expect(403, "member", "DELETE", "/lots/FAB-SN6-901");   // someone else's: refused
-await expect(403, "member", "DELETE", "/lots/FAB-SN6-902");   // no createdBy: stays lead-only
-await expect(200, "member", "DELETE", "/lots/FAB-SN6-900");   // my own: allowed
-await expect(200, "lead",   "DELETE", "/lots/FAB-SN6-901");   // a lead still deletes anything
-await expect(200, "lead",   "DELETE", "/lots/FAB-SN6-902");
-/* The same shape on the other two collections an undo can touch. stock is the
-   one that was already broken in the field: undoCuts() deletes the offcuts it
-   created, and a member could never actually do it. */
+await expect(200, "member", "DELETE", "/lots/FAB-SN6-901");   // someone else's: now allowed
+await expect(200, "member", "DELETE", "/lots/FAB-SN6-902");   // no createdBy: also allowed
+await expect(200, "member", "DELETE", "/lots/FAB-SN6-900");   // my own: allowed as ever
+await expect(200, "owner", "PATCH", "/items/JIG-SN6-900", { id: S("JIG-SN6-900"), cls: S("JIG"), createdBy: S("lead@feb.test") });
+await expect(200, "member", "DELETE", "/items/JIG-SN6-900");  // items too, whoever made it
+/* stock keeps the undo rule: your own mistake, or a lead. undoCuts() deletes
+   the offcuts it created, which is exactly the mine() case. */
 await expect(200, "owner", "PATCH", "/stock/BRD-SN6-900", { id: S("BRD-SN6-900"), createdBy: S("member@feb.test") });
-await expect(200, "member", "DELETE", "/stock/BRD-SN6-900");
-await expect(200, "owner", "PATCH", "/items/JIG-SN6-900", { id: S("JIG-SN6-900"), cls: S("JIG"), createdBy: S("member@feb.test") });
-await expect(200, "member", "DELETE", "/items/JIG-SN6-900");
+await expect(200, "owner", "PATCH", "/stock/BRD-SN6-901", { id: S("BRD-SN6-901"), createdBy: S("lead@feb.test") });
+await expect(403, "member", "DELETE", "/stock/BRD-SN6-901");  // someone else's board: refused
+await expect(200, "member", "DELETE", "/stock/BRD-SN6-900");  // my own: allowed
+await expect(200, "lead",   "DELETE", "/stock/BRD-SN6-901");
+/* rnd keeps the undo shape too, and NOT the wider onRoster() its multi-class
+   siblings items and lots were opened to. A coupon is somebody's experiment and
+   its result is data, which is the opposite of a shared jug of resin — but the
+   bulk-create Undo still has to be able to delete what it just made, or it is a
+   button that lies: the rows vanish locally, the server refuses, and the next
+   snapshot puts them back. */
+await expect(200, "owner", "PATCH", "/rnd/CPN-SN6-900", { id: S("CPN-SN6-900"), cls: S("CPN"), createdBy: S("member@feb.test") });
+await expect(200, "owner", "PATCH", "/rnd/CPN-SN6-901", { id: S("CPN-SN6-901"), cls: S("CPN"), createdBy: S("lead@feb.test") });
+await expect(403, "member", "DELETE", "/rnd/CPN-SN6-901");  // someone else's coupon: refused
+await expect(200, "member", "DELETE", "/rnd/CPN-SN6-900");  // the one Undo just created: allowed
+await expect(200, "lead",   "DELETE", "/rnd/CPN-SN6-901");
+/* A study is the same rule — it is the thing that holds the experiment. */
+await expect(200, "owner", "PATCH", "/rnd/RDS-SN6-900", { id: S("RDS-SN6-900"), cls: S("RDS"), createdBy: S("member@feb.test") });
+await expect(200, "member", "DELETE", "/rnd/RDS-SN6-900");
+
 /* Collections that have no undo keep the old rule. */
 await expect(200, "owner", "PATCH", "/parts/P-SN6-900", { id: S("P-SN6-900"), createdBy: S("member@feb.test") });
 await expect(403, "member", "DELETE", "/parts/P-SN6-900");

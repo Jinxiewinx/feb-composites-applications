@@ -126,13 +126,17 @@ console.log("\nthe camera light goes out");
   await ctx.close();
 }
 
-/* ---------- 3. the fallback, which is most of the phones ---------- */
+/* ---------- 3. the typed path, when there is no camera at all ---------- */
 console.log("\ntyping the code when the camera is unavailable");
 {
   const ctx = await browser.newContext({ viewport: { width: 393, height: 850 } });
-  // Safari has no BarcodeDetector. Simulate that rather than assume it away:
-  // the typed path is the one most of the team will actually use.
-  await ctx.addInitScript(() => { try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; } });
+  // No detector AND no mediaDevices — a desktop with no webcam, an insecure
+  // origin, a locked-down browser. (No-detector alone is Safari, and Safari
+  // now gets the wasm fallback — that path is section 3b below.)
+  await ctx.addInitScript(() => {
+    try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; }
+    try { Object.defineProperty(navigator, "mediaDevices", { value: undefined }); } catch {}
+  });
   const { page } = await openApp(ctx, port);
   await page.evaluate(APPLY_FIXTURES);
   await page.evaluate(SEED);
@@ -158,6 +162,50 @@ console.log("\ntyping the code when the camera is unavailable");
   const v = await page.evaluate(() => ({ tab: view.tab, mode: view.mode, id: view.id }));
   eq(v.mode, "detail", "a typed code opens the record");
   eq(v.id, "WO-SN5-003", "the right one, upcased");
+  await ctx.close();
+}
+
+/* ---------- 3a. the wasm fallback, which is every iPhone ---------- */
+console.log("\nthe vendored decoder stands in where BarcodeDetector is missing");
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 393, height: 850 }, permissions: ["camera"],
+  });
+  await ctx.addInitScript(() => { try { delete window.BarcodeDetector; } catch { window.BarcodeDetector = undefined; } });
+  const { page } = await openApp(ctx, port);
+  await page.evaluate(APPLY_FIXTURES);
+  await page.evaluate(SEED);
+  await page.waitForTimeout(200);
+
+  eq(await page.evaluate(() => scanSupported()), true,
+    "no native detector still reports scannable — the fallback is loadable");
+  eq(await page.evaluate(() => ZX_FALLBACK.state), "idle", "and nothing was fetched at boot");
+
+  const loaded = await page.evaluate(() => loadScanFallback());
+  eq(loaded, true, "the wasm module loads from vendor/zxing/");
+  eq(await page.evaluate(() => ZX_FALLBACK.state), "ready", "and reports ready");
+  eq(await page.evaluate(() => typeof window.BarcodeDetector), "function", "BarcodeDetector is installed");
+
+  // Round trip through the app's own QR generator: draw a code, decode it.
+  const read = await page.evaluate(async () => {
+    const q = qrcode(0, "Q");   // the app's own vendored generator
+    q.addData("HTTPS://FEB-COMPOSITES.WEB.APP/Q/RSN-SN6-001", "Alphanumeric");
+    q.make();
+    const n = q.getModuleCount(), scale = 8, border = 4;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = (n + border * 2) * scale;
+    const g = canvas.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, canvas.width, canvas.height);
+    g.fillStyle = "#000";
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+      if (q.isDark(r, c)) g.fillRect((c + border) * scale, (r + border) * scale, scale, scale);
+    const det = new window.BarcodeDetector({ formats: ["qr_code", "code_128"] });
+    const hits = await det.detect(canvas);
+    return hits.map(h => h.rawValue);
+  }).catch(e => ["ERR:" + e.message]);
+  eq(read.length, 1, "one code read from the frame", read.join(","));
+  eq(await page.evaluate(v => idFromScan(v), read[0] || ""), "RSN-SN6-001",
+    "and it resolves through the same chain as a native scan");
   await ctx.close();
 }
 
@@ -222,6 +270,49 @@ console.log("\nthe UC EH&S tag, typed (chemicals wear the university's sticker, 
   });
   eq(cells.chem, true, "a resin row has an EH&S tag cell");
   eq(cells.fabInput, false, "a fabric row shows — there instead: cloth is not in the campus system");
+  await ctx.close();
+}
+
+/* ---------- 3c. the RSS export parses in the browser, no library ---------- */
+console.log("\nthe EH&S export (.xlsx) is read by the app's own zip walker");
+{
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const fixture = await readFile(fileURLToPath(new URL("./lib/rss-export-fixture.xlsx", import.meta.url)));
+  const { ctx, page } = await boot(1200);
+  const res = await page.evaluate(async (b64) => {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const table = await ehsParseXlsx(buf.buffer);
+    const rows = ehsMapRows(table);
+    const st = ehsImpState("fixture.xlsx", rows);
+    const feb = st.subs.get("Formula Electric at Berkeley - Flammable Cabinet");
+    const at30 = rows.find(r => /AT30/.test(r.name));
+    return {
+      header: table[0].slice(0, 3),
+      mapped: rows.length,
+      dupes: st.dupes,
+      subs: [...st.subs.keys()],
+      febOn: feb ? feb.on : null,
+      febRows: feb ? feb.rows.length : 0,
+      at30: at30 ? { expires: at30.expires, vendor: at30.vendor, hazard: ehsHazard(at30.hazardCodes) } : null,
+      acetoneOpened: (rows.find(r => r.name === "Acetone") || {}).opened,
+    };
+  }, fixture.toString("base64")).catch(e => ({ err: e.message }));
+  ok(!res.err, "the xlsx parses in the page", res.err);
+  if (!res.err) {
+    eq(res.header.join("|"), "Name|Substance Name|CAS", "the header row comes out in order");
+    eq(res.mapped, 6, "six importable rows (the no-barcode row drops)");
+    eq(res.dupes, 1, "the repeated barcode inside the file is counted, first one wins");
+    eq(res.subs.length, 2, "two sublocations found");
+    eq(res.febOn, true, "FEB's sublocation starts ticked");
+    eq(res.febRows, 4, "with its four surviving rows");
+    eq(res.at30 && res.at30.expires, "2027-06-01", "the expiry timestamp becomes a date");
+    eq(res.at30 && res.at30.vendor, "Easy Composites", "the vendor rides along");
+    eq(res.at30 && res.at30.hazard, "not flammable", "H302/H314/H317 is classified, not flammable");
+    eq(res.acetoneOpened, "2026-01-05", "an Opened Date carries over");
+  }
   await ctx.close();
 }
 

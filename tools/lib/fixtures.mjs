@@ -273,6 +273,68 @@ export const SEASON_PARTS = [
      P-SN6-103  retro AND rnd at once. This is the one that matters: it is the
                 only fixture that fails a seasonRows() written with && instead
                 of ||, and it is legal (R&D work from a finished season). */
+/* ---- the R&D bench (the `rnd` collection, NOT the flag above) ----
+
+   These photograph the coupon grid, which is the whole reason they exist: with
+   an empty collection every visual suite measures the tab's EMPTY STATE and the
+   width sweep proves nothing about the thing most likely to overflow.
+
+   Shaped to exercise the awkward cases rather than the happy one:
+     RDS-SN6-001  a project with two batches under it, three columns (one input,
+                  two results) inherited by both — the nesting and the column
+                  inheritance in one fixture
+     RDS-SN6-002  a batch whose coupons are all measured, so Compare renders
+     RDS-SN6-003  a batch half-measured, with a Scrapped coupon and blanks, so
+                  the coverage line and the scrapped filter have something to do
+     RDS-SN6-004  a plain named folder: no columns, no parent, no question. The
+                  "declare nothing and it is a folder" case, which is the one a
+                  wizard-shaped design would have made impossible. */
+const rdCoupon = (n, study, label, status, vals, notes) => ({
+  id: "CPN-SN6-" + String(n).padStart(3, "0"), cls: "CPN", study, label, status,
+  vals: vals || {}, notes: notes || "", notesHtml: "", photos: [],
+  createdBy: "starbuck@berkeley.edu",
+});
+export const RND = [
+  { id: "RDS-SN6-001", cls: "RDS", name: "Nosecone infusion trials", status: "Active", parent: "",
+    question: "Does a 20 °C hotter post-cure move the tensile knee?",
+    labelPrefix: "C", labelNext: 1,
+    cols: [
+      { cid: "Kcure", name: "Cure temp", role: "input", type: "num", unit: "°C", hidden: false },
+      { cid: "Kthk", name: "Thickness", role: "result", type: "num", unit: "mm", hidden: false },
+      { cid: "Kload", name: "Peak load", role: "result", type: "num", unit: "N", hidden: false },
+    ],
+    defaults: { stack: "6X 195 TWILL", resinLot: "RSN-SN6-001", lotSource: "scanned", by: "starbuck@berkeley.edu" },
+    notes: "", notesHtml: "", createdBy: "starbuck@berkeley.edu", createdOn: iso(-20),
+  },
+  { id: "RDS-SN6-002", cls: "RDS", name: "Batch A — 120 °C", status: "Done", parent: "RDS-SN6-001",
+    question: "", labelPrefix: "A", labelNext: 7, cols: [], defaults: {},
+    notes: "", notesHtml: "", createdBy: "starbuck@berkeley.edu", createdOn: iso(-20) },
+  { id: "RDS-SN6-003", cls: "RDS", name: "Batch B — 140 °C", status: "Active", parent: "RDS-SN6-001",
+    question: "", labelPrefix: "B", labelNext: 7, cols: [], defaults: { resinLot: "RSN-SN6-002" },
+    notes: "", notesHtml: "", createdBy: "ana@berkeley.edu", createdOn: iso(-9) },
+  { id: "RDS-SN6-004", cls: "RDS", name: "Offcut library", status: "Parked", parent: "",
+    question: "", labelPrefix: "L", labelNext: 4, cols: [], defaults: {},
+    notes: "", notesHtml: "", createdBy: "ana@berkeley.edu", createdOn: iso(-31) },
+
+  rdCoupon(1, "RDS-SN6-002", "A01", "Tested", { Kcure: 120, Kthk: 2.09, Kload: 588 }),
+  rdCoupon(2, "RDS-SN6-002", "A02", "Tested", { Kcure: 120, Kthk: 1.98, Kload: 561 }, "dry corner, trimmed back"),
+  rdCoupon(3, "RDS-SN6-002", "A03", "Tested", { Kcure: 120, Kthk: 2.17, Kload: 604 }),
+  rdCoupon(4, "RDS-SN6-002", "A04", "Tested", { Kcure: 120, Kthk: 2.11, Kload: 597 }),
+  rdCoupon(5, "RDS-SN6-002", "A05", "Tested", { Kcure: 140, Kthk: 2.14, Kload: 612 }),
+  rdCoupon(6, "RDS-SN6-002", "A06", "Tested", { Kcure: 140, Kthk: 2.05, Kload: 590 }),
+
+  rdCoupon(7, "RDS-SN6-003", "B01", "Tested", { Kcure: 140, Kthk: 2.22, Kload: 641 }),
+  rdCoupon(8, "RDS-SN6-003", "B02", "Tested", { Kcure: 140, Kthk: 2.19, Kload: 633 }),
+  rdCoupon(9, "RDS-SN6-003", "B03", "Scrapped", { Kcure: 140, Kthk: 1.62 }, "bag leaked overnight — not a data point"),
+  rdCoupon(10, "RDS-SN6-003", "B04", "Made", { Kcure: 160 }),
+  rdCoupon(11, "RDS-SN6-003", "B05", "Made", { Kcure: 160 }),
+  rdCoupon(12, "RDS-SN6-003", "B06", "Planned", {}),
+
+  rdCoupon(13, "RDS-SN6-004", "L01", "Made", {}, "half a metre of 195 twill, RFS shelf 2"),
+  rdCoupon(14, "RDS-SN6-004", "L02", "Made", {}, "core offcuts, assorted"),
+  rdCoupon(15, "RDS-SN6-004", "L03", "Made", {}),
+];
+
 export const RND_PARTS = [
   {
     id: "P-SN6-101", partName: "VG TRIAL PANEL", subteam: "AERO", layupType: "MOLD INFUSION",
@@ -334,6 +396,7 @@ export const APPLY_FIXTURES = `
   window.onFbData("molds", ${JSON.stringify(MOLDS)});
   window.onFbData("items", ${JSON.stringify(ITEMS)});
   window.onFbData("lots", ${JSON.stringify(LOTS)});
+  window.onFbData("rnd", ${JSON.stringify(RND)});
   /* Concatenated onto the SN5 archive, not replacing it. Parts and the
      dashboard want both seasons; only the Season tab and the tracker feed
      filter retro out, which is the whole point of these four. */

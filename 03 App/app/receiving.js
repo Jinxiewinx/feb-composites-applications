@@ -44,9 +44,9 @@ const RX_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /* The four things a person picks from, and the two fields they set. Four
    distinct initials on purpose: f / r / h / c each select natively.
-   Capturing `role` here is what finally lets the CS-011 §6 "resin and hardener
-   on the same shelf" warning fire at all — the old flow never asked, so every
-   received lot was born unable to trigger it. */
+   `role` matters even though the co-location warning is gone: the cure
+   buy-off's lot pickers filter on it (defaultLot), and it is what keeps a
+   hardener from being offered as the resin. */
 const RX_CLASSES = [
   { key: "FAB", label: "Fabric", cls: "FAB", role: "" },
   { key: "RSN:resin", label: "Resin", cls: "RSN", role: "resin" },
@@ -251,11 +251,17 @@ function rxInferFromName(r) {
     if (!r.supplier && prior.supplier) r.supplier = prior.supplier;
     if (!r.unitCost && typeof prior.unitCost === "number") r.unitCost = String(prior.unitCost);
   }
+  /* The materials alias table is the second source: a human wrote "at30
+     means AT30" there, so it fills a still-blank matKey the same way a prior
+     lot would. It carries no safety fields, so nothing here can guess one. */
+  if (!r.matKey && typeof matForName === "function") {
+    const mat = matForName(name);
+    if (mat) r.matKey = mat.matKey;
+  }
   /* The restock table knows what a material IS — that acetone is flammable and
      AT30 is a hardener — in a way a delivery never does. Inference runs from
-     the rule, never from pattern-matching the name: guessing "hardener" out of
-     a string is how a hardener ends up on the resin shelf with a clean §6
-     all-clear. */
+     the rule, never from pattern-matching the name: a wrong hazard guessed out
+     of a string files a silent false all-clear on the flammables check. */
   const rule = r.matKey && typeof restockRuleFor === "function" ? restockRuleFor(r.matKey) : null;
   if (rule) {
     if (!r.supplier && rule.supplier) r.supplier = rule.supplier;
@@ -556,14 +562,16 @@ function rxRowHtml(r, cols) {
       </select>`,
     vendorLot: `<input id="rxv-${r.rid}" value="${esc(r.vendorLot)}" placeholder="lot #" aria-label="Vendor lot"
         onchange="rxUpd('${r.rid}','vendorLot',this.value)">`,
-    /* The UC EH&S tag going onto (or already on) this container. Free-typed or
-       scanned in with a keyboard-mode scanner; the camera path arrives with
-       the scan.js work. A row fanning out to several containers takes several
-       codes, space- or comma-separated, dealt to the records in order. */
+    /* The UC EH&S tag going onto (or already on) this container. Typed, fed
+       by a keyboard-mode scanner, or camera-scanned with the button — which
+       stays open across codes, so a three-jug line is three scans into one
+       cell. A row fanning out to several containers takes several codes,
+       space- or comma-separated, dealt to the records in order. */
     ehs: shopFieldApplies(spec, cls, "ehsBarcode")
-      ? `<input id="rxh-${r.rid}" value="${esc(r.ehs || "")}" placeholder="tag code" aria-label="EH&S tag"
+      ? `<span class="rx-ehs"><input id="rxh-${r.rid}" value="${esc(r.ehs || "")}" placeholder="tag code" aria-label="EH&S tag"
           autocapitalize="characters" autocomplete="off" spellcheck="false"
-          onchange="rxUpd('${r.rid}','ehs',this.value)">`
+          onchange="rxUpd('${r.rid}','ehs',this.value)">${typeof scanSupported === "function" && scanSupported()
+            ? `<button type="button" class="sm ib" tabindex="-1" title="Scan the tag(s) with the camera" onclick="rxScanEhs('${r.rid}')">${icon("scan", 13)}</button>` : ""}</span>`
       : `<span class="rx-na">—</span>`,
     expiresOn: shopFieldApplies(spec, cls, "expiresOn")
       ? `<input id="rxe-${r.rid}" type="date" value="${esc(r.expiresOn)}" aria-label="Expires"
@@ -747,17 +755,42 @@ function rxConfirmHtml() {
   </div>`;
 }
 
-/* The CS-011 §6 checks, run against what each shelf WOULD hold once this
-   delivery lands — so the chemical-storage problem is caught before the write
-   instead of turning up as a red chip on the map afterwards. This is only
-   possible at all because the sheet captures role and hazard, which the old
-   modal never asked for. */
+/* The chemical-storage checks, run against what each shelf WOULD hold once
+   this delivery lands — so a problem is caught before the write instead of
+   turning up as a red chip on the map afterwards. This is only possible at
+   all because the sheet captures hazard, which the old modal never asked
+   for. */
 /* The EH&S codes a row carries, normalised, in the order they will be dealt
    to the row's records. Classes outside the campus chemical system get none
    even if something was typed — the cell renders as — for them anyway. */
 function rxEhsTokens(r) {
   if (!shopFieldApplies(shopSpec("lots"), rxClassOf(r.cls).cls, "ehsBarcode")) return [];
   return String(r.ehs || "").split(/[\s,;]+/).map(ehsNorm).filter(Boolean);
+}
+
+/* Camera-scan tags into one line's cell, sticky: the camera stays open, each
+   new tag appends, a repeat of one already in the cell is said and skipped.
+   A code that resolves to an existing record is refused by accept() — that
+   tag is on a jug the app already tracks, not on this delivery. */
+function rxScanEhs(rid) {
+  openScan({
+    title: "Scan EH&S tags",
+    hint: "Point the camera at the UC sticker on each container for this line. The camera stays open.",
+    sticky: true,
+    accept: () => false,
+    onUnknown: code => {
+      const r = rxRow(rid);
+      if (!r) return;
+      const tags = String(r.ehs || "").split(/[\s,;]+/).filter(Boolean);
+      if (tags.some(t => ehsKey(t) === ehsKey(code))) { setScanState(`${code} is already on this line.`); return; }
+      tags.push(code);
+      r.ehs = tags.join(" ");
+      rxDraftSave();
+      const el = document.getElementById("rxh-" + rid);
+      if (el) el.value = r.ehs;
+      rxRefresh(rid);
+    },
+  });
 }
 
 /* One tag, one container — checked across the sheet AND against what already
@@ -790,7 +823,6 @@ function rxEhsWarnings(rows) {
 
 function rxProposedWarnings(p) {
   const out = [...rxEhsWarnings(p.rows)];
-  const idx = invIndex();
   const byBin = new Map();
   for (const r of p.rows) {
     if (!r.bin) continue;
@@ -800,12 +832,8 @@ function rxProposedWarnings(p) {
   for (const [binId, rows] of byBin) {
     const bin = shopById("items", binId);
     if (!bin) continue;
-    const bucket = idx.by.get(binId) || invEmptyBucket();
-    const roles = new Set(bucket.resin.map(o => String(o.role || "").toLowerCase()).filter(Boolean));
-    for (const r of rows) { const c = rxClassOf(r.cls); if (c.cls === "RSN" && c.role) roles.add(c.role); }
-    if (roles.has("resin") && roles.has("hardener")) {
-      out.push(`${rxBinName(binId)} would hold resin and hardener together — CS-011 §6 wants them on separate shelves.`);
-    }
+    /* No resin+hardener co-location check — the team stores them together
+       (lead decision 2026-08-28; see the matching note in invLocWarnings). */
     const flam = rows.filter(r => {
       const rule = r.matKey && typeof restockRuleFor === "function" ? restockRuleFor(r.matKey) : null;
       return rule && rule.hazard === "flammable";

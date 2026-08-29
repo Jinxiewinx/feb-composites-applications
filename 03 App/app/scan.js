@@ -29,14 +29,18 @@
  * Safari does not. The old stance ("the phone's own camera app reads the QR
  * and lands on q.html, so vendor nothing") fails for EH&S tags — their codes
  * open nothing of ours, and some are 1-D barcodes a camera app won't treat as
- * a link. A lazy-loaded WASM fallback is the planned fix; until it lands,
- * browsers without BarcodeDetector fall back to typing the code.
+ * a link. So scan-fallback.js lazy-loads a vendored zxing-wasm decoder and
+ * installs it AS window.BarcodeDetector, only on browsers without the native
+ * one; everything below the feature-detect is identical on both paths. If
+ * that load fails, the typed box is still there.
  */
 
 function scanSupported() {
-  return typeof window !== "undefined" && "BarcodeDetector" in window &&
-    typeof navigator !== "undefined" && navigator.mediaDevices &&
-    typeof navigator.mediaDevices.getUserMedia === "function";
+  const det = typeof window !== "undefined" &&
+    ("BarcodeDetector" in window ||
+     (typeof ZX_FALLBACK !== "undefined" && ZX_FALLBACK.state !== "failed"));
+  return !!(det && typeof navigator !== "undefined" && navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function");
 }
 
 let SCAN = { stream: null, raf: 0, onCode: null, running: false,
@@ -68,8 +72,8 @@ async function openScan(opts) {
       <input id="scan-manual" ${can ? "" : "autofocus"} placeholder="e.g. MOLD-SN6-004"
              autocapitalize="characters" autocomplete="off" spellcheck="false"
              onkeydown="if(event.key==='Enter')scanManual()"></div>
-    ${can ? "" : `<p class="gate"><span class="gi">!</span><span>This browser can't open the camera for scanning.
-      Safari can't, Chrome and Android can. Your phone's own camera app reads the code either way — it opens the
+    ${can ? "" : `<p class="gate"><span class="gi">!</span><span>This browser can't open a camera for scanning.
+      Type the code from the label instead — or scan an FEB QR with your phone's own camera app, which opens the
       public page for that record.</span></p>`}
     <div class="foot">
       <button onclick="closeScan()">Cancel</button>
@@ -79,6 +83,14 @@ async function openScan(opts) {
 
   if (!can) return;
   try {
+    /* iPhones take this branch: the polyfill fetches once (1MB of wasm,
+       cached after), and while it does the state line says so. On failure
+       the modal quietly becomes what it always was on iOS — a typed box. */
+    if (typeof scanFallbackNeeded === "function" && scanFallbackNeeded()) {
+      setScanState("Loading the scanner… first time takes a few seconds.");
+      const loaded = await loadScanFallback();
+      if (!loaded) { setScanState("Couldn't load the scanner here. Type the code instead."); return; }
+    }
     // facingMode "environment" is the back camera. On a laptop there is only
     // one and the constraint is ignored rather than failing.
     SCAN.stream = await navigator.mediaDevices.getUserMedia({
@@ -120,9 +132,21 @@ async function tickScan(det, video) {
       if (!code) continue;
       /* A readable code that no record wears. One-shot callers who said they
          can do something with that (scanToOpen offers the receiving desk) get
-         it; sticky flows just say so and keep the camera up — a pile of moves
-         should not be derailed into an enrolment dialog mid-pile. */
-      if (SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+         it and the modal closes. A STICKY caller with onUnknown takes code
+         after code without closing — that is the receiving desk scanning the
+         tags on a three-jug line — with the same held-in-frame debounce the
+         resolved path uses, keyed "u:" so a code and an id can never collide.
+         Sticky flows withOUT onUnknown just say so and keep the camera up:
+         a pile of moves should not be derailed into an enrolment dialog. */
+      if (SCAN.onUnknown) {
+        if (!SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+        const k = "u:" + code;
+        if (k === SCAN.lastId && Date.now() - SCAN.lastAt < 2500) continue;
+        SCAN.lastId = k; SCAN.lastAt = Date.now(); SCAN.count++;
+        SCAN.onUnknown(code);
+        setScanState(`${code} — ${SCAN.count} scanned. Keep going, or Done.`);
+        continue;
+      }
       setScanState(`${code} isn't on any record yet — log it at the receiving desk first.`);
     }
   } catch { /* a dropped frame is not an error worth reporting */ }
@@ -188,7 +212,13 @@ function scanManual() {
   if (SCAN.sticky && el) el.value = "";   // ready for the next one
   if (!id) {
     const code = scanEhsCode(raw);
-    if (code && SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+    if (code && SCAN.onUnknown) {
+      if (!SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+      SCAN.count++;
+      SCAN.onUnknown(code);
+      setScanState(`${code} — ${SCAN.count} scanned. Keep going, or Done.`);
+      return;
+    }
     if (code) { toast(`${code} isn't on any record yet — log it at the receiving desk first.`, "error"); return; }
     toast("That doesn't look like a code from a label.", "error");
     return;
@@ -354,6 +384,32 @@ function shopUndoBar() {
     <button class="sm ib" onclick="dismissShopUndo()">${icon("x", 14)}</button>
   </div>`;
 }
+/* Point the camera at a container's UC tag to fill the record's ehsBarcode
+   field — the Edit-mode alternative to retyping a 24-character serial off a
+   sticker. The polarity is inverted from every other scan on purpose:
+   onUnknown (a tag NO record wears) is the success path and writes through
+   updShop, which owns the normalisation, the one-tag-one-container refusal,
+   the save and the re-render. onCode firing means scanResolve found the tag
+   already on some record — that is the duplicate case, refused by naming the
+   wearer, with the same words updShop would use. */
+function scanEhsInto(tab) {
+  openScan({
+    title: "Scan the EH&S tag",
+    hint: "Point the camera at the UC barcode sticker on the container or shelf.",
+    onUnknown: code => updShop(tab, "ehsBarcode", code),
+    onCode: id => {
+      if (id === view.id) { toast("That tag is already on this record.", "info"); return; }
+      const o = recById("lots", id) || recById("items", id);
+      if (o && o.ehsBarcode) {
+        toast(`${ehsNorm(o.ehsBarcode)} is already on ${o.name || id} (${id}) — one tag, one container.`, "error");
+        return;
+      }
+      // An FEB id with no tag means the camera read one of OUR QR labels.
+      toast(`${id} is an FEB label, not a UC EH&S tag.`, "error");
+    },
+  });
+}
+
 /* Pre-filled leftover-board entry: origin = the mold it came off. A leftover
    is not a separate kind of thing, just a smaller board, so the only thing
    worth prefilling is where it came from — the size is whatever is left, which

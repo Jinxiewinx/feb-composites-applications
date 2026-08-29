@@ -20,70 +20,195 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**Branch `cs-standards-eng-rewrite` holds the CS standards engineering pass,
-pushed, NOT merged** (2026-08-28, Simon's /documentation request; he asked for
-a branch because other agents were working on main). Four commits: 13 SVG
-figures + `tools/render_figures.mjs`, the figure pipeline (build_docx.py
-images, gen_docs_manifest.py resource-path + figure copying, documents.js
-mdToHtml image support + two mdfig CSS rules in index.html), the pass itself
-(every doc +1 revision letter, CS-INDEX Rev F, CS-000 defines shall/should/may,
-12 docs carry figures, CS-007/CS-009 out of outline, em-dash sweep), and docs.
-All outputs regenerated; 651 app + 26 design-system + 42 traceability checks
-pass. **No process rule or number changed anywhere — the history rows say so.**
-Merging is Simon's call; after merge, deploy hosting so the app's docs/
-copies go live, and the approval tables still need real signatures.
+**The CS standards engineering pass is MERGED to main** (2026-08-28, Simon
+reviewed the branch and asked for the merge). What landed: 13 SVG figures +
+`tools/render_figures.mjs`, the figure pipeline (build_docx.py images,
+gen_docs_manifest.py resource-path + figure copying, documents.js mdToHtml
+image support + mdfig CSS), every standard +1 revision letter with CS-INDEX at
+Rev F, CS-000 defining shall/should/may, CS-007/CS-009 out of outline, and the
+em-dash sweep. No process rule or number changed; the history rows say so.
+Hosting deploy carries the refreshed docs/ copies live. Approval tables still
+need real signatures.
 
-**EH&S (RSS Chemicals) barcodes: PHASES 1–2 ARE LIVE, 3–4 PAUSED on Simon's
-say-so** (2026-08-28: "stop after phase 2, add the rest to a handoff"). The
-full plan is `~/.claude/plans/at-rfs-the-school-snoopy-dragon.md` on Simon's
-Mac; the handoff with phase 3/4 specifics was posted in that chat. Live and
-verified off the host: `ehsBarcode` on RSN/CON lots and BIN items ("ehs" field
-type in SHOP), `ehsNorm`/`ehsKey`/`ehsResolve`/`ehsConflict` in core.js
-(store keeps dashes, comparisons drop them), the receiving desk's EH&S tag
-column (space-separated codes dealt to fanned-out records, warnings for short
-deals/dupes/already-worn), and the scanner: every scan goes through
-`scanResolve` (FEB grammar, then tag registry), formats widened to
-code_128/39/93 + data_matrix, unknown tag → scanToOpen offers the receiving
-desk prefilled via `openReceiving({ehs})`; sticky flows get a state-line
-nudge instead. The receiving grid stacks to cards below **1320px** now (was
-1200) — the eighth column pushed the honest table minimum to ~1300; do not
-claw it back by shaving measured columns.
+**Known doc lag from the merge**: the R&D bench (v4.0.0, done on main in
+parallel) renamed coupons to `CPN-SN6-###` under studies `RDS-SN6-###`, and a
+coupon label now CAN carry a QR. CS-001, CS-002 and CS-013 (and the CS-013
+record-graph figure) still describe the old `PNL-SNx-###-Cnn` spelling and the
+no-QR rule. That is a revision under CS-000 §7.2 for a future session, not a
+blocker.
 
-Phase 3 (not started): vendor zxing-wasm 3.1.3 so iPhones camera-scan —
-Simon approved breaking scan.js's no-library stance; its header already
-documents the coming fallback. `npm pack zxing-wasm@3.1.3` → vendor
-`dist/es/reader/index.js` + `dist/es/share.js` + `dist/reader/zxing_reader.wasm`
-(1.0MB) + LICENSE under `app/vendor/zxing/`, lazy `import()` only when
-`BarcodeDetector` is absent, expose a polyfill class so tickScan stays
-unchanged. Phase 4 (not started): RSS export CSV import + reconciliation
-export — **blocked on Simon**: a photo of a real tag, and one RSS inventory
-export file. No rules deploy anywhere (lots/items have no field whitelist).
-Any new writer of ehsBarcode must call ehsNorm.
 
-**v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
-and verified by fetching `core.js` off the host. v3.0.0 went out an hour
-earlier the same day — Major by CHANGELOG's own rubric, since Season editing
-moved off the tab and the dashboard became a different page.
+**v4.0.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the R&D bench and the boot
+gate. Major by the rubric twice over: a new top-level area, and the app no
+longer opens by itself. **`firestore.rules` was deployed separately and first**,
+alone, before hosting; the diff was purely additive (one `match /rnd/{id}`
+block, 24 insertions, no existing collection touched), so an old client under
+the new rules was never at risk. Hosting verified by fetching `core.js` and
+`rnd.js` off the host — `APP_VERSION = "4.0.0"`, zero `SPLASH_FLOOR`, `rnd.js`
+200.
 
-v3.1.0 is Simon's correction to v3.0.0's Season: the compactness was right, the
-two-abreast flow was not. `.sline` and `.shead` now share ONE declaration of
-eight fixed grid tracks, so the lines are columnated rather than each sizing its
-own auto tracks. Two fields came back onto the line with the width — `layupType`
-and `moldLocation` are `where: "grid"` in SEASON_COLS again. **Do not reach for
-`columns:` on `.seasongrid` a third time**: it is what made the fields land in a
-different place on every line.
+**Nobody has been told, and per Simon that is fine** — he is not posting much in
+`#composites`, so the printed note is his to use or ignore, and this is no
+longer tracked here as an outstanding action. The one thing that still does
+something: `⋯ → Announce this release`, pressed by a lead standing in v4.0.0,
+gives anyone on an older build a reload prompt. Untouched for v3.0.0 through
+v4.0.0; that one press covers the newest only.
 
-**Nobody has been told about either one.** `config/release` is untouched, so
-there is no reload banner and no What's New panel — anyone still on v2.2.2 stays
-there until a lead opens the app and presses `⋯ → Announce this release`. That
-one press covers both releases; the panel shows v3.1.0's WHATS_NEW, so v3.0.0's
-five items (guest mode, the pit board, the cut sheets, the splash) are now only
-in CHANGELOG.md — worth saying out loud in the #composites note, which the
-script prints and never posts. Re-run `node tools/release.mjs 3.1.0 --dry` to
-reprint it. Both are still outstanding and both are Simon's call.
+**The R&D bench**: a new `rnd` collection, multi-class on `cls` like items and
+lots — `RDS-SN6-###` a study, `CPN-SN6-###` a coupon. Twelfth visible tab, last
+in Build. Shipped: studies (folder / swept test / project-of-batches, all one
+record shape), per-study columns tagged input or result, the grid with
+bulk-create and undo, fill-down paste, and Compare. Round two added, on Simon's
+ask: delete a study (cascade + undo), labels for BOTH studies and coupons,
+photos on studies and coupons, export as CSV / clipboard TSV / printable report,
+and Duplicate-as-template.
 
-The plan for the five-item pass is at
-`C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+**A STUDY IS PHYSICAL AND CARRIES A LABEL.** The first cut had `labelClass`
+return null for `RDS` on the grounds that a folder is not an object; that was
+wrong about how coupons are stored. A study labels the bag, tray or box. Both
+prefixes are 11 characters and carry a QR — the header of `labels.js` used to
+say a coupon never could, which was a fact about the old `PNL-…-C03` spelling
+and not about coupons. `test_qr.mjs` keeps the 15-character form as a
+counterfactual so the 14-character cliff stays proven.
+
+**NOT shipped**: materials inheritance exists in the model (`rdEff`,
+`RD_INHERITS`, study `defaults`) and is exported and printed on labels, but
+there is still no UI to SET a study's defaults — they can only arrive via a
+fixture or a duplicate. That is the next obvious gap. Also declined by Simon
+for now, so do not build them speculatively: std-dev/CV in Compare, computed
+stress from specimen dimensions, and linking a study to a part or mold.
+
+Three things here are load-bearing:
+
+- **A cell edit NEVER calls `render()`** (`rdUpd`, `rdVal`). Receiving's
+  invariant: `onchange` fires while Tab already carries focus, and a repaint
+  destroys the field mid-hop. Only a column-shape change repaints.
+- **The guest cascade does not reach this grid.** `render()` closes ~130 inputs
+  by clearing `view.edit`, but the grid has no Edit button and is always
+  editing, so `rdCell` renders `.ro` itself. Free everywhere else; not here.
+- **A project's sheet rolls its batches up** (`rdSheetRows`). The first build
+  counted deep in the index and direct in the sheet, so opening a project said
+  "no coupons yet" under a row claiming twelve.
+
+**DO NOT FUSE THE TWO MEANINGS OF "R&D".** `parts.rnd` is a real part with a
+full traveler; the `rnd` collection is coupons with none. New section in
+DESIGN-NOTES, and a test that reads `rnd.js` and fails if it ever tests `retro`.
+The `onlyRnd` chip on the Parts rail is untouched.
+
+Written down before it bites: **if `DB.rnd` passes ~2,000, take `rnd` out of
+`COLLECTIONS` and give the tab a per-study query.** It is the twelfth
+whole-collection listener and coupons will be the most numerous record type in
+the app within a month.
+
+**The boot splash is a GATE** and no longer takes itself down: five real
+milestones (app code, sign-in, roster, first data, fonts) fill a gold
+start-light gantry, the caption names whatever is outstanding, and the app waits
+behind the sheet until somebody presses Continue. Both floors are gone —
+`SPLASH_FLOOR`, `SPLASH_FLOOR_FIRST` and `splashFloor()` no longer exist —
+because a gate has nothing to budget. Exit is a `clip-path` wipe along the ply
+bias instead of `sp-lift`'s translate, which read as the window minimising.
+
+Three things about it that are load-bearing and easy to undo by accident:
+
+- **`splashAuth()` marks `data` as "not needed" (state 2) when auth resolves to
+  `signedout` or `pending`.** `startSync()` never runs on those paths, so
+  without it the gate hangs forever in front of exactly the people who need the
+  sign-in card. There is a test named for this.
+- **`hideSplash(true)` must keep working.** `tools/lib/browser.mjs` calls it to
+  photograph the app, and eight visual suites go through that one line.
+- **`splashFail()` returns early when nothing is outstanding.** The 12s backstop
+  fires on healthy boots now — waiting at an armed gate is normal — and without
+  the guard it printed "Something is not responding" under five gold lamps.
+
+A failed lamp is a **hollow amber ring, not a filled amber dot**: the first build
+had it filled, and amber against gold at 15px was invisible in a screenshot. It
+differs by shape on purpose.
+
+The two long-standing test failures are now GONE: the `parentId` one was fixed
+by the session that cut v3.2.0, and the four `test_detailui` wasm failures were
+a missing `.wasm` MIME entry in the test server (fixed here). All suites green.
+
+**INVENTORY ROUND 2 IS COMPLETE** (plan: the snoopy-dragon plan file on
+Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
+grouped lot display (groupLots keyed matKey-else-name; group rows fold via a
+CLASS, not <details> — print must paint; members show EH&S short codes),
+section headers with counts + per-kind accents on the location page, the
+Materials list grouped by default with a Grouped/Flat toggle (flat when
+searching), map cards clickable anywhere (container onclick backstop + the
+buttons stopPropagation — the old "no stopPropagation" test was rewritten
+deliberately), the resin+hardener warning REMOVED code-only (CS-011 §6
+still says otherwise on purpose — Simon revises the standard himself at
+Rev D; do not edit it from a session), and the iOS keyboard zoom fix
+(viewport maximum-scale=1 + 16px coarse-pointer inputs). Landed since: B mass
+delete (Select… on Items/Materials lists, view.shopPick, open to every
+member; firestore.rules items/lots delete moved from isLead()||mine() to
+onRoster() — RULES DEPLOYED; stock keeps the undo shape; occupied BINs are
+never deleted; cure/panel refs keep deleted ids as text on purpose —
+history is not rewritten; budget lines drop deleted lotRefs). Landed:
+C scan-into-field (scanEhsInto on the detail "ehs" field type; rxScanEhs on
+the receiving cell appends sticky-scanned tags; sticky+onUnknown is now a
+supported openScan combination, debounced with a "u:" key) and E the
+materials table (materials.js: MATERIALS aliases→matKey, docs/manifest paths
+test-enforced via materialsTableProblems, ratio/shelf-life ONLY where read
+from a bundled TDS and cited in src — IN2/AT30 100:30 by weight + 12mo,
+WEST-209 3:1, WEST-206 5:1, XCR 12mo ratio-blank; matForName fills blank
+matKey in receiving + EH&S import; matstrip on lot detail; lite ratio/TDS on
+group rows; "Link materials" backfill on the Materials list fills blank
+matKeys and missing expiries from shelf life, stamped "shelf-life table").
+The whole round-2 plan is DONE. Simon still needs to press Link materials
+once, signed in, to backfill the 50 imported containers. A flaky test was
+fixed in passing: the dashboard "part of" assert now matches the chip
+markup, not the phrase — a Team-lore fact contains the words.
+
+**EH&S (RSS Chemicals) barcodes: ALL FOUR PHASES BUILT.** Phases 1–2 (the
+`ehsBarcode` field + one-tag-one-container, the scanner reading UC tags via
+`scanResolve`, the receiving desk's tag column) are live and were verified
+off the host. Phase 3: iPhones camera-scan through `scan-fallback.js`, a
+lazy-loaded BarcodeDetector polyfill over vendored zxing-wasm 3.1.3
+(`app/vendor/zxing/`, 1.0MB wasm fetched only when a scan opens on a
+detector-less browser; load failure is sticky per session and degrades to the
+typed box). Phase 4: **EH&S import** on the Inventory toolbar (lead-only)
+parses the RSS web export — .xlsx read natively via a zip walker +
+DecompressionStream in `ehsimport.js`, CSV fallback — groups by sublocation
+(FEB's ticked by default, per Simon 2026-08-28: import only Formula Electric
+stuff), maps each to one of our BINs (flammable sublocations guess the
+Flammables-cabinet shelf), skips barcodes any record already wears, creates
+the rest (class/role from rxGuessClass, hazard from H22x codes, blank codes
+stay unknown, CON gets count 1, batch-tagged `rxBatch: EHS-<date>-…`,
+importMany + publishPub over 8 records). The Export modal gained an "EH&S
+reconciliation" sheet (`invExportEhs`), attention rows first. Simon's real
+export (628 containers, 17 sublocations) parses clean in Chromium: FEB's 50
+containers → 3 RSN resin, 16 RSN hardener, 31 CON, 15 flammable. **Nothing
+imported into production yet — Simon runs the import himself** (needs a
+lead sign-in; the file is `~/Downloads/Chemical Export Aug 28 2026.xlsx`).
+Still open: a photo of a physical tag to confirm which symbologies the
+stickers actually use (scanner currently enables QR + code_128/39/93 +
+data_matrix; barcodes are 24-char strings like CA0000000000000000228D47).
+The receiving grid stacks to cards below **1320px** (was 1200) — the eighth
+column pushed the table's minimum to ~1300; do not claw it back by shaving
+measured columns. No rules deploy anywhere (lots/items have no field
+whitelist). Any new writer of ehsBarcode must call ehsNorm; comparisons go
+through ehsKey (dash-blind).
+
+**v3.2.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the EH&S/inventory
+release: chemicals under their UC stickers, iPhone scanning, grouped
+containers, the materials table, Select… mass delete, co-storage allowed.
+Minor by the rubric. release.mjs verified the deploy and shot the two
+pictures against the live build; the #composites note and the two PNGs
+(design/release-v3.2.0-*.png) are printed in the release output — **posting
+it and pressing ⋯ → "Announce this release" are Simon's, still pending**, as
+they were for v3.0.0/v3.1.0 (that one press announces the newest version
+only; older ones live in CHANGELOG.md).
+
+**v3.1.0 went out 2026-08-27**, v3.0.0 an hour earlier the same day. Neither was
+ever announced, and the v3.2.0 note above now covers all three — one press
+announces the newest only, and v3.0.0's and v3.1.0's items live in CHANGELOG.md,
+so the #composites note is where they get said out loud.
+
+Durable from that work, and the reason it is kept here rather than dropped with
+the rest: `.sline` and `.shead` share ONE declaration of eight fixed grid tracks
+on the Season blueprint. **Do not reach for `columns:` on `.seasongrid` a third
+time** — it is what made the fields land in a different place on every line.
 
 **GUEST MODE IS ON, AND THE APP IS PUBLICLY READABLE.** Anonymous sign-in is
 enabled on the project and `autodeleteAnonymousUsers` is on, so a visit no
@@ -214,10 +339,37 @@ it should be tightened.
   house style to conform to.
 - Per-record history/audit trail (Phase 5 of the inventory plan), deliberately
   deferred. Nothing depends on it and an empty array is a valid start.
+- **The one label test that needs the printer in hand.** Everything about the
+  roll path is proven in a browser except whether iOS lets a custom page length
+  through on CONTINUOUS stock, or forces a fixed size. If it forces one, switch
+  the default media to `dk1201` (die-cut, already built) and the label wraps one
+  tier earlier; nothing else changes. Test it from the shop PC first — Chrome
+  plus the Brother driver gives exact custom lengths and isolates the question
+  to iOS.
 
 ---
 
 ## Constraints — don't relitigate
+
+**The roll printer must be AirPrint, and that is not a preference.** A browser
+cannot open a raw TCP socket, so port 9100 is unavailable; and the app is
+served over HTTPS, so `fetch`ing a plain-HTTP LAN printer is blocked as mixed
+content. Every "just POST to the printer" design dies on one of those two, and
+a cheaper Bluetooth-only label maker cannot be driven from the app at all. The
+reasoning is in `03 App/app/DESIGN-NOTES.md`; what is here is the shopping
+constraint, because it is invisible from the code.
+
+**The laminated-tape option was checked and rejected on print height, not on
+price.** A Brother PT-P750W ($155) takes 24 mm TZe laminated tape — IPA-proof,
+−80 to +150 °C — and does support AirPrint, so it was a real candidate. Its
+**maximum print height is 18 mm** against the 21.4 mm the current label needs
+(25.4 less 2 mm margin top and bottom), so it cannot print this label without a
+tighter redesign and a QR dropped from 21.4 to ~17.5 mm. Tape is also 3–4× the
+cost per label. Simon chose the QL-810W direct-thermal path 2026-08-28 knowing
+the labels fade in UV, blacken with heat and smear under solvent — they are for
+shelves, bins and lots indoors, and anything that meets a post-cure oven or an
+IPA wipe keeps Avery 5522 polyester off the sheet printer. Do not "fix" this by
+switching to tape without redoing the vertical budget.
 
 **The shelved `projects` TABS row is hidden but is NOT an alias.** The four
 hidden rows under it (`stock`, `items`, `lots`, `weekplan`) are normalised
