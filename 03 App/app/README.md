@@ -1050,9 +1050,12 @@ code resolves whether it arrives as the full URL, the bare code, lowercase, or
 with whitespace round it, because somebody will retype it off a scuffed label.
 
 The camera reads FEB's QR labels and the **UC EH&S tags** on chemical
-containers (QR and the common linear formats). An EH&S tag resolves to the lot
-wearing it; a tag nobody has logged offers to open the receiving desk with the
-code prefilled. RSS sublocation tags on shelves resolve to the BIN record the
+containers. An RSS tag is a **Data Matrix** square — confirmed off a physical
+sticker, 2026-08-29 — carrying a 24-character serial printed under it in groups
+of four (`CA00 0000 0000 0000 0024 3EF0`); the detector is also asked for the
+common linear formats in case an older sticker is one, which nobody has checked
+yet. An EH&S tag resolves to the lot wearing it; a tag nobody has logged offers
+to open the receiving desk with the code prefilled. RSS sublocation tags on shelves resolve to the BIN record the
 same way, so Move and "move things here" take either kind of label at either
 end.
 

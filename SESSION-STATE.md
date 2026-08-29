@@ -183,9 +183,16 @@ export (628 containers, 17 sublocations) parses clean in Chromium: FEB's 50
 containers → 3 RSN resin, 16 RSN hardener, 31 CON, 15 flammable. **Nothing
 imported into production yet — Simon runs the import himself** (needs a
 lead sign-in; the file is `~/Downloads/Chemical Export Aug 28 2026.xlsx`).
-Still open: a photo of a physical tag to confirm which symbologies the
-stickers actually use (scanner currently enables QR + code_128/39/93 +
-data_matrix; barcodes are 24-char strings like CA0000000000000000228D47).
+**Symbology is settled** (2026-08-29, photo of a physical tag): RSS stickers
+are **Data Matrix**, not QR and not linear, and `data_matrix` was already in
+both the native and the zxing format lists, so nothing was broken — the guess
+in `scan.js` was. Serial is 24 chars printed in groups of four, with the last
+twelve repeated up the tag's edge. Across the three samples we hold
+(`…228D47` from the real export, `…243EF0` off the photo, `…243F1C` in the
+tests) the shape is `CA` + sixteen `0` + six hex, and only those six move —
+which is exactly what `invEhsShort` shows, so the last-6 tail is the whole
+identity, not a truncation that could collide. The linear formats stay until
+someone walks the shelves — one sheet of tags is not a survey.
 The receiving grid stacks to cards below **1320px** (was 1200) — the eighth
 column pushed the table's minimum to ~1300; do not claw it back by shaving
 measured columns. No rules deploy anywhere (lots/items have no field
