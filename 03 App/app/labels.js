@@ -48,13 +48,21 @@ const QR_ALNUM = /^[0-9A-Z $%*+\-./:]*$/;
  *
  *   47 - 30 - 3 = 14
  *
- * MOLD-SN6-004 is 12, and every other prefix in the grammar is shorter. The one
- * thing that busts it is a coupon, PNL-SN6-006-C03 at 15 — which is fine,
- * because coupons are text-only on 12mm tape and never carry a QR at all (there
- * is no room for one: 8mm of print height cannot hold a version 1 code with its
- * quiet zone). This is asserted in tools/test_qr.mjs so that the day someone
- * adds a longer prefix, or puts a QR on a coupon, the suite says so instead of
- * every label quietly getting denser.
+ * MOLD-SN6-004 is 12, and every other prefix in the grammar is shorter.
+ *
+ * THIS USED TO SAY COUPONS COULD NEVER CARRY A QR, and that was a fact about
+ * one SPELLING of a coupon rather than about coupons. When a coupon was a
+ * substring of a panel — PNL-SN6-006-C03, fifteen characters — it was one over
+ * budget, so coupon labels were text-only on 12mm tape. A coupon is now a
+ * first-class record in the `rnd` collection: CPN-SN6-042 is eleven characters,
+ * shorter than a mold, and it carries a QR like everything else. A study,
+ * RDS-SN6-004, is eleven too — it labels the bag or tray the coupons live in,
+ * which is a physical object somebody picks up months later.
+ *
+ * The rule the budget expresses did not move; what changed is which ids satisfy
+ * it. tools/test_qr.mjs keeps the 15-character form as a counterfactual, so the
+ * cliff stays proven rather than assumed, and still says so the day someone
+ * adds a longer prefix instead of every label quietly getting denser.
  */
 const QR_ID_BUDGET = 47 - SCAN_HOST.length - SCAN_PATH.length;   // = 14
 
@@ -151,6 +159,31 @@ function qrSvg(text, sizeMm, cls) {
    given — and the geometry it IS there to check is unaffected. */
 function lblIsRnd(coll, o) { return typeof recIsRnd === "function" ? recIsRnd(coll, o) : false; }
 
+/* The R&D bench's four accessors, guarded exactly the way lblIsRnd is and for
+   the same reason: tools/test_qr.mjs loads THIS FILE ALONE in a sandbox holding
+   only esc() and qrcode(), deliberately, so the geometry it checks cannot drift
+   behind a dependency. A label asked to render a coupon in that sandbox simply
+   cannot know what study holds it — and the geometry it is there to check does
+   not depend on knowing. Unguarded, every one of these is a ReferenceError that
+   fails the QR suite rather than the thing the suite is about. */
+function lblStudyOf(o) { return typeof rdStudyOf === "function" ? rdStudyOf(o) : null; }
+function lblStudyName(o) { const s = lblStudyOf(o); return s ? (s.name || s.id || "") : ""; }
+function lblEff(o, k) { return typeof rdEff === "function" ? rdEff(o, k) : (o[k] ?? ""); }
+function lblStudyMat(s, k) { return s && s.defaults ? (s.defaults[k] ?? "") : ""; }
+function lblCouponCount(s) { return typeof rdCouponsDeep === "function" ? rdCouponsDeep(s.id).length : 0; }
+/* A NAME, not an email. The R&D records store `createdBy` and `by` as email
+   addresses because that is what myEmail() returns and what the rules check,
+   but "ANA@BERKELEY.EDU" on a 7pt line is both uglier and less useful than
+   "ANA RIVERA" to somebody holding the bag. Guarded like the rest: with core.js
+   absent this degrades to the raw value rather than throwing.
+
+   This is a printed, team-facing label. The PUBLIC nameplate is pubProjection,
+   which carries no person at all — see the never-add list on it. */
+function lblWho(v) {
+  const s = String(v || "");
+  return typeof userName === "function" && s.includes("@") ? userName(s) : s;
+}
+
 function pubProjection(coll, o) {
   if (!o || !o.id) return null;
   const cls = labelClass(coll, o);
@@ -203,6 +236,19 @@ function labelClass(coll, o) {
     // label rather than a blank one.
     const words = { PNL: "TEST PANEL", JIG: "JIG", BIN: "STORAGE", FAB: "FABRIC", RSN: "RESIN", CON: "CONSUMABLE" };
     return words[o.cls] || (o.cls ? String(o.cls).toUpperCase() : null);
+  }
+  /* The R&D bench. A STUDY is physical after all — it is the bag, the tray or
+     the box the coupons live in, and that is the thing somebody picks up off a
+     shelf in March wondering what it was. The first cut of this returned null
+     for a study on the grounds that "a folder is not a physical object", which
+     was wrong about how coupons are actually stored.
+
+     Same no-cls-no-label rule as items and lots, for the same reason: the class
+     word is what stops CPN being read as CON at 7pt with mould release on it,
+     and COUPON versus CONSUMABLE are not confusable where the codes are. */
+  if (coll === "rnd") {
+    const words = { RDS: "STUDY", CPN: "COUPON" };
+    return words[o.cls] || null;
   }
   return byColl[coll] || null;
 }
@@ -353,6 +399,30 @@ function labelLines(coll, o, p) {
       foot: j(o.laidOn ? `LAID ${o.laidOn}` : "", up(o.by), o.weightG ? `${o.weightG}G` : "", up(o.subteam))
     };
   }
+  if (coll === "rnd") {
+    /* A STUDY labels the bag. What you need while holding it in March is what
+       the test was and how many pieces should be inside — a count that does not
+       match what is in the bag is itself information. */
+    if (o.cls === "RDS") {
+      const n = lblCouponCount(o);
+      return {
+        name: up(o.name),
+        key: j(up(lblStudyMat(o, "stack")), n ? `${n} COUPON${n === 1 ? "" : "S"}` : ""),
+        mid: j(up(lblStudyMat(o, "fabricLots")), up(lblStudyMat(o, "resinLot"))),
+        foot: j(o.createdOn ? `MADE ${o.createdOn}` : "", up(lblWho(o.createdBy)), up(o.status)),
+      };
+    }
+    /* A COUPON leads with its STUDY, not its own number. In a tray of forty
+       from three studies, "C03" identifies nothing — and nameTier drops to two
+       lines past 20 characters, which is exactly what a study name plus a
+       coupon number costs and what that ladder is there for. */
+    return {
+      name: up(j(lblStudyName(o), o.label)),
+      key: up(lblEff(o, "stack")),                      // the PP-09 answer, same as a panel
+      mid: j(up(lblEff(o, "fabricLots")), up(lblEff(o, "resinLot"))),
+      foot: j(o.laidOn ? `LAID ${o.laidOn}` : "", up(lblWho(lblEff(o, "by"))), up(o.status)),
+    };
+  }
   if (coll === "lots") {
     return {
       name: up(o.name || o.material),
@@ -498,6 +568,7 @@ const LABELABLE = [
   ["stock", "Tooling board"],
   ["items", "Panels & items"],
   ["lots", "Material lots"],
+  ["rnd", "R&D studies & coupons"],
 ];
 
 let LB = { coll: "parts", picked: {}, skip: 0, grid: "5161", cal: true };

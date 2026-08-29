@@ -41,10 +41,25 @@ v4.0.0; that one press covers the newest only.
 lots — `RDS-SN6-###` a study, `CPN-SN6-###` a coupon. Twelfth visible tab, last
 in Build. Shipped: studies (folder / swept test / project-of-batches, all one
 record shape), per-study columns tagged input or result, the grid with
-bulk-create and undo, fill-down paste, and Compare. **NOT shipped**: materials
-inheritance exists in the model (`rdEff`, `RD_INHERITS`, study `defaults`) but
-has no UI, and coupons carry no labels/QR and no photos — stages 4–6 of
-`C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`.
+bulk-create and undo, fill-down paste, and Compare. Round two added, on Simon's
+ask: delete a study (cascade + undo), labels for BOTH studies and coupons,
+photos on studies and coupons, export as CSV / clipboard TSV / printable report,
+and Duplicate-as-template.
+
+**A STUDY IS PHYSICAL AND CARRIES A LABEL.** The first cut had `labelClass`
+return null for `RDS` on the grounds that a folder is not an object; that was
+wrong about how coupons are stored. A study labels the bag, tray or box. Both
+prefixes are 11 characters and carry a QR — the header of `labels.js` used to
+say a coupon never could, which was a fact about the old `PNL-…-C03` spelling
+and not about coupons. `test_qr.mjs` keeps the 15-character form as a
+counterfactual so the 14-character cliff stays proven.
+
+**NOT shipped**: materials inheritance exists in the model (`rdEff`,
+`RD_INHERITS`, study `defaults`) and is exported and printed on labels, but
+there is still no UI to SET a study's defaults — they can only arrive via a
+fixture or a duplicate. That is the next obvious gap. Also declined by Simon
+for now, so do not build them speculatively: std-dev/CV in Compare, computed
+stress from specimen dimensions, and linking a study to a part or mold.
 
 Three things here are load-bearing:
 

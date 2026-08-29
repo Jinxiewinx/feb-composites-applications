@@ -309,6 +309,186 @@ async function rdAddRows(count) {
   render();
 }
 
+/* ---------- deleting a study ----------
+
+   The coupons go with it, after a confirm that NAMES THE COUNT. A study is not
+   a folder you can peek into before deleting — the count is the only warning
+   somebody gets, and "and its 10 coupons" is the difference between a confident
+   press and a regretted one.
+
+   A PROJECT WITH BATCHES REFUSES. Deleting three rounds of work with one press
+   is not a thing to offer, and the batches are right there in the index. */
+async function rdDelStudy(id) {
+  const s = rdStudy(id);
+  if (!s || guestBlocked("delete a study")) return;
+  const kids = rdChildren(id);
+  if (kids.length) {
+    toast(`"${s.name || s.id}" holds ${kids.length} batch${kids.length === 1 ? "" : "es"}. Delete those first — this is three rounds of work, not one press.`, "error");
+    return;
+  }
+  const rows = rdCoupons(id);
+  /* PLAIN TEXT, not markup: confirmModal runs its message through esc(), so a
+     <b> here prints as a literal tag in front of somebody about to delete ten
+     coupons. Quotes do the emphasis instead. */
+  const name = s.name || s.id;
+  const what = rows.length
+    ? `Delete "${name}" and its ${rows.length} coupon${rows.length === 1 ? "" : "s"}? Their measurements go with them.`
+    : `Delete "${name}"?`;
+  confirmModal(what, async () => {
+    const gone = [s, ...rows];
+    RD_UNDO = { kind: "delete", recs: JSON.parse(JSON.stringify(gone)), n: rows.length, name: s.name || s.id };
+    DB.rnd = rdAll().filter(o => o.id !== id && o.study !== id);
+    if (view.rdStudy === id) view.rdStudy = null;
+    render();
+    try {
+      /* delMany over one-at-a-time: a study and ten coupons is eleven round
+         trips otherwise, and a half-finished delete leaves coupons pointing at
+         a study that is gone. */
+      if (window.fb && fb.delMany) await fb.delMany(gone.map(o => ({ coll: "rnd", id: o.id })));
+      else for (const o of gone) await del("rnd", o.id);
+    } catch (e) {
+      toast("Some records may not have been deleted: " + (e && e.message ? e.message : e), "error");
+    }
+  }, { ok: "Delete", danger: true });
+}
+
+/* ---------- duplicate a study as a template ----------
+
+   Repeat testing is the normal case, not the exception: the same sweep, a new
+   batch, next week. Without this you rebuild the columns and re-pick the
+   materials by hand every time, which is exactly the friction that sends
+   somebody back to the spreadsheet they already have.
+
+   The COLUMNS KEEP THEIR cids. Two studies sharing a column id is not a
+   collision, it is the thing that makes "cure temp across every sweep we ever
+   ran" answerable later. Coupons are NOT copied — a template is the setup, not
+   the results — and labelNext resets so the new run starts at 01. */
+async function rdDuplicateStudy(id) {
+  const s = rdStudy(id);
+  if (!s || guestBlocked("duplicate a study")) return;
+  const newId = await allocId("rnd", "RDS");
+  if (!newId) return;
+  const copy = {
+    id: newId, cls: "RDS",
+    name: (s.name || "Study") + " (copy)",
+    question: s.question || "",
+    status: "Active",
+    parent: s.parent || "",
+    labelPrefix: s.labelPrefix || "C",
+    labelNext: 1,
+    cols: JSON.parse(JSON.stringify(s.cols || [])),
+    defaults: JSON.parse(JSON.stringify(s.defaults || {})),
+    notes: "", notesHtml: "", photos: [],
+    createdBy: myEmail(), createdOn: today(),
+  };
+  (DB.rnd = DB.rnd || []).push(copy);
+  save("rnd", copy);
+  view.rdStudy = newId;
+  render();
+  /* Count the EFFECTIVE columns, not the copy's own. Duplicating a batch copies
+     no columns at all — they belong to the project both batches hang off — so
+     counting `copy.cols` told somebody "0 columns" about a grid that was about
+     to render three. The number has to be the one they are going to see. */
+  const n = rdCols(copy).length;
+  toast(`Copied the setup — ${n} column${n === 1 ? "" : "s"} and the materials. No coupons yet.`);
+}
+
+/* ---------- labels ---------- */
+
+/* Every coupon in the study, as one sheet. The single most useful printing this
+   tab does: you cut ten coupons and you want ten tags in one press, not ten
+   presses. A rolled-up project prints its batches' too, which is what is on
+   screen. */
+function rdPrintCouponLabels(id) {
+  const s = rdStudy(id);
+  if (!s) return;
+  const rows = rdSheetRows(s);
+  if (!rows.length) { toast("No coupons to label yet.", "error"); return; }
+  openLabelPreview(rows.map(o => ({ coll: "rnd", o })));
+}
+
+/* ---------- export ---------- */
+
+/* The columns a study exports, spine first then its own, so the header reads
+   the way the grid does. Shared by the CSV and the clipboard TSV so the two can
+   never disagree about what "all the data" means. */
+function rdExportCols(s) {
+  const cols = rdCols(s);
+  const out = [
+    { label: "id", get: r => r.id },
+    { label: "study", get: r => { const o = rdStudy(r.study); return o ? (o.name || o.id) : r.study; } },
+    { label: "label", get: r => r.label },
+    { label: "status", get: r => r.status },
+  ];
+  for (const c of cols) {
+    out.push({ label: c.unit ? `${c.name} (${c.unit})` : c.name, get: r => (r.vals || {})[c.cid] ?? "" });
+  }
+  /* The inherited fields are exported RESOLVED, not raw. A blank resin cell in
+     a spreadsheet somebody opens next year is a lie by omission — the coupon
+     did have a resin, it just took it from its study. */
+  for (const k of RD_INHERITS) out.push({ label: k, get: r => rdEff(r, k) });
+  out.push({ label: "notes", get: r => r.notes || "" });
+  out.push({ label: "photos", get: r => (r.photos || []).length || "" });
+  return out;
+}
+
+function rdExportCSV(id) {
+  const s = rdStudy(id);
+  if (!s) return;
+  const rows = rdSheetRows(s);
+  const name = String(s.name || s.id).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  downloadCSV(`rnd-${name || s.id}`, toCSV(rows, rdExportCols(s)));
+}
+
+/* Copy beats a download on a phone, where a browser download often silently
+   does nothing — the same reasoning the Inventory export runs on. TSV because
+   Sheets does not reliably unquote CSV on paste. */
+function rdCopyTSV(id) {
+  const s = rdStudy(id);
+  if (!s) return;
+  copyText(toTSV(rdSheetRows(s), rdExportCols(s)), "the study");
+}
+
+/* The printable report: what you hand a reviewer, or put in front of a
+   professor. Through mountSheet, like every other printable in the app, so it
+   gets the preview, the grayscale proof and Save — and NOT a raw window.print(),
+   which is the thing reports.js is still being chased about. */
+function rdPrintReport(id) {
+  const s = rdStudy(id);
+  if (!s) return;
+  const cols = rdCols(s);
+  const rows = rdSheetRows(s);
+  const mat = RD_INHERITS.map(k => {
+    const v = (s.defaults || {})[k];
+    return v ? `<span><b>${esc(k)}</b> ${esc(String(v))}</span>` : "";
+  }).filter(Boolean).join("");
+  const photos = (s.photos || []).slice(0, 6);
+  const html = `<div class="rdrep-page">
+    <h1>${esc(s.name || s.id)}</h1>
+    <div class="rdrep-meta">${esc(s.id)} · ${esc(s.status || "Active")}${
+      s.createdOn ? " · started " + esc(s.createdOn) : ""}${
+      s.createdBy ? " · " + esc(userName(s.createdBy)) : ""} · ${rows.length} coupon${rows.length === 1 ? "" : "s"}</div>
+    ${s.question ? `<p class="rdrep-q">${esc(s.question)}</p>` : ""}
+    ${mat ? `<div class="rdrep-mat">${mat}</div>` : ""}
+    <table class="rdrep-tbl">
+      <thead><tr><th>Label</th>${rdIsParent(s) ? "<th>Batch</th>" : ""}<th>Status</th>${
+        cols.map(c => `<th>${esc(c.name)}${c.unit ? ` (${esc(c.unit)})` : ""}</th>`).join("")}<th>Notes</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><b>${esc(r.label || r.id)}</b></td>
+        ${rdIsParent(s) ? `<td>${esc(((rdStudy(r.study) || {}).name) || "")}</td>` : ""}
+        <td>${esc(r.status || "")}</td>
+        ${cols.map(c => `<td>${esc(String((r.vals || {})[c.cid] ?? ""))}</td>`).join("")}
+        <td>${esc(r.notes || "")}</td></tr>`).join("")}</tbody>
+    </table>
+    ${rdCompareTableHtml(s, cols, rows)}
+    ${photos.length ? `<div class="rdrep-photos">${
+      photos.map(p => `<figure><img src="${esc(p.url)}" alt="${esc(p.name || "")}"><figcaption>${esc(p.caption || p.name || "")}</figcaption></figure>`).join("")}</div>` : ""}
+  </div>`;
+  mountSheet(html, true, `${esc(s.name || s.id)} · ${rows.length} coupon${rows.length === 1 ? "" : "s"}`,
+    `rnd-${String(s.id).toLowerCase()}`);
+  document.body.classList.add("previewing");
+}
+
 /* ---------- undo ----------
    One slot, the shape RX_UNDO / CUTS_UNDO / SHOP_UNDO already use. It deletes
    exactly what it created and puts labelNext back, so pressing Add rows again
@@ -317,8 +497,13 @@ let RD_UNDO = null;
 
 function rdUndoBar() {
   if (!RD_UNDO) return "";
+  const say = RD_UNDO.kind === "delete"
+    ? `Deleted <b>${esc(RD_UNDO.name)}</b>${RD_UNDO.n ? ` and its ${RD_UNDO.n} coupon${RD_UNDO.n === 1 ? "" : "s"}` : ""}.`
+    : `${RD_UNDO.n} coupon${RD_UNDO.n === 1 ? "" : "s"} added.`;
   return `<div class="undobar no-print">
-    <span>${RD_UNDO.n} coupon${RD_UNDO.n === 1 ? "" : "s"} added.</span>
+    <span>${say}</span>
+    ${RD_UNDO.kind === "delete" ? "" :
+      `<button class="ib" onclick="rdPrintCouponLabels(view.rdStudy)">${icon("print", 15)} Print labels</button>`}
     <button class="ib" onclick="rdUndo()">Undo</button>
     <button class="ib" onclick="RD_UNDO=null;render()">Dismiss</button>
   </div>`;
@@ -328,12 +513,87 @@ async function rdUndo() {
   const u = RD_UNDO;
   if (!u) return;
   RD_UNDO = null;
+
+  /* Putting a deleted study back. The records were snapshotted before the
+     delete rather than rebuilt from the UI, so a coupon comes back with its
+     measurements, its notes and its photo list intact — an undo that restored
+     the row but not the numbers would be worse than no undo, because it looks
+     like it worked. */
+  if (u.kind === "delete") {
+    for (const o of u.recs) (DB.rnd = DB.rnd || []).push(o);
+    view.rdStudy = u.recs[0] ? u.recs[0].id : view.rdStudy;
+    render();
+    try {
+      if (window.fb && fb.importMany && u.recs.length > 8) await fb.importMany("rnd", u.recs);
+      else for (const o of u.recs) save("rnd", o);
+    } catch (e) {
+      toast("Some records may not have come back: " + (e && e.message ? e.message : e), "error");
+      return;
+    }
+    toast(`"${u.name}" is back.`);
+    return;
+  }
+
   const study = rdStudy(u.study);
   if (study) { study.labelNext = u.prevLabelNext; save("rnd", study, "labelNext"); }
   DB.rnd = rdAll().filter(o => !u.ids.includes(o.id));
   render();
   for (const id of u.ids) { try { await del("rnd", id); } catch (e) { /* reported below */ } }
   toast(`${u.n} coupon${u.n === 1 ? "" : "s"} removed. Bin any labels you printed.`);
+}
+
+/* ---------- photos ----------
+
+   Studies AND coupons. The study's are the panel before it was cut, the bag on
+   the shelf, the setup on the machine. A coupon's is almost always the FAILURE
+   SURFACE, which is the thing that says whether a number is a real result or a
+   grip that slipped — the one photograph in coupon testing that is evidence
+   rather than a record.
+
+   `projects/` is the storage tree, not a new `rnd/` one. projects.js:1053 makes
+   the argument for work orders and it holds here: storage.rules already scopes
+   and content-type-limits that tree, and inventing a prefix costs a rules
+   deploy — the one thing in this repo that can lock the team out of its own
+   data — to gain nothing. The record is roster-gated in Firestore either way. */
+function rdAddPhotos(id) {
+  if (guestBlocked("add photos")) return;
+  if (typeof addRecordFiles !== "function") { toast("Photo upload is unavailable.", "error"); return; }
+  addRecordFiles("rnd", id, "projects", "image/*");
+}
+
+/* addRecordFiles writes to `files`, which is the shape every other record in
+   the app uses; `photos` is what this collection was modelled with. Read both
+   so neither an older coupon nor a newly uploaded one goes missing. */
+function rdPhotos(rec) {
+  return [].concat(rec && rec.photos || [], rec && rec.files || [])
+    .filter(p => p && p.url && (!p.type || /^image\//.test(p.type)));
+}
+
+/* A coupon's photos in a modal rather than in the grid. The row is already
+   carrying the columns somebody came to type into, and a thumbnail strip inside
+   a table cell is how a fast grid stops being fast. */
+function rdOpenPhotos(id) {
+  const r = rdAll().find(o => o.id === id && o.cls === "CPN");
+  if (!r) return;
+  const s = rdStudyOf(r);
+  openModal(`<h2>${esc(r.label || r.id)} <span class="tny muted">${esc(s ? (s.name || "") : "")}</span></h2>
+    <p class="tny muted">The failure surface is the useful one — it is what says whether a
+    number is a result or a grip that slipped.</p>
+    ${rdPhotoStrip(r, canEdit())}
+    <div class="foot"><button onclick="closeModal()">Done</button></div>`);
+}
+
+function rdPhotoStrip(rec, E) {
+  const ph = rdPhotos(rec);
+  if (!ph.length && !E) return "";
+  return `<div class="rdphotos">
+    ${ph.map(p => `<figure class="phtile">
+      <img class="phimg" loading="lazy" src="${esc(p.url)}" data-lb-src="${esc(p.url)}"
+        data-lb-name="${esc(p.name || "")}" alt="${esc(p.caption || p.name || "photo")}">
+      <figcaption class="tny muted">${esc(p.caption || p.name || "")}</figcaption>
+    </figure>`).join("")}
+    ${E ? `<button class="ib rdphadd" onclick="rdAddPhotos('${esc(rec.id)}')">${icon("image", 15)} Add photo</button>` : ""}
+  </div>`;
 }
 
 /* ---------- the tab ---------- */
@@ -488,6 +748,22 @@ function rdSheetHtml(s) {
       </select>` : `<span class="stage ${s.status === "Done" ? "st-done" : s.status === "Parked" ? "st-na" : "st-mid"}">${esc(s.status || "Active")}</span>`}
     </div>
     ${s.question ? `<p class="rdq">${esc(s.question)}</p>` : ""}
+    ${/* The study's own actions, in one row under its head rather than scattered
+          through the page. Ordered by how often they are reached for: label the
+          bag and the coupons, get the data out, then the two that change or end
+          the study. Delete is last and is the only one wearing `danger`. */""}
+    <div class="toolbar rdacts no-print">
+      <button class="ib" onclick="printOneLabel('rnd','${esc(s.id)}')" title="A 4x1 label for the bag or tray this study lives in">${icon("print", 15)} Study label</button>
+      <button class="ib" onclick="rdPrintCouponLabels('${esc(s.id)}')" title="One label per coupon, on a single sheet">${icon("print", 15)} Coupon labels</button>
+      <button class="ib" onclick="rdPrintReport('${esc(s.id)}')" title="A printable one-page report: the table, the comparison and the photos">${icon("file", 15)} Report</button>
+      <button class="ib" onclick="rdExportCSV('${esc(s.id)}')" title="One row per coupon, every column">${icon("download", 15)} CSV</button>
+      <button class="ib" onclick="rdCopyTSV('${esc(s.id)}')" title="Paste straight into a Google Sheet — works on a phone, where a download often does nothing">${icon("file", 15)} Copy</button>
+      <span style="flex:1"></span>
+      <button class="ib"${gx("Sign in to duplicate a study.")} onclick="rdDuplicateStudy('${esc(s.id)}')" title="Same columns and materials, no coupons — for the next round">Duplicate</button>
+      <button class="ib danger"${gx("Sign in to delete a study.")} onclick="rdDelStudy('${esc(s.id)}')">${icon("trash", 15)} Delete study</button>
+    </div>
+    ${rdPhotoStrip(s, canEdit())}
+    ${rdMatBar(s)}
     ${rdColBar(s, cols)}
     ${rows.length ? rdGridHtml(s, cols, rows)
       : rdIsParent(s)
@@ -504,6 +780,94 @@ function rdStudyUpd(id, key, val) {
   if (!s || guestBlocked("edit this study")) return;
   s[key] = val;
   save("rnd", s, key);
+  render();
+}
+
+/* ---------- materials ----------
+
+   DECLARED ONCE, ON THE STUDY, and inherited by every coupon in it. Ten coupons
+   were laid up from one roll and one jug on one afternoon; asking ten times is
+   exactly the friction that sends somebody back to the spreadsheet.
+
+   The field names are the ones an items/PNL test panel already uses, so a
+   coupon and a panel describe their materials identically and labelLines needs
+   no second vocabulary. Nothing is decremented — the app has never tracked
+   quantities, only containers — so this is a POINTER to the lot record, which
+   is what makes "which roll went into this" answerable at all.
+
+   THIS UI IS WHY THE MODEL IS WORTH HAVING. Round one shipped rdEff, RD_INHERITS
+   and `defaults` with no way to set them, so labels printed a blank resin and
+   the export resolved an inheritance nobody could establish. A model with no
+   way in is not a feature. */
+function rdMatBar(s) {
+  const open = view.rdMatOpen === s.id;
+  const E = canEdit();
+  const d = s.defaults || {};
+  const parent = s.parent ? rdStudy(s.parent) : null;
+  const pd = parent && parent.defaults ? parent.defaults : {};
+
+  const ro = v => `<div class="ro">${esc(v == null ? "" : String(v))}</div>`;
+  const fld = (key, label, kind) => {
+    const own = d[key];
+    const inherited = (own === undefined || own === null || own === "") && pd[key];
+    const shown = inherited ? pd[key] : (own ?? "");
+    const hint = inherited ? ` <span class="tny muted rd-inh" title="From ${esc(parent.name || parent.id)}">inherited</span>` : "";
+    let ctl;
+    if (!E) ctl = ro(shown);
+    else if (kind === "FAB" || kind === "RSN") {
+      const opts = typeof shopRefOptions === "function" ? shopRefOptions(kind, own || "") : [];
+      ctl = `<select onchange="rdDefUpd('${esc(s.id)}','${esc(key)}',this.value)">
+        <option value="">${inherited ? "— inherited —" : "—"}</option>${opts.join("")}</select>`;
+    } else if (kind === "src") {
+      const vals = ["", "scanned", "inferred", "recalled", "partial", "unknown"];
+      ctl = `<select onchange="rdDefUpd('${esc(s.id)}','${esc(key)}',this.value)">${
+        vals.map(v => `<option value="${esc(v)}" ${v === (own || "") ? "selected" : ""}>${v || "—"}</option>`).join("")}</select>`;
+    } else {
+      ctl = `<input ${kind === "date" ? 'type="date"' : ""} value="${esc(own ?? "")}"
+        placeholder="${inherited ? esc(String(pd[key])) : ""}"
+        onchange="rdDefUpd('${esc(s.id)}','${esc(key)}',this.value)">`;
+    }
+    return `<label class="f"><span>${esc(label)}${hint}</span>${ctl}</label>`;
+  };
+
+  /* The one-line summary on the closed fold, because "what went into this" is
+     read far more often than it is set. */
+  const sum = RD_INHERITS.map(k => {
+    const v = d[k] ?? pd[k];
+    return v ? esc(String(v)) : "";
+  }).filter(Boolean).slice(0, 4).join(" · ");
+
+  return `<div class="rdmat${open ? "" : " folded"}">
+    <button class="rdparts-hd" aria-expanded="${open}"
+      onclick="view.rdMatOpen = view.rdMatOpen === '${esc(s.id)}' ? null : '${esc(s.id)}'; render()">
+      ${icon(open ? "chevronDown" : "chevronRight", 14)} Materials${sum ? ` · <span class="rdmatsum">${sum}</span>` : ""}</button>
+    <div class="rdmat-body">
+      <p class="tny muted">Set once here; every coupon in this study inherits it.
+      A coupon that was different can say so on its own row — clearing that cell
+      hands it back to the study.</p>
+      <div class="grid">
+        ${fld("stack", "Layup stack", "text")}
+        ${fld("fabricLots", "Fabric lot", "FAB")}
+        ${fld("resinLot", "Resin lot", "RSN")}
+        ${fld("hardenerLot", "Hardener lot", "RSN")}
+        ${fld("lotSource", "Lot record", "src")}
+        ${fld("laidOn", "Laid up on", "date")}
+        ${fld("by", "Laid up by", "text")}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* A study-level write, so render() is safe — nothing here is a grid cell being
+   Tab-ed out of. Clearing a field DELETES it rather than storing "", which is
+   what lets a batch fall back to its project. */
+function rdDefUpd(id, key, val) {
+  const s = rdStudy(id);
+  if (!s || guestBlocked("set the materials")) return;
+  s.defaults = { ...(s.defaults || {}) };
+  if (String(val || "").trim() === "") delete s.defaults[key];
+  else s.defaults[key] = val;
+  save("rnd", s, "defaults");
   render();
 }
 
@@ -642,9 +1006,16 @@ function rdRowHtml(s, cols, r, roll) {
     <td class="rdc-notes" data-label="Notes">${E
       ? `<input data-cell="notes" value="${esc(r.notes || "")}" onchange="rdUpd('${esc(r.id)}','notes',this.value)" onpaste="rdPaste(event,'${esc(r.id)}',null)">`
       : ro(r.notes)}</td>
-    <td class="rdc-act">${E
-      ? `<button class="ib rowact" title="Delete this coupon" onclick="rdDelCoupon('${esc(r.id)}')">${icon("x", 14)}</button>`
-      : ""}</td>
+    ${/* Three per-coupon actions, and they earn the width: a label for the
+          specimen, its photos (the failure surface is the evidence a number is
+          real), and delete. The photo button carries its count, so a coupon
+          that has one is visible without opening anything. */""}
+    <td class="rdc-act">${(() => {
+      const nph = rdPhotos(r).length;
+      return `<button class="ib rowact" title="Print a label for this coupon" onclick="printOneLabel('rnd','${esc(r.id)}')">${icon("print", 13)}</button>
+      ${E || nph ? `<button class="ib rowact${nph ? " has" : ""}" title="${nph ? nph + " photo" + (nph === 1 ? "" : "s") : "Add a photo — the failure surface, usually"}" onclick="rdOpenPhotos('${esc(r.id)}')">${icon("image", 13)}${nph ? `<span class="rdphn">${nph}</span>` : ""}</button>` : ""}
+      ${E ? `<button class="ib rowact" title="Delete this coupon" onclick="rdDelCoupon('${esc(r.id)}')">${icon("x", 13)}</button>` : ""}`;
+    })()}</td>
   </tr>`;
 }
 
@@ -707,7 +1078,7 @@ function rdVal(id, cid, val) {
 function rdDelCoupon(id) {
   const r = rdAll().find(o => o.id === id && o.cls === "CPN");
   if (!r || guestBlocked("delete a coupon")) return;
-  confirmModal(`Delete ${esc(r.label || r.id)}? Its measurements go with it.`, async () => {
+  confirmModal(`Delete ${r.label || r.id}? Its measurements go with it.`, async () => {
     DB.rnd = rdAll().filter(o => o.id !== id);
     render();
     try { await del("rnd", id); } catch (e) { toast("Could not delete: " + (e && e.message ? e.message : e), "error"); }
@@ -773,6 +1144,36 @@ function rdCompareHtml(s, cols, rows) {
   const open = view.rdCmpOpen === s.id;
   const by = ins.find(c => c.cid === view.rdCmpBy) || ins[0];
 
+  return `<div class="rdcmp${open ? "" : " folded"}">
+    <button class="rdparts-hd" aria-expanded="${open}"
+      onclick="view.rdCmpOpen = view.rdCmpOpen === '${esc(s.id)}' ? null : '${esc(s.id)}'; render()">
+      ${icon(open ? "chevronDown" : "chevronRight", 14)} Compare</button>
+    <div class="rdcmp-body">
+      <div class="toolbar no-print">
+        <label class="tny muted" for="rd-cmpby">Group by</label>
+        <select id="rd-cmpby" onchange="view.rdCmpBy=this.value;render()">
+          ${ins.map(c => `<option value="${esc(c.cid)}" ${c.cid === by.cid ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
+        </select>
+        <label class="tny muted"><input type="checkbox" ${view.rdCmpScrap ? "checked" : ""}
+          onchange="view.rdCmpScrap=this.checked;render()"> include scrapped</label>
+      </div>
+      ${rdCompareTableHtml(s, cols, rows)}
+    </div>
+  </div>`;
+}
+
+/* The compare TABLE on its own, so the printed report and the on-screen fold
+   are the same numbers from the same code. A report that recomputed its own
+   averages is a report that can disagree with the screen it was printed from,
+   which is worse than having no report. */
+function rdCompareTableHtml(s, cols, rows) {
+  const ins = cols.filter(c => c.role === "input");
+  const res = cols.filter(c => c.role === "result");
+  if (!ins.length || !res.length) return "";
+  const live = rows.filter(r => view.rdCmpScrap ? true : r.status !== "Scrapped");
+  if (live.length < 3) return "";
+  const by = ins.find(c => c.cid === view.rdCmpBy) || ins[0];
+
   const groups = new Map();
   for (const r of live) {
     const k = (r.vals || {})[by.cid];
@@ -802,8 +1203,8 @@ function rdCompareHtml(s, cols, rows) {
        averaging over blanks. Capped at 3 so a stray long float cannot widen
        the column. */
     const dp = Math.min(3, Math.max(...nums.map(n => {
-      const s = String(n); const i = s.indexOf(".");
-      return i < 0 ? 0 : s.length - i - 1;
+      const t = String(n); const i = t.indexOf(".");
+      return i < 0 ? 0 : t.length - i - 1;
     })));
     return `${mean.toFixed(dp)} <span class="tny muted">${lo === hi ? "" : lo + "–" + hi}</span>`;
   };
@@ -815,28 +1216,13 @@ function rdCompareHtml(s, cols, rows) {
     return `${esc(c.name)}: ${n} of ${live.length}`;
   }).join(" · ");
 
-  return `<div class="rdcmp${open ? "" : " folded"}">
-    <button class="rdparts-hd" aria-expanded="${open}"
-      onclick="view.rdCmpOpen = view.rdCmpOpen === '${esc(s.id)}' ? null : '${esc(s.id)}'; render()">
-      ${icon(open ? "chevronDown" : "chevronRight", 14)} Compare</button>
-    <div class="rdcmp-body">
-      <div class="toolbar no-print">
-        <label class="tny muted" for="rd-cmpby">Group by</label>
-        <select id="rd-cmpby" onchange="view.rdCmpBy=this.value;render()">
-          ${ins.map(c => `<option value="${esc(c.cid)}" ${c.cid === by.cid ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
-        </select>
-        <label class="tny muted"><input type="checkbox" ${view.rdCmpScrap ? "checked" : ""}
-          onchange="view.rdCmpScrap=this.checked;render()"> include scrapped</label>
-      </div>
-      <table class="sub rdcmptable">
-        <thead><tr><th>${esc(by.name)}</th><th>n</th>${res.map(c => `<th>${esc(c.name)}${c.unit ? ` <span class="tny muted">${esc(c.unit)}</span>` : ""}</th>`).join("")}</tr></thead>
-        <tbody>${keys.map(k => `<tr>
-          <td data-label="${esc(by.name)}"><b>${esc(k)}</b></td>
-          <td data-label="n">${groups.get(k).length}</td>
-          ${res.map(c => `<td data-label="${esc(c.name)}">${cell(groups.get(k), c)}</td>`).join("")}
-        </tr>`).join("")}</tbody>
-      </table>
-      <p class="tny muted">${coverage}. Blanks are left out of the averages.</p>
-    </div>
-  </div>`;
+  return `<table class="sub rdcmptable">
+      <thead><tr><th>${esc(by.name)}</th><th>n</th>${res.map(c => `<th>${esc(c.name)}${c.unit ? ` <span class="tny muted">${esc(c.unit)}</span>` : ""}</th>`).join("")}</tr></thead>
+      <tbody>${keys.map(k => `<tr>
+        <td data-label="${esc(by.name)}"><b>${esc(k)}</b></td>
+        <td data-label="n">${groups.get(k).length}</td>
+        ${res.map(c => `<td data-label="${esc(c.name)}">${cell(groups.get(k), c)}</td>`).join("")}
+      </tr>`).join("")}</tbody>
+    </table>
+    <p class="tny muted">${coverage}. Blanks are left out of the averages.</p>`;
 }

@@ -3624,6 +3624,14 @@ function rdFixture() {
     { id: "CPN-SN6-002", cls: "CPN", study: "RDS-SN6-001", label: "C02", status: "Tested",
       vals: {}, resinLot: "RSN-SN6-011", createdBy: "a@b.c" },
   ];
+  /* Push the stub's counters past the ids planted above. `counters` is shared
+     across this whole file, so the first allocId("rnd","RDS") in a test that
+     had not done this returned RDS-SN6-001 — the id the fixture had just used —
+     and a "duplicate" landed on top of the original, inheriting its coupons.
+     Production counters are always ahead of the records that exist; a stub that
+     is wrong in a way a test CAN see is still a stub that is wrong. */
+  counters.RDS = Math.max(counters.RDS || 0, 50);
+  counters.CPN = Math.max(counters.CPN || 0, 50);
 }
 
 await t("THE R&D COLLECTION IS NOT THE R&D FLAG — nothing here reaches the season", () => {
@@ -3810,6 +3818,92 @@ await t("a guest gets text, not fields — the cascade does not reach this grid"
       "render()'s view.edit cascade closes ~130 inputs elsewhere, but this grid has no Edit button and is always editing — so rdCell has to close itself");
     assert(/class="ro"/.test(html), "values render as read-only text instead");
   } finally { fb.guest = realGuest; fb.roster = realRoster; }
+});
+
+await t("deleting a study takes its coupons, and UNDO brings the numbers back", async () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  DB.rnd = DB.rnd.filter(o => o.id !== "RDS-SN6-002");        // no batches: a plain study
+  DB.rnd.find(o => o.id === "CPN-SN6-001").vals = { K1: 2.09 };
+  const before = DB.rnd.length;
+  rdDelStudy("RDS-SN6-001");
+  const ask = document.getElementById("modal").innerHTML;
+  assert(/2 coupons/.test(ask), "the confirm NAMES THE COUNT — it is the only warning anyone gets: " + ask.slice(0, 200));
+  assert(!/&lt;b&gt;/.test(ask),
+    "and carries no markup: confirmModal escapes its message, so a <b> would print as a literal tag");
+  confirmProceed();
+  await new Promise(r => setTimeout(r, 0));
+  assert(DB.rnd.length === before - 3, "study and both coupons go: " + DB.rnd.length);
+  assert(RD_UNDO && RD_UNDO.kind === "delete", "and the undo slot holds them");
+
+  await rdUndo();
+  assert(DB.rnd.length === before, "undo restores every record");
+  const back = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  assert(back && back.vals && back.vals.K1 === 2.09,
+    "WITH its measurements — an undo that restored the row but not the numbers would look like it worked");
+});
+
+await t("a project refuses to be deleted while it holds batches", () => {
+  rdFixture();
+  const before = DB.rnd.length;
+  rdDelStudy("RDS-SN6-001");                                   // has RDS-SN6-002 under it
+  assert(DB.rnd.length === before, "nothing is deleted");
+  assert(/batch/i.test(lastToast), "and it says why: " + lastToast);
+});
+
+await t("duplicating a study copies the setup and none of the results", async () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+  await rdDuplicateStudy("RDS-SN6-001");
+  const copy = rdStudies().find(x => /\(copy\)$/.test(x.name || ""));
+  assert(copy, "a copy exists");
+  assert(copy.cols.length === 1 && copy.cols[0].cid === "K1",
+    "the columns come with it, KEEPING their cids — two studies sharing a column id is what makes 'cure temp across every sweep' answerable later");
+  assert(copy.defaults.resinLot === "RSN-SN6-009", "and so do the materials");
+  assert(rdCoupons(copy.id).length === 0, "but no coupons: a template is the setup, not the results");
+  assert(copy.labelNext === 1, "and the labels start at 01 again");
+  assert(copy.id !== s.id && /^RDS-/.test(copy.id), "it is its own record: " + copy.id);
+});
+
+await t("a study's materials can actually be SET, not just read", () => {
+  /* Round one shipped rdEff, RD_INHERITS and `defaults` with no UI to populate
+     them, so labels printed a blank resin and the export resolved an
+     inheritance nobody could establish. A model with no way in is not a
+     feature. */
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  const c = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  rdDefUpd("RDS-SN6-001", "stack", "4X 200 UD");
+  assert(s.defaults.stack === "4X 200 UD", "the study takes the value");
+  assert(rdEff(c, "stack") === "4X 200 UD", "and every coupon in it sees it at once");
+  assert(calls.some(x => x[0] === "save" && x[1] === "rnd" && x[3] === "defaults"),
+    "written as one field, not the whole document");
+
+  /* Clearing DELETES the key rather than storing "", which is what lets a batch
+     fall back to the project that holds it. */
+  const batchCpn = { id: "CPN-SN6-090", cls: "CPN", study: "RDS-SN6-002", label: "A01" };
+  DB.rnd.push(batchCpn);
+  rdDefUpd("RDS-SN6-002", "stack", "2X PLAIN");
+  assert(rdEff(batchCpn, "stack") === "2X PLAIN", "a batch can override its project");
+  rdDefUpd("RDS-SN6-002", "stack", "");
+  assert(!("stack" in rdStudy("RDS-SN6-002").defaults), "clearing removes the key, not just its value");
+  assert(rdEff(batchCpn, "stack") === "4X 200 UD", "so the batch falls back to the project again");
+});
+
+await t("export resolves what a coupon inherited, rather than exporting a blank", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  const cols = rdExportCols(s);
+  const csv = toCSV(rdSheetRows(s), cols);
+  const head = csv.split("\n")[0];
+  assert(head.includes("Thk (mm)"), "a column carries its unit into the header: " + head);
+  assert(head.includes("resinLot"), "and the inherited fields are columns too");
+  const row = csv.split("\n").find(l => l.startsWith("CPN-SN6-001"));
+  assert(row.includes("RSN-SN6-009"),
+    "a coupon that inherited its resin exports the RESOLVED value — a blank cell in a spreadsheet somebody opens next year is a lie by omission");
 });
 
 await t("a short id block writes nothing at all", async () => {

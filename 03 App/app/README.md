@@ -1084,6 +1084,39 @@ saying where each came from, which is what lets a sweep run across two rounds.
 Coupons themselves always live in a batch — a project holds batches, so the
 **Add rows** button moves out of the way and says so.
 
+**Everything gets a label.** The study's is for the bag, the tray or the box the
+coupons live in — the thing you pick up in March wondering what it was. It
+carries the study name, how many coupons should be inside, the materials and a
+QR. Each coupon gets its own, and **Coupon labels** prints the whole study on one
+sheet: you cut ten coupons and you want ten tags in one press. Both scan back to
+the record like every other label in the app.
+
+**Photos.** On the study, that's the panel before it was cut or the setup on the
+machine. On a coupon it's almost always the **failure surface** — the one
+photograph in coupon testing that is evidence rather than a record, because it's
+what says whether a number is a real result or a grip that slipped. The camera
+button on each row carries its photo count, so a coupon that has one is visible
+while you scan down the column.
+
+**Getting the data out**, three ways, because they're for three different
+moments. **CSV** downloads one row per coupon with every column. **Copy** puts
+the same thing on the clipboard as TSV to paste into a Google Sheet — which is
+the one that works on a phone, where a browser download often silently does
+nothing. **Report** prints a one-page sheet with the table, the comparison and
+the photos, for a design review or the advisor. All three resolve what a coupon
+*inherited*: a blank resin cell in a spreadsheet somebody opens next year is a
+lie by omission, because the coupon did have a resin — it just took it from its
+study.
+
+**Duplicate** copies a study's setup and none of its results: same columns, same
+materials, same label stem, no coupons, labels starting at 01 again. Same test,
+new batch, next week — which is the normal case, not the exception.
+
+**Delete** takes the coupons with it, after telling you how many. Undo puts
+everything back *with its measurements* — an undo that restored the rows but not
+the numbers would look like it worked. A project won't delete while it still
+holds batches; that's three rounds of work, not one press.
+
 **R&D parts are a different thing, and they are listed at the bottom.** A part
 flagged R&D is a real part with a real traveler that just isn't a season
 deliverable — a mold shakedown keeps every blocker and every cure hold. Those

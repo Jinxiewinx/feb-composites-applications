@@ -2140,8 +2140,26 @@
      does not reflow when it changes. */
   .rdstat { width: 104px; }
   .rdnorows { margin: 10px 2px; }
-  .rdcols, .rdcmp { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 4px; }
-  .rdcols.folded .rdcols-body, .rdcmp.folded .rdcmp-body { display: none; }
+  .rdcols, .rdcmp, .rdmat { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .rdcols.folded .rdcols-body, .rdcmp.folded .rdcmp-body, .rdmat.folded .rdmat-body { display: none; }
+  /* The closed fold carries the answer, because "what went into this" is read
+     far more often than it is set. Truncated rather than wrapped: a summary
+     that grows to two lines pushes the grid down on every study. */
+  /* min-width: 0 is what makes the ellipsis actually happen. A nowrap child of
+     a flex row refuses to shrink below its content width without it, so on a
+     phone the summary pushed the fold header to 494px inside a 393px viewport
+     and the whole page scrolled sideways — which the UI suite fails, correctly.
+     max-width caps it on a desktop, where there is room to spare. */
+  .rdparts-hd { max-width: 100%; overflow: hidden; }
+  .rdmatsum { text-transform: none; letter-spacing: 0; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 0 1 auto; max-width: 46ch; }
+  .rdmat-body p { margin: 2px 8px 6px; }
+  .rdmat-body .grid { padding: 0 8px 6px; }
+  /* An inherited value is muted and says so, because a batch showing its
+     project's resin otherwise looks identical to one that set its own — and
+     then an override is invisible until it bites somebody. */
+  .rd-inh { font-style: italic; }
   .rdcol { display: flex; align-items: center; gap: 8px; padding: 4px 8px; flex-wrap: wrap; }
   .rdcolnew input, .rdcolnew select { min-width: 0; }
   .rdunit { width: 68px; }
@@ -2162,7 +2180,7 @@
   .rdgrid .rdc-status { width: 116px; }
   .rdgrid .rdc-user { width: 108px; }
   .rdgrid .rdc-notes { width: auto; min-width: 0; }
-  .rdgrid .rdc-act { width: 34px; text-align: right; }
+  .rdgrid .rdc-act { text-align: right; }
   /* A result column is what the study is FOR. A hairline on its leading edge
      separates measured from chosen without spending a colour on it — statuses
      already own colour in this app. */
@@ -2172,6 +2190,24 @@
   .rdgrid .rowact:hover { color: var(--bad); }
   .rdcmptable td { font-variant-numeric: tabular-nums; }
   .rdcmp .toolbar { margin: 4px 0; }
+  .rdacts { margin: 8px 0 4px; flex-wrap: wrap; }
+  /* Three buttons in a 34px column would not fit, so the column widens only
+     when it has to — the grid's other tracks are fixed and notes takes the
+     slack, so this costs the notes field and nothing anybody types into more
+     often. */
+  .rdgrid .rdc-act { width: 96px; white-space: nowrap; }
+  .rdgrid .rowact { padding: 2px 4px; }
+  .rdgrid .rowact.has { color: var(--accent); }
+  /* The count rides ON the photo button rather than beside it: a coupon that
+     has a photo should be visible while scanning down the column, without
+     opening anything. */
+  .rdphn { font-size: 9.5px; font-weight: 700; margin-left: 1px; vertical-align: super; }
+  .rdphotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin: 8px 0; }
+  .rdphotos .phtile { margin: 0; width: 132px; }
+  .rdphotos .phimg { width: 132px; height: 96px; object-fit: cover; border-radius: var(--radius);
+    border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .rdphadd { align-self: center; }
+
 
   /* Below the desktop band each row becomes a card, the receiving idiom: the
      table parts go display:block, the head is hidden, and every cell prints its
