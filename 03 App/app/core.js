@@ -29,13 +29,15 @@ let pendingRender = false;
    joins. Same reason as WO_NOTES_NEW. */
 var APP_VERSION = "4.0.0";
 /* What this version changed, in the words a team member would use. Rewritten
-   every release; three to six lines, or nobody reads it. */
+   every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
+   a modal in front of someone who wants to get to work, and a paragraph per
+   bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "There is an R&D tab now, and it is for coupons. Ten flat panels at two cure temperatures, six infusion trials, a box of offcuts you want to keep track of — none of that wanted a work order, a traveler or a buy-off, so none of that has one. A coupon is a row in a grid you type into. It is meant to be quicker than opening a spreadsheet; if it ever isn't, say so, because that is the only thing it has to beat.",
-  "Ten coupons is three presses: open the study, set Rows, press Add rows. They arrive numbered C01 to C10, ready to fill in. A study is whatever you need it to be — give it a name and it's a folder, add a column and it's a test with a variable, put it inside another study and it's a batch in a project. There is nothing to pick when you make one.",
-  "Columns are yours, per study. Name one, say whether it's a setting you chose or something you measured, give it a unit. Once a study has one of each and three coupons, Compare turns itself on: it groups by the thing you varied and gives you the mean and the range — and how many coupons each number actually came from, so a half-measured study says so instead of quietly averaging over the blanks.",
-  "Paste a column of readings straight off the Instron. Click the first cell, paste, and the values fill down the rows already there. If there are more numbers than rows it stops and tells you how many had nowhere to go — it never invents coupons.",
-  "The loading screen waits for you now. It fills five lights as the app actually loads — sign-in, the roster, the shop data — and then it stops and waits until you press Continue. It won't drop you into a half-loaded app, and if something is genuinely broken it says which part in plain words and offers to let you in anyway rather than spinning. Press it and the lights go out.",
+  "New R&D tab: coupon studies you type into like a spreadsheet. No work order, no traveler, no buy-off.",
+  "Ten coupons is three presses: open a study, set Rows, Add rows. Columns are yours, per study.",
+  "Compare turns on once a study has a setting, a result and three coupons: means and ranges, grouped by what you varied.",
+  "Paste a column of readings straight off the Instron; values fill down the rows that exist.",
+  "The loading screen now fills its lights and waits for Continue, instead of dropping you into a half-loaded app.",
 ];
 
 /* ---------- config/release ----------
