@@ -18,6 +18,14 @@ const MIME = {
   ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
   ".pdf": "application/pdf",
   ".json": "application/json", ".stl": "model/stl", ".woff2": "font/woff2",
+  /* WebAssembly.compileStreaming REFUSES anything but application/wasm — it is
+     the one type here the browser checks rather than sniffs. Without this entry
+     the vendored zxing reader fell to the octet-stream default, the streaming
+     compile threw, scan-fallback.js quietly recovered via ArrayBuffer, and the
+     console error it logged on the way failed every scan-modal page in
+     test_detailui. Firebase Hosting serves .wasm correctly, so this was only
+     ever wrong in the harness. */
+  ".wasm": "application/wasm",
   ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
 };
 

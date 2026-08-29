@@ -64,36 +64,77 @@ const CABINET = `
   jug("REXCO FORMULA FIVE Mold Release Wax", "CON", "",     "F5-WAX",   1, 0);
 `;
 
+/* A bench with enough in it to be worth photographing. The standing fixtures
+   hold one project, two batches and fifteen coupons, which is the right size
+   for testing and slightly thin for a picture whose point is "this is a
+   spreadsheet you can actually use" — so the sweep is filled out to a full
+   three-temperature run with a couple of blanks and one scrapped coupon still
+   in it. What is shown has to be what a real study looks like halfway
+   through, not a tidy wall of filled cells that flatters the grid. */
+const BENCH = `
+  DB.rnd = DB.rnd.filter(o => o.cls === "RDS");
+  const cpn = (n, study, label, status, vals, notes) => DB.rnd.push({
+    id: "CPN-SN6-" + String(n).padStart(3, "0"), cls: "CPN", study, label, status,
+    vals, notes: notes || "", photos: [], createdBy: "starbuck@berkeley.edu" });
+  let n = 0;
+  const row = (study, stem, i, cure, thk, load, status, notes) =>
+    cpn(++n, study, stem + String(i).padStart(2, "0"), status || "Tested",
+        load == null ? (thk == null ? { Kcure: cure } : { Kcure: cure, Kthk: thk })
+                     : { Kcure: cure, Kthk: thk, Kload: load }, notes);
+  row("RDS-SN6-002", "A", 1, 120, 2.09, 588);
+  row("RDS-SN6-002", "A", 2, 120, 1.98, 561, "Tested", "dry corner, trimmed back");
+  row("RDS-SN6-002", "A", 3, 120, 2.17, 604);
+  row("RDS-SN6-002", "A", 4, 120, 2.11, 597);
+  row("RDS-SN6-003", "B", 1, 140, 2.22, 641);
+  row("RDS-SN6-003", "B", 2, 140, 2.19, 633);
+  row("RDS-SN6-003", "B", 3, 140, 2.14, 612);
+  row("RDS-SN6-003", "B", 4, 140, 1.62, null, "Scrapped", "bag leaked overnight");
+  row("RDS-SN6-003", "B", 5, 160, 2.26, null, "Made");
+  row("RDS-SN6-003", "B", 6, 160, null, null, "Made");
+  row("RDS-SN6-003", "B", 7, 160, null, null, "Planned");
+  /* The folder study keeps its rows: a study with no columns at all, sitting
+     next to the swept one, is half of what "one record shape, three uses" is
+     claiming — and a Parked folder reading "0 coupons" in a picture argues
+     against it. */
+  cpn(++n, "RDS-SN6-004", "L01", "Made", {}, "half a metre of 195 twill, RFS shelf 2");
+  cpn(++n, "RDS-SN6-004", "L02", "Made", {}, "core offcuts, assorted");
+  cpn(++n, "RDS-SN6-004", "L03", "Made", {});
+`;
+
 export const RELEASE_SHOTS = [
   {
-    id: "flam-cabinet",
-    /* Tall enough for the header card, both chemical sections with the AT30
-       group open, and a few singleton rows — the fold and the tag codes are
-       the whole story, so both have to be in frame. */
-    vh: 1150,
-    js: CABINET + `
-      view = { ...view, tab: "inventory", invView: "map", mode: "detail", id: "BIN-SN6-950",
-               edit: false, invFlag: "", invLotOpen: { "m:at30": true } };
+    id: "rnd-grid",
+    /* Tall enough for the study index, the head with its question, and enough
+       rows that it reads as a sheet rather than a form — including the ones
+       still blank, because a study halfway through is the normal state. */
+    vh: 1180,
+    js: BENCH + `
+      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
+               rdCmpOpen: null, rdColsOpen: null, rdPartsOpen: false };
       render();`,
-    title: "The Flammables Cabinet, grouped",
-    note: "Every chemical EH&S tagged is in the app now, and identical containers fold into one " +
-          "line — ten AT30 jugs is one row with the count, the open/sealed split and the mix " +
-          "ratio on it. Opened, each jug shows its own UC tag code, which is how you tell jug " +
-          "six from jug seven while holding one. Scan the sticker with the in-app camera " +
-          "(iPhones included now) and the record opens.",
+    title: "R&D: coupons, without the paperwork",
+    note: "A new tab for the things that were never going on the car. Ten coupons is three " +
+          "presses and they arrive numbered; the columns are yours per study; the batch each " +
+          "one came from rides along so a sweep can span two rounds. No work order, no " +
+          "traveler, no buy-off — it is a sheet you type into, and it has to beat a " +
+          "spreadsheet or it has failed.",
   },
   {
-    id: "materials-grouped",
-    vh: 900,
-    js: CABINET + `
-      view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null,
-               q: "", fSub: "", fStatus: "", lotsFlat: false, invLotOpen: {} };
+    id: "rnd-compare",
+    /* Tall enough that the compare table itself is in frame. The first cut of
+       this was 980 and stopped at the word COMPARE — a picture whose caption is
+       entirely about a table that is not in it. */
+    vh: 1400,
+    js: BENCH + `
+      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
+               rdCmpOpen: "RDS-SN6-001", rdCmpBy: "Kcure", rdCmpScrap: false,
+               rdColsOpen: null, rdPartsOpen: false };
       render();`,
-    title: "Materials, by material",
-    note: "The Materials list counts containers AND kinds, one card per class. A material knows " +
-          "its paperwork now — mix ratio and the TDS button sit right on the line, read from the " +
-          "datasheets in Documents. Select… deletes many records in one confirmed go, and " +
-          "anyone can.",
+    title: "Did the hotter cure actually change anything?",
+    note: "Mark a column a setting you chose and another something you measured, and Compare " +
+          "turns itself on: grouped by what you varied, with the mean and the range. It also " +
+          "says how many coupons each number actually came from, because a study is normally " +
+          "half-measured and averaging over the blanks is how a test lies to you.",
   },
 ];
 

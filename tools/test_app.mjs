@@ -5990,7 +5990,7 @@ await t("old items/lots links and scans land on Inventory", () => {
   setTab("lots");
   assert(view.tab === "inventory", "lots normalises");
   assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
-  assert(TABS.filter(t => !t.hidden).length === 12, "twelve visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0, R&D in v3.3.0)");
+  assert(TABS.filter(t => !t.hidden).length === 12, "twelve visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0, R&D in v4.0.0)");
   openRecord("lots", "RSN-SN6-001");
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });
