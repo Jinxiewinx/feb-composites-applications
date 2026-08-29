@@ -82,10 +82,19 @@ measured columns. No rules deploy anywhere (lots/items have no field
 whitelist). Any new writer of ehsBarcode must call ehsNorm; comparisons go
 through ehsKey (dash-blind).
 
-**v3.1.0 IS TAGGED, PUSHED AND LIVE**, serving from `feb-composites.web.app`
-and verified by fetching `core.js` off the host. v3.0.0 went out an hour
-earlier the same day — Major by CHANGELOG's own rubric, since Season editing
-moved off the tab and the dashboard became a different page.
+**v3.2.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the EH&S/inventory
+release: chemicals under their UC stickers, iPhone scanning, grouped
+containers, the materials table, Select… mass delete, co-storage allowed.
+Minor by the rubric. release.mjs verified the deploy and shot the two
+pictures against the live build; the #composites note and the two PNGs
+(design/release-v3.2.0-*.png) are printed in the release output — **posting
+it and pressing ⋯ → "Announce this release" are Simon's, still pending**, as
+they were for v3.0.0/v3.1.0 (that one press announces the newest version
+only; older ones live in CHANGELOG.md).
+
+**v3.1.0 went out 2026-08-27**, v3.0.0 an hour earlier the same day — Major
+by CHANGELOG's own rubric, since Season editing moved off the tab and the
+dashboard became a different page.
 
 v3.1.0 is Simon's correction to v3.0.0's Season: the compactness was right, the
 two-abreast flow was not. `.sline` and `.shead` now share ONE declaration of
