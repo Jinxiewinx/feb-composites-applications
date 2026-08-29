@@ -101,7 +101,7 @@ const STATES = [
    purpose: the tab still renders and is still reachable by link, so shooting it
    is how we would notice the shelf having broken it. */
 const ALL_TABS = ["dashboard", "season", "workorders", "parts", "stock", "molds", "lots",
-  "items", "projects", "timeline", "weekplan", "budget", "documents", "reports",
+  "items", "rnd", "projects", "timeline", "weekplan", "budget", "documents", "reports",
   "people"];
 const SWEEP = TAB === "all";
 /* The record id lookup below only knows two archives, so a sweep takes the

@@ -21,6 +21,42 @@ git log -p --follow -- SESSION-STATE.md
 ## Now
 
 
+**THE R&D TAB IS BUILT AND NOT DEPLOYED, AND IT NEEDS A RULES DEPLOY.** A new
+`rnd` collection, multi-class on `cls` like items and lots: `RDS-SN6-###` is a
+study, `CPN-SN6-###` is a coupon. Twelfth visible tab, last in Build.
+`firestore.rules` gained a `match /rnd/{id}` block — **so this is NOT a
+hosting-only deploy**; rules first, then hosting, and say so in the report.
+
+What is done: studies (folder / swept test / project-of-batches, all one record
+shape), per-study columns tagged input or result, the coupon grid with
+bulk-create and undo, fill-down paste, and the compare strip. What is NOT done:
+materials inheritance is in the model (`rdEff`, `RD_INHERITS`, study
+`defaults`) but has no UI yet, and coupons carry no labels/QR and no photos.
+Plan at `C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`,
+stages 4–6.
+
+Three things here are load-bearing:
+
+- **A cell edit NEVER calls `render()`** (`rdUpd`, `rdVal`). Receiving's
+  invariant: `onchange` fires while Tab already carries focus, and a repaint
+  destroys the field mid-hop. Only a column-shape change repaints.
+- **The guest cascade does not reach this grid.** `render()` closes ~130 inputs
+  by clearing `view.edit`, but the grid has no Edit button and is always
+  editing, so `rdCell` renders `.ro` itself. Free everywhere else; not here.
+- **A project's sheet rolls its batches up** (`rdSheetRows`). The first build
+  counted deep in the index and direct in the sheet, so opening a project said
+  "no coupons yet" under a row claiming twelve.
+
+**DO NOT FUSE THE TWO MEANINGS OF "R&D".** `parts.rnd` is a real part with a
+full traveler; the `rnd` collection is coupons with none. New section in
+DESIGN-NOTES, and a test that reads `rnd.js` and fails if it ever tests `retro`.
+The `onlyRnd` chip on the Parts rail is untouched.
+
+Written down before it bites: **if `DB.rnd` passes ~2,000, take `rnd` out of
+`COLLECTIONS` and give the tab a per-study query.** It is the twelfth
+whole-collection listener and coupons will be the most numerous record type in
+the app within a month.
+
 **THE BOOT SPLASH IS A GATE NOW, AND IT IS NOT DEPLOYED.** Committed on main,
 not released. It no longer takes itself down: five real boot milestones (app
 code, sign-in, roster, first data, fonts) fill a gold start-light gantry, the

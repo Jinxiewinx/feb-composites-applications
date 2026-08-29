@@ -418,6 +418,10 @@ const ICONS = {
   link: '<path d="M9.5 14.5a3.5 3.5 0 0 0 5 0l3-3a3.54 3.54 0 0 0-5-5l-1 1"/><path d="M14.5 9.5a3.5 3.5 0 0 0-5 0l-3 3a3.54 3.54 0 0 0 5 5l1-1"/>',
   externalLink: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
   presentation: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8.5 21l3.5-2 3.5 2"/>',
+  /* A flask. Not the cube, the layer stack, the bin, the bar chart or the
+     calendar grid — checked against every glyph above so the rail reads at a
+     glance rather than by squinting. */
+  rnd: '<path d="M9 3h6"/><path d="M10 3v5.5L4.6 17A2 2 0 0 0 6.3 20h11.4a2 2 0 0 0 1.7-3L14 8.5V3"/><path d="M7.5 14h9"/>',
   season: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/>',
   _fallback: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
 };
@@ -1054,6 +1058,8 @@ const ID_TO_COLL = {
   // Multi-class collections: several prefixes, one collection, one tab each.
   PNL: "items", JIG: "items", BIN: "items",
   FAB: "lots", RSN: "lots", CON: "lots",
+  // The R&D bench: a study is a folder of coupons, a coupon is one test piece.
+  RDS: "rnd", CPN: "rnd",
 };
 /* One collection, two homes. `stock` holds tooling boards (BRD-) and the
    stack plans cut from them (STK-), and since boards moved to Inventory those
@@ -2236,6 +2242,18 @@ const TABS = [
   { id: "inventory", label: "Inventory", ic: "inventory", coll: "items", grp: "build", tip: "Inventory — what we have and where it lives", render: () => renderInventory() },
   { id: "items", label: "Items", ic: "layers", coll: "items", grp: "build", hidden: true, render: () => { view.tab = "inventory"; return renderInventory(); } },
   { id: "lots", label: "Materials", ic: "layers", coll: "lots", grp: "build", hidden: true, render: () => { view.tab = "inventory"; return renderInventory(); } },
+  /* The R&D bench. Studies (RDS-) and coupons (CPN-) in one multi-class
+     collection, and the only row in this array carrying coll:"rnd", so both
+     prefixes resolve here through tabForId and nothing else is hijacked.
+
+     LAST IN `build` ON PURPOSE. It consumes from Inventory and produces test
+     pieces, so it is the end of the chain — and a first-year's first question
+     is never R&D.
+
+     NOT the same thing as `rnd:true` on a part. That flag means a real part
+     with a full traveler that is not a season deliverable; nothing in this
+     collection has a traveler, a blocker or a buy-off. See DESIGN-NOTES. */
+  { id: "rnd", label: "R&D", ic: "rnd", coll: "rnd", grp: "build", tip: "R&D — coupon studies, test pieces and trials", render: () => renderRnd() },
   { id: "timeline", label: "Schedule", ic: "timeline", coll: "schedule", grp: "planning", tip: "Schedule — the season by station, or the week by person", render: () => renderSchedule() },
   /* Hidden alias: Weekly Plan merged into Schedule as its week view. Old
      #/weekplan links and stored notifications land there. */

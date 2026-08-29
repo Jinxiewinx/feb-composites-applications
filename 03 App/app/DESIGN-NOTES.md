@@ -323,6 +323,54 @@ unlinks the part from its work order; and `nameTier()` gives a one-line label
 only 20 characters, so six characters of prefix pushes most names to two lines
 and deletes the mid row from the printed label.
 
+## "R&D" means two things, and they must stay apart
+
+Since 2026-08-28 there are two, and the shared word is all they have in common.
+
+| | `parts.rnd === true` | the `rnd` collection |
+|---|---|---|
+| what it is | a real part | a coupon |
+| lives on | the Parts tab | the R&D tab |
+| ids | `P-SN6-###` | `RDS-SN6-###`, `CPN-SN6-###` |
+| has a traveler | **yes** — blockers, cure holds, evidence gates, buy-offs | **no** |
+| read by `inSeason()` | yes | **never** |
+| on the tracker feed | never | never |
+
+An R&D **part** is real carbon on a real deadline, and every gate above still
+bites — that is the whole point of the section before this one. An R&D
+**coupon** is a test piece somebody cut this afternoon: no revision, no
+signature, no cure hold, and a grid you type into like a spreadsheet.
+
+**Somebody will try to unify them.** It looks like duplication and it is not.
+Three lines hold it:
+
+- `rnd.js` never tests `retro`, and never gains an `isRnd()` call. A test reads
+  the source and asserts the first of those.
+- Nothing in the `rnd` collection is ever read by `inSeason()`, `seasonRows()`,
+  `trackerRow()`, `partIndexRows()` or `woIndexRows()`.
+- A coupon never gets an `rnd` boolean. It is not a part that is flagged; it is
+  a different record.
+
+The R&D tab lists the R&D **parts** underneath its studies, read-only, every row
+leaving for the Parts tab. That is deliberate — the tab is meant to be the one
+place you look — and it is also the most likely place for the two to get fused,
+so the section carries a sentence saying which is which.
+
+**The `onlyRnd` chip on the Parts rail is unchanged and stays.** It is how you
+filter while you are already over there, and none of the five hide sites moved.
+
+### One cliff, written down before it is hit
+
+`rnd` is the twelfth whole-collection `onSnapshot` at boot, and coupons will be
+the most numerous record type in the app inside a month — ten at a time, several
+times a week, forever. Five hundred is nothing on shop wifi. Five thousand is
+not.
+
+**If `DB.rnd` passes about 2,000, take `rnd` out of `COLLECTIONS` and give the
+tab a per-study query.** Nothing else in the app reads the collection, so it is
+a contained change — but only while that stays true, which is the real reason it
+is written here rather than discovered later.
+
 ## The public surfaces
 
 There are two deliberate public holes, and both are narrow on purpose.

@@ -3606,6 +3606,225 @@ await t("AN R&D RUN STILL ENFORCES — this is the one that says rnd is not a se
     "and its blocker still bites. A retro record documents; an R&D record is live work at the bench with a real cure clock and a real blocker. If this ever fails, somebody added an rnd test beside a retro one and the feature has silently become retro with a different word.");
 });
 
+/* ---------- the R&D bench (the `rnd` collection) ----------
+   The sibling of the test above, and the most valuable one in this block. Two
+   different things in this app share the word "R&D": the boolean on a part,
+   which means a real part with a full traveler that is simply not a season
+   deliverable, and this collection, which holds coupons that have no traveler
+   at all. Somebody will eventually try to unify them. */
+function rdFixture() {
+  DB.parts = [{ id: "P-SN6-960", partName: "VG TRIAL", subteam: "AERO", rnd: true, layupDeadline: "" },
+              { id: "P-SN6-961", partName: "NOSECONE", subteam: "AERO", layupDeadline: "" }];
+  DB.rnd = [
+    { id: "RDS-SN6-001", cls: "RDS", name: "Cure temp", status: "Active", parent: "",
+      labelPrefix: "C", labelNext: 3, cols: [], defaults: { resinLot: "RSN-SN6-009" }, createdBy: "a@b.c" },
+    { id: "RDS-SN6-002", cls: "RDS", name: "Batch A", status: "Active", parent: "RDS-SN6-001",
+      labelPrefix: "A", labelNext: 1, cols: [], defaults: {}, createdBy: "a@b.c" },
+    { id: "CPN-SN6-001", cls: "CPN", study: "RDS-SN6-001", label: "C01", status: "Made", vals: {}, createdBy: "a@b.c" },
+    { id: "CPN-SN6-002", cls: "CPN", study: "RDS-SN6-001", label: "C02", status: "Tested",
+      vals: {}, resinLot: "RSN-SN6-011", createdBy: "a@b.c" },
+  ];
+}
+
+await t("THE R&D COLLECTION IS NOT THE R&D FLAG — nothing here reaches the season", () => {
+  rdFixture();
+  /* The three accessors must answer identically whether or not DB.rnd holds
+     anything at all. If one of them ever starts reading the collection, the two
+     meanings have been fused and the part-side guarantees go with them. */
+  assert(inSeason(DB.parts[1]) === true, "an ordinary part is still in season");
+  assert(inSeason(DB.parts[0]) === false, "an rnd:true PART is still out of it");
+  assert(isRnd(DB.rnd[2]) === false,
+    "and a COUPON is not 'an R&D part' — it has no rnd flag and must never be given one");
+  view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "", seasonQ: "" };
+  render();
+  assert(!main.innerHTML.includes("CPN-SN6-"), "no coupon reaches the Season blueprint");
+  assert(typeof trackerRow === "function" && trackerRows().every(r => !String(r[0]).startsWith("CPN-")),
+    "nor the public Sheet mirror, which is a disclosure boundary");
+});
+
+await t("rnd.js never tests `retro` — the alarm for the whole feature", () => {
+  /* DESIGN-NOTES: "every `if (x.retro) return null` gate stays exactly as
+     written and never gains an rnd test". The inverse matters just as much —
+     the day this file starts testing retro, the bench has quietly become a
+     second archive rather than live work. Read from source on purpose. */
+  const src = readFileSync(join(root, "rnd.js"), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert(!/\bretro\b/.test(code), "no retro test survives in rnd.js outside its comments");
+});
+
+await t("inheritance resolves at read time, and clearing a cell restores it", () => {
+  rdFixture();
+  const own = DB.rnd.find(o => o.id === "CPN-SN6-002");
+  const plain = DB.rnd.find(o => o.id === "CPN-SN6-001");
+  assert(rdEff(plain, "resinLot") === "RSN-SN6-009", "a coupon shows its study's resin");
+  assert(rdIsInherited(plain, "resinLot") === true, "and knows the value is not its own");
+  assert(rdEff(own, "resinLot") === "RSN-SN6-011", "an override wins");
+  assert(rdIsInherited(own, "resinLot") === false, "and is reported as an override");
+  own.resinLot = "";
+  assert(rdEff(own, "resinLot") === "RSN-SN6-009",
+    "clearing the cell RESTORES inheritance — no third state, no tombstone");
+  /* One hop up: a batch with no defaults of its own falls through to the
+     project that holds it, which is the only thing that makes nesting useful. */
+  const batchCoupon = { id: "CPN-SN6-003", cls: "CPN", study: "RDS-SN6-002", label: "A01" };
+  DB.rnd.push(batchCoupon);
+  assert(rdEff(batchCoupon, "resinLot") === "RSN-SN6-009", "a batch inherits from its project");
+});
+
+await t("nesting is one level, in both directions", () => {
+  rdFixture();
+  assert(rdChildren("RDS-SN6-001").length === 1, "a project lists its batches");
+  assert(rdChildren("RDS-SN6-002").length === 0, "a batch has none, and rdChildren never recurses");
+  assert(rdRoots().length === 1, "only the project is a root");
+  assert(rdCouponsDeep("RDS-SN6-001").length === 2,
+    "a project counts its batches' coupons too, or the parent row reads smaller than the sum under it");
+});
+
+await t("a study is a folder until you give it columns", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  assert(rdCols(s).length === 0, "declare nothing and it is a plain named folder");
+  s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+  assert(rdCols(s).length === 1, "declare a column and it is a test with a variable");
+  assert(rdCols(rdStudy("RDS-SN6-002")).length === 1,
+    "and a batch inherits its project's columns, so a sweep can span batches");
+  s.cols[0].hidden = true;
+  assert(rdCols(s).length === 0, "hiding retires a column without destroying its values");
+});
+
+await t("A CELL EDIT NEVER REPAINTS — the receiving invariant, restated here", () => {
+  /* onchange fires while Tab is already carrying focus to the next cell, so a
+     repaint destroys the field mid-hop. This is the single thing most likely to
+     be broken by a well-meaning "just call render()". */
+  rdFixture();
+  const realRender = globalThis.render;
+  let painted = 0;
+  try {
+    globalThis.render = () => { painted++; };
+    calls.length = 0;
+    rdUpd("CPN-SN6-001", "notes", "dry corner");
+    assert(painted === 0, "editing notes did not repaint: " + painted);
+    assert(calls.some(c => c[0] === "save" && c[1] === "rnd" && c[3] === "notes"),
+      "and wrote exactly that one field, not the whole document");
+    const s = rdStudy("RDS-SN6-001");
+    s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+    rdVal("CPN-SN6-001", "K1", "140");
+    assert(painted === 0, "nor did editing a measured value");
+    assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 140, "which is stored as a NUMBER, not a string");
+  } finally { globalThis.render = realRender; }
+});
+
+await t("a numeric cell refuses a unit rather than silently eating it", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thickness", role: "result", type: "num", unit: "mm" }];
+  rdVal("CPN-SN6-001", "K1", "2.1mm");
+  assert(((DB.rnd.find(o => o.id === "CPN-SN6-001").vals || {}).K1) === undefined,
+    "parseFloat would have stored 2.1 and thrown the unit away — a number that quietly lost its unit is worse than a rejected keystroke");
+  rdVal("CPN-SN6-001", "K1", "2.1");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 2.1, "the number itself is fine");
+  rdVal("CPN-SN6-001", "K1", "");
+  assert(!("K1" in (DB.rnd.find(o => o.id === "CPN-SN6-001").vals || {})),
+    "and clearing removes the key rather than storing an empty string, so 'not measured' stays distinguishable from zero");
+});
+
+await t("a project rolls its batches up, and refuses coupons of its own", async () => {
+  rdFixture();
+  DB.rnd.push({ id: "CPN-SN6-010", cls: "CPN", study: "RDS-SN6-002", label: "A01", status: "Made", vals: {} });
+  const proj = rdStudy("RDS-SN6-001"), batch = rdStudy("RDS-SN6-002");
+  assert(rdIsParent(proj) === true && rdIsParent(batch) === false, "one is a project, one is a batch");
+  assert(rdSheetRows(proj).length === rdCouponsDeep(proj.id).length,
+    "the project's sheet shows every coupon its index row counted — one number, one place");
+  assert(rdSheetRows(batch).length === 1, "a batch shows its own");
+  view = { ...view, tab: "rnd", rdStudy: proj.id };
+  const before = DB.rnd.length;
+  await rdAddRows(3);
+  assert(DB.rnd.length === before,
+    "and Add rows refuses on a project — a coupon beside the batches has no provenance and no way to gain any");
+});
+
+await t("paste fills the rows on screen and never mints new ones", () => {
+  rdFixture();
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001" };
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "K1", name: "Thickness", role: "result", type: "num", unit: "mm" }];
+  const before = DB.rnd.length;
+  let prevented = false;
+  const ev = { preventDefault: () => { prevented = true; },
+               clipboardData: { getData: () => "2.01\n2.09\n2.14\n2.22" } };
+  rdPaste(ev, "CPN-SN6-001", "K1");
+  assert(prevented, "the paste is taken over rather than dropped into one cell");
+  assert(DB.rnd.length === before,
+    "FOUR values into TWO rows creates nothing — there is no commit step here to catch a mis-paste, and every row burns an id");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-001").vals.K1 === 2.01, "the first value lands where it was pasted");
+  assert(DB.rnd.find(o => o.id === "CPN-SN6-002").vals.K1 === 2.09, "and fills down from there");
+  assert(/2 of 4|had nowhere to go/.test(lastToast), "and the overrun is named exactly: " + lastToast);
+});
+
+await t("compare groups by what you chose, sorts numerically, and admits its gaps", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "Kc", name: "Cure", role: "input", type: "num", unit: "C" },
+            { cid: "Kt", name: "Thk", role: "result", type: "num", unit: "mm" }];
+  /* Every coupon in this test is planted below, so the counts asserted are
+     exactly the ones written here and not the fixture's plus these. */
+  DB.rnd = DB.rnd.filter(o => o.cls === "RDS");
+  const mk = (n, cure, thk, status) => DB.rnd.push({ id: "CPN-SN6-1" + n, cls: "CPN", study: "RDS-SN6-001",
+    label: "C" + n, status: status || "Tested", vals: thk == null ? { Kc: cure } : { Kc: cure, Kt: thk } });
+  mk(1, 160, 2.2); mk(2, 120, 2.0); mk(3, 140, 2.1); mk(4, 120, 2.1); mk(5, 140, null); mk(6, 140, 9.9, "Scrapped");
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001", rdCmpOpen: "RDS-SN6-001", rdCmpBy: "Kc", rdCmpScrap: false };
+  const html = rdCompareHtml(s, rdCols(s), rdSheetRows(s));
+  assert(html, "a study with an input, a result and three coupons gets a compare view");
+  const order = (html.match(/<b>(\d+)<\/b>/g) || []).map(x => x.replace(/\D/g, ""));
+  assert(String(order) === "120,140,160",
+    "numeric groups sort NUMERICALLY — a string sort reads 120,160,140 and makes a sweep look unordered: " + order);
+  /* Five live coupons (the sixth is scrapped), four of which carry a thickness:
+     C5 was made and never pulled. That gap is the point — a study half-measured
+     is the normal state of a study. */
+  assert(/Thk: 4 of 5/.test(html),
+    "coverage rides with the number, because averaging over whatever happened to have a value is how a test lies — " +
+    (html.match(/Thk: [^<.]*/) || [""])[0]);
+  assert(!/9\.9/.test(html), "and the scrapped coupon is left out by default");
+  view.rdCmpScrap = true;
+  assert(/9\.9|5\.\d/.test(rdCompareHtml(s, rdCols(s), rdSheetRows(s))), "unless you ask for it");
+});
+
+await t("compare stays hidden until there is something to compare", () => {
+  rdFixture();
+  const s = rdStudy("RDS-SN6-001");
+  s.cols = [{ cid: "Kc", name: "Cure", role: "input", type: "num", unit: "C" }];
+  assert(rdCompareHtml(s, rdCols(s), rdSheetRows(s)) === "",
+    "an input with no result has nothing to average — a button that is always there is one that usually disappoints");
+  s.cols.push({ cid: "Kt", name: "Thk", role: "result", type: "num", unit: "mm" });
+  assert(rdCompareHtml(s, rdCols(s), rdSheetRows(s)) === "", "and two coupons is not a comparison");
+});
+
+await t("a guest gets text, not fields — the cascade does not reach this grid", () => {
+  rdFixture();
+  const realGuest = fb.guest, realRoster = fb.roster;
+  try {
+    fb.guest = true; fb.roster = null;
+    const s = rdStudy("RDS-SN6-001");
+    s.cols = [{ cid: "K1", name: "Cure", role: "input", type: "num", unit: "C" }];
+    const html = rdGridHtml(s, rdCols(s), rdSheetRows(s));
+    assert(!/<input/.test(html) && !/<select/.test(html),
+      "render()'s view.edit cascade closes ~130 inputs elsewhere, but this grid has no Edit button and is always editing — so rdCell has to close itself");
+    assert(/class="ro"/.test(html), "values render as read-only text instead");
+  } finally { fb.guest = realGuest; fb.roster = realRoster; }
+});
+
+await t("a short id block writes nothing at all", async () => {
+  rdFixture();
+  view = { ...view, tab: "rnd", rdStudy: "RDS-SN6-001" };
+  const before = DB.rnd.length;
+  const realAlloc = fb.allocIdBlock;
+  try {
+    fb.allocIdBlock = async () => ["CPN-SN6-900", "CPN-SN6-901"];   // asked for 5, got 2
+    await rdAddRows(5);
+    assert(DB.rnd.length === before, "no coupon is created: " + (DB.rnd.length - before));
+    assert(!calls.some(c => c[0] === "importMany"), "and nothing is batched to the server");
+  } finally { fb.allocIdBlock = realAlloc; }
+});
+
 await t("the blueprint is a read: it renders no control that writes a part", () => {
   /* The whole reason the tab fits on a screen again. Thirteen editable columns
      had a floor near 1,700px against about 1,300px of content width, so it
@@ -5771,7 +5990,7 @@ await t("old items/lots links and scans land on Inventory", () => {
   setTab("lots");
   assert(view.tab === "inventory", "lots normalises");
   assert(tabForId("PNL-SN6-001") === "inventory", "PNL routes to the visible tab");
-  assert(TABS.filter(t => !t.hidden).length === 11, "eleven visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0)");
+  assert(TABS.filter(t => !t.hidden).length === 12, "twelve visible tabs (Tickets shelved in v1.0.0, Season added in v2.0.0, R&D in v3.3.0)");
   openRecord("lots", "RSN-SN6-001");
   assert(view.tab === "inventory" && main.innerHTML.includes("IN2 resin"), "a lot opens embedded in Inventory");
 });

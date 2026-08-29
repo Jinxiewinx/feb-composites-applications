@@ -160,10 +160,16 @@ record for when you are doing something to one part. Same records, two questions
 
 ### R&D parts
 
-Not everything the shop lays up is going on the car. Coupons, flat test panels,
-layup trials, a mold shakedown — those are **real parts**: real carbon, real
-resin, a real cost and a real deadline. What they are not is something the team
-promised to deliver this season.
+> **Not the same thing as the R&D tab.** A coupon you cut this afternoon belongs
+> on [the R&D bench](#the-rd-bench), where it is a row in a grid with no
+> paperwork attached. This section is about a **part** — something with a mold,
+> a work order and a traveler — that simply is not on the season's list. Both
+> are called R&D and they are genuinely different records.
+
+Not everything the shop lays up is going on the car. A layup trial, a mold
+shakedown, a full-size panel made to prove a process — those are **real parts**:
+real carbon, real resin, a real cost and a real deadline. What they are not is
+something the team promised to deliver this season.
 
 So a part can be marked **R&D**, and that means one thing and one thing only:
 *it is not a season deliverable.* It is not scrap, it is not a draft, and it is
@@ -1036,6 +1042,53 @@ that can only be satisfied by naming a lot gets satisfied by naming the wrong
 one: with two jugs on the bench at 11pm, someone scans the nearest, and the
 record is then precise, confident and wrong. An honest gap is worth more. The
 lots print on the traveler too, unflattering source and all.
+
+## The R&D bench
+
+**For coupons, not for parts.** Ten flat panels at two cure temperatures, six
+infusion trials, a box of offcuts you want to keep track of. There is no work
+order, no traveler, no revision and no buy-off — a coupon is a row, and the
+whole tab is meant to be quicker than opening a spreadsheet. If it ever isn't,
+say so, because that is the only thing it has to beat.
+
+**A study is whatever you need it to be.** Give it a name and it is a folder.
+Add a column and mark it a *setting you chose* and it becomes a test with a
+variable. Put it inside another study and it becomes a batch in a project. It is
+one record either way — there is nothing to pick when you make one, and nothing
+to migrate when it grows.
+
+**Ten coupons is three presses.** Open the study, set **Rows**, press **Add
+rows**. They arrive numbered C01…C10, ready to type into. Labels never repeat:
+if a create half-fails the numbering skips rather than reusing, because a gap is
+invisible and two coupons both marked C03 in Sharpie is not.
+
+**Columns are per study.** Name one, say whether it is an **input** (something
+you chose) or a **result** (something you measured), give it a unit. Eight is
+the limit — past that the grid gets wider than the screen, and the ninth column
+is really a second study. Retiring a column hides it and keeps every value ever
+measured into it.
+
+**Compare turns itself on** once a study has an input, a result and three
+coupons. It groups by the thing you varied and gives you the mean and the range
+of what you got, plus how many coupons each number actually came from — a study
+that is half-measured says so rather than averaging over whatever happened to
+be filled in. Scrapped coupons are left out unless you ask for them.
+
+**Paste fills, it does not create.** Copy a column of readings off the Instron,
+click the first cell and paste: the values fill *down the rows already there*.
+If there are more values than rows it stops and tells you how many had nowhere
+to go. Nothing is minted by a paste.
+
+**A project shows all its batches' coupons at once**, with a Batch column
+saying where each came from, which is what lets a sweep run across two rounds.
+Coupons themselves always live in a batch — a project holds batches, so the
+**Add rows** button moves out of the way and says so.
+
+**R&D parts are a different thing, and they are listed at the bottom.** A part
+flagged R&D is a real part with a real traveler that just isn't a season
+deliverable — a mold shakedown keeps every blocker and every cure hold. Those
+live on the Parts tab; the R&D tab lists them so there is one place to look, and
+every row opens over there.
 
 ## Opening the app
 

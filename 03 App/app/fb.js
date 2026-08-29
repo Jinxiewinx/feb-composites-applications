@@ -101,15 +101,21 @@ async function downscaleImage(file, maxDim, opts = {}) {
 // The data collections the app syncs. Add one here + a rules block + a counter
 // prefix below to introduce a new record type. `roster` and `meta` are infra,
 // not in this list.
-const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents", "stock", "stackplans", "molds", "items", "lots"];
+const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "documents", "stock", "stackplans", "molds", "items", "lots", "rnd"];
 /* Id prefix per collection for allocId(). schedule ids are week keys, not
    counter-allocated, so it has no prefix.
 
-   `items` and `lots` have no entry because they are MULTI-CLASS: one collection
-   holding several kinds of object, each with its own prefix and its own counter
-   (PNL/JIG/BIN, FAB/RSN/CON). Callers pass the class to allocId() and it wins
-   over this map. Three collections rather than nine because their fields are
-   near-identical and nine onSnapshot listeners at boot buys nothing. */
+   `items`, `lots` and `rnd` have no entry because they are MULTI-CLASS: one
+   collection holding several kinds of object, each with its own prefix and its
+   own counter (PNL/JIG/BIN, FAB/RSN/CON, RDS/CPN). Callers pass the class to
+   allocId() and it wins over this map. Four collections rather than eleven
+   because their fields are near-identical and eleven onSnapshot listeners at
+   boot buys nothing.
+
+   ABSENT ON PURPOSE, not forgotten. A default prefix here would let a caller
+   that forgot its class silently mint an `RND-` id — a prefix ID_TO_COLL does
+   not know, which routes nowhere, and only offline, where localId() is the
+   allocator. Leaving the entry out makes that a visible mistake instead. */
 const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK", molds: "MOLD" };
 
 /* ---- the public mirror ----

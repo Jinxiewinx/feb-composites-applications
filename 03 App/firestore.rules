@@ -87,6 +87,30 @@ service cloud.firestore {
     match /items/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if onRoster(); }
     match /lots/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if onRoster(); }
 
+    /* rnd = the R&D bench (2026-08-28). A third multi-class collection:
+       RDS-SN6-### is a STUDY — a named collection of coupons, which may be a
+       plain folder, a test with a swept variable, or a project holding batches,
+       all one record shape — and CPN-SN6-### is a COUPON, one physical test
+       piece. Same access shape as every other record collection.
+
+       THIS IS NOT THE `rnd` BOOLEAN ON A PART, and the shared word is the only
+       thing the two have in common. parts.rnd means "a real part with a full
+       traveler that is not a season deliverable": an evidence gate, a cure
+       hold, a blocker, a signature. Nothing in this collection has any of
+       those, nothing here is ever read by inSeason(), and no document here
+       points at a part. See app/DESIGN-NOTES.md.
+
+       delete is isLead() || mine() — the shape stock keeps, and NOT the wider
+       onRoster() that items and lots were opened to above. That widening was
+       for shared shop consumables, where "only whoever logged the jug may
+       delete it" made cleanup a lead-only chore. A coupon is the opposite: it
+       is somebody's experiment, and its result is data. mine() is what keeps
+       the bulk-create Undo honest — Undo means delete, and a lead-only delete
+       makes it a LYING button, since the rows vanish locally, the server
+       refuses, and the next snapshot puts them back. createdBy is stamped at
+       creation by both create paths, so this is always checkable. */
+    match /rnd/{id}        { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+
     // Notifications: any member can create one (for a teammate); you can only
     // read/update/delete notifications addressed to YOU (a lead can prune any).
     // The app subscribes with where('to','==', myEmail), which matches the read rule.

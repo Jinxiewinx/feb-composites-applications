@@ -2085,6 +2085,108 @@
      it 784px at 1440 and 490px at 1100, which eight columns and a material
      name cannot live in — so it overflowed sideways at the design width, and
      every fix available amounted to hiding the columns people came to fill. */
+  /* ---- the R&D bench ----
+     An index strip ABOVE a full-width sheet, not a pane beside it, for exactly
+     the reason written on the receiving desk above: a split leaves the grid
+     490px at 1100, and the coupon grid carries MORE columns than receiving's
+     eight, so it fails harder here. App-only classes, tokens only — nothing in
+     this family is lifted into 06 Design System, which is still an open
+     decision and must not be resolved by accident. */
+  .rdindex { padding: 6px 8px; }
+  .rdsheet { margin-top: 10px; }
+  .rdempty { max-width: 62ch; }
+  .rdempty p { color: var(--muted); font-size: 13.5px; }
+  .rdrow { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+    border-radius: var(--radius); border: 1px solid transparent;
+    transition: background var(--t-fast) var(--ease); }
+  .rdrow:hover { background: var(--hover); border-color: var(--line); }
+  .rdrow.on { background: var(--hover); border-color: var(--border-2); }
+  /* One indent, and only one: a batch sits under its project and nothing sits
+     under a batch. The rule is enforced in rnd.js; this is it made visible. */
+  .rdchild { margin-left: 20px; }
+  .rdchild::before { content: "└"; color: var(--muted); font-size: 12px; margin-right: -4px; }
+  .rd-open { all: unset; cursor: pointer; font-weight: 600; font-size: 13.5px;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px; }
+  .rd-open:hover { color: var(--accent); }
+  .rd-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  /* `all: unset` throws away the tap-target floor, the same trap .lc-open and
+     .sl-open carry a note about. */
+  @media (pointer: coarse) { .rd-open { min-height: 40px; } .rdrow { min-height: 44px; } }
+  /* A fold built from a class and a real button, NOT <details> — a closed
+     <details> skips painting and vanishes from print, which is why the house
+     rule forbids it and why .wosec.folded looks the way it does. */
+  .rdparts { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+  .rdparts-hd { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; font-size: 12px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); }
+  .rdparts-hd:hover { color: var(--ink); }
+  .rdparts-hd:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  @media (pointer: coarse) { .rdparts-hd { min-height: 40px; } }
+  .rdparts.folded .rdparts-body { display: none; }
+  .rdparts p { margin: 2px 8px 6px; }
+  .rdhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rdhead h2 { margin: 0; }
+  .rdq { margin: 4px 0 10px; font-size: 13.5px; color: var(--muted); }
+  .rdn { width: 62px; }
+  /* The study's own status, on its head rather than in the grid — it describes
+     the study, not any coupon in it. Sized to its longest value so the head
+     does not reflow when it changes. */
+  .rdstat { width: 104px; }
+  .rdnorows { margin: 10px 2px; }
+  .rdcols, .rdcmp { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .rdcols.folded .rdcols-body, .rdcmp.folded .rdcmp-body { display: none; }
+  .rdcol { display: flex; align-items: center; gap: 8px; padding: 4px 8px; flex-wrap: wrap; }
+  .rdcolnew input, .rdcolnew select { min-width: 0; }
+  .rdunit { width: 68px; }
+  .rdcols p { margin: 2px 8px 6px; }
+
+  /* The coupon grid. table-layout: fixed is what makes a DYNAMIC column set
+     work without computing track sizes into the markup — the spine takes fixed
+     widths and the user columns share what is left.
+
+     Season's discipline, restated for a table: exactly ONE column may shrink to
+     nothing, and it is notes, not the label. Nothing scrolls sideways. */
+  .rdgridwrap { overflow-x: auto; }
+  table.sub.rdgrid { table-layout: fixed; }
+  .rdgrid th, .rdgrid td { vertical-align: middle; }
+  .rdgrid input, .rdgrid select { width: 100%; min-width: 0; box-sizing: border-box; }
+  .rdgrid .rdc-label { width: 84px; }
+  .rdgrid .rdc-batch { width: 122px; }
+  .rdgrid .rdc-status { width: 116px; }
+  .rdgrid .rdc-user { width: 108px; }
+  .rdgrid .rdc-notes { width: auto; min-width: 0; }
+  .rdgrid .rdc-act { width: 34px; text-align: right; }
+  /* A result column is what the study is FOR. A hairline on its leading edge
+     separates measured from chosen without spending a colour on it — statuses
+     already own colour in this app. */
+  .rdgrid .rdc-result { box-shadow: inset 1px 0 0 var(--line); }
+  .rdgrid tr:focus-within td { background: var(--hover); }
+  .rdgrid .rowact { padding: 2px 5px; color: var(--muted); }
+  .rdgrid .rowact:hover { color: var(--bad); }
+  .rdcmptable td { font-variant-numeric: tabular-nums; }
+  .rdcmp .toolbar { margin: 4px 0; }
+
+  /* Below the desktop band each row becomes a card, the receiving idiom: the
+     table parts go display:block, the head is hidden, and every cell prints its
+     column name ABOVE the field from data-label. Never beside it — a 96px label
+     gutter is ruinous at 393px, which is already written down on .rxgrid. */
+  @media (max-width: 1200px) {
+    .rdgrid, .rdgrid thead, .rdgrid tbody, .rdgrid tr, .rdgrid td { display: block; width: auto; }
+    .rdgrid thead { display: none; }
+    .rdgrid tr { position: relative; margin-bottom: 8px; padding: 8px 10px 10px;
+      border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); box-shadow: var(--shadow); }
+    .rdgrid td { border-top: 0; padding: 4px 0; }
+    .rdgrid td::before { content: attr(data-label); display: block; font-size: 11px;
+      letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+    /* The card's title, so it needs no label of its own. */
+    .rdgrid .rdc-label { font-size: 15px; padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+    .rdgrid .rdc-label::before { content: none; }
+    .rdgrid .rdc-result { box-shadow: none; }
+    .rdgrid .rdc-act { position: absolute; top: 6px; right: 8px; padding: 0; }
+    .rdgrid .rdc-act::before { content: none; }
+  }
+
   .rxsheet { margin-top: 10px; }
   .rxindex .toolbar { margin: 0; }
   .rxindex-body { max-height: 30vh; overflow: auto; margin-top: 8px; }
@@ -3556,6 +3658,7 @@
 <script src="inventory.js"></script>
 <script src="receiving.js"></script>
 <script src="ehsimport.js"></script>
+<script src="rnd.js"></script>
 <script src="documents.js"></script>
 <script src="people.js"></script>
 <script src="reports.js"></script>

@@ -81,7 +81,7 @@ console.log("new collections (member CRUD, lead-only delete — inventory except
    Select… mass-delete); their delete coverage lives in the inventory block
    further down. */
 for (const coll of ["parts", "projects", "schedule", "budget", "stock", "stackplans",
-                    "molds", "items", "lots"]) {
+                    "molds", "items", "lots", "rnd"]) {
   const anyDelete = coll === "items" || coll === "lots";
   await expect(200, "member", "PATCH", `/${coll}/X-001`, { id: S("X-001"), name: S("t") });
   await expect(200, "member", "GET", `/${coll}/X-001`);
@@ -163,6 +163,21 @@ await expect(200, "owner", "PATCH", "/stock/BRD-SN6-901", { id: S("BRD-SN6-901")
 await expect(403, "member", "DELETE", "/stock/BRD-SN6-901");  // someone else's board: refused
 await expect(200, "member", "DELETE", "/stock/BRD-SN6-900");  // my own: allowed
 await expect(200, "lead",   "DELETE", "/stock/BRD-SN6-901");
+/* rnd keeps the undo shape too, and NOT the wider onRoster() its multi-class
+   siblings items and lots were opened to. A coupon is somebody's experiment and
+   its result is data, which is the opposite of a shared jug of resin — but the
+   bulk-create Undo still has to be able to delete what it just made, or it is a
+   button that lies: the rows vanish locally, the server refuses, and the next
+   snapshot puts them back. */
+await expect(200, "owner", "PATCH", "/rnd/CPN-SN6-900", { id: S("CPN-SN6-900"), cls: S("CPN"), createdBy: S("member@feb.test") });
+await expect(200, "owner", "PATCH", "/rnd/CPN-SN6-901", { id: S("CPN-SN6-901"), cls: S("CPN"), createdBy: S("lead@feb.test") });
+await expect(403, "member", "DELETE", "/rnd/CPN-SN6-901");  // someone else's coupon: refused
+await expect(200, "member", "DELETE", "/rnd/CPN-SN6-900");  // the one Undo just created: allowed
+await expect(200, "lead",   "DELETE", "/rnd/CPN-SN6-901");
+/* A study is the same rule — it is the thing that holds the experiment. */
+await expect(200, "owner", "PATCH", "/rnd/RDS-SN6-900", { id: S("RDS-SN6-900"), cls: S("RDS"), createdBy: S("member@feb.test") });
+await expect(200, "member", "DELETE", "/rnd/RDS-SN6-900");
+
 /* Collections that have no undo keep the old rule. */
 await expect(200, "owner", "PATCH", "/parts/P-SN6-900", { id: S("P-SN6-900"), createdBy: S("member@feb.test") });
 await expect(403, "member", "DELETE", "/parts/P-SN6-900");
