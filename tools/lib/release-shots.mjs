@@ -35,64 +35,65 @@
  *   node tools/shoot_release.mjs --version 3.0.0
  */
 
-/* A plausible SN6 season: three subteams, every stage represented, some late,
-   some undated, one still unnamed. Values are the real enums from parts.js. */
-const SEASON = `
-  const mk = (name, sub, cad, mold, layup, due) => ({
-    id: "P-SN6-" + String(900 + (DB.parts.length % 90)).padStart(3, "0") + "-" + DB.parts.length,
-    partName: name, subteam: sub, layupType: "MOLD INFUSION",
-    cadProgress: cad, moldProgress: mold, layupProgress: layup,
-    layupDeadline: due, retro: false, rnd: false,
-    moldEngineer: "", manufacturingEngineer: "", layupStack: [], commentLog: [],
-  });
-  const D = (n) => { const d = new Date(Date.now() + n * 86400000); return d.toISOString().slice(0, 10); };
-  DB.parts.push(
-    mk("NOSECONE INNER",     "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-4)),
-    mk("UNDERTRAY MAIN",     "AERO",      "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(3)),
-    mk("UNDERTRAY DIFFUSER", "AERO",      "Mold CAD/CAM Done", "Machining",       "Not Started",    D(9)),
-    mk("SIDEPOD LEFT",       "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
-    mk("SIDEPOD RIGHT",      "AERO",      "Part CAD Done",     "Not Started",     "Not Started",    D(16)),
-    mk("FRONT WING MAIN",    "AERO",      "Mold CAD/CAM Done", "Ready For Layup", "Layup Complete", D(-21)),
-    mk("FRONT WING FLAP",    "AERO",      "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-2)),
-    mk("REAR WING MAIN",     "AERO",      "Part CAD Done",     "Machining",       "Not Started",    D(24)),
-    mk("REAR WING ENDPLATE", "AERO",      "Not Started",       "Not Started",     "Not Started",    ""),
-    mk("FLOOR PAN",          "AUTO-MECH", "Mold CAD/CAM Done", "N/A (Flat)",      "Layup Complete", D(-30)),
-    mk("FIREWALL",           "AUTO-MECH", "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(11)),
-    mk("SEAT PAN",           "AUTO-MECH", "Mold CAD/CAM Done", "Sealed",          "Polished",       D(-45)),
-    mk("BATTERY BOX LID",    "AUTO-MECH", "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(6)),
-    mk("BATTERY BOX SHELL",  "AUTO-MECH", "Part CAD Done",     "Machining",       "Not Started",    D(13)),
-    mk("IMPACT ATTENUATOR",  "AUTO-MECH", "Mold CAD/CAM Done", "Ready For Layup", "In Layup",       D(1)),
-    mk("STEERING SHROUD",    "AUTO-MECH", "Not Started",       "Not Started",     "Not Started",    ""),
-    mk("MONOCOQUE UPPER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "In Layup",       D(-7)),
-    mk("MONOCOQUE LOWER",    "BERGO",     "Mold CAD/CAM Done", "Sealed",          "Layup Complete", D(-14)),
-    mk("BULKHEAD FRONT",     "BERGO",     "Mold CAD/CAM Done", "Machine Complete","Not Started",    D(5)),
-    mk("BULKHEAD REAR",      "BERGO",     "Part CAD Done",     "Machining",       "Not Started",    D(19)),
-    mk("SUSPENSION A-ARM",   "BERGO",     "Part CAD Done",     "N/A (Flat)",      "Not Started",    D(27)),
-    mk("PEDAL BOX",          "BERGO",     "Not Started",       "Not Started",     "Not Started",    D(34)),
-  );
+/* The Flammables Cabinet as it actually stands after the EH&S import: the
+   real material names and container counts from the RSS export, each with a
+   plausible UC tag. Seeded fresh because the standing fixtures hold five
+   lots, and a picture about fifty containers folding into eight lines needs
+   the fifty. */
+const CABINET = `
+  DB.items.push({ id: "BIN-SN6-950", cls: "BIN", name: "Flammables Cabinet", stage: "Active",
+    site: "Flammables cabinet", locKind: "cabinet", flam: "Yes",
+    walkedAt: new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10), walkedBy: "Simon Starbuck" });
+  let tag = 0x243E80;
+  const jug = (name, cls, role, matKey, n, open) => {
+    for (let i = 0; i < n; i++) DB.lots.push({
+      id: (cls === "RSN" ? "RSN" : "CON") + "-SN6-" + (700 + DB.lots.length),
+      cls, name, role, matKey, stage: i < open ? "Open" : "Sealed",
+      location: "BIN-SN6-950", receivedOn: "2025-12-06",
+      ehsBarcode: "CA00000000000000" + (tag++).toString(16).toUpperCase().padStart(8, "0"),
+    });
+  };
+  jug("IN2 Epoxy Infusion Resin",        "RSN", "resin",    "IN2",      3, 1);
+  jug("AT30 SLOW EPOXY HARDENER",        "RSN", "hardener", "AT30",    10, 2);
+  jug("WEST SYSTEM 209 Extra Slow Hardener", "RSN", "hardener", "WEST-209", 4, 0);
+  jug("Acetone",                         "CON", "",         "ACETONE",  1, 1);
+  jug("91% Isopropyl Alcohol",           "CON", "",         "IPA-91",   3, 0);
+  jug("3M Bondo lightweight body filler","CON", "",         "BONDO",    5, 0);
+  jug("Vacuum pump oil",                 "CON", "",         "PUMP-OIL", 3, 1);
+  jug("frekote 700-nc",                  "CON", "",         "FREKOTE",  1, 1);
+  jug("REXCO FORMULA FIVE Mold Release Wax", "CON", "",     "F5-WAX",   1, 0);
 `;
 
 export const RELEASE_SHOTS = [
-  /* ONE picture this time, and that is the honest number. Two is the cap, not
-     the target, and the only thing that changed is the blueprint — reshipping
-     last release's dashboard shot beside it would pad the post with a picture
-     the team has already seen and read past. */
   {
-    id: "blueprint",
-    /* Tall enough for all twenty-six seeded parts plus the footer note. One per
-       line costs vertical space; a shot that crops the list mid-season is
-       arguing the opposite of its own caption. */
-    vh: 1250,
-    js: SEASON + `
-      view = { ...view, tab: "season", mode: "list", id: null, seasonSub: "",
-               seasonQ: "", seasonSort: null, seasonDir: null };
+    id: "flam-cabinet",
+    /* Tall enough for the header card, both chemical sections with the AT30
+       group open, and a few singleton rows — the fold and the tag codes are
+       the whole story, so both have to be in frame. */
+    vh: 1150,
+    js: CABINET + `
+      view = { ...view, tab: "inventory", invView: "map", mode: "detail", id: "BIN-SN6-950",
+               edit: false, invFlag: "", invLotOpen: { "m:at30": true } };
       render();`,
-    title: "The season, in columns",
-    note: "One part per line, and every line on the same eight tracks — so subteam sits under " +
-          "subteam and a deadline under a deadline, and you read down a column instead of across " +
-          "a line. Two of those columns are new: LAYUP TYPE and MOLD LOC., which used to mean " +
-          "opening the part. Clicking a name still opens it, and that is still where you change " +
-          "anything.",
+    title: "The Flammables Cabinet, grouped",
+    note: "Every chemical EH&S tagged is in the app now, and identical containers fold into one " +
+          "line — ten AT30 jugs is one row with the count, the open/sealed split and the mix " +
+          "ratio on it. Opened, each jug shows its own UC tag code, which is how you tell jug " +
+          "six from jug seven while holding one. Scan the sticker with the in-app camera " +
+          "(iPhones included now) and the record opens.",
+  },
+  {
+    id: "materials-grouped",
+    vh: 900,
+    js: CABINET + `
+      view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null,
+               q: "", fSub: "", fStatus: "", lotsFlat: false, invLotOpen: {} };
+      render();`,
+    title: "Materials, by material",
+    note: "The Materials list counts containers AND kinds, one card per class. A material knows " +
+          "its paperwork now — mix ratio and the TDS button sit right on the line, read from the " +
+          "datasheets in Documents. Select… deletes many records in one confirmed go, and " +
+          "anyone can.",
   },
 ];
 

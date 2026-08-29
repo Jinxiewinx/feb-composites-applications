@@ -31,9 +31,11 @@ var APP_VERSION = "3.1.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release; three to six lines, or nobody reads it. */
 var WHATS_NEW = [
-  "The Season tab is one part per line again, and the lines now sit in real columns — subteam under subteam, deadline under deadline, all the way down. It went out in v3.0.0 two abreast, which fitted more parts and made every one of them harder to read, because no two lines put the same field in the same place. Half as many parts, in columns you can scan, is the better read.",
-  "The width one line got back paid for two more fields on it: LAYUP TYPE and MOLD LOC. So \"which of these are wet layups\" and \"what is still sitting in Etcheverry\" are now questions you answer by looking down a column, instead of opening eleven parts. There is a row of column names across the top, and both new columns drop out on a narrow screen before anything else does.",
-  "On a laptop or a tablet the line folds into two rows, and those two rows line up now too — the subteam and the C/M/L marks used to land in a different place on every row, and on the narrowest screens the subteam printed underneath the stage rail.",
+  "Chemicals are in the app now, under the barcode EH&S already put on them. Every jug and can at RFS wears a UC sticker, and that sticker is how the app knows the container — scan it with the in-app camera and the record opens, same as our own QR labels. No second sticker on anything. This works on iPhones too now: the first scan says \"loading the scanner\" for a few seconds, and every scan after that is instant.",
+  "The Flammables Cabinet page stopped being fifty identical rows. Each kind of thing is its own card, and identical containers fold into one line — AT30 SLOW EPOXY HARDENER ×10, with how many are open, the soonest expiry and the mix ratio on the line. Open it and every jug is listed with its own tag code, which is how you tell jug six from jug seven while holding one of them.",
+  "A material knows its paperwork: TDS and SDS buttons, mix ratio and shelf life sit right on a resin or consumable's page, read from the datasheets in Documents — no more walking to a laptop to check whether it's 100:30.",
+  "Receiving a delivery captures the EH&S tag too — there's a tag column on the desk with a camera button that stays open across a multi-jug line, and scanning an unknown tag anywhere offers to log the container for you.",
+  "Select… on the Items and Materials lists deletes many records in one confirmed go, and anyone can do it — inventory is shared property. Also: resin and hardener on the same shelf no longer warns; we store them together, same as EH&S filed them.",
 ];
 
 /* ---------- config/release ----------
