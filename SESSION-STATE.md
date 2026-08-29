@@ -30,13 +30,6 @@ em-dash sweep. No process rule or number changed; the history rows say so.
 Hosting deploy carries the refreshed docs/ copies live. Approval tables still
 need real signatures.
 
-**Known doc lag from the merge**: the R&D bench (v4.0.0, done on main in
-parallel) renamed coupons to `CPN-SN6-###` under studies `RDS-SN6-###`, and a
-coupon label now CAN carry a QR. CS-001, CS-002 and CS-013 (and the CS-013
-record-graph figure) still describe the old `PNL-SNx-###-Cnn` spelling and the
-no-QR rule. That is a revision under CS-000 §7.2 for a future session, not a
-blocker.
-
 
 **v4.0.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the R&D bench and the boot
 gate. Major by the rubric twice over: a new top-level area, and the app no
