@@ -20,6 +20,30 @@ to learn**, not about API compatibility:
 
 ---
 
+## v3.2.0 — 2026-08-28
+
+- Release prep for v3.2.0: WHATS_NEW and the two pictures
+- Inventory sections become their own cards; phones put the name first
+- EH&S import: per-row unticks, and the location sections get room to breathe
+- Inventory round 2 lands whole: scan-into-field, and the materials table
+- Inventory Select…: mass delete for jugs, open to the whole roster
+- Inventory round 2, first landing: grouped containers, sections, co-storage, iOS zoom
+
+<details><summary>8 more</summary>
+
+- EH&S barcodes, phase 4: the RSS export imports, and reconciliation exports back
+- EH&S barcodes, phase 3: iPhones get camera scanning through vendored zxing-wasm
+- SESSION-STATE: EH&S phases 1-2 live and verified; 3-4 paused per Simon, handoff posted in chat
+- EH&S barcodes, phase 2: the scanner reads the university's tag
+- EH&S barcodes, phase 1: the UC tag becomes a second identity for chemicals
+- Step buy-off cluster stops poking into the landscape safe-area inset
+- The mold's stage becomes a stepper, in the Parts idiom
+- SESSION-STATE: v3.1.0 is live, and one Announce covers both releases
+
+</details>
+
+---
+
 ## v3.1.0 — 2026-08-27
 
 - What's New: v3.0.0 was an hour ago, not last week
