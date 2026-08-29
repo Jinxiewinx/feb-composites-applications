@@ -193,7 +193,7 @@ tests) the shape is `CA` + sixteen `0` + six hex, and only those six move.
 The linear formats stay until someone walks the shelves — one sheet of tags
 is not a survey.
 
-**v4.1.0 acted on that photo** (the two sessions crossed; this half merged on
+**v4.1.0 IS TAGGED, PUSHED AND LIVE** (2026-08-29) and acted on that photo (the two sessions crossed; this half merged on
 top). `invEhsShort` no longer shows the last six: it shows **the twelve
 characters reprinted down the tag's edge, in the label's four-character
 groups**, because a row is read while comparing it against a sticker and
