@@ -2011,6 +2011,10 @@
   .ehs-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted);
     background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
   .invrow .bad { color: var(--bad); font-weight: 600; }
+  /* Select… (mass delete) — same look as the WO picker. */
+  .invrow.picked, table.list tr.picked { background: var(--accent-soft); }
+  .invrow input[type="checkbox"], table.list .pickcell input { accent-color: var(--accent); flex: none; }
+  table.list .pickcell { width: 34px; }
 
   /* ---- the receiving desk ---- */
   /* The sheet is the budget line-item grid one size up, and wears the same

@@ -31,10 +31,13 @@ buttons stopPropagation — the old "no stopPropagation" test was rewritten
 deliberately), the resin+hardener warning REMOVED code-only (CS-011 §6
 still says otherwise on purpose — Simon revises the standard himself at
 Rev D; do not edit it from a session), and the iOS keyboard zoom fix
-(viewport maximum-scale=1 + 16px coarse-pointer inputs). Still to land from
-the plan: B mass delete (view.shopPick per the WO pattern; NOTE Simon's
-call: EVERYONE can delete anything in inventory — needs the firestore.rules
-lots/items delete change, rules deploy ALONE and FIRST), C scan-into-field
+(viewport maximum-scale=1 + 16px coarse-pointer inputs). Landed since: B mass
+delete (Select… on Items/Materials lists, view.shopPick, open to every
+member; firestore.rules items/lots delete moved from isLead()||mine() to
+onRoster() — RULES DEPLOYED; stock keeps the undo shape; occupied BINs are
+never deleted; cure/panel refs keep deleted ids as text on purpose —
+history is not rewritten; budget lines drop deleted lotRefs). Still to land:
+C scan-into-field
 for ehsBarcode (updShop("...","ehsBarcode",code) already does the dupe
 refusal), E materials.js knowledge table (matKey aliases + datasheet paths
 from docs/manifest.json + ratio/shelf-life ONLY from bundled TDS PDFs, cite

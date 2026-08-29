@@ -5072,6 +5072,61 @@ await t("the Materials list groups by default, goes flat on search or by toggle"
   view.q = ""; DB.lots = [];
 });
 
+console.log("Select… on inventory (the WO picker, for jugs):");
+
+await t("pick mode is a mode: null means browsing, {} means picking nothing yet", () => {
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null, q: "", fSub: "", fStatus: "", shopPick: null };
+  assert(!shopPickOn(), "not picking");
+  startShopPick();
+  assert(shopPickOn() && shopPickedIds().length === 0, "picking, nothing selected");
+  toggleShopPick("RSN-SN6-001"); toggleShopPick("CON-SN6-001"); toggleShopPick("RSN-SN6-001");
+  assert(shopPickedIds().join(",") === "CON-SN6-001", "toggle on, toggle off");
+  cancelShopPick();
+  assert(!shopPickOn(), "cancel leaves the mode entirely");
+});
+
+await t("All selects only what the filter shows, and a group ticks its members", () => {
+  DB.lots = [
+    { id: "RSN-SN6-080", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "RSN-SN6-081", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "CON-SN6-080", cls: "CON", name: "Acetone", stage: "Sealed" },
+  ];
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", q: "", fSub: "RSN", fStatus: "", shopPick: {}, invLotOpen: {} };
+  shopPickAll("lots", true);
+  assert(shopPickedIds().sort().join(",") === "RSN-SN6-080,RSN-SN6-081",
+    "the consumable the class filter hides is not quietly selected");
+  view.fSub = "";
+  shopPickAll("lots", false);
+  shopPickGroup(lotGroupKey(DB.lots[0]));
+  assert(shopPickedIds().sort().join(",") === "RSN-SN6-080,RSN-SN6-081", "the group box is all its containers");
+  shopPickGroup(lotGroupKey(DB.lots[0]));
+  assert(shopPickedIds().length === 0, "a full set unticks whole");
+  view.shopPick = null; DB.lots = [];
+});
+
+await t("deleting spares occupied shelves, keeps signed history, trims purchase refs", () => {
+  DB.items = [
+    { id: "BIN-SN6-060", cls: "BIN", name: "Full shelf", stage: "Active" },
+    { id: "BIN-SN6-061", cls: "BIN", name: "Empty shelf", stage: "Active" },
+  ];
+  DB.lots = [
+    { id: "RSN-SN6-085", cls: "RSN", name: "AT30", stage: "Sealed", location: "BIN-SN6-060" },
+    { id: "RSN-SN6-086", cls: "RSN", name: "AT30", stage: "Sealed" },
+  ];
+  DB.workOrders = [{ id: "WO-SN6-500", status: "Complete", cure: { lotResin: "RSN-SN6-086" }, steps: [] }];
+  DB.budget = [{ id: "BUY-SN6-500", lines: [{ lineId: "L1", desc: "AT30", lotRefs: ["RSN-SN6-086", "RSN-SN6-085"] }] }];
+  const d = shopDeletionSet("items", ["BIN-SN6-060", "BIN-SN6-061"]);
+  assert(d.take.length === 1 && d.take[0].id === "BIN-SN6-061", "the shelf still holding a jug is left alone");
+  assert(d.keptBins.length === 1 && shopDeletionSummary(d, "items").includes("still holds 1"),
+    "and the confirm says which and why");
+  const dl = shopDeletionSet("lots", ["RSN-SN6-086"]);
+  assert(dl.referenced === 1, "the cure pointing at it is counted");
+  assert(dl.budgets.length === 1, "so is the purchase line");
+  assert(shopDeletionSummary(dl, "lots").includes("keep the id as text"),
+    "signed records are not rewritten, and the confirm says so");
+  DB.items = []; DB.lots = []; DB.workOrders = []; DB.budget = [];
+});
+
 console.log("the scan resolution chain (FEB grammar first, then the tag registry):");
 
 await t("a scan resolves FEB codes as before, and an EH&S tag to the record wearing it", () => {
@@ -6822,10 +6877,12 @@ await t("a plan pointing at a deleted mold can still be adopted", async () => {
   assert(!planIsOrphan(DB.stackplans[0]), "so it stops being an orphan");
 });
 
-await t("a lead can delete a shop record without hunting for edit mode first", async () => {
+await t("anyone can delete an inventory record from read mode, one click and one confirm", async () => {
   // The bug as reported: an item could be retired but "not deleted" — the
   // Delete button existed but hid behind Edit. It must be one click from the
-  // record, for a lead, in read mode.
+  // record, in read mode. Since 2026-08-28 that includes MEMBERS for items
+  // and lots (the rules opened inventory deletes to the roster); molds stay
+  // lead-only and keep the isLead() gate.
   DB.items = [{ id: "JIG-SN6-001", cls: "JIG", name: "trim jig", stage: "Retired", createdBy: "a@b.c" }];
   view = { ...view, tab: "items", mode: "detail", id: "JIG-SN6-001", edit: false };
   render();
@@ -6833,9 +6890,10 @@ await t("a lead can delete a shop record without hunting for edit mode first", a
   const wasLead = fb.roster.role;
   fb.roster = { ...fb.roster, role: "member" };
   render();
-  assert(!main.innerHTML.includes("delShopRec"), "and absent for a member (rules deny it server-side anyway)");
+  assert(main.innerHTML.includes("delShopRec"), "and for a member — the rules allow inventory deletes now");
   fb.roster = { ...fb.roster, role: wasLead };
   delShopRec("items", "JIG-SN6-001"); confirmProceed();
+  await new Promise(r => setTimeout(r, 0));   // the bulk path awaits delMany before splicing
   assert(DB.items.length === 0, "deleting removes it locally");
   assert(calls.some(c => c[0] === "del" && c[1] === "items" && c[2] === "JIG-SN6-001"), "and server-side");
 });

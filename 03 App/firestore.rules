@@ -79,8 +79,13 @@ service cloud.firestore {
        Both multi-class collections carry a `cls` field; same access shape as
        every other record collection. */
     match /molds/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
-    match /items/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
-    match /lots/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    /* items and lots delete is open to ANY roster member, not isLead()||mine()
+       — Simon's call (2026-08-28) for the inventory Select…/mass-delete: shop
+       consumables are shared property, and "only whoever logged the jug can
+       delete it" made cleanup after the EH&S import a lead-only chore. Molds
+       stay lead-only: a mold is months of machining, not a jug. */
+    match /items/{id}      { allow read: if reader(); allow create, update: if onRoster(); allow delete: if onRoster(); }
+    match /lots/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if onRoster(); }
 
     // Notifications: any member can create one (for a teammate); you can only
     // read/update/delete notifications addressed to YOU (a lead can prune any).

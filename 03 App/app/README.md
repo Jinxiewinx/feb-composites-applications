@@ -702,6 +702,16 @@ Items-list and Materials-list toggles keep the flat tables; the Materials list
 groups the same way by default, with a Grouped/Flat switch, and drops to flat
 rows while searching.
 
+**Select…** on the Items and Materials lists is the work-order picker for
+inventory: tick rows (a group's box is all of its containers, and All selects
+only what the current filter shows), then one Delete with one confirm. Open to
+every member, not just leads — inventory is shared property, and the rules
+changed to match on 2026-08-28. The confirm is honest about the blast radius:
+an occupied storage location is left alone entirely (empty it first), a lot a
+signed cure or panel references is deleted with the pointer keeping the id as
+text (history does not get rewritten), and purchases drop the deleted
+containers from their received lines. There is no undo.
+
 #### Boards
 
 ![Boards: the tooling rack](../design/inventory-boards-mockup-20260825.png)

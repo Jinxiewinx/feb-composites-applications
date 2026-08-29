@@ -614,9 +614,14 @@ function invToolbar(active) {
 }
 
 /* ---------- one location's contents ---------- */
-function invRow(coll, o, pill) {
+function invRow(coll, o, pill, opts) {
   const tab = tabForId(o.id) || "inventory";
-  return `<div class="pmini invrow" onclick="openRecord('${esc(tab)}','${esc(o.id)}')">
+  const pick = !!(opts && opts.pick);
+  const ticked = pick && !!(view.shopPick || {})[o.id];
+  return `<div class="pmini invrow ${ticked ? "picked" : ""}" ${pick ? `aria-selected="${ticked}"` : ""}
+      onclick="${pick ? `toggleShopPick('${esc(o.id)}')` : `openRecord('${esc(tab)}','${esc(o.id)}')`}">
+    ${pick ? `<input type="checkbox" ${ticked ? "checked" : ""} aria-label="Select ${esc(o.id)}"
+      onclick="event.stopPropagation();toggleShopPick('${esc(o.id)}')">` : ""}
     <span class="pm-name">${esc(o.name || o.partName || o.label || o.id)}</span>
     <span class="tny muted">${esc(o.id)}</span>
     ${/* Prices ride along on the shelf view so browsing the map teaches what
@@ -687,8 +692,13 @@ function toggleLotGroup(key) {
    many do we have" is the question the line exists to answer. */
 function invGroupRow(g, opts) {
   const o = opts || {};
-  const open = invLotOpenState(g.key);
+  const open = invLotOpenState(g.key) || !!o.pick;   // picking auto-opens: you tick what you can see
   const n = g.members.length;
+  const pickedAll = o.pick && g.members.every(m => (view.shopPick || {})[m.id]);
+  const pickedSome = o.pick && !pickedAll && g.members.some(m => (view.shopPick || {})[m.id]);
+  const groupBox = o.pick ? `<input type="checkbox" ${pickedAll ? "checked" : ""}
+      aria-label="Select all ${n} ${esc(g.name)}" ${pickedSome ? 'data-mixed="1"' : ""}
+      onclick="event.stopPropagation();shopPickGroup('${esc(g.key)}')">` : "";
   const byStage = new Map();
   for (const m of g.members) byStage.set(m.stage || "—", (byStage.get(m.stage || "—") || 0) + 1);
   const states = [...byStage.entries()].map(([s, c]) => `${c} ${String(s).toLowerCase()}`).join(" · ");
@@ -702,6 +712,7 @@ function invGroupRow(g, opts) {
   return `<div class="pmini invrow invgrp" role="button" tabindex="0" aria-expanded="${open}"
       onclick="toggleLotGroup('${esc(g.key)}')"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLotGroup('${esc(g.key)}')}">
+    ${groupBox}
     <span class="grp-caret">${open ? "▾" : "▸"}</span>
     <span class="pm-name">${esc(g.name)} <b class="grp-n">×${n}</b></span>
     ${flam ? `<span class="kind lc-flam" title="Flammable">◆</span>` : ""}
@@ -720,8 +731,13 @@ function invGroupRow(g, opts) {
    second fact. */
 function invMemberRow(o, opts) {
   const loc = opts && opts.showLoc;
+  const pick = !!(opts && opts.pick);
+  const ticked = pick && !!(view.shopPick || {})[o.id];
   const where = loc ? shopById("items", o.location || "") : null;
-  return `<div class="pmini invrow invmem" onclick="openRecord('lots','${esc(o.id)}')">
+  return `<div class="pmini invrow invmem ${ticked ? "picked" : ""}" ${pick ? `aria-selected="${ticked}"` : ""}
+      onclick="${pick ? `toggleShopPick('${esc(o.id)}')` : `openRecord('lots','${esc(o.id)}')`}">
+    ${pick ? `<input type="checkbox" ${ticked ? "checked" : ""} aria-label="Select ${esc(o.id)}"
+      onclick="event.stopPropagation();toggleShopPick('${esc(o.id)}')">` : ""}
     <span class="pm-name tny">${esc(o.id)}</span>
     ${loc ? `<span class="tny muted">${where ? esc(where.name || where.id) : "(no location)"}</span>` : ""}
     ${o.openedOn ? `<span class="tny muted">opened ${esc(o.openedOn)}</span>` : ""}
@@ -736,7 +752,7 @@ function invMemberRow(o, opts) {
    plain row — nothing changes for the mold release that exists once. */
 function invLotList(arr, opts) {
   return groupLots(arr).map(g => g.members.length === 1
-    ? invRow("lots", g.members[0], invLotPill(g.members[0]))
+    ? invRow("lots", g.members[0], invLotPill(g.members[0]), opts)
     : invGroupRow(g, opts)).join("");
 }
 
