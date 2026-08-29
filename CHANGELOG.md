@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v4.1.1 — 2026-08-29
+
+- The EH&S row's last group carries the weight, settled against 627 real tags
+- SESSION-STATE: v4.1.0 is cut, pushed and live
+- The v4.1.0 release picture
+
+---
+
 ## v4.1.0 — 2026-08-29
 
 - Inventory reads an EH&S tag the way the sticker prints it
