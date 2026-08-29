@@ -21,19 +21,30 @@ git log -p --follow -- SESSION-STATE.md
 ## Now
 
 
-**THE R&D TAB IS BUILT AND NOT DEPLOYED, AND IT NEEDS A RULES DEPLOY.** A new
-`rnd` collection, multi-class on `cls` like items and lots: `RDS-SN6-###` is a
-study, `CPN-SN6-###` is a coupon. Twelfth visible tab, last in Build.
-`firestore.rules` gained a `match /rnd/{id}` block — **so this is NOT a
-hosting-only deploy**; rules first, then hosting, and say so in the report.
+**v4.0.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the R&D bench and the boot
+gate. Major by the rubric twice over: a new top-level area, and the app no
+longer opens by itself. **`firestore.rules` was deployed separately and first**,
+alone, before hosting; the diff was purely additive (one `match /rnd/{id}`
+block, 24 insertions, no existing collection touched), so an old client under
+the new rules was never at risk. Hosting verified by fetching `core.js` and
+`rnd.js` off the host — `APP_VERSION = "4.0.0"`, zero `SPLASH_FLOOR`, `rnd.js`
+200.
 
-What is done: studies (folder / swept test / project-of-batches, all one record
-shape), per-study columns tagged input or result, the coupon grid with
-bulk-create and undo, fill-down paste, and the compare strip. What is NOT done:
-materials inheritance is in the model (`rdEff`, `RD_INHERITS`, study
-`defaults`) but has no UI yet, and coupons carry no labels/QR and no photos.
-Plan at `C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`,
-stages 4–6.
+**Nobody has been told, and per Simon that is fine** — he is not posting much in
+`#composites`, so the printed note is his to use or ignore, and this is no
+longer tracked here as an outstanding action. The one thing that still does
+something: `⋯ → Announce this release`, pressed by a lead standing in v4.0.0,
+gives anyone on an older build a reload prompt. Untouched for v3.0.0 through
+v4.0.0; that one press covers the newest only.
+
+**The R&D bench**: a new `rnd` collection, multi-class on `cls` like items and
+lots — `RDS-SN6-###` a study, `CPN-SN6-###` a coupon. Twelfth visible tab, last
+in Build. Shipped: studies (folder / swept test / project-of-batches, all one
+record shape), per-study columns tagged input or result, the grid with
+bulk-create and undo, fill-down paste, and Compare. **NOT shipped**: materials
+inheritance exists in the model (`rdEff`, `RD_INHERITS`, study `defaults`) but
+has no UI, and coupons carry no labels/QR and no photos — stages 4–6 of
+`C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`.
 
 Three things here are load-bearing:
 
@@ -57,14 +68,13 @@ Written down before it bites: **if `DB.rnd` passes ~2,000, take `rnd` out of
 whole-collection listener and coupons will be the most numerous record type in
 the app within a month.
 
-**THE BOOT SPLASH IS A GATE NOW, AND IT IS NOT DEPLOYED.** Committed on main,
-not released. It no longer takes itself down: five real boot milestones (app
-code, sign-in, roster, first data, fonts) fill a gold start-light gantry, the
-caption names whatever is still outstanding, and the app waits behind the sheet
-until somebody presses Continue. Both floors are gone — `SPLASH_FLOOR`,
-`SPLASH_FLOOR_FIRST` and `splashFloor()` no longer exist — because a gate has
-nothing to budget. Exit is a `clip-path` wipe along the ply bias instead of
-`sp-lift`'s translate, which read as the window minimising.
+**The boot splash is a GATE** and no longer takes itself down: five real
+milestones (app code, sign-in, roster, first data, fonts) fill a gold
+start-light gantry, the caption names whatever is outstanding, and the app waits
+behind the sheet until somebody presses Continue. Both floors are gone —
+`SPLASH_FLOOR`, `SPLASH_FLOOR_FIRST` and `splashFloor()` no longer exist —
+because a gate has nothing to budget. Exit is a `clip-path` wipe along the ply
+bias instead of `sp-lift`'s translate, which read as the window minimising.
 
 Three things about it that are load-bearing and easy to undo by accident:
 
@@ -82,13 +92,9 @@ A failed lamp is a **hollow amber ring, not a filled amber dot**: the first buil
 had it filled, and amber against gold at 15px was invisible in a screenshot. It
 differs by shape on purpose.
 
-Two test failures on main are **pre-existing and not from this work**, verified
-by stashing: `test_app` "a legacy parentId resolves to null", and `test_safearea`
-`wo-detail` (two step buttons cross the right inset in landscape).
-
-Next: the R&D tab and coupon collections. Plan at
-`C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`. Stage 1 of
-that work needs a `firestore.rules` deploy — hosting-only does not cover it.
+The two long-standing test failures are now GONE: the `parentId` one was fixed
+by the session that cut v3.2.0, and the four `test_detailui` wasm failures were
+a missing `.wasm` MIME entry in the test server (fixed here). All suites green.
 
 **INVENTORY ROUND 2 IS COMPLETE** (plan: the snoopy-dragon plan file on
 Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
