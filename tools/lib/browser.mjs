@@ -152,31 +152,31 @@ window.onFbChange("ready");
 
 /* Wait for the boot splash to actually leave the screen.
 
-   fb.state going "ready" is what USED to take the splash down, so waiting on
-   it alone was sufficient for exactly as long as hideSplash() had no floor.
-   It has one now (SPLASH_FLOOR in core.js), so the sheet deliberately
-   outlives its cue — and without this every screenshot this module feeds to
-   shoot_ui, make_mockups, shoot_release and the UI suites would be a
-   photograph of a navy panel with a fun fact on it.
+   fb.state going "ready" is what USED to take the splash down, so waiting on it
+   alone was sufficient for exactly as long as hideSplash() always fired.
+
+   THE SPLASH IS A GATE NOW. It does not leave on its own at all — it waits for
+   somebody to press Continue, however long that takes. So this is no longer an
+   optimisation that skips a floor; it is the harness standing in for the person
+   who would press the button. Without it, every screenshot this module feeds to
+   shoot_ui, make_mockups, shoot_release and the UI suites would be a photograph
+   of a navy panel with a fun fact on it, forever.
 
    Waiting on the ELEMENT rather than on a duration is what keeps this honest:
    hideSplash() removes the node from the DOM rather than leaving it at
-   opacity 0 (see its note in core.js), so absence is an unambiguous signal
-   and the floor can change without touching this line. */
+   opacity 0 (see its note in core.js), so absence is an unambiguous signal. */
 export async function splashGone(page) {
-  /* Skip the floor, then prove the sheet actually leaves.
+  /* Press the button on the harness's behalf, then prove the sheet leaves.
 
-     The floor is a delay for a PERSON — long enough to read the fun fact — and
-     a harness is not a person. Waiting it out costs every page load in every
-     visual suite about two and a half seconds (a fresh browser context has
-     empty localStorage, so each one looks like the first load of the day and
-     draws the longer floor), for nothing anyone will ever look at.
+     hideSplash(true) is the same teardown a real press runs — splashGo calls it
+     with force once the gate is armed — so this takes the app's own path rather
+     than inventing a test-only one. `force` is what lets it fire before the gate
+     arms, which matters because a stubbed fb never walks the whole boot.
 
-     hideSplash(true) is the same call the twelve-second backstop makes, so this
-     takes an existing path rather than inventing a test-only one. And it is
-     deliberately NOT the whole check: the wait below still has to pass, so a
-     splash that fails to tear itself down fails the suite exactly as it would
-     have. The floor itself is asserted properly, and cheaply, in test_app.mjs. */
+     It is deliberately NOT the whole check: the wait below still has to pass, so
+     a splash that fails to tear itself down fails the suite exactly as it would
+     have. That the gate itself never opens unbidden is asserted properly, and
+     cheaply, in test_app.mjs. */
   await page.evaluate(() => { if (typeof hideSplash === "function") hideSplash(true); }).catch(() => {});
   await page.waitForFunction("!document.getElementById('splash')", null, { timeout: 20000 });
 }

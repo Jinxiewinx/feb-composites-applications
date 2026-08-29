@@ -121,6 +121,7 @@ function loadSeason() {
 
 /* ---------- sync hooks (called by fb.js) ---------- */
 window.onFbChange = function () {
+  splashAuth();
   loadSeason();
   loadRelease();
   if (typeof loadResinOverrides === "function") loadResinOverrides();
@@ -128,7 +129,48 @@ window.onFbChange = function () {
   if (typeof loadTrainingCatalog === "function") loadTrainingCatalog();
   render();
 };
+
+/* The collections the landing page actually reads. Waiting on these — rather
+   than on all eleven — is what stops the dashboard painting empty and then
+   filling in a second later, which is the thing the splash was covering for and
+   never actually fixed.
+
+   Not all eleven, because the tail of them (stackplans, documents, lots) has
+   nothing to do with what you see first, and a gate is only as fast as its
+   slowest member. */
+const SPLASH_CORE = ["parts", "workOrders", "schedule"];
+
+/* fb.state has settled. THREE milestones close here, and which ones depends on
+   where the boot is going.
+
+   The signed-out and pending paths are the important half. startSync() never
+   runs for them (fb.js), so no snapshot will ever arrive — the destination is
+   the sign-in card or the "ask a lead" card, and both are legitimate places to
+   land. Marking `data` as NOT NEEDED is what lets the gate arm for them. Without
+   it the splash would hang forever in front of exactly the people who most need
+   to see the sign-in screen, which is the single worst thing this rewrite could
+   do. */
+function splashAuth() {
+  if (!window.fb || fb.state === "loading") return;
+  splashStep("auth", 1);
+  /* A roster read that failed for a reason other than "you are not on it" is a
+     genuine failure and says so. `pending` itself is not a failure: it is a
+     definite answer about your access, and the app has a card for it. */
+  if (fb.rosterCheckFailed) splashStep("access", -1, "Could not check the roster — the shop wifi at RFS drops sometimes.");
+  else splashStep("access", 1);
+  if (fb.state !== "ready") splashStep("data", 2);
+}
+
 window.onFbData = function (coll, arr) {
+  if (SPLASH_CORE.includes(coll)) {
+    if (!SPLASH_SEEN) SPLASH_SEEN = {};
+    SPLASH_SEEN[coll] = true;
+    /* A collection a guest is denied still reports here, as an empty array
+       (fb.js drops that one listener and publishes []). So a denied read closes
+       this milestone rather than stalling it, which is correct: the answer
+       arrived, and the answer was "nothing you can see". */
+    if (SPLASH_CORE.every(c => SPLASH_SEEN[c])) splashStep("data", 1);
+  }
   DB[coll] = arr;
   // Don't yank the DOM out from under someone mid-edit: another member's (or
   // our own echoed) update re-renders once focus leaves the field.
@@ -2565,25 +2607,59 @@ function markAllNotifsRead() {
 }
 // Overridden meaningfully in dashboard.js once watchers exist; safe default here.
 /* ---------- the boot splash ----------
-   HOW LONG IT OWNS THE SCREEN.
+   IT IS A GATE. The app waits behind it until somebody presses Continue.
 
-   The sheet used to come down the instant fb.state left "loading", which on a
-   warm load with a cached session is a few hundred milliseconds — before
-   .sp-fact has finished the 0.75s-delayed fade-in that is the only reason the
-   fact is there at all. The team watched this on a projector and asked to be
-   able to read the thing.
+   It used to leave on a timer. The sheet came down the instant fb.state left
+   "loading", so a floor was added to stop it beating the fact onto the screen —
+   1600ms, or 2400ms on the first load of a day. Continue was an accelerator
+   that waived the remainder, never a door, and the whole thing had a fault at
+   its centre: .ready was only ever added inside the floor branch, so if auth
+   resolved AFTER the floor expired — the shop-wifi case the button was written
+   for — execution fell straight through to dismissal and the button never
+   appeared at all. It was reachable only on fast boots, which is backwards.
 
-   So the splash now deliberately OUTLIVES its cue. The fact is fully opaque at
-   1250ms and the floor leaves a beat of stillness after that. The first load of
-   a day, or the first after a deploy, gets longer — that is the load where the
-   fact is actually new to you, and the fortieth load of a Tuesday is a tax.
+   Both floors are gone, and so is the tax they were trading against. With a
+   real gate there is nothing to budget: the fact is on screen until you press,
+   whether that is one second or one minute. What is left is SPLASH_DWELL, which
+   is not a reading window — it is just long enough for the plies to finish
+   laying up, so the exit cannot interrupt the entrance.
 
-   Both floors are waived the moment somebody says go. See splashGo. */
-const SPLASH_FLOOR = 1600;
-const SPLASH_FLOOR_FIRST = 2400;
-const SPLASH_HINT_AT = 1100;   // "Continue" must never beat the fact onto the screen
+   In their place, five real milestones and a start-light gantry that counts
+   them. The gantry is honest or it is nothing: every lamp is a thing the boot
+   genuinely waited on, and a step that fails says so in amber and in words
+   rather than quietly completing. A boot that cannot finish arms the button
+   anyway, with different wording — see splashFail. Nobody is locked out, and
+   nobody is told the app loaded when it did not.
 
-let SPLASH_DONE = false, SPLASH_PENDING = null, SPLASH_ASKED = false, SPLASH_FLOOR_MS = null;
+   The pieces: splashStep records a milestone, splashPaint draws the gantry,
+   splashCheck arms the gate, splashGo is the only door, hideSplash is the
+   teardown, splashFail is the honest give-up. */
+/* Sized to sp-lay (0.7s), so the plies are never cut off mid-flight. That is
+   the ONLY thing this number protects. It is not a reading window any more —
+   the gate is, and it lasts as long as you want it to. */
+const SPLASH_DWELL = 700;
+
+/* The five milestones the gantry counts. Every one is a real thing the boot
+   waits on; none of them is a timer. `say` is what the caption reads while that
+   step is the one outstanding, in the words somebody at RFS would use.
+
+   Order here is the order the captions are PREFERRED in, not the order the
+   steps finish — they genuinely finish out of order. See splashPaint. */
+const SPLASH_BOOT = [
+  { key: "code",   say: "Loading the app…" },
+  { key: "fonts",  say: "Loading type…" },
+  { key: "auth",   say: "Checking who you are…" },
+  { key: "access", say: "Looking you up on the roster…" },
+  { key: "data",   say: "Loading parts, runs and stock…" },
+];
+/* 0 = still running · 1 = done · 2 = not needed on this path · -1 = failed.
+   "Not needed" is a real state and not a fudge: signed out, there is no data to
+   wait for, and pretending otherwise is how a gate hangs forever. */
+let SPLASH = { code: 0, fonts: 0, auth: 0, access: 0, data: 0 };
+let SPLASH_DONE = false, SPLASH_READY = false, SPLASH_ASKED = false, SPLASH_NOTE = "";
+/* Which collections have reported their first snapshot. The `data` milestone is
+   the only one that needs to remember anything across calls. */
+let SPLASH_SEEN = null;
 
 function splashEl() {
   return (typeof document !== "undefined" && document.getElementById)
@@ -2594,22 +2670,144 @@ function splashEl() {
    lost most of the parse it is meant to be measuring. */
 function splashAge() { return Date.now() - (window.__splashT0 || Date.now()); }
 
-/* Memoised, because hideSplash() can be called several times while the floor
-   is still running and reading the key twice would shorten the wait mid-flight.
-   Wrapped, because localStorage throws outright in some private modes and a
-   fun fact is not worth failing a boot over. */
-function splashFloor() {
-  if (SPLASH_FLOOR_MS != null) return SPLASH_FLOOR_MS;
-  SPLASH_FLOOR_MS = SPLASH_FLOOR;
-  try {
-    const key = APP_VERSION + "|" + today();
-    if (localStorage.getItem("feb-splash") !== key) {
-      localStorage.setItem("feb-splash", key);
-      SPLASH_FLOOR_MS = SPLASH_FLOOR_FIRST;
-    }
-  } catch (e) { /* no storage, so every load counts as a repeat load */ }
-  return SPLASH_FLOOR_MS;
+function splashById(id) {
+  return (typeof document !== "undefined" && document.getElementById) ? document.getElementById(id) : null;
 }
+
+/* How many of the five have settled, and whether any of them settled badly. */
+function splashDoneCount() { return SPLASH_BOOT.filter(s => SPLASH[s.key] !== 0).length; }
+function splashFailed() { return SPLASH_BOOT.some(s => SPLASH[s.key] === -1); }
+
+/* Paint the gantry from SPLASH. Cheap and idempotent — called on every step, so
+   it must never assume it is the first.
+
+   THE LAMPS FILL BY COUNT, LEFT TO RIGHT, and are not one-per-milestone. Fonts
+   routinely beat auth, and on a warm cache the first snapshot can land before
+   the roster read returns; a gantry that lit its third lamp while its first was
+   dark would read as broken rather than as honest. The count is the true
+   number; the caption carries which step is actually outstanding. */
+function splashPaint() {
+  const el = splashEl();
+  if (!el || SPLASH_DONE || !el.querySelectorAll) return;
+  const done = splashDoneCount();
+  const failed = SPLASH_BOOT.filter(s => SPLASH[s.key] === -1).length;
+  const bad = failed > 0;
+  const lamps = el.querySelectorAll(".sp-lamp");
+  for (let i = 0; i < lamps.length; i++) {
+    /* ONE AMBER LAMP PER FAILED STEP, at the end of the run. A give-up marks
+       everything still outstanding as failed, so three stalled steps must show
+       three amber lamps — lighting a single one would under-report a boot that
+       went badly wrong, which is the one lie this whole feature exists to
+       avoid. Gold first, then amber, then dark: the gantry reads left to right
+       as "these worked, these did not, these never got asked". */
+    lamps[i].className = "sp-lamp" +
+      (i >= done ? "" : i < done - failed ? " on" : " bad");
+  }
+  /* getElementById, not querySelector, for everything that HAS an id: the node
+     test harness ships a hand-rolled document whose querySelector always
+     returns null, so a caption or a button addressed that way would be
+     untestable outside a browser. The lamps are the one exception — they carry
+     no ids, and in the harness the loop above simply iterates nothing. */
+  const box = splashById("sp-lights");
+  if (box && box.setAttribute) box.setAttribute("aria-valuenow", String(done));
+  /* add/remove rather than toggle(name, force): the node test harness ships a
+     minimal classList and does not implement the two-argument form, and this is
+     not worth a DOM shim. */
+  if (bad) el.classList.add("failed"); else el.classList.remove("failed");
+
+  const step = splashById("sp-step");
+  if (!step) return;
+  if (SPLASH_NOTE) { step.textContent = SPLASH_NOTE; return; }
+  const next = SPLASH_BOOT.find(s => SPLASH[s.key] === 0);
+  step.textContent = next ? next.say : "Ready";
+}
+
+/* Record a milestone. `state` is 1 done, 2 not needed, -1 failed; `note` is the
+   plain-words reason, and only a failure gets to set one — a successful step
+   has nothing to say that the gantry is not already saying. */
+function splashStep(key, state, note) {
+  if (SPLASH_DONE || !(key in SPLASH)) return;
+  if (SPLASH[key] !== 0) return;                 // first answer wins; no flapping
+  SPLASH[key] = state;
+  if (state === -1 && note) SPLASH_NOTE = note;
+  splashPaint();
+  splashCheck();
+}
+
+/* Arm the button, once everything has settled and the plies have landed.
+
+   .ready is added HERE, on real completion, and no longer inside a floor
+   branch. That is the fix for the fault where a slow boot — the shop-wifi case
+   the button exists for — never showed the button at all, because the floor had
+   already expired and the code fell straight through to dismissal. */
+function splashCheck() {
+  if (SPLASH_DONE || SPLASH_READY) return;
+  if (splashDoneCount() < SPLASH_BOOT.length) return;
+  const left = SPLASH_DWELL - splashAge();
+  if (left > 0) { setTimeout(splashCheck, left); return; }
+  SPLASH_READY = true;
+  const el = splashEl();
+  if (!el) return;
+  if (splashFailed()) {
+    const go = splashById("sp-go");
+    /* Different words, because pressing it is now an informed choice rather
+       than an invitation. A button that said "Continue" over a broken boot
+       would be the silent timeout wearing a hat. */
+    if (go) go.textContent = "Continue anyway";
+  }
+  el.classList.add("ready");
+  splashPaint();
+  /* Somebody already pressed while it was still loading. The press was
+     remembered rather than swallowed, so honour it now. */
+  if (SPLASH_ASKED) hideSplash(true);
+}
+
+/* Give up on whatever is still running and arm the gate with the bad news.
+   Used by the twelve-second backstop and by any step that knows it has failed.
+   It does NOT dismiss: dismissing on a timer is the behaviour being removed. */
+function splashFail(note) {
+  if (SPLASH_DONE) return;
+  /* NOTHING OUTSTANDING MEANS NOTHING TO REPORT. The twelve-second backstop
+     fires on a timer and cannot know whether it is needed, so it will land on
+     plenty of perfectly healthy boots where somebody simply had not pressed
+     Continue yet — which is now the normal state of this screen rather than an
+     unusual one. Without this guard that boot gets told "Something is not
+     responding" over five gold lamps, which is the exact species of lie the
+     gantry exists to avoid. */
+  if (SPLASH_BOOT.every(s => SPLASH[s.key] !== 0)) return;
+  for (const s of SPLASH_BOOT) {
+    if (SPLASH[s.key] !== 0) continue;
+    SPLASH[s.key] = -1;
+  }
+  /* A reason already set by the step that actually failed beats the backstop's
+     generic one — it is more specific and it was there first. */
+  if (!SPLASH_NOTE) SPLASH_NOTE = note || "Something is not responding.";
+  splashPaint();
+  splashCheck();
+}
+
+/* The one control on the sheet that is not "go". A failed boot is usually a
+   transient network one, and a reload is genuinely the fix. */
+function splashRetry() {
+  if (typeof location !== "undefined" && location.reload) location.reload();
+}
+
+/* Milestone: fonts. Both faces ship font-display: swap, so without this the
+   wordmark and then the whole first screen re-set themselves a beat after you
+   arrive — which is the one flash the gate is now in a position to absorb for
+   free, since something else is always slower.
+
+   "Not needed" rather than "failed" on every unhappy path: the node harness has
+   no document.fonts, an older browser may not have it either, and the promise
+   can reject. None of those is a broken boot, and a swapped face is not worth
+   turning the gantry amber over. Kicked off at parse time so the wait overlaps
+   auth instead of following it. */
+(function () {
+  try {
+    if (typeof document === "undefined" || !document.fonts || !document.fonts.ready) { splashStep("fonts", 2); return; }
+    document.fonts.ready.then(() => splashStep("fonts", 1), () => splashStep("fonts", 2));
+  } catch (e) { splashStep("fonts", 2); }
+})();
 
 /* Take the boot splash down — or arrange to, once the floor is spent.
    Idempotent, and safe to call before the element exists (the node harness has
@@ -2626,50 +2824,59 @@ function hideSplash(force) {
   const el = splashEl();
   if (!el) return;
 
-  const left = (force || SPLASH_ASKED) ? 0 : splashFloor() - splashAge();
-  if (left > 0) {
-    if (!SPLASH_PENDING) {
-      /* The app behind the sheet is ready now, so the affordance is a REPORT
-         and not a promise — which is what makes it safe to press. Held back to
-         SPLASH_HINT_AT so it cannot land before the fact it sits under. */
-      setTimeout(() => {
-        const e = splashEl();
-        if (e && !SPLASH_DONE) e.classList.add("ready");
-      }, Math.max(0, SPLASH_HINT_AT - splashAge()));
-      SPLASH_PENDING = setTimeout(() => { SPLASH_PENDING = null; hideSplash(); }, left);
-    }
-    return;
-  }
+  /* THE SHEET NEVER TAKES ITSELF DOWN. Without `force` this is a no-op unless
+     the gate is armed, and even then only a press gets here — there is no
+     timer left in this function that dismisses anything.
+
+     `force` is the deliberate override, and it has exactly two callers: a press
+     against an armed gate (splashGo), and the UI harness, which forces the
+     sheet away so it can photograph the app behind it (tools/lib/browser.mjs).
+     Both are somebody saying go; neither is the app deciding for itself. */
+  if (!force && !SPLASH_READY) return;
 
   SPLASH_DONE = true;
   /* Disabled and hidden BEFORE the animation rather than after. .sp-go is
      focusable and sits ahead of everything in the document, so for the half
      second the sheet spends lifting off it would otherwise be a keyboard trap
      inside an element nobody can see. */
-  const go = typeof document !== "undefined" && document.getElementById
-    ? document.getElementById("sp-go") : null;
+  const doc = typeof document !== "undefined" && document.getElementById ? document : null;
+  const go = doc ? doc.getElementById("sp-go") : null;
   if (go) go.disabled = true;
+  const retry = doc ? doc.getElementById("sp-retry") : null;
+  if (retry) retry.disabled = true;
   if (el.setAttribute) el.setAttribute("aria-hidden", "true");
   el.classList.add("enter");
+  /* The app rises as the sheet is wiped off it, rather than sitting there
+     already arrived. Added on the way out and removed once it has played, so
+     nothing in the app is left carrying a boot animation for the rest of the
+     session — a re-render mid-animation would otherwise replay it. */
+  const app = doc ? doc.getElementById("app") : null;
+  if (app && app.classList) {
+    app.classList.add("sp-arrive");
+    setTimeout(() => app.classList.remove("sp-arrive"), 500);
+  }
   setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 560);
 }
 
 /* Somebody said go — a tap anywhere on the sheet, Enter, Space or Escape.
 
-   If the app behind it is ready, leave now. If it is NOT, the tap is REMEMBERED
-   rather than obeyed: SPLASH_ASKED waives the floor so the sheet leaves the
-   instant there is something to leave to. The sheet is pressable from its first
-   frame and on the shop wifi at RFS "not ready yet" is the common case, not the
-   edge case — dismissing onto the bare "Connecting…" card would be strictly
-   worse than the splash it replaced.
+   THIS IS THE ONLY WAY OUT. Nothing else takes the sheet down: no floor, no
+   arrival timer, no backstop. The app waits behind the splash for as long as
+   nobody presses, which is what makes the fact worth putting there — you read
+   it for as long as you want to, not for the 1.6 seconds somebody budgeted.
+
+   A press before the gate arms is REMEMBERED rather than swallowed, and
+   splashCheck honours it the instant the boot finishes. That matters more now
+   than it did: on shop wifi at RFS "not ready yet" is the common case, and a
+   press that vanished would train people to jab at the screen.
 
    The press animation is the acknowledgement that the input was heard even
-   though it could not be acted on. */
+   though it could not be acted on yet. */
 function splashGo() {
   const el = splashEl();
   if (!el || SPLASH_DONE) return;
   SPLASH_ASKED = true;
-  if (el.classList.contains && el.classList.contains("ready")) { hideSplash(true); return; }
+  if (SPLASH_READY) { hideSplash(true); return; }
   el.classList.remove("press");
   void el.offsetWidth;            // restart the animation rather than ignore a second press
   el.classList.add("press");
@@ -2700,6 +2907,12 @@ function render() {
      through it — but what paints is the merged tab. Normalised before the
      sidebar so the Molds entry lights up, and mode/id survive so a routed
      BRD- lands selected in the rail. */
+  /* Milestone 1. Reaching render() at all means every one of the thirty-three
+     classic scripts parsed — which is the whole of "the app code is here", and
+     is why this is measured from inside render rather than from a line in some
+     particular file. The inline <script>render()</script> at the end of the
+     body is the first caller. */
+  splashStep("code", 1);
   if (view.tab === "stock") view.tab = moldsOrBoardsFor(view.id);
   if (view.tab === "weekplan") { view.tab = "timeline"; view.schedView = "week"; }
   if (view.tab === "items" || view.tab === "lots") view.tab = "inventory";
@@ -2708,9 +2921,12 @@ function render() {
   const el = document.getElementById("main");
   const st = window.fb ? fb.state : "loading";
   if (st === "loading") { el.innerHTML = `<div class="card">Connecting…</div>`; return; }
-  // Past here there is a real screen to show — the app, the login form, or the
-  // "you're not on the roster yet" note. The splash has done its job.
-  hideSplash();
+  /* Past here there is a real screen behind the sheet — the app, the login form,
+     or the "you're not on the roster yet" note.
+     NOT a dismissal. It used to be, and that was the bug: the sheet left on its
+     own the moment this line was reached. Now it only reports, and the sheet
+     waits to be told to go. */
+  splashCheck();
   if (st === "signedout") { el.innerHTML = renderLogin(); return; }
   /* THE SECOND CASCADE. Every detail page's field() helper renders a read-only
      <div class="ro"> when view.edit is down, so this one line turns roughly a

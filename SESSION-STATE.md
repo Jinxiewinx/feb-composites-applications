@@ -20,6 +20,40 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+
+**THE BOOT SPLASH IS A GATE NOW, AND IT IS NOT DEPLOYED.** Committed on main,
+not released. It no longer takes itself down: five real boot milestones (app
+code, sign-in, roster, first data, fonts) fill a gold start-light gantry, the
+caption names whatever is still outstanding, and the app waits behind the sheet
+until somebody presses Continue. Both floors are gone — `SPLASH_FLOOR`,
+`SPLASH_FLOOR_FIRST` and `splashFloor()` no longer exist — because a gate has
+nothing to budget. Exit is a `clip-path` wipe along the ply bias instead of
+`sp-lift`'s translate, which read as the window minimising.
+
+Three things about it that are load-bearing and easy to undo by accident:
+
+- **`splashAuth()` marks `data` as "not needed" (state 2) when auth resolves to
+  `signedout` or `pending`.** `startSync()` never runs on those paths, so
+  without it the gate hangs forever in front of exactly the people who need the
+  sign-in card. There is a test named for this.
+- **`hideSplash(true)` must keep working.** `tools/lib/browser.mjs` calls it to
+  photograph the app, and eight visual suites go through that one line.
+- **`splashFail()` returns early when nothing is outstanding.** The 12s backstop
+  fires on healthy boots now — waiting at an armed gate is normal — and without
+  the guard it printed "Something is not responding" under five gold lamps.
+
+A failed lamp is a **hollow amber ring, not a filled amber dot**: the first build
+had it filled, and amber against gold at 15px was invisible in a screenshot. It
+differs by shape on purpose.
+
+Two test failures on main are **pre-existing and not from this work**, verified
+by stashing: `test_app` "a legacy parentId resolves to null", and `test_safearea`
+`wo-detail` (two step buttons cross the right inset in landscape).
+
+Next: the R&D tab and coupon collections. Plan at
+`C:\Users\simon\.claude\plans\your-goal-of-this-cosmic-tarjan.md`. Stage 1 of
+that work needs a `firestore.rules` deploy — hosting-only does not cover it.
+
 **INVENTORY ROUND 2 IS COMPLETE** (plan: the snoopy-dragon plan file on
 Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
 grouped lot display (groupLots keyed matKey-else-name; group rows fold via a
@@ -92,29 +126,15 @@ it and pressing ⋯ → "Announce this release" are Simon's, still pending**, as
 they were for v3.0.0/v3.1.0 (that one press announces the newest version
 only; older ones live in CHANGELOG.md).
 
-**v3.1.0 went out 2026-08-27**, v3.0.0 an hour earlier the same day — Major
-by CHANGELOG's own rubric, since Season editing moved off the tab and the
-dashboard became a different page.
+**v3.1.0 went out 2026-08-27**, v3.0.0 an hour earlier the same day. Neither was
+ever announced, and the v3.2.0 note above now covers all three — one press
+announces the newest only, and v3.0.0's and v3.1.0's items live in CHANGELOG.md,
+so the #composites note is where they get said out loud.
 
-v3.1.0 is Simon's correction to v3.0.0's Season: the compactness was right, the
-two-abreast flow was not. `.sline` and `.shead` now share ONE declaration of
-eight fixed grid tracks, so the lines are columnated rather than each sizing its
-own auto tracks. Two fields came back onto the line with the width — `layupType`
-and `moldLocation` are `where: "grid"` in SEASON_COLS again. **Do not reach for
-`columns:` on `.seasongrid` a third time**: it is what made the fields land in a
-different place on every line.
-
-**Nobody has been told about either one.** `config/release` is untouched, so
-there is no reload banner and no What's New panel — anyone still on v2.2.2 stays
-there until a lead opens the app and presses `⋯ → Announce this release`. That
-one press covers both releases; the panel shows v3.1.0's WHATS_NEW, so v3.0.0's
-five items (guest mode, the pit board, the cut sheets, the splash) are now only
-in CHANGELOG.md — worth saying out loud in the #composites note, which the
-script prints and never posts. Re-run `node tools/release.mjs 3.1.0 --dry` to
-reprint it. Both are still outstanding and both are Simon's call.
-
-The plan for the five-item pass is at
-`C:\Users\simon\.claude\plans\lets-now-develop-a-staged-elephant.md`.
+Durable from that work, and the reason it is kept here rather than dropped with
+the rest: `.sline` and `.shead` share ONE declaration of eight fixed grid tracks
+on the Season blueprint. **Do not reach for `columns:` on `.seasongrid` a third
+time** — it is what made the fields land in a different place on every line.
 
 **GUEST MODE IS ON, AND THE APP IS PUBLICLY READABLE.** Anonymous sign-in is
 enabled on the project and `autodeleteAnonymousUsers` is on, so a visit no

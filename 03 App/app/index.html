@@ -3214,6 +3214,11 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 18px; padding: 24px;
     background: var(--sb-bg); color: #fff;
+    /* The sheet is navy in BOTH themes, so it cannot use --amber: the light
+       value (#a25c00) is a brown meant for white paper and is almost unreadable
+       here. This is the dark-theme amber, pinned locally and on purpose,
+       because this element is always dark regardless of what the app is. */
+    --sp-warn: #e0a53a;
     /* Opacity only, and pointer-events off with it: a splash that lingers as an
        invisible sheet over the app eats the first tap on the login field. */
     transition: opacity .28s ease;
@@ -3244,17 +3249,80 @@
   #splash.slow .sp-slow { opacity: .8; }
   @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
 
+  /* ---- the start-light gantry ----
+     Five lamps, filling as five REAL boot milestones land, under a caption
+     naming what is still outstanding. It is a readiness readout that happens to
+     look like a start line, and that is the only reason it is allowed to look
+     like one — a gantry that filled on a timer would be a fake progress bar,
+     which is the same lie as a hardcoded clock.
+
+     LAMPS FILL BY COUNT, not one named milestone per position. The milestones
+     genuinely finish out of order — fonts usually beat auth, and on a warm
+     cache the first data can land before the roster read returns — so a gantry
+     that lit its third lamp before its first would read as broken rather than
+     as honest. Five done is five lit, and the caption carries the detail.
+
+     GOLD, NOT RED. Real start lights are red; in this app red is --bad and
+     carries a status meaning on every other screen, so five red lamps on boot
+     would be the loudest wrong signal in the product. Gold on navy is what the
+     mark already is. */
+  .sp-lights { display: flex; gap: 10px; animation: sp-fade .5s ease .35s both; }
+  .sp-lamp { box-sizing: border-box; width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.05);
+    transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
+                box-shadow var(--t) var(--ease); }
+  .sp-lamp.on  { background: var(--gold); border-color: var(--gold-2);
+    box-shadow: 0 0 10px rgba(253,181,21,.55); }
+  /* A step that FAILED, and it differs by SHAPE, not only by hue. Amber against
+     gold is very nearly the same colour at 15px — the first build of this had a
+     correctly-marked failed lamp that was simply invisible in a screenshot, and
+     an invisible failure signal is the same as no failure signal. So a failed
+     lamp is a hollow ring: unmistakably not a filled one, at any size, and
+     legible to anyone who cannot separate the two hues at all.
+     It also reads correctly as a thing that did not light. */
+  .sp-lamp.bad { background: transparent; border: 3px solid var(--sp-warn); box-shadow: none; }
+  /* min-height so the caption changing length never reflows the gantry above
+     it — a jumping start line reads as a glitch. */
+  .sp-step { margin: 0; min-height: 1.3em; font-size: 12px; letter-spacing: .04em;
+    text-align: center; color: var(--sb-text); animation: sp-fade .5s ease .35s both; }
+  #splash.failed .sp-step { color: var(--sp-warn); }
+  /* Continue and Retry sit on one row; Retry exists only in the failed state,
+     because a retry offered on a healthy boot is a button that does nothing
+     anybody wants. */
+  .sp-acts { display: flex; gap: 10px; align-items: center; }
+  .sp-retry { display: none; }
+  #splash.failed.ready .sp-retry { display: inline-block; }
+
   /* ---- saying go ----
-     The affordance appears only under .ready, and core.js never adds .ready
-     before SPLASH_HINT_AT — so it is a REPORT that the app behind the sheet has
-     arrived, not a promise that it might. That is the whole reason a press is
-     safe: there is nothing to be stranded on. */
-  .sp-go { opacity: 0; pointer-events: none; transition: opacity .3s ease;
+     THE BUTTON IS THE DOOR, not an accelerator. Nothing else takes this sheet
+     down: hideSplash no longer schedules its own dismissal, so the app waits
+     behind the splash until somebody says go, however long that is.
+
+     The affordance appears only under .ready, which core.js adds when the boot
+     is genuinely finished — so it is a REPORT that the app has arrived, never a
+     promise that it might. That is what makes a press safe, and it is also why
+     the button can now be trusted to be the only way out: there is nothing to
+     be stranded on. Under .failed it arms anyway, with different words, because
+     a gate nobody can open is worse than a broken app you were warned about. */
+  .sp-go, .sp-retry { opacity: 0; pointer-events: none; transition: opacity .3s ease;
     font: inherit; font-weight: 600; padding: 9px 20px; border-radius: 999px;
     border: 1px solid var(--gold); background: none; color: var(--gold); cursor: pointer; }
-  .sp-go:hover { background: var(--gold); color: var(--sb-bg); }
+  .sp-go:hover, .sp-retry:hover { background: var(--gold); color: var(--sb-bg); }
+  /* Retry is the quieter of the two: the sheet has just told you something is
+     wrong, and the useful press is usually still Continue. */
+  .sp-retry { border-color: rgba(255,255,255,.35); color: var(--sb-text); font-weight: 500; }
+  .sp-retry:hover { background: rgba(255,255,255,.12); color: #fff; }
+  /* The house 44px floor, and unconditionally rather than under
+     @media (pointer: coarse) — for two reasons. It matters more here than
+     anywhere else in the app, because this is now the only way into the
+     product, on a phone, in a shop, in gloves; and a splash has room to be
+     generous on a desktop too, where 44px is a comfortable primary action
+     rather than the dense-toolbar compromise the coarse block exists to undo.
+     Keeping it out of that block also leaves the app's one coarse-pointer
+     section the last one in the file, which test_app.mjs relies on to find it. */
+  .sp-go, .sp-retry { min-height: 44px; padding: 11px 22px; }
   .sp-hint { font-size: 11.5px; color: var(--sb-text); opacity: 0; transition: opacity .3s ease; }
-  #splash.ready .sp-go { opacity: 1; pointer-events: auto; }
+  #splash.ready .sp-go, #splash.ready .sp-retry { opacity: 1; pointer-events: auto; }
   #splash.ready .sp-hint { opacity: .7; }
   /* Arrival outranks a four-second worry: if the connection took long enough to
      earn the slow line and then landed, the slow line is no longer true. */
@@ -3276,20 +3344,54 @@
   @keyframes sp-part-b { to { transform: translate(-30px,  20px) scale(1.06); opacity: 0; } }
   #splash.enter .sp-ply.a { animation: sp-part-a .34s cubic-bezier(.4,0,.9,.4) both; }
   #splash.enter .sp-ply.b { animation: sp-part-b .34s cubic-bezier(.4,0,.9,.4) both; }
-  /* The text goes first and quietly. It is not the subject of the shot. */
+  /* LIGHTS OUT, and it goes first. On a real start line the lights do not fade
+     down, they all extinguish together, and that instant IS the go signal —
+     which is exactly what the press just was. Snapped off in 120ms rather than
+     released through the .17s token transition, because a gantry that dims
+     politely is a gantry that was never a start line. */
+  @keyframes sp-out { to { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.28); box-shadow: none; } }
+  #splash.enter .sp-lamp { animation: sp-out .12s linear both; }
+  /* The text goes next, quietly. It is not the subject of the shot. */
   @keyframes sp-drop { to { opacity: 0; transform: translateY(6px); } }
   #splash.enter .sp-word, #splash.enter .sp-fact, #splash.enter .sp-go,
-  #splash.enter .sp-hint, #splash.enter .sp-slow { animation: sp-drop .18s ease both; }
-  /* The sheet itself moves. A cross-fade would spend 280ms as grey, because
-     what is behind a navy full-bleed sheet is a white app.
+  #splash.enter .sp-retry, #splash.enter .sp-hint, #splash.enter .sp-slow,
+  #splash.enter .sp-step { animation: sp-drop .18s ease .06s both; }
 
-     pointer-events goes off with the FIRST frame, not at the end: a sheet that
-     is still catchable while it flies away eats the first tap on whatever it is
-     uncovering, which is the same hazard the DOM removal in hideSplash exists
-     to prevent. The transition is cancelled so it cannot fight the animation. */
-  @keyframes sp-lift { to { transform: translate(46%, -46%); opacity: 0; } }
-  #splash.enter { animation: sp-lift .38s cubic-bezier(.55,0,.85,.35) .14s both;
-    transition: none; pointer-events: none; will-change: transform, opacity; }
+  /* ---- and the sheet is drawn off on the bias ----
+     A CLIP, NOT A MOVE. The sheet used to translate 46% up and right, which
+     shrinks it into a corner — it read as the window being minimised rather
+     than as the app arriving. Clipping instead means the app is uncovered in
+     place, already rendered, from the first frame.
+
+     This also settles the objection the old comment raised against a
+     cross-fade: that it "would spend 280ms as grey, because what is behind a
+     navy full-bleed sheet is a white app". A wipe is never grey — at every
+     frame each pixel is either fully navy or fully app.
+
+     The cut runs along the same diagonal the plies arrive on (sp-lay comes in
+     from up and to the right), and it retreats that way too, so the sheet
+     leaves the way a ply comes off a mold. Both keyframes have four points, in
+     the same order, which is what makes clip-path interpolate at all. The
+     percentages overshoot the box hard so the start frame provably covers every
+     aspect ratio and the end frame provably covers none.
+
+     pointer-events goes off with the FIRST frame, not at the end: a sheet still
+     catchable while it leaves eats the first tap on whatever it is uncovering,
+     which is the same hazard the DOM removal in hideSplash exists to prevent. */
+  @keyframes sp-wipe {
+    from { clip-path: polygon(-200%  -50%, 300% 450%, 300% -300%, -200% -300%); }
+    to   { clip-path: polygon(-200% -350%, 300% 150%, 300% -300%, -200% -300%); }
+  }
+  #splash.enter { animation: sp-wipe .32s cubic-bezier(.55,0,.85,.35) .12s both;
+    transition: none; pointer-events: none; will-change: clip-path; }
+
+  /* The app arrives rather than merely being uncovered: the rail first, then
+     the page, on the same 12px rise. Short and once — this class is removed as
+     soon as it has played, so nothing in the app is left carrying an animation
+     it did not ask for. */
+  @keyframes sp-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  #app.sp-arrive .sidebar { animation: sp-rise .26s var(--ease) both; }
+  #app.sp-arrive .content { animation: sp-rise .26s var(--ease) .06s both; }
   /* The global reduce-motion rule clamps durations to .01ms, which lands every
      element on its `to` frame — the stacked mark, all three lines up. That is
      the right still image, so there is nothing to undo here beyond the
@@ -3311,9 +3413,16 @@
     </svg>
   </div>
   <div class="sp-word">FEB <span>Composites</span></div>
+  <div class="sp-lights" id="sp-lights" role="progressbar" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" aria-label="Starting up">
+    <span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span>
+  </div>
+  <p class="sp-step" id="sp-step" aria-live="polite">Starting up&hellip;</p>
   <p class="sp-fact" id="sp-fact">Twill weave drapes around curves better than plain weave, and has fewer fiber crimps.</p>
   <div class="sp-slow">Still connecting — the shop wifi at RFS drops sometimes.</div>
-  <button type="button" class="sp-go" id="sp-go" onclick="splashGo()">Continue</button>
+  <div class="sp-acts">
+    <button type="button" class="sp-go" id="sp-go">Continue</button>
+    <button type="button" class="sp-retry" id="sp-retry">Retry</button>
+  </div>
   <div class="sp-hint kbdhint">or press Enter</div>
 </div>
 <script>
@@ -3347,7 +3456,16 @@
      "Connecting…" card. Bound here rather than in core.js so the sheet answers
      a press from the first frame, before the app's scripts have run — at which
      point splashGo does not exist yet, hence the typeof guard. */
-  document.getElementById("splash").addEventListener("click", function () {
+  document.getElementById("splash").addEventListener("click", function (e) {
+    /* Retry is the one control on the sheet that is NOT "go". Without this test
+       it would be swallowed by the go-anywhere handler and reload nothing,
+       because the click bubbles to the sheet either way. Checked with closest()
+       rather than on the button itself so a press that lands on the button's
+       text node still counts. */
+    if (e.target && e.target.closest && e.target.closest("#sp-retry")) {
+      if (typeof splashRetry === "function") splashRetry();
+      return;
+    }
     if (typeof splashGo === "function") splashGo();
   });
   document.addEventListener("keydown", function (e) {
@@ -3357,19 +3475,24 @@
       if (typeof splashGo === "function") splashGo();
     }
   });
-  /* The splash owns the screen only while there is genuinely nothing to show.
-     render() takes it down the moment fb.state leaves "loading" — including
-     for "signedout" and "pending", or the login form would sit behind it. This
-     is the backstop for the case render() never gets there: no network, a
-     Firebase config that will not load, a module that threw. Say so rather
-     than spin forever, and get out of the way so the page underneath is
-     reachable. */
+  /* THE SHEET NO LONGER LEAVES ON ITS OWN. It owns the screen until somebody
+     presses Continue, and Continue does not arm until the boot has genuinely
+     finished — so these two timers are about what to SAY while waiting and how
+     to fail honestly, never about dismissing.
+
+     At 12s something is wrong rather than slow. The right answer is to arm the
+     button with different words, not to dismiss: splashFail marks whatever is
+     still outstanding as failed, says which step it was, and offers Continue
+     anyway alongside Retry. Nobody is locked out and nobody is told the app
+     loaded when it did not. */
   setTimeout(function () { var el = document.getElementById("splash"); if (el) el.classList.add("slow"); }, 4000);
   setTimeout(function () {
-    if (typeof hideSplash === "function") { hideSplash(true); return; }
-    /* core.js never parsed, so hideSplash does not exist and the timer above
-       would simply no-op — leaving a full-bleed navy sheet over the page
-       forever. Take it down by hand instead; .gone is still the plain fade. */
+    if (typeof splashFail === "function") { splashFail("Something is not responding."); return; }
+    /* core.js never parsed, so there is no gate to arm and no app to gate — a
+       thrown module, a bad deploy, a Firebase config that will not load. This
+       is the one case that still dismisses by hand, because leaving a
+       full-bleed navy sheet over the page forever is strictly worse than
+       showing whatever did manage to render underneath it. */
     var el = document.getElementById("splash");
     if (el) { el.classList.add("gone"); setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el); }, 400); }

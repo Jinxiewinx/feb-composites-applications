@@ -1046,22 +1046,29 @@ California-gold one, arriving on the bias the way you actually lay a 45. Under
 it sits the **fact of the day** — the same one the dashboard shows, drawn from
 the team's own SN5 documentation.
 
-**It waits long enough to be read.** The sheet used to come down the instant the
-database answered, which on a warm load is a few hundred milliseconds — before
-the fact had finished fading in. There is a floor now: about a second and a half,
-and a little longer on the first load of a day or the first after a deploy, which
-is the load where the fact is actually new to you.
+**The start lights tell you what it is waiting on.** Five lamps under the
+wordmark, filling as five real things land: the app's own code, sign-in, your
+place on the roster, the first of the shop data, and the type. A line underneath
+names whichever one is still outstanding. They are lit by what actually
+finished, never by a timer — so when a load stalls at RFS you can see *which*
+part stalled instead of watching a spinner.
 
-**And it gets out of the way when you say so.** Once the app behind it is ready
-the splash offers **Continue** — a tap anywhere, or Enter, Space or Escape. The
-button only appears once there is genuinely something to continue *to*, so
-pressing it can never drop you onto a blank app; press it early and the press is
-remembered rather than ignored, and the sheet leaves the moment the data lands.
-Leaving, the two plies part along the bias they arrived on and the sheet is drawn
-off on the 45, the way a ply comes off a mold.
+**Nothing opens until you say so.** Once all five are lit the splash offers
+**Continue** — a tap anywhere, or Enter, Space or Escape — and then it waits. It
+does not leave on its own, so the fact under it is there for as long as you want
+to read it rather than for however many seconds somebody budgeted. Press early
+and the press is remembered rather than ignored; the app opens the moment it is
+genuinely ready.
 
-If the connection is slow the splash says so after four seconds, and it gives up
-entirely after twelve rather than spinning forever.
+**Leaving is lights-out.** All five lamps go dark at once, the two plies part
+along the bias they arrived on, and the sheet is drawn off on the 45 — the way a
+ply comes off a mold — uncovering the app already in place beneath it.
+
+If the connection is slow the splash says so after four seconds. If something is
+genuinely broken, the lamp for that step goes hollow and amber, the line says
+what went wrong in plain words, and the button changes to **Continue anyway**
+with a **Retry** beside it. You are never locked out, and you are never told the
+app loaded when it did not.
 
 ## Getting around
 

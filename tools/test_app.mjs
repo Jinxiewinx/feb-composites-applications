@@ -9243,88 +9243,199 @@ await t("the batch printable goes through the house print system, and says what 
 });
 
 /* ---------- the boot splash ----------
-   There was no coverage here at all before the floor existed, which was
-   defensible while hideSplash() was four lines that always fired. It is not
-   defensible now: the sheet deliberately outlives its cue, so "when does it
-   leave" is real logic with a real way to strand somebody on a blank app.
+   THE SHEET IS A GATE NOW, and that is what this block guards.
 
-   SPLASH_DONE, SPLASH_ASKED, SPLASH_PENDING and SPLASH_FLOOR_MS are module-level
-   state that nothing in the app ever resets — a page load is the reset. So each
-   test has to put them back by hand, the pending timer included, or the second
-   test in this block inherits the first one's decision. */
+   It used to leave on a timer, with Continue as an accelerator that waived the
+   remaining floor. The floors are gone. The app waits behind the splash until
+   somebody presses, so "does it ever leave on its own" is the question with a
+   real way to hurt somebody — in both directions. Leaving by itself breaks the
+   feature; never arming locks a person out of the app entirely.
+
+   Every one of these is module-level state that nothing in the app resets — a
+   page load is the reset — so each test puts it back by hand or inherits the
+   previous test's decision. */
 function resetSplash() {
-  if (SPLASH_PENDING) clearTimeout(SPLASH_PENDING);
-  SPLASH_DONE = false; SPLASH_ASKED = false; SPLASH_PENDING = null; SPLASH_FLOOR_MS = null;
-  localStorage.removeItem("feb-splash");
-  document.getElementById("splash").classList.remove("ready", "enter", "press", "gone");
-  window.__splashT0 = Date.now();
+  SPLASH = { code: 0, fonts: 0, auth: 0, access: 0, data: 0 };
+  SPLASH_DONE = false; SPLASH_READY = false; SPLASH_ASKED = false;
+  SPLASH_NOTE = ""; SPLASH_SEEN = null;
+  document.getElementById("splash").classList.remove("ready", "enter", "press", "gone", "failed");
+  document.getElementById("sp-go").textContent = "Continue";
+  /* Past SPLASH_DWELL, so the plies-still-laying-up hold is never what a test
+     is accidentally measuring. The dwell gets its own test. */
+  window.__splashT0 = Date.now() - 5000;
 }
 const splashClasses = () => String(document.getElementById("splash").classList);
+/* Settle every milestone. `boot()` is the happy path: five real things landed. */
+const bootAll = (state) => { for (const s of SPLASH_BOOT) splashStep(s.key, state === undefined ? 1 : state); };
 
-await t("the splash holds until the floor is spent, so the fact can be read", async () => {
+await t("THE SPLASH NEVER LEAVES ON ITS OWN — this is the whole feature", async () => {
   resetSplash();
-  hideSplash();                     // fb.state just left "loading", as render() does
-  assert(SPLASH_DONE === false, "the sheet does not leave the instant the app is ready");
-  assert(SPLASH_PENDING, "it has armed itself to leave once the floor is spent");
-  assert(!splashClasses().includes("enter"), "and it has not started the exit animation");
+  bootAll();                        // the boot is completely finished
+  assert(SPLASH_READY === true, "the gate arms once all five milestones settle");
+  assert(SPLASH_DONE === false,
+    "but the sheet is STILL THERE — nothing dismisses it except a press");
+  assert(!splashClasses().includes("enter"), "and the exit has not started");
+  splashCheck(); splashCheck();     // whatever else calls it, however many times
+  assert(SPLASH_DONE === false, "and repeated readiness reports still do not dismiss it");
 });
 
-await t("once the floor is spent the same call takes it down", async () => {
+await t("the button appears on a SLOW boot, which is the bug this replaced", async () => {
+  /* The old code added .ready only inside its floor branch, so a boot that
+     finished AFTER the floor expired — the shop-wifi case the button exists
+     for — fell straight through to dismissal and never showed the button at
+     all. It was reachable only on fast boots, which is backwards. */
   resetSplash();
-  window.__splashT0 = Date.now() - 5000;   // a slow boot: the floor is long gone
-  hideSplash();
-  assert(SPLASH_DONE === true, "nothing is held back when the wait already happened");
-  assert(splashClasses().includes("enter"), "the mold-opens animation is what plays");
-  assert(document.getElementById("splash").getAttribute("aria-hidden") === "true",
-    "and the sheet is hidden from a screen reader before it starts moving");
+  window.__splashT0 = Date.now() - 30000;   // an extremely slow boot
+  bootAll();
+  assert(splashClasses().includes("ready"), "a late arrival still arms the gate");
+  assert(SPLASH_DONE === false, "and still waits to be told to go");
 });
 
-await t("the 12s backstop forces past the floor", async () => {
+await t("the gate holds for the dwell, so the exit cannot cut off the entrance", async () => {
   resetSplash();
-  hideSplash(true);
-  assert(SPLASH_DONE === true, "force skips the floor — a stuck boot is not a reading opportunity");
+  window.__splashT0 = Date.now();   // the plies are still laying up
+  bootAll();
+  assert(SPLASH_READY === false, "not armed yet — sp-lay has not finished");
+  assert(!splashClasses().includes("ready"), "and the affordance is not on screen");
 });
 
-await t("a press before the app is ready is REMEMBERED, never obeyed", async () => {
+await t("a press before the gate arms is REMEMBERED, never obeyed", async () => {
   resetSplash();
-  splashGo();                       // nothing called hideSplash, so there is no .ready
+  splashGo();                       // nothing has booted, so there is no .ready
   assert(SPLASH_DONE === false,
     "pressing early must not dismiss onto the bare Connecting card — that is the RFS case");
   assert(SPLASH_ASKED === true, "but the press is recorded rather than swallowed");
   assert(splashClasses().includes("press"), "and it is acknowledged on screen");
 });
 
-await t("that remembered press waives the floor once there is something to show", async () => {
+await t("a remembered press is honoured the instant the boot finishes", async () => {
   resetSplash();
   splashGo();                       // pressed early...
-  assert(SPLASH_DONE === false, "still holding, because the app is not ready");
-  hideSplash();                     // ...and now the app arrives
-  assert(SPLASH_DONE === true, "the sheet leaves at once — the wait was already asked for");
+  assert(SPLASH_DONE === false, "still holding, because the boot is not finished");
+  bootAll();                        // ...and now it is
+  assert(SPLASH_DONE === true, "the sheet leaves at once — going was already asked for");
 });
 
-await t("pressing once the app is ready leaves immediately", async () => {
+await t("pressing an armed gate leaves immediately, on the bias wipe", async () => {
   resetSplash();
-  hideSplash();                     // arms .ready on a timer; set it as that timer would
-  document.getElementById("splash").classList.add("ready");
+  bootAll();
   splashGo();
-  assert(SPLASH_DONE === true, "a press against a ready app is obeyed on the spot");
+  assert(SPLASH_DONE === true, "a press against an armed gate is obeyed on the spot");
+  assert(splashClasses().includes("enter"), "the exit animation is what plays");
+  assert(document.getElementById("splash").getAttribute("aria-hidden") === "true",
+    "and the sheet is hidden from a screen reader before it starts moving");
+  assert(document.getElementById("sp-go").disabled === true,
+    "the button is disabled before the animation, so it cannot become a keyboard trap");
 });
 
-await t("the first load of a day waits longer than the fortieth", async () => {
-  resetSplash();
-  const first = splashFloor();
-  SPLASH_FLOOR_MS = null;           // a fresh page load, same day, same build
-  const again = splashFloor();
-  assert(first === SPLASH_FLOOR_FIRST, "a fact you have not seen gets time to be read: " + first);
-  assert(again === SPLASH_FLOOR, "one you have gets the short floor: " + again);
-  assert(again < first, "and the short one is genuinely shorter");
+await t("SIGNED OUT STILL ARMS — nothing waits for data that will never come", async () => {
+  /* The single worst thing this rewrite could do is hang in front of the people
+     who most need the sign-in card. startSync() never runs when auth resolves
+     to signedout or pending, so no snapshot will ever arrive; `data` has to be
+     marked not-needed or the gate waits forever. */
+  const realFb = window.fb;
+  try {
+    resetSplash();
+    window.fb = { state: "signedout" };
+    splashAuth();
+    splashStep("code", 1); splashStep("fonts", 1);
+    assert(SPLASH.data === 2, "data is marked NOT NEEDED, not left running");
+    assert(SPLASH_READY === true, "so the gate arms onto the sign-in card");
+    assert(SPLASH_DONE === false, "and still waits for a press like every other path");
+  } finally { window.fb = realFb; }
 });
 
-await t("the floor is read once, so repeated calls cannot shorten a wait in flight", async () => {
+await t("a pending member arms too — 'not on the roster' is an answer, not a failure", async () => {
+  const realFb = window.fb;
+  try {
+    resetSplash();
+    window.fb = { state: "pending" };
+    splashAuth();
+    splashStep("code", 1); splashStep("fonts", 1);
+    assert(SPLASH.access === 1, "access is KNOWN — it is just not granted");
+    assert(splashClasses().includes("failed") === false, "so the gantry does not go amber");
+    assert(SPLASH_READY === true, "and the gate arms onto the 'ask a lead' card");
+  } finally { window.fb = realFb; }
+});
+
+await t("a failed boot says so and arms anyway, rather than timing out silently", async () => {
   resetSplash();
-  const a = splashFloor(), b = splashFloor();
-  assert(a === b, "memoised: " + a + " then " + b);
-  assert(a === SPLASH_FLOOR_FIRST, "and it is the first-of-day value both times");
+  splashStep("code", 1);
+  splashFail("Can't reach the database.");
+  assert(SPLASH_READY === true, "the gate arms — nobody is ever locked out");
+  assert(SPLASH_DONE === false, "but it still does not dismiss itself");
+  assert(splashClasses().includes("failed"), "the sheet is in its failed state");
+  assert(document.getElementById("sp-step").textContent.includes("database"),
+    "and says which thing went wrong, in words");
+  assert(document.getElementById("sp-go").textContent === "Continue anyway",
+    "the button changes wording, so pressing it is an informed choice");
+});
+
+await t("the gantry counts real milestones, and never one it did not have", async () => {
+  /* The MODEL is asserted here; the lamps themselves are asserted in
+     test_appui.mjs, where there is a real DOM. This file's document is a
+     hand-rolled stub whose querySelectorAll returns [], so a lamp assertion
+     here would pass against nothing — which is worse than no assertion. */
+  resetSplash();
+  assert(splashDoneCount() === 0, "nothing is lit before anything has happened");
+  splashStep("code", 1); splashStep("fonts", 1);
+  assert(splashDoneCount() === 2, "two settled, two lamps: " + splashDoneCount());
+  assert(splashFailed() === false, "and nothing is amber");
+
+  /* Out of order on purpose. Fonts routinely beat auth and a warm cache can
+     land data before the roster read returns, which is exactly why the lamps
+     fill by count rather than one per named position. */
+  resetSplash();
+  splashStep("data", 1); splashStep("fonts", 1);
+  assert(splashDoneCount() === 2, "the count does not care which two: " + splashDoneCount());
+
+  resetSplash();
+  splashFail("nope");
+  assert(splashDoneCount() === SPLASH_BOOT.length, "a give-up settles everything");
+  assert(splashFailed() === true, "and the gantry knows it ended badly");
+
+  resetSplash();
+  splashStep("auth", 1); splashStep("auth", -1, "too late");
+  assert(SPLASH.auth === 1 && SPLASH_NOTE === "",
+    "a settled step cannot be re-settled — the first answer wins, so nothing flaps");
+});
+
+await t("the backstop stays silent when there was nothing wrong", async () => {
+  /* It fires on a timer and cannot know whether it is needed. Waiting at an
+     armed gate for twelve seconds is now NORMAL — it just means nobody pressed
+     Continue yet — so a backstop that spoke anyway would print "Something is
+     not responding" under five gold lamps. */
+  resetSplash();
+  bootAll();
+  splashFail("Something is not responding.");
+  assert(SPLASH_NOTE === "", "no reason is invented for a boot that worked");
+  assert(splashFailed() === false, "and nothing is marked failed after the fact");
+  assert(splashClasses().includes("failed") === false, "so the sheet stays out of its failed state");
+  assert(document.getElementById("sp-go").textContent === "Continue",
+    "and the button keeps its ordinary wording");
+});
+
+await t("a specific reason outranks the backstop's generic one", async () => {
+  resetSplash();
+  splashStep("auth", -1, "Can't reach sign-in.");
+  splashFail("Something is not responding.");
+  assert(SPLASH_NOTE === "Can't reach sign-in.",
+    "the step that actually failed said something more useful, and said it first");
+});
+
+await t("hideSplash(true) still forces, because eight visual suites depend on it", async () => {
+  /* tools/lib/browser.mjs calls exactly this to photograph the app behind the
+     sheet. It is the harness saying go on a person's behalf, which is why it is
+     the same door and not a test-only path. */
+  resetSplash();
+  hideSplash(true);
+  assert(SPLASH_DONE === true, "force takes it down with nothing booted at all");
+});
+
+await t("the floors are gone, not merely unused", async () => {
+  assert(typeof splashFloor === "undefined", "splashFloor()");
+  assert(typeof SPLASH_FLOOR === "undefined" && typeof SPLASH_FLOOR_FIRST === "undefined",
+    "and both floor constants — a gate has nothing to budget, so there is nothing to tune");
 });
 
 await t("the splash fact comes from the same pool the dashboard draws from", async () => {
