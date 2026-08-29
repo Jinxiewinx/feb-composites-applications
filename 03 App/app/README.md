@@ -704,10 +704,16 @@ a flammable marker and the price on it, and opening it lists each container
 with its EH&S code, which is the only way to tell jug six from jug seven while
 holding one of them. The code a row shows is **the strip printed down the
 right edge of the tag**: the last twelve characters, in the label's own
-four-character groups. That strip is the part still readable on a jug whose
-label is wrapped round the neck or wiped with acetone, so it is what somebody
-comparing the screen against the thing in their hand can actually read out.
-The whole code sits in the row's tooltip. A material with one container stays a plain row. The
+four-character groups, **with the final group at full weight and the rest
+dimmed**. That strip is the part still readable on a jug whose label is wrapped
+round the neck or wiped with acetone, so it is what somebody comparing the
+screen against the thing in their hand can actually read out. The emphasis is
+there because comparing and scanning are different jobs: across the 627 real
+tags in the RSS export only the last five characters vary, and across FEB's own
+50 containers only the last three, so an undifferentiated strip is nine glyphs
+of shared prefix in front of the ones that tell two jugs apart. Dimming rather
+than dropping them keeps the comparison honest. The whole code sits in the
+row's tooltip. A material with one container stays a plain row. The
 folded groups still print open, because this page is the stock-walk sheet.
 
 **Add here** creates a record already located. **Move here** scans the label

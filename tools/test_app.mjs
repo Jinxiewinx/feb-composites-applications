@@ -5418,8 +5418,15 @@ await t("a group of one renders as the plain row; a group of many folds with the
   toggleLotGroup(key);
   const open = invLotList(DB.lots);
   assert(!open.includes("folded"), "toggling opens the member list");
-  assert(open.includes("0000 0024 3EF0") && open.includes("0000 0024 3EF1"),
-    "each container shows the strip printed down the edge of its label — what you can read on the jug in your hand");
+  /* Assert the VISIBLE row, not the tooltip. The title attribute carries the
+     whole printed code, so a substring check for "0000 0024 3EF0" passes even
+     when the row itself shows nothing of the sort — which is exactly what it
+     did while this assertion was written that way. */
+  assert(open.includes(`<span class="ehs-dim">0000 0024 </span><b>3EF0</b>`) &&
+         open.includes(`<span class="ehs-dim">0000 0024 </span><b>3EF1</b>`),
+    "each container shows the edge strip with its last group carrying the weight");
+  assert(open.includes(`title="EH&amp;S tag CA00 0000 0000 0000 0024 3EF0"`),
+    "and the whole code, grouped as the label's face prints it, is the tooltip");
   view.invLotOpen = {};
   DB.lots = []; DB.items = [];
 });
@@ -5432,7 +5439,8 @@ await t("the location page says counts in its section headers and codes on singl
   const h = main.innerHTML;
   assert(h.includes("pgrouphd"), "sections wear the house group-header strip");
   assert(h.includes("sec-resin") && h.includes("sec-consumables"), "with per-kind accents");
-  assert(h.includes("0000 0024 3F1C"), "a lone container's EH&S code is on its row, as the label's edge prints it");
+  assert(h.includes(`<span class="ehs-dim">0000 0024 </span><b>3F1C</b>`),
+    "a lone container's EH&S code is on its row, as the label's edge prints it");
   view = { ...view, mode: "list", id: null };
 });
 

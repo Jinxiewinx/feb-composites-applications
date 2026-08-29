@@ -644,25 +644,32 @@ function invLotPill(o) {
    never showed it, so ten identical jugs were told apart by an id that is on
    no sticker), the expiry, and a flammable marker.
 
-   THE ROW SHOWS THE EDGE PRINT, NOT AN ARBITRARY TRUNCATION. A UC tag reprints
-   its last twelve characters rotated down the right edge, and that strip is
-   what survives a label wrapped round a bottle neck or wiped with acetone — so
-   it is what the person comparing this row against the jug in their hand is
-   actually reading. The old "…243EF0" was the last six with no grouping, which
-   matched nothing printed anywhere on the sticker. See the EH&S header in
-   core.js. The full code, grouped as the face prints it, stays in the tooltip.
+   THE ROW SHOWS THE EDGE PRINT, WITH THE LAST GROUP CARRYING THE WEIGHT.
+   A UC tag reprints its last twelve characters rotated down the right edge, and
+   that strip is what survives a label wrapped round a bottle neck or wiped with
+   acetone, so it is what somebody comparing this row against the jug in their
+   hand is actually reading. But it is not what tells two jugs apart.
 
-   WHY TWELVE AND NOT SIX, because a parallel session reached the other answer
-   from the same photograph and its reasoning is worth answering rather than
-   overwriting. Across the three serials anyone has actually seen (…228D47 from
-   Simon's RSS export, …243EF0 off the photo, …243F1C in the fixtures) the shape
-   is CA, sixteen zeros, six hex, and only those six move — so the last six ARE
-   the identity and cannot collide. True, and not the point. The row is read
-   while comparing it against a sticker, and "…243EF0" is a string printed
-   nowhere on that sticker, so the eye has to translate before it can compare.
-   The edge strip is printed, in these groups, on the label itself. The leading
-   zeros are the label's own redundancy, not ours. If a future batch of tags
-   varies further left, twelve keeps working and six quietly stops.
+   Simon's RSS export of 2026-08-28 settles that with 627 real tags rather than
+   an argument: positions 0-18 are IDENTICAL in every one of them, only the last
+   five characters vary at all, and across FEB's own 50 containers only the last
+   THREE do. So a twelve-character strip at one weight is nine glyphs of shared
+   prefix in front of the three that matter, and a column of ten of them is
+   unreadable — which is what shipping it in v4.1.0 proved when the four
+   candidates were photographed side by side against that real data.
+
+   Hence: the whole strip, in the label's four-character groups, with the last
+   group at full weight and the rest dimmed. The comparison against the sticker
+   still works because every printed character is present. The scan down a
+   column works because the eye has a fixed target. Emphasising the last GROUP
+   rather than the last three characters keeps it a property of the label's
+   grammar instead of a property of this export, so a future batch that varies
+   further left needs no change here.
+
+   (The alternative, and it was a real one: show only the last six, as v4.0.0
+   did. It is compact and it cannot collide. It was dropped because "…243EF0"
+   is a string printed nowhere on the tag, so the eye has to translate before it
+   can compare, and comparing is the whole reason the row carries a code.)
 
    A tag that does not fit the printed grammar is marked rather than hidden:
    almost always a typo, and the shelf view is where somebody notices. */
@@ -670,8 +677,13 @@ function invEhsShort(o) {
   const c = String(o.ehsBarcode || "");
   if (!c) return "";
   const shape = ehsShape(c);
+  const t = ehsTailText(c);
+  const cut = t.lastIndexOf(" ");
+  const body = cut < 0
+    ? `<b>${esc(t)}</b>`
+    : `<span class="ehs-dim">${esc(t.slice(0, cut + 1))}</span><b>${esc(t.slice(cut + 1))}</b>`;
   const title = `EH&S tag ${ehsPrinted(c)}` + (shape.ok ? "" : ` — this ${shape.why}`);
-  return `<span class="ehs-code${shape.ok ? "" : " ehs-odd"}" title="${esc(title)}">${esc(ehsTailText(c))}${shape.ok ? "" : " ?"}</span>`;
+  return `<span class="ehs-code${shape.ok ? "" : " ehs-odd"}" title="${esc(title)}">${body}${shape.ok ? "" : " ?"}</span>`;
 }
 function invLotFacts(o) {
   return [

@@ -34,7 +34,7 @@ var APP_VERSION = "4.1.0";
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
   "EH&S tags now read on screen the way they read on the sticker: four-character groups, not a run of 24.",
-  "A container's row shows the twelve characters printed down the edge of its tag, which is the part you can still read on a scuffed jug.",
+  "A container's row shows the twelve characters printed down the edge of its tag, with the last four in bold — those are the ones that tell two jugs apart.",
   "Those twelve are enough to look a container up. Type them into any scan box; if two jugs share them the app says so instead of guessing.",
   "A tag that is not 24 characters saves with a warning rather than being refused, and the EH&S reconciliation sheet flags it.",
   "That sheet now carries the code twice: plain for matching against RSS, grouped for reading off a clipboard on the shelf walk.",
@@ -1117,10 +1117,20 @@ function tabForId(id) {
       be enough to find a container (ehsResolveTyped), and twelve characters
       are what the app shows on a row, so screen and sticker say the same thing.
 
-   This is ONE photographed tag, so the grammar is advisory, not enforced:
-   ehsShape warns and nothing blocks. A tag that does not fit is far more likely
-   a typo than a new RSS format, and saying so at the shelf is cheap; refusing
-   to store it is not. */
+   AND 627 REAL TAGS AGREE WITH IT. Simon's RSS export of 2026-08-28 holds every
+   container in the university's system for this building: 627 barcodes, 627
+   distinct, EVERY ONE of them 24 characters. Positions 0-18 are identical in
+   all of them; only the last five vary at all, and across FEB's own 50
+   containers only the last three do. So the grammar is not one photograph's
+   worth of guess, and a four-character tail would already be unique.
+
+   It stays ADVISORY anyway: ehsShape warns and nothing blocks. Two reasons that
+   the export does not touch. The pre-2024 hand-entered codes in our own DB are
+   shorter and real, and they have to keep working. And refusing a code somebody
+   is holding in their hand is how a person decides the field is broken and
+   leaves it blank, which costs more than a wrong code somebody can see and fix.
+   The export tells us what a tag looks like; it does not tell us what every
+   sticker on every shelf looks like. */
 
 /* The printed grammar, from the tag above. Kept as named constants because
    three files reason about these two numbers. */

@@ -197,9 +197,26 @@ is not a survey.
 top). `invEhsShort` no longer shows the last six: it shows **the twelve
 characters reprinted down the tag's edge, in the label's four-character
 groups**, because a row is read while comparing it against a sticker and
-`…243EF0` is printed nowhere on one. Six being sufficient for uniqueness was
-right and is not the reason the row exists; the argument is written out in
-full above `invEhsShort` so it is not re-litigated. New in `core.js`:
+`…243EF0` is printed nowhere on one. **v4.1.1 then settled the visual half of
+that argument against real data rather than opinion.** Simon's RSS export holds
+**627 real tags, all 24 characters, all distinct — and positions 0-18 are
+identical in every one of them.** Only the last five vary; across FEB's own 50
+containers, only the last THREE. So a flat twelve-character strip is nine dead
+glyphs in front of the ones that matter, which is what shipping it proved. The
+four candidates (edge-12 flat, last-6, edge-12 with the final group emphasised,
+whole-code with it emphasised) were rendered side by side against those 50 real
+codes; the third won and is what ships. **The last group is at full weight, the
+rest dimmed to 0.5** — dimmed rather than dropped, because comparing against the
+sticker needs every printed character and only scanning a column needs the
+anchor. Emphasising the last GROUP, not the last three characters, keeps it a
+property of the label's grammar rather than of this one export. The reasoning
+for all of it sits above `invEhsShort`; do not re-litigate it from first
+principles.
+
+The row assertions in `test_app` now match the dim/bold markup, not a flat
+string. **They used to pass against the tooltip** (`title=` carries the whole
+printed code, so `includes("0000 0024 3EF0")` was green no matter what the row
+showed). Mutation-checked: breaking the split fails exactly one test. New in `core.js`:
 `ehsPrinted`, `ehsTailText`, `ehsShape` (advisory, never a gate) and
 **`ehsResolveTyped`**, which accepts those twelve edge characters as a lookup
 anywhere a code is typed — floor of 12 so the nine-character pre-2024 codes

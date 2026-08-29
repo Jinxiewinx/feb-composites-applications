@@ -2042,8 +2042,16 @@
     background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
   /* The tag is shown as the label prints it, in four-character groups, so the
      eye can walk screen and sticker together. A hair of extra tracking is what
-     makes the groups read as groups at 12px. */
+     makes the groups read as groups at 12px.
+
+     The last group carries the weight and the rest is dimmed: across the 627
+     real tags in the RSS export only the last five characters vary at all, so
+     an undifferentiated strip is mostly shared prefix. See invEhsShort. The
+     dim half must stay legible rather than decorative — it is what gets
+     compared against the sticker — so this is 0.5, not 0.25. */
   .ehs-code { letter-spacing: 0.02em; }
+  .ehs-code .ehs-dim { opacity: 0.5; font-weight: 400; }
+  .ehs-code b { font-weight: 600; color: var(--ink); }
   /* A code that does not fit the printed grammar: almost always a typo, so it
      is marked where somebody is standing in front of the shelf. */
   .ehs-code.ehs-odd { color: var(--bad); }
