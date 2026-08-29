@@ -44,9 +44,9 @@ const RX_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /* The four things a person picks from, and the two fields they set. Four
    distinct initials on purpose: f / r / h / c each select natively.
-   Capturing `role` here is what finally lets the CS-011 §6 "resin and hardener
-   on the same shelf" warning fire at all — the old flow never asked, so every
-   received lot was born unable to trigger it. */
+   `role` matters even though the co-location warning is gone: the cure
+   buy-off's lot pickers filter on it (defaultLot), and it is what keeps a
+   hardener from being offered as the resin. */
 const RX_CLASSES = [
   { key: "FAB", label: "Fabric", cls: "FAB", role: "" },
   { key: "RSN:resin", label: "Resin", cls: "RSN", role: "resin" },
@@ -253,9 +253,8 @@ function rxInferFromName(r) {
   }
   /* The restock table knows what a material IS — that acetone is flammable and
      AT30 is a hardener — in a way a delivery never does. Inference runs from
-     the rule, never from pattern-matching the name: guessing "hardener" out of
-     a string is how a hardener ends up on the resin shelf with a clean §6
-     all-clear. */
+     the rule, never from pattern-matching the name: a wrong hazard guessed out
+     of a string files a silent false all-clear on the flammables check. */
   const rule = r.matKey && typeof restockRuleFor === "function" ? restockRuleFor(r.matKey) : null;
   if (rule) {
     if (!r.supplier && rule.supplier) r.supplier = rule.supplier;
@@ -747,11 +746,11 @@ function rxConfirmHtml() {
   </div>`;
 }
 
-/* The CS-011 §6 checks, run against what each shelf WOULD hold once this
-   delivery lands — so the chemical-storage problem is caught before the write
-   instead of turning up as a red chip on the map afterwards. This is only
-   possible at all because the sheet captures role and hazard, which the old
-   modal never asked for. */
+/* The chemical-storage checks, run against what each shelf WOULD hold once
+   this delivery lands — so a problem is caught before the write instead of
+   turning up as a red chip on the map afterwards. This is only possible at
+   all because the sheet captures hazard, which the old modal never asked
+   for. */
 /* The EH&S codes a row carries, normalised, in the order they will be dealt
    to the row's records. Classes outside the campus chemical system get none
    even if something was typed — the cell renders as — for them anyway. */
@@ -790,7 +789,6 @@ function rxEhsWarnings(rows) {
 
 function rxProposedWarnings(p) {
   const out = [...rxEhsWarnings(p.rows)];
-  const idx = invIndex();
   const byBin = new Map();
   for (const r of p.rows) {
     if (!r.bin) continue;
@@ -800,12 +798,8 @@ function rxProposedWarnings(p) {
   for (const [binId, rows] of byBin) {
     const bin = shopById("items", binId);
     if (!bin) continue;
-    const bucket = idx.by.get(binId) || invEmptyBucket();
-    const roles = new Set(bucket.resin.map(o => String(o.role || "").toLowerCase()).filter(Boolean));
-    for (const r of rows) { const c = rxClassOf(r.cls); if (c.cls === "RSN" && c.role) roles.add(c.role); }
-    if (roles.has("resin") && roles.has("hardener")) {
-      out.push(`${rxBinName(binId)} would hold resin and hardener together — CS-011 §6 wants them on separate shelves.`);
-    }
+    /* No resin+hardener co-location check — the team stores them together
+       (lead decision 2026-08-28; see the matching note in invLocWarnings). */
     const flam = rows.filter(r => {
       const rule = r.matKey && typeof restockRuleFor === "function" ? restockRuleFor(r.matKey) : null;
       return rule && rule.hazard === "flammable";

@@ -211,7 +211,9 @@ Three field names carry more weight than they look:
   the default-and-confirm design would quietly launder guesses into records.
 - **`role`** and `hazard` are written by the Receiving class cell. Before that
   flow existed nothing asked for them, so every received lot was born unable to
-  trigger the CS-011 §6 resin/hardener check at all.
+  trigger the flammables check, and the cure buy-off could not tell a hardener
+  from a resin. (The one-time §6 resin/hardener co-location warning is gone —
+  the team stores them together, lead decision 2026-08-28.)
 
 The Activity feed is built from the `updatedAt` / `updatedBy` pair every record
 already carried, plus comments and step buy-offs — no separate event log.

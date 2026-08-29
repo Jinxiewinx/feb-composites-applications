@@ -359,10 +359,39 @@ function renderShopList(tab) {
         [D.filter(o => o.stage === "Ready for layup").length, "Ready for layup"],
         [D.filter(o => !o.location).length, "No home location"],
       ]
+    : tab === "lots" && typeof groupLots === "function"
+    ? [
+        /* Containers vs materials is the pair the EH&S import made matter:
+           ten AT30 jugs are ten containers and one material, and both numbers
+           answer real questions ("how many jugs" vs "how many kinds"). */
+        [D.length, "Containers"],
+        [groupLots(D.filter(o => o.stage !== "Empty")).length, "Materials"],
+        [D.filter(o => o.cls === "RSN").length, "Resin / hardener"],
+        [D.filter(o => o.cls === "CON").length, "Consumables"],
+      ]
     : [
         [D.length, spec.label],
         ...classes.map(c => [D.filter(o => (o.cls || spec.prefix) === c.cls).length, c.label]),
       ].slice(0, 4);
+
+  /* The Materials list groups identical containers by default, exactly like
+     the location page: ×N per material, expandable to per-container rows with
+     their EH&S codes and locations. A search drops to the flat table — search
+     results need per-record rows — and the Flat toggle is the standing escape
+     for anyone who wants the spreadsheet view. */
+  const grouped = tab === "lots" && !q && !view.lotsFlat && typeof invLotList === "function";
+  const groupedBody = () => {
+    const secs = [
+      ["RSN", "Resin / hardener", "sec-resin"],
+      ["CON", "Consumables", "sec-consumables"],
+      ["FAB", "Fabric", "sec-fabric"],
+    ];
+    const out = secs.map(([cls, label, sec]) => {
+      const arr = rows.filter(o => o.cls === cls);
+      return arr.length ? invGroup(label, invLotList(arr, { showLoc: true }), invLotMeta(arr), sec) : "";
+    }).join("");
+    return out || `<div class="card">Nothing matches that filter.</div>`;
+  };
 
   return `
   <div class="stat-row">
@@ -390,11 +419,16 @@ function renderShopList(tab) {
       ${stages.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
     </select>
     <input id="searchbox" placeholder="search ${esc(spec.nounPlural)} / id…" value="${esc(view.q || "")}" oninput="searchInput(this)">
+    ${tab === "lots" && !q ? `<button class="ib ${view.lotsFlat ? "" : "primary"}" title="One line per material, expandable"
+        onclick="view.lotsFlat=false;render()">Grouped</button>
+      <button class="ib ${view.lotsFlat ? "primary" : ""}" title="One row per container"
+        onclick="view.lotsFlat=true;render()">Flat</button>` : ""}
   </div>
   ${!D.length ? `<div class="card">No ${esc(spec.nounPlural)} yet. ${spec.coll === "molds"
       ? `Add one, or import the SN5 molds from their work orders with <b>Find molds in work orders</b> under Reports.`
       : `Use the buttons above to add one.`}</div>` : ""}
-  ${rows.length ? `<table class="list">
+  ${grouped && D.length ? `<div class="card">${groupedBody()}</div>`
+  : rows.length ? `<table class="list">
     <tr>${spec.list.map(k => `<th>${esc(shopColLabel(spec, k))}</th>`).join("")}</tr>
     ${rows.map(o => `<tr onclick="openRecord('${tab}','${esc(o.id)}')">
       ${spec.list.map((k, i) => `<td>${i === 0

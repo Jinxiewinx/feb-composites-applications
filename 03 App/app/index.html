@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- maximum-scale=1 exists to stop iOS Safari's automatic zoom-in when a
+     sub-16px input takes focus (the scan box, the receiving grid — Simon:
+     "the app zooms in slightly when any keyboard opens"). Since iOS 10 the
+     cap is IGNORED for user pinch gestures, so accessibility zoom still
+     works; only the focus auto-zoom is suppressed. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#002b50">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f16">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -1144,6 +1149,10 @@
     border-radius: var(--radius); padding: 4px 8px; background: var(--surface-2); }
   .lblist .chk { border-top: 1px solid var(--line); }
   .lblist .chk:first-child { border-top: none; }
+  /* One sublocation in the EH&S import picker (ehsimport.js). */
+  .lblist .ehsub { border-top: 1px solid var(--line); }
+  .lblist .ehsub:first-child { border-top: none; }
+  .lblist .ehsub .chk { border-top: none; }
 
   /* ---- documents ---- */
   .doccat { margin-bottom: 8px; }
@@ -1976,6 +1985,32 @@
     border-radius: var(--radius); background: var(--surface-2); color: var(--ink); padding: 8px; }
   .inv-site .pgrouphd { position: static; margin-top: 14px; }
   .invrow .sm { flex: none; }
+  /* ---- location contents: sections and grouped materials ---- */
+  /* Each kind is a section with the house group-header strip and a left
+     accent. The accent is enhancement only — the uppercase label is the
+     distinction that survives grayscale, per the print rule. The
+     folded-groups-print-open rule lives in the app's ONE @media print block
+     further down — a second print block here confused the design-system
+     token check, which reads the first block it finds. */
+  .invsec { margin-top: 4px; }
+  .invsec .pgrouphd { border-left: 3px solid var(--border-2); padding-left: 8px; }
+  .invsec.sec-resin .pgrouphd { border-left-color: var(--accent); }
+  .invsec.sec-consumables .pgrouphd { border-left-color: var(--amber); }
+  .invsec.sec-fabric .pgrouphd { border-left-color: var(--ok); }
+  .invsec.sec-molds .pgrouphd, .invsec.sec-boards .pgrouphd { border-left-color: var(--brand-ink); }
+  /* A material with several containers folds to one line. The caret column
+     keeps group and single rows aligned; the member list indents under it.
+     The fold is a class so print still paints it (see the @media print rule),
+     unlike a closed <details>. */
+  .invrow.invgrp { cursor: pointer; }
+  .invrow.invgrp .grp-caret { width: 14px; flex: none; color: var(--muted); }
+  .invrow.invgrp .grp-n { color: var(--brand-ink); }
+  .invgrp-body { margin-left: 22px; border-left: 2px solid var(--border-2); }
+  .invgrp-body.folded { display: none; }
+  .invrow.invmem .pm-name { font-weight: 500; }
+  .ehs-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted);
+    background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+  .invrow .bad { color: var(--bad); font-weight: 600; }
 
   /* ---- the receiving desk ---- */
   /* The sheet is the budget line-item grid one size up, and wears the same
@@ -2883,6 +2918,10 @@
 
   /* Touch devices get larger tap targets regardless of width. */
   @media (pointer: coarse) {
+    /* Belt-and-braces for the viewport meta's maximum-scale=1: the two inputs
+       a phone actually types into get real 16px type, so even a browser that
+       ignores the meta has no sub-16px input to zoom in on. */
+    #scan-manual, .rxgrid input, .rxgrid select { font-size: 16px; }
     .lc-open { min-height: 40px; display: inline-flex; align-items: center; }
     button, .icon-btn, .hamburger { min-height: 40px; }
     .mtxcell { min-height: 40px; min-width: 40px; }
@@ -2952,6 +2991,9 @@
   }
 
   @media print {
+    /* A folded material group prints its containers: this page is the stock
+       walk, and a walk sheet missing eight of ten jugs is not a walk sheet. */
+    .invgrp-body.folded { display: block; }
     /* Force light tokens on paper no matter the on-screen theme, so a work order
        printed in dark mode is still black-on-white (print.css and the fallback
        path both read --ink / --surface). */

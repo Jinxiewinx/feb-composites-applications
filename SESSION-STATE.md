@@ -20,6 +20,28 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**INVENTORY ROUND 2 IS IN PROGRESS** (plan: the snoopy-dragon plan file on
+Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
+grouped lot display (groupLots keyed matKey-else-name; group rows fold via a
+CLASS, not <details> — print must paint; members show EH&S short codes),
+section headers with counts + per-kind accents on the location page, the
+Materials list grouped by default with a Grouped/Flat toggle (flat when
+searching), map cards clickable anywhere (container onclick backstop + the
+buttons stopPropagation — the old "no stopPropagation" test was rewritten
+deliberately), the resin+hardener warning REMOVED code-only (CS-011 §6
+still says otherwise on purpose — Simon revises the standard himself at
+Rev D; do not edit it from a session), and the iOS keyboard zoom fix
+(viewport maximum-scale=1 + 16px coarse-pointer inputs). Still to land from
+the plan: B mass delete (view.shopPick per the WO pattern; NOTE Simon's
+call: EVERYONE can delete anything in inventory — needs the firestore.rules
+lots/items delete change, rules deploy ALONE and FIRST), C scan-into-field
+for ehsBarcode (updShop("...","ehsBarcode",code) already does the dupe
+refusal), E materials.js knowledge table (matKey aliases + datasheet paths
+from docs/manifest.json + ratio/shelf-life ONLY from bundled TDS PDFs, cite
+them; backfill for the 50 imported records). A flaky test was fixed in
+passing: the dashboard "part of" assert now matches the chip markup, not the
+phrase — a Team-lore fact contains the words.
+
 **EH&S (RSS Chemicals) barcodes: ALL FOUR PHASES BUILT.** Phases 1–2 (the
 `ehsBarcode` field + one-tag-one-container, the scanner reading UC tags via
 `scanResolve`, the receiving desk's tag column) are live and were verified

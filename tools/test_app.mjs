@@ -2482,7 +2482,10 @@ await t("a legacy parentId resolves to null rather than crashing", () => {
   DB.projects = [{ id: "TKT-ORPHAN", title: "Orphan", kind: "issue", status: "To Do", parentId: "TKT-GONE", workOrderId: "WO-1", dueDate: today(), assignees: ["simon@berkeley.edu"] }];
   assert(parentOf(DB.projects[0]) === null, "dangling parentId resolves to null, not a crash");
   setTab("dashboard");
-  assert(!main.innerHTML.includes("part of"), "and nothing claims a parent it cannot name");
+  /* Matched against the parent-chip MARKUP, not the bare phrase: the Team
+     lore card rotates through fact strings and one of them contains "part
+     of", which made this assert fail on whichever day that fact came up. */
+  assert(!main.innerHTML.includes("part of <span"), "and nothing claims a parent it cannot name");
 });
 
 await t("isMine: exact name/first/email match, NOT shared-first-name overmatch", () => {
@@ -4996,6 +4999,79 @@ await t("the reconciliation export flags untagged and emptied containers first",
   DB.lots = []; DB.items = [];
 });
 
+console.log("identical containers fold into one line (the ten-AT30-jugs fix):");
+
+await t("grouping keys on matKey when set, else the name — and never merges different materials", () => {
+  const jug = (id, name, matKey) => ({ id, cls: "RSN", name, matKey, stage: "Sealed" });
+  const gs = groupLots([
+    jug("RSN-1", "AT30 SLOW EPOXY HARDENER"), jug("RSN-2", "AT30 SLOW EPOXY HARDENER"),
+    jug("RSN-3", "at30 slow epoxy hardener  "),     // case/space variants are the same jug type
+    jug("RSN-4", "IN2 Epoxy Infusion Resin"),
+    jug("RSN-5", "AT30 (new label)", "AT30-SLOW"), jug("RSN-6", "AT30 old-style name", "AT30-SLOW"),
+  ]);
+  const at30ByName = gs.find(g => g.key === "n:at30 slow epoxy hardener");
+  const at30ByKey = gs.find(g => g.key === "m:at30-slow");
+  assert(at30ByName && at30ByName.members.length === 3, "name variants fold together");
+  assert(at30ByKey && at30ByKey.members.length === 2, "matKey folds across different label names");
+  assert(gs.find(g => g.members.some(m => m.id === "RSN-4")).members.length === 1, "a different material stays its own group");
+});
+
+await t("a group of one renders as the plain row; a group of many folds with the count", () => {
+  DB.items = [{ id: "BIN-SN6-050", cls: "BIN", name: "Flam cab", stage: "Active", flam: "Yes", site: "Flammables cabinet" }];
+  DB.lots = [
+    { id: "RSN-SN6-070", cls: "RSN", name: "AT30", stage: "Sealed", location: "BIN-SN6-050", ehsBarcode: "CA0000000000000000243EF0" },
+    { id: "RSN-SN6-071", cls: "RSN", name: "AT30", stage: "Open", location: "BIN-SN6-050", ehsBarcode: "CA0000000000000000243EF1" },
+    { id: "RSN-SN6-072", cls: "RSN", name: "Frekote 700-NC", stage: "Sealed", location: "BIN-SN6-050" },
+  ];
+  view = { ...view, invLotOpen: {} };
+  const html = invLotList(DB.lots);
+  assert(html.includes("×2") && html.includes("invgrp"), "the AT30 pair folds to one line with its count");
+  assert(html.includes("1 sealed") && html.includes("1 open"), "the line says the states without opening it");
+  assert(html.includes("folded"), "and starts closed");
+  assert((html.match(/Frekote 700-NC/g) || []).length === 1 && !html.includes("Frekote 700-NC <b"),
+    "the singleton renders as a plain row, not a group of one");
+  const key = lotGroupKey(DB.lots[0]);
+  toggleLotGroup(key);
+  const open = invLotList(DB.lots);
+  assert(!open.includes("folded"), "toggling opens the member list");
+  assert(open.includes("…243EF0") && open.includes("…243EF1"),
+    "each container shows its EH&S code — the sticker on the jug in your hand");
+  view.invLotOpen = {};
+  DB.lots = []; DB.items = [];
+});
+
+await t("the location page says counts in its section headers and codes on singleton rows", () => {
+  seedInventory();
+  DB.lots.forEach(o => { if (o.id === "RSN-SN6-001") o.ehsBarcode = "CA0000000000000000243F1C"; });
+  view = { ...view, tab: "inventory", invView: "map", mode: "detail", id: "BIN-SN6-001", edit: false, invFlag: "", invLotOpen: {} };
+  render();
+  const h = main.innerHTML;
+  assert(h.includes("pgrouphd"), "sections wear the house group-header strip");
+  assert(h.includes("sec-resin") && h.includes("sec-consumables"), "with per-kind accents");
+  assert(h.includes("…243F1C"), "a lone container's EH&S code is on its row");
+  view = { ...view, mode: "list", id: null };
+});
+
+await t("the Materials list groups by default, goes flat on search or by toggle", () => {
+  DB.lots = [
+    { id: "RSN-SN6-070", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "RSN-SN6-071", cls: "RSN", name: "AT30", stage: "Sealed" },
+    { id: "CON-SN6-070", cls: "CON", name: "Acetone", stage: "Sealed" },
+  ];
+  view = { ...view, tab: "inventory", invView: "lots", mode: "list", id: null, q: "", fSub: "", fStatus: "", lotsFlat: false, invLotOpen: {} };
+  render();
+  let h = main.innerHTML;
+  assert(h.includes("invgrp") && h.includes("×2"), "grouped by default");
+  assert(h.includes("Materials") && h.includes("Containers"), "the tiles count both jugs and kinds");
+  view.lotsFlat = true; render();
+  h = main.innerHTML;
+  assert(h.includes("<table class=\"list\"") && !h.includes("invgrp"), "the Flat toggle is the spreadsheet escape");
+  view.lotsFlat = false; view.q = "at30"; render();
+  h = main.innerHTML;
+  assert(h.includes("<table class=\"list\""), "a search drops to flat rows — results are per-record");
+  view.q = ""; DB.lots = [];
+});
+
 console.log("the scan resolution chain (FEB grammar first, then the tag registry):");
 
 await t("a scan resolves FEB codes as before, and an EH&S tag to the record wearing it", () => {
@@ -5212,13 +5288,16 @@ await t("the contents join answers 'what is on this shelf', boards and molds inc
   assert(idx.un.fabric.length === 1, "the unlocated roll is unhoused");
 });
 
-await t("the chemical and freshness warnings fire where CS-011 says they should", () => {
+await t("the chemical and freshness warnings fire where they should — and co-location is not one", () => {
   seedInventory();
   const idx = invIndex();
   const w = invLocWarnings(shopById("items", "BIN-SN6-001"), idx.by.get("BIN-SN6-001"));
   const texts = w.map(x => x.text).join(" | ");
-  assert(/resin \+ hardener together/.test(texts), "§6 separation: " + texts);
-  assert(/flammable — not a rated location/.test(texts), "§6 flammables: " + texts);
+  /* The shelf holds a resin AND a hardener, and that is now fine: the team
+     stores them together (lead decision 2026-08-28), same as the campus EH&S
+     filing. Reintroducing the old §6 co-location warning fails here. */
+  assert(!/resin \+ hardener/.test(texts), "co-location is allowed: " + texts);
+  assert(/flammable — not a rated location/.test(texts), "flammables: " + texts);
   assert(/1 expired/.test(texts), "expiry: " + texts);
   const w2 = invLocWarnings(shopById("items", "BIN-SN6-002"), idx.by.get("BIN-SN6-002"));
   assert(w2.length === 0, "the clean bin stays clean");
@@ -5482,7 +5561,8 @@ await t("the map renders sites, cards, and the No-location card; a tap opens con
   render();
   const h = main.innerHTML;
   assert(h.includes("RFS container") && h.includes("Jacobs basement"), "site headers");
-  assert(h.includes("Resin shelf A") && h.includes("resin + hardener together"), "card + warning");
+  assert(h.includes("Resin shelf A") && h.includes("flammable — not a rated location"), "card + warning");
+  assert(!h.includes("resin + hardener"), "co-location is not a warning any more");
   assert(h.includes("No location"), "the unhoused card");
   selectInvRec("BIN-SN6-002");
   const c = main.innerHTML;
@@ -5627,11 +5707,11 @@ await t("a fabric row cannot smuggle in an expiry the schema does not have", asy
     "dry cloth has no expiresOn in SHOP_FIELDS_BY_CLASS, and a field the detail page will never render is a black hole");
 });
 
-await t("THE regression: a received lot can finally trigger the CS-011 §6 warnings", async () => {
-  /* The old flow captured class, name and vendor lot only, so a received lot
-     was born with no role and no hazard — and invLocWarnings needs both. Every
-     chemical-storage check was therefore structurally blind to everything the
-     receive flow created. */
+await t("a received resin + hardener pair on one shelf is NOT a warning (co-storage allowed)", async () => {
+  /* This test used to assert the opposite. The team stores resin and hardener
+     together (lead decision 2026-08-28, matching the campus EH&S filing), so
+     the pair must land with a clean bill — while role and hazard are still
+     captured, because the flammables and expiry checks need them. */
   rxSeedShelves();
   rxSetup([
     { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
@@ -5641,11 +5721,13 @@ await t("THE regression: a received lot can finally trigger the CS-011 §6 warni
   const bin = shopById("items", "BIN-SN6-002");
   const bucket = invIndex().by.get("BIN-SN6-002");
   const warns = invLocWarnings(bin, bucket);
-  assert(warns.some(w => w.text.includes("resin + hardener together")),
-    "resin and hardener on one shelf now actually warns: " + JSON.stringify(warns));
+  assert(!warns.some(w => w.text.includes("resin + hardener")),
+    "co-location stays clean: " + JSON.stringify(warns));
+  const jug = DB.lots.find(o => o.name === "AT30");
+  assert(jug && jug.role === "hardener", "role is still captured — the cure buy-off filters on it");
 });
 
-await t("and the same warning is shown BEFORE the write, not discovered after", () => {
+await t("and the receiving confirm does not warn about the pair either", () => {
   rxSeedShelves();
   rxSetup([
     { cls: "RSN:resin", name: "IN2", qty: "1", bin: "BIN-SN6-002" },
@@ -5653,8 +5735,7 @@ await t("and the same warning is shown BEFORE the write, not discovered after", 
   ]);
   rxConfirm();
   const h = document.getElementById("modal").innerHTML;
-  assert(h.includes("resin and hardener together"), "the confirm says so up front");
-  assert(h.includes("CS-011 §6"), "and cites the standard that wants them apart");
+  assert(!h.includes("resin and hardener together"), "no co-location warning in the confirm");
   closeModal();
 });
 
@@ -6071,13 +6152,17 @@ await t("the chips are real filters now, not decoration", () => {
   /* low/expired set view.invFlag and lit up while invCard never read it, so the
      map did not change. chemical warnings was onclick="void 0". */
   seedFind();
-  DB.lots.push({ id: "RSN-SN6-002", cls: "RSN", name: "AT30", role: "hardener", stage: "Sealed", location: "BIN-SN6-002" });
+  /* An expired jug makes the cabinet chem-dirty. (It used to be a resin +
+     hardener pair, but co-location stopped being a warning in 2026-08.) */
+  DB.lots.push({ id: "RSN-SN6-002", cls: "RSN", name: "AT30", role: "hardener", stage: "Sealed",
+    location: "BIN-SN6-002", expiresOn: "2020-01-01" });
   view.invFlag = "chem";
   render();
   let h = main.innerHTML;
-  assert(h.includes("Flammables Cabinet"), "resin + hardener together, so that shelf shows");
+  assert(h.includes("Flammables Cabinet"), "an expired lot on it, so that shelf shows");
   assert(!h.includes("Basement Shelf B3"), "and the clean ones are filtered out");
   DB.lots[0].qty = "Low";
+  DB.lots.find(o => o.id === "RSN-SN6-002").expiresOn = "";   // cabinet back to clean for the narrowing check
   view.invFlag = "reorder";
   render();
   h = main.innerHTML;
@@ -6086,14 +6171,22 @@ await t("the chips are real filters now, not decoration", () => {
   view.invFlag = "";
 });
 
-await t("a card is two real buttons, not a button full of divs", () => {
+await t("a card is two real buttons, and the whole card opens as a pointer backstop", () => {
+  /* This test used to assert "no stopPropagation anywhere". The design
+     changed on 2026-08-28: the ::after stretch failed for Simon on at least
+     one engine, so the container carries the open handler as a pointer-only
+     backstop and the two real buttons stop propagation. Keyboard access is
+     still the buttons — the container has no tabindex. */
   seedFind();
   render();
   const h = main.innerHTML;
   assert(h.includes('class="lc-open lc-name"'), "the name is a real button");
   assert(h.includes("invConfirmContents("), "and the monthly walk is one click from the map, as a sibling");
   assert(!/<button class="loccard"/.test(h), "no button wrapping block content");
-  assert(!h.includes("stopPropagation"), "and nothing held off with stopPropagation");
+  assert(/<div class="loccard[^>]*onclick="selectInvRec\(/.test(h), "the card itself opens on click");
+  const confirm = h.match(/<button[^>]*invConfirmContents[^>]*>/)[0];
+  assert(confirm.includes("stopPropagation"), "Confirm never also opens the shelf");
+  assert(!/loccard[^>]*tabindex/.test(h), "the backstop adds no phantom tab stop");
 });
 
 await t("nothing-has-a-home is a bar above the shelves, not a card inside the last site", () => {

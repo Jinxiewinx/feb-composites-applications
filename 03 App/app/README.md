@@ -657,9 +657,10 @@ needs Python 3).
 Inventory is the storage map, and it absorbed the Items and Materials tabs. The
 default view is one card per storage location (shelf, rack, cabinet, bin),
 grouped by CS-011 site, each showing a live summary of its contents and its
-problems: expired lots, resin and hardener sharing a shelf, a flammable lot
-outside the rated cabinet (§6 as warning chips), things flagged running low, and
-how long since anyone confirmed the shelf.
+problems: expired lots, a flammable lot outside the rated cabinet (§6 as
+warning chips), things flagged running low, and how long since anyone confirmed
+the shelf. Resin and hardener sharing a shelf is deliberately not a warning:
+the team stores them together, matching the campus EH&S filing.
 
 The map is filtered, not a wall. A search box matches a shelf on its own name,
 site or kind **or** on the name, vendor lot or material type of anything on it,
@@ -679,13 +680,27 @@ unhoused sits in a bar above the shelves.
 
 ![A shelf's contents page](../design/inventory-contents-mockup-20260825.png)
 
-Tap a card, or scan the shelf's own front-edge label, and you are on its
+Tap a card — anywhere on it, the whole card opens, with Confirm the one
+exception — or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
-each with a Move button. **Add here** creates a record already located. **Move
-here** scans the label on each thing you are putting down, the inverse of the
-Move flow — and the camera stays open between codes, so a pile is one scan each
-rather than one modal each. **Confirm contents** stamps who walked the shelf and
-when. The Items-list and Materials-list toggles keep the old flat tables.
+in sections with the count in each header, each row with a Move button.
+
+**Identical containers fold into one line.** The EH&S import made this matter:
+ten AT30 jugs are ten records (one tag, one container) and were ten identical
+rows. Lot rows now group by material — matKey when set, else the name — so the
+line reads "AT30 SLOW EPOXY HARDENER ×10" with the states, the soonest expiry,
+a flammable marker and the price on it, and opening it lists each container
+with its EH&S code, which is the only way to tell jug six from jug seven while
+holding one of them. A material with one container stays a plain row. The
+folded groups still print open, because this page is the stock-walk sheet.
+
+**Add here** creates a record already located. **Move here** scans the label
+on each thing you are putting down, the inverse of the Move flow — and the
+camera stays open between codes, so a pile is one scan each rather than one
+modal each. **Confirm contents** stamps who walked the shelf and when. The
+Items-list and Materials-list toggles keep the flat tables; the Materials list
+groups the same way by default, with a Grouped/Flat switch, and drops to flat
+rows while searching.
 
 #### Boards
 
@@ -751,11 +766,11 @@ and jugs and consumables belonging on three different shelves.
 
 Enter commits a line and opens the next one already carrying the class, shelf
 and supplier, so a stock-take line is name, Tab, count, Enter. The class cell
-offers Fabric / Resin / Hardener / Consumable, which is what finally lets the §6
-resin-and-hardener check fire at all — the old flow never asked, so every
-received lot was born unable to trigger any warning. The confirm runs those
-checks against what each shelf *would* hold, so a chemical-storage problem is
-caught before the write.
+offers Fabric / Resin / Hardener / Consumable, capturing the role the cure
+buy-off filters on and the hazard the flammables check needs — the old flow
+never asked, so every received lot was born unable to trigger any warning. The
+confirm runs the chemical-storage checks against what each shelf *would* hold,
+so a problem is caught before the write.
 
 Quantity fans out by class, live as you type: 3 in a fabric row reads "3
 records" before the keystroke finishes, because fabric and resin are tracked one
