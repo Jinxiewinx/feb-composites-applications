@@ -5187,6 +5187,70 @@ await t("a tag resolves to its container, its shelf, or nothing — never a gues
   assert(ehsResolve("") === null, "an empty scan resolves to nothing");
 });
 
+await t("a tag reads as the label prints it: four-character groups, and the edge strip", () => {
+  /* The photographed RFS tag (2026-08-29): 24 characters, six groups of four,
+     no punctuation, and the last twelve reprinted rotated down the right edge. */
+  const full = "CA00000000000000243EF0AB";
+  assert(ehsPrinted(full) === "CA00 0000 0000 0000 243E F0AB", "the face, grouped — got " + ehsPrinted(full));
+  assert(ehsPrinted("ca00-0000 0000 0000 243e f0ab") === "CA00 0000 0000 0000 243E F0AB",
+    "dashes and spaces a typist added do not survive into the printed form");
+  assert(ehsTailText(full) === "0000 243E F0AB", "the edge strip is the last twelve — got " + ehsTailText(full));
+  assert(ehsTailText("UCB-111222") === "UCB1 1122 2",
+    "a short pre-2024 code has no tail to take, so it shows whole — got " + ehsTailText("UCB-111222"));
+  assert(ehsPrinted("") === "" && ehsTailText(null) === "", "nothing in, nothing out");
+});
+
+await t("the shape check advises and never blocks", () => {
+  assert(ehsShape("CA00000000000000243EF0AB").ok, "24 characters is a tag");
+  assert(!ehsShape("0000243EF0AB").ok, "the edge strip alone is not a whole tag");
+  assert(/12 characters/.test(ehsShape("0000243EF0AB").why),
+    "and the reason says how many it has — got " + ehsShape("0000243EF0AB").why);
+  assert(ehsShape("").ok, "a blank field is not a malformed tag");
+});
+
+await t("the edge strip finds the container, and two of them find neither", () => {
+  DB.lots = [
+    { id: "RSN-SN6-060", cls: "RSN", name: "IN2 jug", ehsBarcode: "CA00000000000000243EF0AB" },
+    { id: "RSN-SN6-061", cls: "RSN", name: "AT30 jug", ehsBarcode: "CA00111111110000243EF0AB" },
+    { id: "RSN-SN6-062", cls: "RSN", name: "Other jug", ehsBarcode: "CA0022222222222299991111" },
+  ];
+  DB.items = [];
+  assert(!ehsResolveTyped("9999 1111"), "eight characters is below the twelve-character floor — too short to be sure");
+  const tail = ehsResolveTyped("2222 9999 1111");
+  assert(tail && tail.id === "RSN-SN6-062" && tail.via === "tail",
+    "twelve characters off the edge of the label finds the one jug wearing them — got " + JSON.stringify(tail && tail.id));
+  const both = ehsResolveTyped("0000 243E F0AB");
+  assert(both && both.ambiguous && both.ambiguous.length === 2,
+    "a strip two jugs share resolves to neither — it reports both");
+  assert(both && !both.id, "and an ambiguous result carries no id for a caller to open by mistake");
+  const whole = ehsResolveTyped("CA00 0000 0000 0000 243E F0AB");
+  assert(whole && whole.id === "RSN-SN6-060" && whole.via === "code",
+    "the whole code still wins outright, before any tail is considered");
+});
+
+await t("an edge strip typed onto a second record is the same conflict as the whole code", () => {
+  DB.lots = [
+    { id: "RSN-SN6-070", cls: "RSN", name: "IN2 jug", stage: "Sealed", ehsBarcode: "CA00000000000000243EF0AB" },
+    { id: "RSN-SN6-071", cls: "RSN", name: "AT30 jug", stage: "Sealed", ehsBarcode: "" },
+  ];
+  DB.items = [];
+  view = { ...view, tab: "lots", mode: "detail", id: "RSN-SN6-071", edit: true };
+  updShop("lots", "ehsBarcode", "0000 243E F0AB");
+  assert(DB.lots[1].ehsBarcode === "", "the tail of a tag already worn is refused, not stored");
+  assert(/RSN-SN6-070/.test(lastToast), "and the refusal names the jug wearing it — got " + lastToast);
+  updShop("lots", "ehsBarcode", "CA00 5555 5555 5555 5555 5555");
+  assert(DB.lots[1].ehsBarcode === "CA0055555555555555555555",
+    "a well-formed fresh code stores — got " + DB.lots[1].ehsBarcode);
+  /* The shape warning SAVES and says so — the opposite of the refusal above,
+     and the distinction the whole advisory/gate split turns on. */
+  DB.lots[1].ehsBarcode = "";
+  updShop("lots", "ehsBarcode", "7777 8888 9999");
+  assert(DB.lots[1].ehsBarcode === "777788889999", "a short code is STORED, because the grammar is advisory");
+  assert(/check it/.test(lastToast) && /12 characters/.test(lastToast),
+    "with a warning saying what is off about it — got " + lastToast);
+  view = { ...view, mode: "list", id: null, edit: false };
+});
+
 await t("one tag, one container: the editor refuses a code another record wears", () => {
   DB.lots = [
     { id: "RSN-SN6-050", cls: "RSN", name: "IN2 jug", stage: "Sealed", ehsBarcode: "UCB-111222" },
@@ -5354,8 +5418,8 @@ await t("a group of one renders as the plain row; a group of many folds with the
   toggleLotGroup(key);
   const open = invLotList(DB.lots);
   assert(!open.includes("folded"), "toggling opens the member list");
-  assert(open.includes("…243EF0") && open.includes("…243EF1"),
-    "each container shows its EH&S code — the sticker on the jug in your hand");
+  assert(open.includes("0000 0024 3EF0") && open.includes("0000 0024 3EF1"),
+    "each container shows the strip printed down the edge of its label — what you can read on the jug in your hand");
   view.invLotOpen = {};
   DB.lots = []; DB.items = [];
 });
@@ -5368,7 +5432,7 @@ await t("the location page says counts in its section headers and codes on singl
   const h = main.innerHTML;
   assert(h.includes("pgrouphd"), "sections wear the house group-header strip");
   assert(h.includes("sec-resin") && h.includes("sec-consumables"), "with per-kind accents");
-  assert(h.includes("…243F1C"), "a lone container's EH&S code is on its row");
+  assert(h.includes("0000 0024 3F1C"), "a lone container's EH&S code is on its row, as the label's edge prints it");
   view = { ...view, mode: "list", id: null };
 });
 

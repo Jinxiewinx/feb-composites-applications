@@ -33,11 +33,11 @@ var APP_VERSION = "4.0.0";
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "New R&D tab: coupon studies you type into like a spreadsheet. No work order, no traveler, no buy-off.",
-  "Ten coupons is three presses: open a study, set Rows, Add rows. Columns are yours, per study.",
-  "Compare turns on once a study has a setting, a result and three coupons: means and ranges, grouped by what you varied.",
-  "Paste a column of readings straight off the Instron; values fill down the rows that exist.",
-  "The loading screen now fills its lights and waits for Continue, instead of dropping you into a half-loaded app.",
+  "EH&S tags now read on screen the way they read on the sticker: four-character groups, not a run of 24.",
+  "A container's row shows the twelve characters printed down the edge of its tag, which is the part you can still read on a scuffed jug.",
+  "Those twelve are enough to look a container up. Type them into any scan box; if two jugs share them the app says so instead of guessing.",
+  "A tag that is not 24 characters saves with a warning rather than being refused, and the EH&S reconciliation sheet flags it.",
+  "That sheet now carries the code twice: plain for matching against RSS, grouped for reading off a clipboard on the shelf walk.",
 ];
 
 /* ---------- config/release ----------
@@ -1089,10 +1089,44 @@ function tabForId(id) {
    system — campus mandate), and the team does not want a second sticker on the
    same carton. So a container's EH&S code is a second identity for a lot
    record, stored in `ehsBarcode`, and RSS sublocation tags are the same thing
-   for BIN records. The code is OPAQUE: RSS does not document its serial
-   grammar, so nothing here parses meaning out of it — normalise, store,
-   compare. That is also why resolution is a scan over DB rather than a prefix
-   route: an EH&S code carries no prefix tabForId could use. */
+   for BIN records. Resolution is a scan over DB rather than a prefix route: an
+   EH&S code carries no prefix tabForId could use.
+
+   WHAT A TAG ACTUALLY LOOKS LIKE. Until now this section said the code was
+   OPAQUE and refused to know anything about its shape. A photograph of a real
+   RFS tag (2026-08-29) settled three things worth encoding:
+
+       ┌──────────────────────────────┐
+       │ ▚▞▚  Data Matrix      RSS   ⌐│  <- 0
+       │ ▞▚▞                         0│     0
+       │  CA00 0000 0000 0000 0024 3EF0│     2
+       │                             4│     …
+       └──────────────────────────────┘
+
+   1. The symbology is DATA MATRIX, not a linear barcode and not a QR. scan.js
+      already asks for data_matrix, so nothing changes there — but the guess is
+      now a fact and the format list can stop being a shotgun.
+   2. The code is 24 characters of uppercase letters and digits, printed as six
+      space-separated groups of four. NO DASHES. A dash in a stored code is a
+      person's invention, never the tag's, which is why ehsKey drops them and
+      why the app renders the printed grouping rather than echoing punctuation.
+   3. THE LAST TWELVE CHARACTERS ARE REPRINTED, ROTATED, DOWN THE RIGHT EDGE.
+      That is the part still readable once the label is wrapped round a bottle
+      neck or the face is scuffed with resin, and it is therefore what a person
+      standing at the shelf can actually read out. So twelve characters have to
+      be enough to find a container (ehsResolveTyped), and twelve characters
+      are what the app shows on a row, so screen and sticker say the same thing.
+
+   This is ONE photographed tag, so the grammar is advisory, not enforced:
+   ehsShape warns and nothing blocks. A tag that does not fit is far more likely
+   a typo than a new RSS format, and saying so at the shelf is cheap; refusing
+   to store it is not. */
+
+/* The printed grammar, from the tag above. Kept as named constants because
+   three files reason about these two numbers. */
+var EHS_LEN = 24;    // characters in a full code
+var EHS_GROUP = 4;   // characters per printed group
+var EHS_TAIL = 12;   // characters reprinted down the label's edge
 
 /* One normal form, applied on save and on lookup, so a code scanned off a tag
    and a code retyped off a scuffed one meet in the middle. Uppercase, and
@@ -1102,11 +1136,39 @@ function ehsNorm(raw) {
   return String(raw || "").trim().toUpperCase().replace(/[^0-9A-Z-]/g, "");
 }
 
-/* The COMPARISON form drops the dashes ehsNorm keeps: the stored code holds
-   the tag's printed punctuation, but a code retyped off a scuffed sticker
-   loses its dashes first, and "did not match because of a hyphen" is a bug
-   report waiting to be filed. Same courtesy idFromScan documents. */
+/* The COMPARISON form drops the dashes ehsNorm keeps: a real tag has none, but
+   the stored code holds whatever punctuation a typist supplied, and "did not
+   match because of a hyphen" is a bug report waiting to be filed. Same courtesy
+   idFromScan documents. */
 function ehsKey(raw) { return ehsNorm(raw).replace(/-/g, ""); }
+
+/* The code as the LABEL prints it: groups of four, separated by spaces. Used
+   everywhere a person is expected to compare what is on screen against what is
+   on the sticker in their hand, which is every place the code is shown. */
+function ehsPrinted(raw) {
+  const k = ehsKey(raw);
+  return k ? (k.match(new RegExp(".{1," + EHS_GROUP + "}", "g")) || []).join(" ") : "";
+}
+
+/* The edge print: the last twelve characters, grouped. This is the string a
+   person reads off a jug whose label is wrapped or scuffed, so it is what rows
+   show and what ehsResolveTyped accepts. Short codes (the pre-2024 hand-entered
+   ones) have no tail worth taking and are returned whole. */
+function ehsTailText(raw) {
+  const k = ehsKey(raw);
+  if (!k) return "";
+  return k.length > EHS_TAIL ? ehsPrinted(k.slice(-EHS_TAIL)) : ehsPrinted(k);
+}
+
+/* Does this look like a tag off the wall? Advisory only — see the header. The
+   reason is phrased for a person holding the container, not for a log. */
+function ehsShape(raw) {
+  const k = ehsKey(raw);
+  if (!k) return { ok: true, why: "" };
+  if (!/^[0-9A-Z]+$/.test(k)) return { ok: false, why: "has characters a UC tag does not use" };
+  if (k.length === EHS_LEN) return { ok: true, why: "" };
+  return { ok: false, why: `is ${k.length} characters; a UC tag is ${EHS_LEN}` };
+}
 
 /* The record wearing this EH&S tag, or null. Lots first (containers are the
    common scan), then BIN locations (RSS sublocation tags). Returns
@@ -1121,12 +1183,49 @@ function ehsResolve(raw) {
   return null;
 }
 
+/* What somebody TYPED, resolved. Exact first, then the edge print: a code of
+   at least EHS_TAIL characters that is the tail of exactly one stored tag finds
+   that record, because reading the wrapped-round part of the label is the
+   normal way to identify a jug you are holding.
+
+   TWO GUARDS, both load-bearing:
+   - Never below EHS_TAIL characters. Twelve is long enough that a collision is
+     not a real risk; six would match half the shelf, and the pre-2024 codes in
+     the DB are nine characters, which must keep meaning themselves and not a
+     fragment of something longer.
+   - AMBIGUITY IS NOT A GUESS. Two tails matching returns {ambiguous:[...]} and
+     the caller says so. Opening the wrong jug's record is worse than typing
+     four more characters.
+   The extra field `via` is "code" or "tail", so a caller can tell the person
+   which of the two things on the label it matched. */
+function ehsResolveTyped(raw) {
+  const hit = ehsResolve(raw);
+  if (hit) return { ...hit, via: "code" };
+  const code = ehsKey(raw);
+  if (code.length < EHS_TAIL) return null;
+  const found = [];
+  for (const coll of ["lots", "items"]) {
+    for (const o of DB[coll] || []) {
+      const k = ehsKey(o.ehsBarcode);
+      if (k.length > code.length && k.endsWith(code)) found.push({ coll, id: o.id, o, via: "tail" });
+    }
+  }
+  if (found.length === 1) return found[0];
+  return found.length ? { ambiguous: found } : null;
+}
+
 /* An EH&S tag identifies ONE physical container. Two records claiming the same
    code means one of them is wrong, and the polite moment to say so is while
-   the person who can fix it is still holding the jug. */
+   the person who can fix it is still holding the jug. Goes through the typed
+   resolver so entering an edge print onto a second record is caught too —
+   that is the exact mistake the shorter, more readable half of the label
+   invites. An ambiguous tail is a conflict with the first of them: whatever
+   else is true, this code does not uniquely belong to the record being edited. */
 function ehsConflict(raw, excludeId) {
-  const hit = ehsResolve(raw);
-  return hit && hit.id !== excludeId ? hit : null;
+  const hit = ehsResolveTyped(raw);
+  if (!hit) return null;
+  if (hit.ambiguous) return hit.ambiguous.find(h => h.id !== excludeId) || null;
+  return hit.id !== excludeId ? hit : null;
 }
 
 /* Read at file-scope load, which is early enough: index.html's

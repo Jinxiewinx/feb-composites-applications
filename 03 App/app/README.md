@@ -702,7 +702,12 @@ rows. Lot rows now group by material — matKey when set, else the name — so t
 line reads "AT30 SLOW EPOXY HARDENER ×10" with the states, the soonest expiry,
 a flammable marker and the price on it, and opening it lists each container
 with its EH&S code, which is the only way to tell jug six from jug seven while
-holding one of them. A material with one container stays a plain row. The
+holding one of them. The code a row shows is **the strip printed down the
+right edge of the tag**: the last twelve characters, in the label's own
+four-character groups. That strip is the part still readable on a jug whose
+label is wrapped round the neck or wiped with acetone, so it is what somebody
+comparing the screen against the thing in their hand can actually read out.
+The whole code sits in the row's tooltip. A material with one container stays a plain row. The
 folded groups still print open, because this page is the stock-walk sheet.
 
 **Add here** creates a record already located. **Move here** scans the label
@@ -830,6 +835,24 @@ open, so a three-jug line is three scans into one cell. Scanned and typed
 codes go through the same normalisation and the same one-tag-one-container
 refusal.
 
+**What a UC tag looks like**, from a photographed RFS label: a Data Matrix
+square, the word RSS, and 24 characters of letters and digits printed as six
+space-separated groups of four (`CA00 0000 0000 0000 0024 3EF0`). No dashes; a
+dash in a stored code came from a person, not the tag. The last twelve
+characters are reprinted rotated down the right edge, which is the copy that
+survives a wrapped or scuffed label.
+
+Three things follow from that. The app renders a code in the tag's own
+grouping wherever it shows one, so screen and sticker can be walked together.
+**Typing those twelve edge characters is enough to find a container**, in the
+scan box, in Move, anywhere a code is accepted, provided exactly one record
+wears them; if two do, the app names both and asks for more of the code rather
+than opening one of them. And a code that is not 24 characters is flagged
+rather than refused. It saves, with a note saying how many characters it has,
+because the grammar comes from one photographed label, older hand-entered
+codes are genuinely shorter, and refusing a code somebody is holding is how a
+person decides the field is broken and leaves it blank.
+
 For the containers EH&S tagged before this feature existed, **EH&S import** on
 the Inventory toolbar (lead-only) takes the RSS web app's own .xlsx export,
 parsed in the browser with no library — the export is a zip of XML, and
@@ -844,7 +867,12 @@ expiry dates carried over. Import never edits and never deletes; a barcode
 some record already wears is the same jug, not newer truth. The Export modal
 gained an **EH&S reconciliation** sheet going the other way: every chemical
 container with its barcode, untagged and emptied-but-still-in-RSS rows sorted
-first.
+first. The sheet carries the code twice: `ehsBarcode` unpunctuated, so a
+lookup against the RSS export lands, and `printed` in the tag's four-character
+groups, for the half of the job done on foot with the sheet on a clipboard. A
+code that is not 24 characters gets its own note, because it will miss the RSS
+export and read as a container campus does not know about when the truth is a
+typo.
 
 After a submit you stay in the sheet with the caret in a fresh line, and the
 labels are queued on the undo bar rather than auto-printed. Undo deletes what it
@@ -1050,9 +1078,11 @@ code resolves whether it arrives as the full URL, the bare code, lowercase, or
 with whitespace round it, because somebody will retype it off a scuffed label.
 
 The camera reads FEB's QR labels and the **UC EH&S tags** on chemical
-containers (QR and the common linear formats). An EH&S tag resolves to the lot
-wearing it; a tag nobody has logged offers to open the receiving desk with the
-code prefilled. RSS sublocation tags on shelves resolve to the BIN record the
+containers. A UC tag is a Data Matrix square, and the linear formats stay in
+the list for the older stickers. An EH&S tag resolves to the lot wearing it,
+by the whole code or by the twelve characters printed down the label's edge; a
+tag nobody has logged offers to open the receiving desk with the code
+prefilled. RSS sublocation tags on shelves resolve to the BIN record the
 same way, so Move and "move things here" take either kind of label at either
 end.
 

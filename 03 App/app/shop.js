@@ -427,13 +427,32 @@ function updShop(tab, key, val) {
   /* "ehs" — a UC EH&S tag code. Stored in the one normal form ehsNorm defines
      so lookup never has to guess, and refused outright if another record
      already wears it: an EH&S tag identifies ONE physical container, and two
-     records claiming it means a scan would open the wrong jug forever after. */
+     records claiming it means a scan would open the wrong jug forever after.
+     The refusal now also catches the label's edge print landing on a second
+     record — see ehsConflict.
+
+     THE SHAPE IS A WARNING, NOT A GATE. A UC tag is 24 characters (core.js's
+     EH&S header, from a photographed tag), and the commonest way to be off
+     that is to have typed the twelve-character edge strip and stopped, or to
+     have dropped a group. Storing it anyway is right: the grammar comes from
+     one label, older hand-entered codes are shorter and real, and refusing a
+     code somebody is holding in their hand is how a person decides the field
+     is broken and leaves it blank. So it saves, and it says so. */
   if (fType === "ehs") {
     val = ehsNorm(val);
     const dupe = val ? ehsConflict(val, o.id) : null;
     if (dupe) {
-      toast(`${val} is already on ${dupe.o.name || dupe.id} (${dupe.id}) — one tag, one container.`, "error");
+      toast(`${ehsPrinted(val)} is already on ${dupe.o.name || dupe.id} (${dupe.id}) — one tag, one container.`, "error");
       render(); return;
+    }
+    const shape = val ? ehsShape(val) : { ok: true };
+    if (!shape.ok) {
+      o[key] = val;
+      save(spec.coll, o, key);
+      /* "error" for the styling and the longer dwell, not because the save
+         failed — toast() has two kinds and green would read as "all good". */
+      toast(`Saved ${ehsPrinted(val)}, but check it: it ${shape.why}. The whole code is on the face of the label.`, "error");
+      return;
     }
   }
   o[key] = val;

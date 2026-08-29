@@ -154,18 +154,27 @@ async function tickScan(det, video) {
 }
 
 /* The resolution chain every scan and every retype goes through: FEB's own
-   grammar first, then the EH&S tag registry. Returns an FEB id or "". */
+   grammar first, then the EH&S tag registry. Returns an FEB id or "".
+
+   The EH&S half goes through ehsResolveTyped, which accepts the LABEL'S EDGE
+   PRINT as well as the whole code — a UC tag reprints its last twelve
+   characters rotated down the right edge, and that strip is what is still
+   readable on a jug whose face is scuffed or whose label is wrapped round the
+   neck. Somebody reading a container out loud reads those twelve. A tail
+   matching two records is not resolved here; scanManual says so in words,
+   because picking one would open the wrong jug. */
 function scanResolve(raw) {
   const id = idFromScan(raw);
   if (id) return id;
-  const hit = typeof ehsResolve === "function" ? ehsResolve(scanEhsCode(raw)) : null;
-  return hit ? hit.id : "";
+  const hit = typeof ehsResolveTyped === "function" ? ehsResolveTyped(scanEhsCode(raw)) : null;
+  return hit && hit.id ? hit.id : "";
 }
 
-/* What an EH&S tag reads as. The serial grammar is RSS's business, not ours,
-   so this only peels a URL wrapper (in case a newer QR tag encodes a link the
-   way ours do) and hands the rest to ehsNorm. An FEB-shaped code is refused:
-   FAB-SN6-001 typed here is a failed FEB lookup, not a plausible UC serial. */
+/* What an EH&S tag reads as. This only peels a URL wrapper (in case a newer QR
+   tag encodes a link the way ours do) and hands the rest to ehsNorm — the
+   grammar checking lives in ehsShape and is advisory, so nothing is rejected
+   here for being the wrong length. An FEB-shaped code is refused: FAB-SN6-001
+   typed here is a failed FEB lookup, not a plausible UC serial. */
 function scanEhsCode(raw) {
   let v = String(raw || "").trim();
   const m = v.match(/^[A-Za-z]+:\/\/[^/]+\/(.*)$/);
@@ -212,6 +221,14 @@ function scanManual() {
   if (SCAN.sticky && el) el.value = "";   // ready for the next one
   if (!id) {
     const code = scanEhsCode(raw);
+    /* An edge print shared by two containers. Refuse and name them: four more
+       characters off the face of the label settles it, and opening the wrong
+       jug's record does not. */
+    const amb = code && typeof ehsResolveTyped === "function" ? ehsResolveTyped(code) : null;
+    if (amb && amb.ambiguous) {
+      toast(`${ehsPrinted(code)} is the end of ${amb.ambiguous.length} tags (${amb.ambiguous.map(h => h.id).join(", ")}) — type more of the code.`, "error");
+      return;
+    }
     if (code && SCAN.onUnknown) {
       if (!SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
       SCAN.count++;

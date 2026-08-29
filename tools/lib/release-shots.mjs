@@ -103,38 +103,24 @@ const BENCH = `
 
 export const RELEASE_SHOTS = [
   {
-    id: "rnd-grid",
-    /* Tall enough for the study index, the head with its question, and enough
-       rows that it reads as a sheet rather than a form — including the ones
-       still blank, because a study halfway through is the normal state. */
+    id: "ehs-edge-print",
+    /* The cabinet, with the AT30 group open, because the whole point of this
+       release is what a MEMBER row says: ten jugs that differ only in their
+       tag, each now showing the twelve characters printed down the edge of
+       the sticker. Tall enough that the open group and several folded ones
+       are both in frame — a picture of one open group alone does not show
+       that the codes are how you tell the ten apart. */
     vh: 1180,
-    js: BENCH + `
-      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
-               rdCmpOpen: null, rdColsOpen: null, rdPartsOpen: false };
+    js: CABINET + `
+      view = { ...view, tab: "inventory", invView: "map", mode: "detail",
+               id: "BIN-SN6-950", edit: false, invFlag: "", invLotOpen: { "m:at30": true } };
       render();`,
-    title: "R&D: coupons, without the paperwork",
-    note: "A new tab for the things that were never going on the car. Ten coupons is three " +
-          "presses and they arrive numbered; the columns are yours per study; the batch each " +
-          "one came from rides along so a sweep can span two rounds. No work order, no " +
-          "traveler, no buy-off — it is a sheet you type into, and it has to beat a " +
-          "spreadsheet or it has failed.",
-  },
-  {
-    id: "rnd-compare",
-    /* Tall enough that the compare table itself is in frame. The first cut of
-       this was 980 and stopped at the word COMPARE — a picture whose caption is
-       entirely about a table that is not in it. */
-    vh: 1400,
-    js: BENCH + `
-      view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-001",
-               rdCmpOpen: "RDS-SN6-001", rdCmpBy: "Kcure", rdCmpScrap: false,
-               rdColsOpen: null, rdPartsOpen: false };
-      render();`,
-    title: "Did the hotter cure actually change anything?",
-    note: "Mark a column a setting you chose and another something you measured, and Compare " +
-          "turns itself on: grouped by what you varied, with the mean and the range. It also " +
-          "says how many coupons each number actually came from, because a study is normally " +
-          "half-measured and averaging over the blanks is how a test lies to you.",
+    title: "The tag on screen now matches the tag on the jug",
+    note: "A UC EH&S sticker prints its code in groups of four and reprints the last twelve " +
+          "rotated down the right edge, which is the part still readable once the label is " +
+          "wrapped round the neck. So that is what a container's row shows. Those twelve are " +
+          "also enough to look the jug up: type them into any scan box. If two containers " +
+          "share them the app names both rather than opening one.",
   },
 ];
 

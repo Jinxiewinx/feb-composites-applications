@@ -642,11 +642,24 @@ function invLotPill(o) {
 /* The facts a person otherwise clicks into a record for, said on the row:
    the EH&S tag (the code on the physical container — until now the shelf view
    never showed it, so ten identical jugs were told apart by an id that is on
-   no sticker), the expiry, and a flammable marker. */
+   no sticker), the expiry, and a flammable marker.
+
+   THE ROW SHOWS THE EDGE PRINT, NOT AN ARBITRARY TRUNCATION. A UC tag reprints
+   its last twelve characters rotated down the right edge, and that strip is
+   what survives a label wrapped round a bottle neck or wiped with acetone — so
+   it is what the person comparing this row against the jug in their hand is
+   actually reading. The old "…243EF0" was the last six with no grouping, which
+   matched nothing printed anywhere on the sticker. See the EH&S header in
+   core.js. The full code, grouped as the face prints it, stays in the tooltip.
+
+   A tag that does not fit the printed grammar is marked rather than hidden:
+   almost always a typo, and the shelf view is where somebody notices. */
 function invEhsShort(o) {
   const c = String(o.ehsBarcode || "");
   if (!c) return "";
-  return `<span class="ehs-code" title="EH&S tag ${esc(c)}">${esc(c.length > 8 ? "…" + c.slice(-6) : c)}</span>`;
+  const shape = ehsShape(c);
+  const title = `EH&S tag ${ehsPrinted(c)}` + (shape.ok ? "" : ` — this ${shape.why}`);
+  return `<span class="ehs-code${shape.ok ? "" : " ehs-odd"}" title="${esc(title)}">${esc(ehsTailText(c))}${shape.ok ? "" : " ?"}</span>`;
 }
 function invLotFacts(o) {
   return [
@@ -957,16 +970,25 @@ function invExportLocations() {
    inventory, one row per RSN/CON lot plus one per shelf wearing an RSS
    sublocation tag. Sorted so the rows with something to fix come first — a
    container with no EH&S tag is exactly what an EH&S walk will flag, and an
-   emptied one is what RSS still thinks exists. Compare on the barcode column;
-   ours and theirs agree on it by construction. */
+   emptied one is what RSS still thinks exists. Compare on the `ehsBarcode`
+   column; ours and theirs agree on it by construction.
+
+   TWO COLUMNS FOR ONE CODE, and they do different jobs. `ehsBarcode` is the
+   comparison form — no spaces, no punctuation — so a VLOOKUP against the RSS
+   export lands. `printed` is the same code in the tag's own four-character
+   groups, for the half of this job that is done on foot with the sheet on a
+   clipboard: it is what the sticker says, character for character. Deleting
+   `printed` would not break the compare, and would make the walk hard. */
 function invExportEhs() {
   const names = invLocNames();
   const rows = [];
   for (const l of DB.lots || []) {
     if (l.cls !== "RSN" && l.cls !== "CON") continue;
     const where = invWhere(l, names);
+    const shape = ehsShape(l.ehsBarcode);
     rows.push({
-      ehsBarcode: l.ehsBarcode || "",
+      ehsBarcode: ehsKey(l.ehsBarcode),
+      printed: ehsPrinted(l.ehsBarcode),
       id: l.id, kind: l.cls === "RSN" ? "Resin / hardener" : "Consumable",
       name: l.name || "", state: l.stage || "", howFull: l.qty || "",
       location: where ? where.name : "(no location)",
@@ -975,17 +997,25 @@ function invExportEhs() {
       hazard: l.hazard || "",
       note: [
         !l.ehsBarcode ? "no EH&S tag on record" : "",
+        /* A tag that is not 24 characters will not match anything in the RSS
+           export, so the walk would report it as "we have a jug they do not"
+           when the truth is a mistyped code. Say which it is. */
+        !shape.ok ? `check the tag: it ${shape.why}` : "",
         l.stage === "Empty" && l.ehsBarcode ? "emptied — retire it in RSS too" : "",
       ].filter(Boolean).join("; "),
       url: SCAN_HOST + SCAN_PATH + l.id,
     });
   }
   for (const b of (DB.items || []).filter(b => b.cls === "BIN" && b.ehsBarcode)) {
+    const shape = ehsShape(b.ehsBarcode);
     rows.push({
-      ehsBarcode: b.ehsBarcode, id: b.id, kind: "Storage location",
+      ehsBarcode: ehsKey(b.ehsBarcode),
+      printed: ehsPrinted(b.ehsBarcode),
+      id: b.id, kind: "Storage location",
       name: b.name || "", state: b.stage || "", howFull: "",
       location: b.site || "", receivedOn: "", openedOn: "", emptiedOn: "", expiresOn: "",
-      hazard: "", note: "RSS sublocation tag",
+      hazard: "",
+      note: ["RSS sublocation tag", shape.ok ? "" : `check the tag: it ${shape.why}`].filter(Boolean).join("; "),
       url: SCAN_HOST + SCAN_PATH + b.id,
     });
   }

@@ -2040,6 +2040,13 @@
   .invrow.invmem .pm-name { font-weight: 500; }
   .ehs-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted);
     background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+  /* The tag is shown as the label prints it, in four-character groups, so the
+     eye can walk screen and sticker together. A hair of extra tracking is what
+     makes the groups read as groups at 12px. */
+  .ehs-code { letter-spacing: 0.02em; }
+  /* A code that does not fit the printed grammar: almost always a typo, so it
+     is marked where somebody is standing in front of the shelf. */
+  .ehs-code.ehs-odd { color: var(--bad); }
   .invrow .bad { color: var(--bad); font-weight: 600; }
   /* On a phone the NAME is the row (Simon, 2026-08-28: the width was hiding
      it behind the mix ratio and the TDS button). The knowledge tail and the
