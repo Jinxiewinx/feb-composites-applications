@@ -20,6 +20,16 @@ to learn**, not about API compatibility:
 
 ---
 
+## v4.0.0 — 2026-08-28
+
+- Release prep for v4.0.0: What's New, the two pictures, and a wasm MIME fix
+- Compare reports the precision it was given, not two decimals
+- The R&D bench: coupons get a home that is not a work order
+- The splash becomes a gate, and the lights go out to open it
+- SESSION-STATE: v3.2.0 is cut and live; the announce press and Slack note are Simon's, pending
+
+---
+
 ## v3.2.0 — 2026-08-28
 
 - Release prep for v3.2.0: WHATS_NEW and the two pictures
