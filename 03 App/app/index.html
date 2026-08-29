@@ -266,6 +266,12 @@
      longest. Same swap the breakpoint does, driven by fit instead of by guess. */
   body.tb-overflow .tb-desktop { display: none; }
   body.tb-overflow .icon-btn.tb-morebtn { display: inline-flex; }
+  /* The version line in the desktop action row — the same links the ⋯ sheet's
+     footer carries, so Announce is reachable at the width the app is actually
+     used at. nowrap because it is measured: syncChromeMetrics collapses the
+     whole row to the ⋯ menu when it overflows, and a line that wrapped would
+     make the bar taller instead of wider and never trip that. */
+  .tb-ver { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .menu-actions { display: flex; flex-direction: column; gap: 6px; }
   .menu-actions button { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; padding: 11px 12px; }
   .menu-actions button .ico { color: var(--muted); }

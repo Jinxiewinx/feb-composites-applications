@@ -2302,6 +2302,22 @@ function renderSidebar() {
       <span class="ic">${icon(rail ? "chevronRight" : "chevronLeft", 18)}</span><span class="sb-label">Collapse</span>
     </button>`;
 }
+/* The version line's actions, in ONE place, because for four releases they
+   existed in exactly one: the footer of the ⋯ sheet. That sheet is the
+   small-screen overflow menu — `.icon-btn.tb-morebtn` is `display: none` until
+   either the ≤900px breakpoint or syncChromeMetrics measures the bar
+   overflowing — so on a maximised desktop window the button that TELLS THE
+   WHOLE TEAM A RELEASE EXISTS was not in the DOM at all. A lead had to narrow
+   their window to announce a release, which nobody would ever guess.
+
+   `compact` shortens the label for the topbar, where the row is measured and a
+   long one costs Backup/Restore/Roster their inline home at more widths.
+   closeModal() is safe from the topbar: nothing is open, and it no-ops. */
+function versionLinks(compact) {
+  return `v${esc(APP_VERSION)} · <button class="link" onclick="closeModal();openWhatsNew()">What's new</button>${
+    isLead() ? ` · <button class="link" onclick="closeModal();publishRelease()">Announce${compact ? "" : " this release"}</button>` : ""}`;
+}
+
 function renderTopbar() {
   const el = document.getElementById("topbar");
   if (!el) return;
@@ -2323,6 +2339,10 @@ function renderTopbar() {
       ${guest ? "" : `<button class="icon-btn" title="Notifications" aria-label="Notifications" onclick="openNotifs()">${icon("bell", 19)}${unread ? `<span class="badge">${unread}</span>` : ""}</button>`}
       ${themeToggleBtn()}
       <span class="tb-desktop">
+        ${/* Same links as the ⋯ sheet's footer, from the same function. Outside
+              the guest branch on purpose: What's new is for everybody, and
+              isLead() is what withholds Announce — not the guest test. */""}
+        <span class="muted tny tb-ver">${versionLinks(true)}</span>
         ${guest ? `<span class="muted">Guest · read-only</span>
         <button class="primary" onclick="leaveGuest()">Sign in</button>`
         : `${/* Backup is not a new capability given the read rules — but a
@@ -2364,10 +2384,7 @@ function openMoreMenu() {
       <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
       <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>`}
     </div>
-    <div class="muted tny" style="margin-top:14px;text-align:center">
-      v${esc(APP_VERSION)} · <button class="link" onclick="closeModal();openWhatsNew()">What's new</button>${
-      lead ? ` · <button class="link" onclick="closeModal();publishRelease()">Announce this release</button>` : ""}
-    </div>`);
+    <div class="muted tny" style="margin-top:14px;text-align:center">${versionLinks(false)}</div>`);
 }
 /* ---------- mobile drawer ---------- */
 // Guard document.body: the DOM-stub test harness has no body element.

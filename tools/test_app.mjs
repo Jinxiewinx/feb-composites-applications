@@ -9127,6 +9127,36 @@ await t("the topbar swaps the account actions for a way in", () => {
   assert(/exportAll\(\)/.test(topbar.innerHTML), "a member's topbar is untouched");
 });
 
+await t("ANNOUNCE IS REACHABLE ON A DESKTOP, not only inside the ⋯ sheet", () => {
+  /* It lived in exactly one place for four releases: the footer of the ⋯ menu.
+     That menu is the SMALL-SCREEN overflow — .icon-btn.tb-morebtn is
+     display:none until the 900px breakpoint or until syncChromeMetrics measures
+     the bar overflowing — so on a maximised window the one control that tells
+     the whole team a release exists was not in the DOM at all. A lead had to
+     narrow their browser to announce a release. */
+  signInAsLead();
+  renderTopbar();
+  const html = topbar.innerHTML;
+  assert(/publishRelease\(\)/.test(html), "a lead can announce from the topbar itself");
+  assert(/openWhatsNew\(\)/.test(html), "and read what shipped");
+  assert(html.includes("v" + APP_VERSION), "the version is named beside them");
+
+  /* One definition, so the sheet and the row cannot drift apart. */
+  openMoreMenu();
+  assert(/publishRelease\(\)/.test(document.getElementById("modal").innerHTML),
+    "the ⋯ sheet still carries it too");
+  closeModal();
+
+  fb.roster = { name: "Ana", role: "member" };
+  renderTopbar();
+  assert(!/publishRelease\(\)/.test(topbar.innerHTML), "a member cannot announce");
+  assert(/openWhatsNew\(\)/.test(topbar.innerHTML), "but What's new is for everybody");
+
+  signInAsGuest();
+  renderTopbar();
+  assert(!/publishRelease\(\)/.test(topbar.innerHTML), "and neither can a guest");
+});
+
 await t("the login screen offers the door, and says what is behind it", () => {
   fb.state = "signedout"; fb.guest = false;
   const html = renderLogin();
