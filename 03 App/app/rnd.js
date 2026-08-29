@@ -796,7 +796,16 @@ function rdCompareHtml(s, cols, rows) {
     }
     const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
     const lo = Math.min(...nums), hi = Math.max(...nums);
-    return `${mean.toFixed(2)} <span class="tny muted">${lo === hi ? "" : lo + "–" + hi}</span>`;
+    /* THE MEAN CARRIES THE DECIMALS ITS INPUTS HAD, no more. A fixed 2 turns
+       eight whole-Newton readings into "619.00 N", which claims a hundredth of
+       a Newton nobody measured — the same species of false confidence as
+       averaging over blanks. Capped at 3 so a stray long float cannot widen
+       the column. */
+    const dp = Math.min(3, Math.max(...nums.map(n => {
+      const s = String(n); const i = s.indexOf(".");
+      return i < 0 ? 0 : s.length - i - 1;
+    })));
+    return `${mean.toFixed(dp)} <span class="tny muted">${lo === hi ? "" : lo + "–" + hi}</span>`;
   };
   /* Coverage rides WITH the number, never silently. Averaging over the coupons
      that happen to have a value and reporting it as the study's result is how a
