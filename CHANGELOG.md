@@ -20,6 +20,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v4.2.0 — 2026-08-29
+
+- Budget: two status tracks, because a purchase always had two lives
+- Budget: Charged to, for spend that is real but is not composites' line
+- The over-$50 gate moves onto the money track, where it belonged
+
+---
+
 ## v4.1.1 — 2026-08-29
 
 - The EH&S row's last group carries the weight, settled against 627 real tags

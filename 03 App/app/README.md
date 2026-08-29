@@ -608,8 +608,27 @@ rollup pulled from ticket due dates and manual assignments.
 
 ### Budget, People, Documents
 
-Budget runs purchase requests through Submitted, Ordered and Reimbursed, with
-the season total, an open-orders subtotal, and a flag on anything over $50.
+Budget runs a purchase along two tracks, because a purchase has two lives. The
+order status says where the goods are (Submitted, Purchased, Arrived); the
+reimbursement status says where the money is (Submitted, Approved, Reimbursed).
+They advance independently, so a part sitting on the shelf that nobody has been
+paid back for is finally something the tab can express. The over-$50 flag hangs
+on the money track: it clears when a treasurer marks the reimbursement Approved,
+not when somebody marks the goods bought. Purchases written before the split
+need no fixing, since the old vocabulary is read through the new one (Ordered is
+Purchased; the old Reimbursed is arrived and paid).
+
+**Charged to** names the budget a purchase lands on. Blank means ours and
+behaves as it always did. Name another team's budget and the cost is still
+tracked, the purchaser is still owed it, and the $50 rule still applies, but it
+stays out of the composites season total and out of every goal bar. That is the
+McMaster run somebody makes for the whole team: real money, not our line. The
+field is free text on purpose, since the subteam names belong to them and a list
+we guessed at would be wrong in a way nobody could fix from the app.
+
+The list carries the season total, an other-budgets subtotal when there is one,
+counts for what has not arrived and what is still owed, and filters on either
+track or on whose budget it lands on.
 
 A purchase can carry **line items**: one row per thing, typed the way a receipt
 reads (total and count) with the unit price deriving live as you type — $20

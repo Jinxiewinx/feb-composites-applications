@@ -20,7 +20,14 @@ const CSV_SPECS = {
   parts: { file: "parts", rows: () => DB.parts, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["layupType", r => r.layupType], ["cad", r => r.cadProgress], ["mold", r => r.moldProgress], ["layup", r => r.layupProgress], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["weightG", r => r.weightG], ["deadline", r => r.layupDeadline], ["rnd", r => isRnd(r) ? "R&D" : ""]] },
   workOrders: { file: "work-orders", rows: () => DB.workOrders, cols: [["id", r => r.id], ["part", r => r.partName], ["subteam", r => r.subteam], ["process", r => r.processType], ["status", r => r.status], ["moldEngineer", r => r.moldEngineer], ["mfgEngineer", r => r.manufacturingEngineer], ["due", r => r.dueDate], ["rnd", r => woIsRnd(r) ? "R&D" : ""]] },
   projects: { file: "issues", rows: () => DB.projects.filter(isIssue), cols: [["id", r => r.id], ["title", r => r.title], ["status", r => projStatus(r)], ["workOrder", r => r.workOrderId], ["resolution", r => r.resolutionMethod], ["priority", r => r.priority], ["due", r => r.dueDate], ["assignees", r => (r.assignees || []).join("; ")]] },
-  budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose], ["status", r => r.status], ["cost", r => r.cost],
+  budget: { file: "budget", rows: () => DB.budget, cols: [["id", r => r.id], ["item", r => r.item], ["purchaser", r => r.purchaser], ["purpose", r => r.purpose],
+    // Two status columns, because there are two tracks: where the goods are and
+    // where the money is. chargedTo is blank for composites' own spend, so the
+    // advisor can sum our season without filtering anything out.
+    ["orderStatus", r => typeof buyStatus === "function" ? buyStatus(r) : r.status],
+    ["reimbursement", r => typeof reimbStatus === "function" ? reimbStatus(r) : ""],
+    ["chargedTo", r => (typeof isOffBudget === "function" && isOffBudget(r)) ? String(r.chargedTo || "").trim() : ""],
+    ["cost", r => r.cost],
     // Both money columns on purpose: cost is the hand-set number the app
     // sums, lineSum is what the line items add to. Exporting only one would
     // hide a mismatch from the advisor spreadsheet.
@@ -49,8 +56,13 @@ function renderReports() {
   const upcoming = (typeof deadlineItems === "function" ? deadlineItems() : [])
     .filter(i => !i.done && i.date && daysUntil(i.date) != null && daysUntil(i.date) >= 0 && daysUntil(i.date) <= 14)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const spend = DB.budget.reduce((s, b) => s + (parseFloat(String(b.cost).replace(/[^0-9.\-]/g, "")) || 0), 0);
-  const openOrders = DB.budget.filter(b => b.status !== "Reimbursed").length;
+  // Season spend is composites' own line; purchases charged to another team's
+  // budget are summed beside it rather than into it.
+  const spendRows = typeof compositesBuys === "function" ? compositesBuys() : DB.budget;
+  const money = rs => rs.reduce((s, b) => s + (parseFloat(String(b.cost).replace(/[^0-9.\-]/g, "")) || 0), 0);
+  const spend = money(spendRows);
+  const offSpend = typeof offBudgetBuys === "function" ? money(offBudgetBuys()) : 0;
+  const openOrders = DB.budget.filter(b => typeof buyReimbursed === "function" ? !buyReimbursed(b) : b.status !== "Reimbursed").length;
 
   return `
   <div class="toolbar no-print">
@@ -103,7 +115,7 @@ function renderReports() {
     </div>
     <div class="card">
       <h3>Budget</h3>
-      <p>Season spend <b>$${spend.toFixed(0)}</b> · ${openOrders} open purchase${openOrders === 1 ? "" : "s"}.</p>
+      <p>Season spend <b>$${spend.toFixed(0)}</b>${offSpend ? ` · $${offSpend.toFixed(0)} on other budgets` : ""} · ${openOrders} awaiting reimbursement.</p>
     </div>
   </div>`;
 }

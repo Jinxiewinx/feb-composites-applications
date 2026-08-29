@@ -2035,19 +2035,85 @@ await t("the weekly rollup pulls issues only — a shelved project and its sub-t
 console.log("budget:");
 await t("newBuy defaults purchaser to me", async () => { setTab("budget"); await newBuy(); assert(buyById(view.id).purchaser === "Simon" && buyById(view.id).status === "Submitted"); });
 await t("num parses money strings", () => { assert(num("$41.68") === 41.68 && num("") === 0 && num("1,200") === 1200); });
-await t("list totals season + open sums", () => { view = { ...view, tab: "budget", mode: "list" }; DB.budget = [{ id: "B1", cost: "100", status: "Reimbursed" }, { id: "B2", cost: "50", status: "Ordered" }]; render(); assert(main.innerHTML.includes("$150")); assert(main.innerHTML.includes("Open orders ($50)")); });
-await t("budget stat row counts over-$50-and-still-Submitted, not just over-$50", () => {
+await t("list totals season + open sums", () => {
+  view = { ...view, tab: "budget", mode: "list", fStatus: "", fReimb: "", fBudget: "" };
+  // Both written in the OLD single-status vocabulary, so this also pins the
+  // legacy read: Reimbursed is arrived-and-paid, Ordered is neither.
+  DB.budget = [{ id: "B1", cost: "100", status: "Reimbursed" }, { id: "B2", cost: "50", status: "Ordered" }];
+  render();
+  assert(main.innerHTML.includes("$150"), "season total is both purchases");
+  assert(main.innerHTML.includes('bignum">1</div><div class="stat-label">Not arrived yet'), "only B2 is still in the mail: " + main.innerHTML);
+  assert(main.innerHTML.includes('bignum">$50</div><div class="stat-label">Awaiting reimbursement (1)'), "only B2 is still owed: " + main.innerHTML);
+});
+await t("the two tracks are read separately, and the legacy vocabulary maps onto both", () => {
+  assert(buyStatus({ status: "Ordered" }) === "Purchased" && reimbStatus({ status: "Ordered" }) === "Submitted",
+    "Ordered was a fact about the goods only — it never said anyone had been paid back");
+  assert(buyStatus({ status: "Reimbursed" }) === "Arrived" && reimbStatus({ status: "Reimbursed" }) === "Reimbursed",
+    "the old terminal state was both");
+  assert(buyStatus({}) === "Submitted" && reimbStatus({}) === "Submitted", "an empty record starts at the top of both");
+  // A real reimb field always wins over anything inferred from status.
+  assert(reimbStatus({ status: "Arrived", reimb: "Approved" }) === "Approved", "an explicit reimb is the answer");
+  assert(reimbStatus({ status: "Arrived", reimb: "nonsense" }) === "Submitted", "garbage falls back, it does not render");
+  // The tracks genuinely move apart: arrived weeks before the money comes back.
+  const b = { id: "B-TWO", cost: "60", status: "Arrived", reimb: "Approved" };
+  assert(buyArrived(b) && !buyReimbursed(b), "on the shelf and still owed is now sayable");
+});
+await t("budget stat row counts over-$50-and-still-unapproved, and approval is the MONEY track", () => {
   DB.budget = [
-    { id: "B3", cost: "80", status: "Submitted" },  // over $50, unapproved
-    { id: "B4", cost: "80", status: "Ordered" },     // over $50 but already past approval
-    { id: "B5", cost: "10", status: "Submitted" },   // under $50, needs no approval
+    { id: "B3", cost: "80", status: "Submitted" },                        // over $50, nobody signed off
+    { id: "B4", cost: "80", status: "Purchased", reimb: "Approved" },     // signed off already
+    { id: "B5", cost: "10", status: "Submitted" },                        // under $50
+    { id: "B6", cost: "90", status: "Arrived", reimb: "Submitted" },      // arrived, still never approved
   ];
-  view = { ...view, tab: "budget", mode: "list" }; render();
-  assert(main.innerHTML.includes('bignum">1</div><div class="stat-label">Over $50, unapproved'), "only B3 counts: " + main.innerHTML);
+  view = { ...view, tab: "budget", mode: "list", fStatus: "", fReimb: "", fBudget: "" }; render();
+  assert(main.innerHTML.includes('bignum">2</div><div class="stat-label">Over $50, unapproved'), "B3 and B6 count: " + main.innerHTML);
+  assert(!needsApproval({ cost: "80", status: "Submitted", reimb: "Approved" }),
+    "the gate clears when the treasurer approves, not when somebody marks it bought");
+});
+await t("off-budget purchases are costed and owed, but never counted against composites", () => {
+  window.BUDGET_CFG = { categories: [{ name: "Manufacturing", goal: 500 }], total: { base: 1000, contingency: 0 } };
+  DB.budget = [
+    { id: "B-OB1", item: "epoxy", cost: "100", purpose: "Manufacturing", purchaser: "Simon", status: "Submitted" },
+    { id: "B-OB2", item: "chassis bolts", cost: "250", purpose: "Manufacturing", purchaser: "Simon", status: "Submitted", chargedTo: "Chassis" },
+    { id: "B-OB3", item: "release", cost: "40", purpose: "Manufacturing", purchaser: "Nick", status: "Submitted", chargedTo: "  Composites " },
+  ];
+  view = { ...view, tab: "budget", mode: "list", q: "", fStatus: "", fReimb: "", fBudget: "" }; render();
+  assert(isOffBudget(DB.budget[1]) && !isOffBudget(DB.budget[0]), "a named other budget is off, a blank one is ours");
+  assert(!isOffBudget(DB.budget[2]), "typing our own name out is still ours — the obvious trap");
+  assert(catSpend("Manufacturing") === 140, "the goal bar sees $140, not $390: " + catSpend("Manufacturing"));
+  assert(main.innerHTML.includes('bignum">$140</div><div class="stat-label">Season total (composites)'), "season total excludes it: " + main.innerHTML);
+  assert(main.innerHTML.includes('bignum">$250</div><div class="stat-label">Other budgets (1)'), "and it is visible on its own tile instead of vanishing");
+  // Still real money somebody fronted.
+  const owed = owedRows();
+  assert(owed.find(([who]) => who === "Simon")[1] === 350, "the purchaser is owed for both: " + JSON.stringify(owed));
+  assert(main.innerHTML.includes(">Chassis</span>"), "the row says whose budget it lands on");
+  // And the filter can cut the list either way.
+  view.fBudget = "other"; render();
+  assert(main.innerHTML.includes("chassis bolts") && !main.innerHTML.includes(">epoxy<"), "other-budgets-only filter");
+  view.fBudget = "composites"; render();
+  assert(!main.innerHTML.includes("chassis bolts"), "composites-only filter");
+  view.fBudget = ""; window.BUDGET_CFG = null;
+});
+await t("the purchase detail carries both tracks and the budget it lands on", () => {
+  DB.budget = [{ id: "B-DT1", item: "prepreg", cost: "300", purchaser: "Simon", purpose: "Manufacturing",
+                 status: "Ordered", chargedTo: "Aerodynamics" }];
+  view = { ...view, tab: "budget", mode: "detail", id: "B-DT1", edit: false }; render();
+  assert(main.innerHTML.includes(">Purchased</span>") && main.innerHTML.includes(">Submitted</span>"),
+    "the legacy record reads as two pills, not one: " + main.innerHTML);
+  assert(main.innerHTML.includes(">Aerodynamics</span>"), "the pill names the budget");
+  assert(main.innerHTML.includes("does not count against the composites season total"), "and the detail says what that means");
+  assert(!buyGoalWarning(DB.budget[0]), "an off-budget purchase never warns about OUR goal");
+  view.edit = true; render();
+  assert(main.innerHTML.includes(`id="bf-status"`) && main.innerHTML.includes(`id="bf-reimb"`) && main.innerHTML.includes(`id="bf-chargedTo"`),
+    "all three are editable fields");
+  assert(/<select id="bf-status"[\s\S]*?<option selected>Purchased<\/option>/.test(main.innerHTML),
+    "the legacy value selects the option it MEANS, so opening the dropdown cannot silently rewind it");
+  updBuy("chargedTo", "");
+  assert(!isOffBudget(buyById("B-DT1")), "clearing the field hands the cost back to composites");
 });
 await t("status and cost are editable in the budget list, without breaking row navigation", () => {
   DB.budget = [{ id: "B-E1", item: "epoxy", cost: "40", status: "Submitted", purchaser: "Simon" }];
-  view = { ...view, tab: "budget", mode: "list", q: "", fStatus: "" }; render();
+  view = { ...view, tab: "budget", mode: "list", q: "", fStatus: "", fReimb: "", fBudget: "" }; render();
   // The two live cells, guarded so editing never opens the detail.
   assert(/setBuyField\('B-E1','status'/.test(main.innerHTML), "the status cell is a select wired to the row's id");
   assert(/setBuyField\('B-E1','cost'/.test(main.innerHTML), "the cost cell is an input wired to the row's id");
@@ -2060,8 +2126,13 @@ await t("status and cost are editable in the budget list, without breaking row n
   assert(buyById("B-E1").cost === "80", "cost written");
   assert(calls.some(c => c[0] === "save" && c[1] === "budget" && c[3] === "cost"), "saved field-scoped, not whole-doc");
   assert(main.innerHTML.includes("needs approval"), "the over-$50 pill appears without opening anything");
-  setBuyField("B-E1", "status", "Ordered");
-  assert(buyById("B-E1").status === "Ordered" && !main.innerHTML.includes("needs approval"), "Ordered clears the approval flag in place");
+  // Both tracks are editable in the row, and only the money one clears the gate.
+  assert(/setBuyField\('B-E1','reimb'/.test(main.innerHTML), "the reimbursement cell is its own select on the row");
+  setBuyField("B-E1", "status", "Purchased");
+  assert(buyById("B-E1").status === "Purchased" && main.innerHTML.includes("needs approval"),
+    "marking the goods bought does NOT pretend somebody signed off");
+  setBuyField("B-E1", "reimb", "Approved");
+  assert(buyById("B-E1").reimb === "Approved" && !main.innerHTML.includes("needs approval"), "the treasurer's field clears it, in place");
   // The category is inline too — tagging a purchase to a section is what
   // makes the goal bars true — and the row advertises its deep link.
   assert(/setBuyField\('B-E1','purpose'/.test(main.innerHTML), "the category cell is a select wired to the row");

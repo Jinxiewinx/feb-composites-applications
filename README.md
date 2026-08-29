@@ -88,8 +88,10 @@ Twelve tabs, grouped in the sidebar by who is asking:
   and per-material run-out that turns into a Restock purchase.
 - **Schedule:** the season as a station-by-week grid, or the week by day,
   subteam and person.
-- **Budget:** purchases through Submitted, Ordered and Reimbursed, with a
-  receipt-scan button on phones.
+- **Budget:** purchases on two tracks, the goods (Submitted, Purchased,
+  Arrived) and the money (Submitted, Approved, Reimbursed), with a receipt-scan
+  button on phones and a Charged to field for spend that belongs to another
+  team's budget.
 - **Documents:** the 25 datasheets, member uploads, and pinned Google Docs in
   one filterable shelf.
 - **Reports:** CSV exports, the printable Monday status board, and the bulk

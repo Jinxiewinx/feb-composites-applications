@@ -12,7 +12,7 @@
 let DB = { workOrders: [], parts: [], projects: [], schedule: [], budget: [], documents: [], stock: [], stackplans: [], notifications: [], users: [] };
 let view = {
   tab: "dashboard", mode: "list", id: null, edit: false,
-  q: "", fStatus: "", fSub: "", authMode: "in", sortKey: null, sortDir: null,
+  q: "", fStatus: "", fSub: "", fReimb: "", fBudget: "", authMode: "in", sortKey: null, sortDir: null,
 };
 let rosterCache = null;
 let pendingRender = false;
@@ -27,17 +27,18 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.1.1";
+var APP_VERSION = "4.2.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "EH&S tags now read on screen the way they read on the sticker: four-character groups, not a run of 24.",
-  "A container's row shows the twelve characters printed down the edge of its tag, with the last four in bold — those are the ones that tell two jugs apart.",
-  "Those twelve are enough to look a container up. Type them into any scan box; if two jugs share them the app says so instead of guessing.",
-  "A tag that is not 24 characters saves with a warning rather than being refused, and the EH&S reconciliation sheet flags it.",
-  "That sheet now carries the code twice: plain for matching against RSS, grouped for reading off a clipboard on the shelf walk.",
+  "A purchase now has two statuses, because it always had two lives. Order says where the goods are (Submitted, Purchased, Arrived); Reimbursement says where the money is (Submitted, Approved, Reimbursed).",
+  "They move independently. A part on the shelf that nobody has been paid back for is finally something the Budget tab can say.",
+  "The over-$50 flag now clears when the reimbursement is Approved, not when somebody marks the goods bought.",
+  "Old purchases need no fixing: Ordered reads as Purchased, and the old Reimbursed reads as arrived and paid.",
+  "New field: Charged to. Leave it blank for our own spend. Name another team's budget and the cost is still tracked and still reimbursed, just kept out of the composites season total and every goal bar.",
+  "The list filters on either track or on whose budget it lands on, and the CSV exports all three columns.",
 ];
 
 /* ---------- config/release ----------
@@ -2370,7 +2371,7 @@ const TABS = [
   /* Hidden alias: Weekly Plan merged into Schedule as its week view. Old
      #/weekplan links and stored notifications land there. */
   { id: "weekplan", label: "Weekly Plan", ic: "calendar", coll: "schedule", grp: "planning", hidden: true, render: () => { view.tab = "timeline"; view.schedView = "week"; return renderSchedule(); } },
-  { id: "budget", label: "Budget", ic: "budget", coll: "budget", grp: "planning", tip: "Budget — purchases through reimbursement", render: () => renderBudget() },
+  { id: "budget", label: "Budget", ic: "budget", coll: "budget", grp: "planning", tip: "Budget — purchases, arrivals and reimbursement", render: () => renderBudget() },
   { id: "documents", label: "Documents", ic: "documents", coll: null, grp: "team", tip: "Documents — datasheets, standards, printables", render: () => renderDocuments() },
   { id: "reports", label: "Reports", ic: "reports", coll: null, grp: "team", tip: "Reports — exports, print boards, labels", render: () => renderReports() },
   { id: "people", label: "People", ic: "people", coll: null, grp: "team", tip: "People — the roster and who carries what", render: () => renderPeople() },
@@ -2385,7 +2386,7 @@ function setTab(id) {
   // than reusing the Parts ones, precisely so this line can clear them: fLate
   // and friends are NOT reset here, and a "late only" toggle left on in Parts
   // would otherwise silently filter a different tab's rail.
-  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
+  view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", fReimb: "", fBudget: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
     woOpen: false, woLate: false, woMine: false, woDone: false, woOnlyRnd: false };
   closeDrawer();
   render(); syncUrl();

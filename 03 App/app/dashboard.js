@@ -710,7 +710,11 @@ function dashProgram(role) {
     : "";
   const molds = typeof moldsStageBar === "function" ? moldsStageBar(live) : "";
 
-  const openOrders = (DB.budget || []).filter(b => b.status !== "Reimbursed");
+  /* "Unreimbursed" is a fact about the MONEY track, so it reads reimbStatus()
+     and not the goods status beside it — a part that arrived last month is
+     still money somebody is owed. Off-budget purchases count: the team owes
+     the purchaser either way. */
+  const openOrders = (DB.budget || []).filter(b => typeof buyReimbursed === "function" ? !buyReimbursed(b) : b.status !== "Reimbursed");
   const openSum = openOrders.reduce((a, b) => a + (typeof num === "function" ? num(b.cost) : 0), 0);
   const approvals = (DB.budget || []).filter(b => typeof needsApproval === "function" && needsApproval(b)).length;
 

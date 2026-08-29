@@ -1,18 +1,87 @@
 "use strict";
 /* budget.js — the Budget tab.
-   The SN5 "Budget" sheet reborn: purchase requests through their lifecycle
-   (Submitted → Ordered → Reimbursed). Season spend at a glance so we don't
-   find out we're over at the worst possible time. */
+   The SN5 "Budget" sheet reborn: purchase requests through their lifecycle,
+   with season spend at a glance so we don't find out we're over at the worst
+   possible time.
 
-const BUY_STATUS = ["Submitted", "Ordered", "Reimbursed"];
+   ---------- two tracks, not one ----------
+   A purchase has two separate lives and the old single status could only tell
+   one of them. Submitted → Ordered → Reimbursed reads like a line but isn't:
+   "Ordered" is a fact about the goods, "Reimbursed" is a fact about the money,
+   and a member who fronted their card routinely has the part on the shelf
+   weeks before the treasurer pays them back. Marking such a purchase
+   "Reimbursed" said it had arrived; marking it "Ordered" said nobody owed
+   anyone anything. Both were lies half the time.
+
+   So the two tracks are two fields:
+
+     status  — the goods:  Submitted → Purchased → Arrived
+     reimb   — the money:  Submitted → Approved  → Reimbursed
+
+   They advance independently. Legacy records carry only `status` with the old
+   vocabulary, so both are read through buyStatus()/reimbStatus(), which map
+   Ordered → Purchased and Reimbursed → Arrived + Reimbursed. Nothing is
+   rewritten in place: the mapping is read-time, and a record only gains a
+   `reimb` field when someone actually sets one.
+
+   ---------- whose budget ----------
+   Not everything bought on a composites run is composites' money. Somebody
+   drives to McMaster for the whole team and comes back with a chassis bolt
+   order; the cost is real, the reimbursement is real, and it must not eat our
+   season goal. `chargedTo` names the budget it lands on. Blank (or the word
+   "Composites") means ours and behaves exactly as before; anything else is
+   off-budget: still listed, still costed, still owed back to whoever paid,
+   still gated at $50, but out of the season total and out of every goal bar.
+   Free text on purpose — the subteam names are theirs, not ours, and a fixed
+   list we guessed at would be wrong in a way nobody could fix from the app. */
+
+const BUY_STATUS = ["Submitted", "Purchased", "Arrived"];        // the goods
+const REIMB_STATUS = ["Submitted", "Approved", "Reimbursed"];    // the money
+// What the single-status era wrote. Read-time only; see the header.
+const LEGACY_BUY_STATUS = { Ordered: "Purchased", Reimbursed: "Arrived" };
 const PURPOSE = ["Manufacturing", "Testing", "Restock", "Tooling", "Other"];
 
 function buyById(id) { return DB.budget.find(b => b.id === id); }
 function saveBuy(b, field) { b = b || buyById(view.id); if (b) save("budget", b, field); }
-function buyStatusClass(s) { return { Submitted: "Draft", Ordered: "InWork", Reimbursed: "Complete" }[s] || "Draft"; }
+function buyStatus(b) {
+  const s = String((b && b.status) || "");
+  return BUY_STATUS.includes(s) ? s : (LEGACY_BUY_STATUS[s] || "Submitted");
+}
+function reimbStatus(b) {
+  const r = String((b && b.reimb) || "");
+  if (REIMB_STATUS.includes(r)) return r;
+  // The one thing the old vocabulary did say about money.
+  return String((b && b.status) || "") === "Reimbursed" ? "Reimbursed" : "Submitted";
+}
+function buyArrived(b) { return buyStatus(b) === "Arrived"; }
+function buyReimbursed(b) { return reimbStatus(b) === "Reimbursed"; }
+function buyStatusClass(s) {
+  return { Submitted: "Draft", Ordered: "InWork", Purchased: "InWork", Arrived: "Complete",
+           Approved: "InWork", Reimbursed: "Complete" }[s] || "Draft";
+}
 function num(v) { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; }
-// FEB purchasing rule: anything over $50 needs sign-off before it's ordered.
-function needsApproval(b) { return num(b.cost) > 50 && b.status === "Submitted"; }
+
+/* Blank means ours. "Composites" typed out means ours too — somebody will,
+   and having the app treat their own team's name as a foreign budget would be
+   a nasty little trap. */
+function isOffBudget(b) {
+  const c = String((b && b.chargedTo) || "").trim();
+  return !!c && !/^composites$/i.test(c);
+}
+function chargedToLabel(b) {
+  const c = String((b && b.chargedTo) || "").trim();
+  return isOffBudget(b) ? c : "Composites";
+}
+// Every roll-up that answers "how much of the composites budget is gone".
+function compositesBuys() { return (DB.budget || []).filter(b => !isOffBudget(b)); }
+function offBudgetBuys() { return (DB.budget || []).filter(isOffBudget); }
+
+/* FEB purchasing rule: anything over $50 needs sign-off before it's ordered
+   (CS-012 §7.1). That gate belongs to the money track — it clears when the
+   treasurer marks it Approved, not when somebody marks the goods ordered,
+   which is what it used to do. It applies to off-budget purchases too: the
+   rule is about the size of the spend, not about whose line it lands on. */
+function needsApproval(b) { return num(b.cost) > 50 && reimbStatus(b) === "Submitted"; }
 
 /* ---------- goals ----------
    Lead-set spending targets, stored in config/budget (the same lead-writable,
@@ -33,14 +102,17 @@ function fetchBudgetCfg() {
 }
 function budgetCats() { return ((window.BUDGET_CFG || {}).categories || []).filter(c => c && c.name); }
 function budgetTotal() { const t = (window.BUDGET_CFG || {}).total || {}; return { base: num(t.base), contingency: num(t.contingency) }; }
+// Goals are composites goals, so off-budget purchases are not in this sum.
 function catSpend(name) {
   const k = String(name || "").toLowerCase();
-  return DB.budget.filter(b => String(b.purpose || "").toLowerCase() === k).reduce((s, b) => s + num(b.cost), 0);
+  return compositesBuys().filter(b => String(b.purpose || "").toLowerCase() === k).reduce((s, b) => s + num(b.cost), 0);
 }
-// Members front their own money and wait; this is the treasurer's nag list.
+/* Members front their own money and wait; this is the treasurer's nag list.
+   Off-budget purchases ARE on it — whose line the cost lands on is nothing to
+   do with whether somebody is still out of pocket. */
 function owedRows() {
   const m = new Map();
-  DB.budget.filter(b => b.status !== "Reimbursed" && num(b.cost)).forEach(b => {
+  (DB.budget || []).filter(b => !buyReimbursed(b) && num(b.cost)).forEach(b => {
     const k = b.purchaser || "—";
     m.set(k, (m.get(k) || 0) + num(b.cost));
   });
@@ -91,6 +163,7 @@ function budgetBoardsHtml(totalSpent) {
    the detail as a warning, never a block — the part still gets bought, the
    lead just finds out now instead of at the spreadsheet reckoning. */
 function buyGoalWarning(b) {
+  if (isOffBudget(b)) return null;   // not our money, not our goal
   const cat = budgetCats().find(c => String(c.name).toLowerCase() === String(b.purpose || "").toLowerCase());
   if (!cat || !num(cat.goal)) return null;
   const spent = catSpend(cat.name);
@@ -150,7 +223,8 @@ async function newBuy() {
   const id = await allocId("budget");
   if (!id) return;
   const b = {
-    id, item: "", purchaser: signerName(), purpose: (budgetCats()[0] || {}).name || "Manufacturing", status: "Submitted",
+    id, item: "", purchaser: signerName(), purpose: (budgetCats()[0] || {}).name || "Manufacturing",
+    status: "Submitted", reimb: "Submitted", chargedTo: "",
     cost: "", dateOrdered: today(), source: "", notes: "", retro: false, createdBy: myEmail(),
     receiptUrl: "", receiptPath: "",
   };
@@ -373,37 +447,60 @@ function renderBudget() {
 function renderBuyList() {
   const D = DB.budget;
   const rows = D
-    .filter(b => (!view.fStatus || b.status === view.fStatus))
-    .filter(b => { const q = view.q.toLowerCase(); return !q || (b.item || "").toLowerCase().includes(q) || (b.purchaser || "").toLowerCase().includes(q); })
+    .filter(b => (!view.fStatus || buyStatus(b) === view.fStatus))
+    .filter(b => (!view.fReimb || reimbStatus(b) === view.fReimb))
+    .filter(b => !view.fBudget || (view.fBudget === "other" ? isOffBudget(b) : !isOffBudget(b)))
+    .filter(b => { const q = view.q.toLowerCase(); return !q || (b.item || "").toLowerCase().includes(q) || (b.purchaser || "").toLowerCase().includes(q) || (b.chargedTo || "").toLowerCase().includes(q); })
     .sort((a, b) => (b.dateOrdered || "").localeCompare(a.dateOrdered || ""));
-  const total = D.reduce((s, b) => s + num(b.cost), 0);
-  const open = D.filter(b => b.status !== "Reimbursed");
-  const openSum = open.reduce((s, b) => s + num(b.cost), 0);
+  /* Season total is COMPOSITES money only — that is the number the goal bars
+     are drawn against, and putting a chassis order inside it is the exact bug
+     chargedTo exists to stop. What the team spent through us anyway gets its
+     own tile, and only when there is something to put in it. */
+  const total = compositesBuys().reduce((s, b) => s + num(b.cost), 0);
+  const off = offBudgetBuys();
+  const offSum = off.reduce((s, b) => s + num(b.cost), 0);
+  const inFlight = D.filter(b => !buyArrived(b));
+  const owed = D.filter(b => !buyReimbursed(b) && num(b.cost));
+  const owedSum = owed.reduce((s, b) => s + num(b.cost), 0);
   const unapproved = D.filter(needsApproval).length;
   fetchBudgetCfg();
   return `
   <div class="stat-row">
-    <div class="stat-tile"><div class="bignum">$${total.toFixed(0)}</div><div class="stat-label">Season total</div></div>
-    <div class="stat-tile"><div class="bignum">${open.length}</div><div class="stat-label">Open orders ($${openSum.toFixed(0)})</div></div>
+    <div class="stat-tile"><div class="bignum">$${total.toFixed(0)}</div><div class="stat-label">Season total (composites)</div></div>
+    ${off.length ? `<div class="stat-tile"><div class="bignum">$${offSum.toFixed(0)}</div><div class="stat-label">Other budgets (${off.length})</div></div>` : ""}
+    <div class="stat-tile"><div class="bignum">${inFlight.length}</div><div class="stat-label">Not arrived yet</div></div>
+    <div class="stat-tile"><div class="bignum">$${owedSum.toFixed(0)}</div><div class="stat-label">Awaiting reimbursement (${owed.length})</div></div>
     <div class="stat-tile"><div class="bignum">${unapproved}</div><div class="stat-label">Over $50, unapproved</div></div>
   </div>
   ${budgetBoardsHtml(total)}
   <div class="toolbar no-print"><button class="primary"${gx("Sign in to log a purchase — it is recorded against you.")} onclick="newBuy()">+ New Purchase</button></div>
   <div class="filters no-print">
-    <select onchange="view.fStatus=this.value;render()">
-      <option value="">All statuses</option>
+    <select title="Where the goods are" onchange="view.fStatus=this.value;render()">
+      <option value="">Any order status</option>
       ${BUY_STATUS.map(s => `<option ${view.fStatus === s ? "selected" : ""}>${s}</option>`).join("")}
+    </select>
+    <select title="Where the money is" onchange="view.fReimb=this.value;render()">
+      <option value="">Any reimbursement</option>
+      ${REIMB_STATUS.map(s => `<option ${view.fReimb === s ? "selected" : ""}>${s}</option>`).join("")}
+    </select>
+    <select title="Whose budget it lands on" onchange="view.fBudget=this.value;render()">
+      <option value="">Every budget</option>
+      <option value="composites" ${view.fBudget === "composites" ? "selected" : ""}>Composites only</option>
+      <option value="other" ${view.fBudget === "other" ? "selected" : ""}>Other budgets only</option>
     </select>
     <input id="searchbox" placeholder="search item / purchaser…" value="${esc(view.q)}" oninput="searchInput(this)">
   </div>
   ${D.length === 0 ? `<div class="card">No purchases logged yet. <b>New Purchase</b> to start.</div>` : ""}
   <table class="list">
-    <tr><th>Item</th><th>Purchaser</th><th>Purpose</th><th>Status</th><th>Cost</th><th>Ordered</th></tr>
+    <tr><th>Item</th><th>Purchaser</th><th>Purpose</th><th>Order</th><th>Reimb.</th><th>Cost</th><th>Ordered</th></tr>
     ${/* Status and cost are edited HERE, in the row (Simon, 2026-08-13): the
-          week's real workflow is walking the list marking things Ordered or
-          Reimbursed and fixing a price off the receipt, and that took a
-          click into the detail and Edit for each one. The row still opens
-          the detail; the two live cells stopPropagation so editing never
+          week's real workflow is walking the list marking things arrived or
+          reimbursed and fixing a price off the receipt, and that took a
+          click into the detail and Edit for each one. Both tracks get their
+          own dropdown for the same reason: the treasurer walks the list down
+          the Reimb. column while the buyer walks it down Order, and neither
+          should have to touch the other's cell. The row still opens the
+          detail; every live cell stopPropagation so editing never
           navigates. */""}
     ${rows.map(b => {
       /* The category (purpose) is editable here too — tagging a purchase to a
@@ -414,12 +511,14 @@ function renderBuyList() {
       const cats = budgetCats().length ? budgetCats().map(c => c.name) : PURPOSE;
       const opts = (cats.some(c => c.toLowerCase() === String(b.purpose || "").toLowerCase()) || !b.purpose ? cats : [b.purpose, ...cats]);
       return `<tr data-open="${b.id}" onclick="view={...view,mode:'detail',id:'${b.id}',edit:false};render()">
-      <td><b>${esc(b.item || b.id)}</b>${b.retro ? ' <span class="pill retro">retro</span>' : ""}${needsApproval(b) ? ' <span class="pill OnHold" title="Over $50 — needs #purchasing sign-off before ordering">needs approval</span>' : ""}</td>
+      <td><b>${esc(b.item || b.id)}</b>${b.retro ? ' <span class="pill retro">retro</span>' : ""}${isOffBudget(b) ? ` <span class="pill offbudget" title="Charged to ${esc(chargedToLabel(b))} — cost tracked, not counted against the composites budget">${esc(chargedToLabel(b))}</span>` : ""}${needsApproval(b) ? ' <span class="pill OnHold" title="Over $50 — needs #purchasing sign-off before ordering">needs approval</span>' : ""}</td>
       <td>${esc(b.purchaser || "—")}</td>
       <td onclick="event.stopPropagation()"><select class="buy-cat" onchange="setBuyField('${b.id}','purpose',this.value)" aria-label="Category of ${esc(b.item || b.id)}">
         ${opts.map(o => `<option ${String(b.purpose || "") === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></td>
-      <td onclick="event.stopPropagation()"><div class="statusdrop ${buyStatusClass(b.status)}">
-        <select onchange="setBuyField('${b.id}','status',this.value)" aria-label="Status of ${esc(b.item || b.id)}">${BUY_STATUS.map(s => `<option ${b.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></div></td>
+      <td onclick="event.stopPropagation()"><div class="statusdrop ${buyStatusClass(buyStatus(b))}">
+        <select onchange="setBuyField('${b.id}','status',this.value)" aria-label="Order status of ${esc(b.item || b.id)}">${BUY_STATUS.map(s => `<option ${buyStatus(b) === s ? "selected" : ""}>${s}</option>`).join("")}</select></div></td>
+      <td onclick="event.stopPropagation()"><div class="statusdrop ${buyStatusClass(reimbStatus(b))}">
+        <select onchange="setBuyField('${b.id}','reimb',this.value)" aria-label="Reimbursement status of ${esc(b.item || b.id)}">${REIMB_STATUS.map(s => `<option ${reimbStatus(b) === s ? "selected" : ""}>${s}</option>`).join("")}</select></div></td>
       <td class="buy-cost" onclick="event.stopPropagation()">$<input value="${num(b.cost).toFixed(2)}"
         onchange="setBuyField('${b.id}','cost',this.value)" aria-label="Cost of ${esc(b.item || b.id)}"></td>
       <td>${esc(b.dateOrdered || "")}</td>
@@ -438,12 +537,21 @@ function setBuyField(id, key, val) {
   render();
 }
 
-function buyFld(b, label, key, opts) {
+function buyFld(b, label, key, opts, x) {
+  x = x || {};
   const v = b[key] ?? "";
-  if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(v) || "—"}</div></div>`;
+  if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(x.ro != null ? x.ro : v) || "—"}</div></div>`;
   // Stable ids so budgetRenderSoon() can hand focus back after a repaint.
   if (opts) return `<div class="f"><label>${label}</label><select id="bf-${key}" onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
-  return `<div class="f"><label>${label}</label><input id="bf-${key}" value="${esc(v)}" onchange="updBuy('${key}',this.value)"></div>`;
+  return `<div class="f"><label>${label}</label><input id="bf-${key}" value="${esc(v)}"${x.placeholder ? ` placeholder="${esc(x.placeholder)}"` : ""} onchange="updBuy('${key}',this.value)">${x.hint ? `<span class="tny muted nocaps">${esc(x.hint)}</span>` : ""}</div>`;
+}
+
+/* Same field, but the SELECTED option is what the record means rather than
+   the string it happens to hold — a legacy "Ordered" shows as Purchased and
+   only becomes one when somebody picks it. */
+function buyFldSel(b, label, key, opts, cur) {
+  if (!view.edit) return `<div class="f"><label>${label}</label><div class="ro">${esc(cur) || "—"}</div></div>`;
+  return `<div class="f"><label>${label}</label><select id="bf-${key}" onchange="updBuy('${key}',this.value)">${opts.map(o => `<option ${cur === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
 }
 
 
@@ -459,14 +567,20 @@ function renderBuyDetail() {
   </div>
   <div class="card" data-lbgroup="budget:${esc(b.id)}">
     <h2>${esc(b.item || "(unnamed purchase)")}</h2>
-    <div class="muted">${esc(b.id)} · <span class="pill ${buyStatusClass(b.status)}">${esc(b.status)}</span>${b.updatedAt ? " · saved " + fmtWhen(b.updatedAt) + " by " + esc(b.updatedBy || "?") : ""}</div>
+    <div class="muted">${esc(b.id)} · <span class="pill ${buyStatusClass(buyStatus(b))}" title="Where the goods are">${esc(buyStatus(b))}</span>
+      <span class="pill ${buyStatusClass(reimbStatus(b))}" title="Where the money is">${esc(reimbStatus(b))}</span>
+      ${isOffBudget(b) ? `<span class="pill offbudget" title="Cost tracked here, counted against ${esc(chargedToLabel(b))} rather than composites">${esc(chargedToLabel(b))}</span>` : ""}${b.updatedAt ? " · saved " + fmtWhen(b.updatedAt) + " by " + esc(b.updatedBy || "?") : ""}</div>
     ${needsApproval(b) ? `<p class="warn">Over $50 — needs #purchasing sign-off before it's ordered.</p>` : ""}
+    ${isOffBudget(b) ? `<p class="muted tny">Charged to ${esc(chargedToLabel(b))}. The cost is tracked and ${esc(b.purchaser || "whoever paid")} still gets reimbursed; it does not count against the composites season total or any goal.</p>` : ""}
     ${(() => { const gw = buyGoalWarning(b); return gw ? `<p class="warn">${esc(gw)}</p>` : ""; })()}
     <h3>Details</h3>
     <div class="grid">
       ${buyFld(b, "Item", "item")}${buyFld(b, "Purchaser", "purchaser")}${buyFld(b, "Purpose", "purpose", budgetCats().length ? budgetCats().map(c => c.name) : PURPOSE)}
-      ${buyFld(b, "Status", "status", BUY_STATUS)}${buyFld(b, "Cost ($)", "cost")}${buyFld(b, "Date ordered", "dateOrdered")}
+      ${buyFldSel(b, "Order status", "status", BUY_STATUS, buyStatus(b))}${buyFldSel(b, "Reimbursement", "reimb", REIMB_STATUS, reimbStatus(b))}
+      ${buyFld(b, "Cost ($)", "cost")}${buyFld(b, "Date ordered", "dateOrdered")}
       ${buyFld(b, "Source / vendor", "source")}
+      ${buyFld(b, "Charged to", "chargedTo", null, { placeholder: "Composites", ro: chargedToLabel(b),
+        hint: "Blank is ours. Name another team's budget and the cost is still tracked and still reimbursed, just not counted against composites." })}
     </div>
     ${buyLinesHtml(b, E)}
     <h3>Receipt</h3>
@@ -487,4 +601,7 @@ function renderBuyDetail() {
   </div>`;
 }
 
-function updBuy(key, val) { const b = buyById(view.id); b[key] = val; saveBuy(b, key); if (key === "status" || key === "cost" || key === "purpose") renderSoonKeepFocus(); }
+function updBuy(key, val) {
+  const b = buyById(view.id); b[key] = val; saveBuy(b, key);
+  if (["status", "reimb", "cost", "purpose", "chargedTo"].includes(key)) renderSoonKeepFocus();
+}

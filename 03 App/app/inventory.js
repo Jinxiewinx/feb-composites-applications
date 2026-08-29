@@ -269,7 +269,8 @@ function invRestockHtml() {
 function openRestockPurchase() {
   const need = restockLow().filter(x => !x.onOrder.length);
   if (!need.length) { toast("Nothing needs ordering that is not already on its way.", "info"); return; }
-  const open = (DB.budget || []).filter(b => b.status === "Submitted");
+  // Anything whose goods are still coming can take another line.
+  const open = (DB.budget || []).filter(b => typeof buyArrived === "function" ? !buyArrived(b) : b.status === "Submitted");
   openModal(`<h2>Add ${need.length} thing${need.length === 1 ? "" : "s"} to a purchase</h2>
     <p class="muted tny">One line per material, at the shortfall. Prices are not guessed —
       whoever orders fills them in.</p>
@@ -323,7 +324,7 @@ async function submitRestockPurchase() {
     const common = suppliers.length && suppliers.every(s => s === suppliers[0]) ? suppliers[0] : "";
     b = {
       id, item: `Restock — ${take.length} item${take.length === 1 ? "" : "s"}`,
-      purpose: "Restock", status: "Submitted", source: common,
+      purpose: "Restock", status: "Submitted", reimb: "Submitted", chargedTo: "", source: common,
       purchaser: signerName(), cost: "", dateOrdered: "", lines,
     };
     (DB.budget = DB.budget || []).push(b);

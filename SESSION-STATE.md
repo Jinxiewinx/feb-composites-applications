@@ -193,6 +193,18 @@ tests) the shape is `CA` + sixteen `0` + six hex, and only those six move.
 The linear formats stay until someone walks the shelves — one sheet of tags
 is not a survey.
 
+**v4.2.0 IS PUSHED AND LIVE** (2026-08-29) — Budget's two status tracks and
+the Charged to field, on Simon's ask. The one thing not to re-litigate: `status`
+and `reimb` are two fields, not one enum, because "Ordered" was a fact about
+goods and "Reimbursed" a fact about money, and a member routinely has the part
+on the shelf weeks before the treasurer pays them back. Legacy records are read
+through `buyStatus()` / `reimbStatus()` and are never rewritten in place;
+`Ordered → Purchased` and old `Reimbursed → Arrived + Reimbursed`. The $50
+approval gate moved onto the money track (`reimb === "Submitted"`), which is why
+marking goods bought no longer clears it. `chargedTo` is free text, blank or
+"Composites" meaning ours, and off-budget purchases stay in the list, the owed
+list and the $50 rule while leaving the season total and every goal bar.
+
 **v4.1.0 AND v4.1.1 ARE TAGGED, PUSHED AND LIVE** (2026-08-29). v4.1.0 acted on that photo (the two sessions crossed; this half merged on
 top). `invEhsShort` no longer shows the last six: it shows **the twelve
 characters reprinted down the tag's edge, in the label's four-character
