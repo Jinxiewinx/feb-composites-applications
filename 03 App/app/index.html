@@ -1150,6 +1150,15 @@
      for the same reason. */
   .chk { display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; }
   .chk input { flex: 0 0 auto; }
+  /* The custom-label composer's live preview (labels.js clPreviewHtml). The
+     label itself is styled by print.css, which is a plain stylesheet and not
+     wrapped in @media print, so what sits in the modal is the label at print
+     size. These rules only give it somewhere to sit. */
+  .cl-prev { margin: 10px 0 4px; overflow-x: auto; }
+  .cl-prev .roll-page { margin: 0; box-shadow: 0 1px 6px rgba(0,0,0,.22); }
+  /* Reserves its line whether or not there is a problem to report, so the
+     fields below do not jump every time the text becomes valid. */
+  .cl-warn { min-height: 1.25em; margin-bottom: 8px; }
   .lbpick { margin-top: 14px; }
   .lblist { max-height: 34vh; overflow: auto; border: 1px solid var(--line);
     border-radius: var(--radius); padding: 4px 8px; background: var(--surface-2); }
@@ -2989,6 +2998,10 @@
     .pfilters > input { grid-column: auto; }
   }
   @media (max-width: 640px) {
+    /* 101.6mm is 384px and the modal is narrower than that on a phone. Scaled
+       rather than scrolled: the point of the preview is seeing the whole label
+       while you type it. */
+    .cl-prev { zoom: .82; }
     .xgroup .linkrow { flex-direction: column; align-items: stretch; }
     .xg-hd { flex-direction: column; align-items: flex-start; gap: 2px; }
     .copyout { height: 40vh; font-size: 12px; }

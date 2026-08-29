@@ -70,6 +70,7 @@ Logic and data, no browser:
 | `test_slicer.mjs` | Mold geometry: STL slicing, islands, containment. |
 | `test_packer.mjs` | Cut lists: guillotine feasibility, kerf, stock policy. |
 | `test_qr.mjs` | QR encoding. Asserts version 3 alphanumeric exactly; see "The QR guard" below. |
+| `test_label_roll.mjs` | Labels on a roll, and the custom label. Parses the millimetres out of BOTH `labels.js` and `print.css` and compares them, because the two files say the same thing in different languages and a drift between them still previews perfectly — onto the wrong length of tape. Also the guard that stops a hand-typed label impersonating a record. |
 | `test_sheetsync.mjs` | `03 App/sheets/Sync.gs`, the Apps Script that mirrors the app into the Composites Master Tracker, against fake Sheets objects. It is the only code here that writes into somebody else's live spreadsheet, unattended, every 15 minutes — so the cases that matter are the ones where it must NOT write: orphan rows kept and tinted, column A's formula untouched, unmapped columns left alone. |
 
 Rendered in headless Chromium (need Playwright):
@@ -81,7 +82,7 @@ Rendered in headless Chromium (need Playwright):
 | `test_drawings.mjs` | Mold drawing sheets: renders each one and checks it is readable. No label crossed by a line, nothing under 5.5pt, nothing off the sheet. |
 | `test_print_mobile.mjs` | The printable documents on a phone: fit, reachable controls, the two-page traveler cap. |
 | `test_safearea.mjs` | The notch, the Dynamic Island, the home indicator, at real iPhone inset values. |
-| `test_labels.mjs` | The label sheets, down to the pixels: each QR is rasterized and its dark-pixel fraction checked, because a blank SVG passes every DOM assertion. |
+| `test_labels.mjs` | The label sheets, down to the pixels: each QR is rasterized and its dark-pixel fraction checked, because a blank SVG passes every DOM assertion. Also measures a roll page: `test_label_roll.mjs` proves the JS and the CSS agree, this proves a browser agrees with them. |
 | `test_sanitize.mjs` | The comment sanitizer, running the real vendored DOMPurify. Never assert allowlist policy anywhere else; nothing else can see it. |
 | `test_scan.mjs` | In-app scanning and lot capture. |
 | `test_receiving_ui.mjs` | The receiving desk, measured at three widths and both themes with 7 and 40 rows. Needs `serve_populated.mjs` running. An empty grid cannot overflow and cannot be unreadable, so it has to be filled before it is measured; that is what found both of the desk's layout bugs. |

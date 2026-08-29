@@ -126,6 +126,7 @@ window.onFbChange = function () {
   loadRelease();
   if (typeof loadResinOverrides === "function") loadResinOverrides();
   if (typeof loadRestockRules === "function") loadRestockRules();
+  if (typeof loadLabelMedia === "function") loadLabelMedia();
   if (typeof loadTrainingCatalog === "function") loadTrainingCatalog();
   render();
 };

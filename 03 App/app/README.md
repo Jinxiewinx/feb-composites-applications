@@ -966,15 +966,57 @@ number of parts pulled off it. The point is that the label answers "what is
 this" with the phone still in your pocket, because RFS wifi drops and gloves are
 covered in resin. Scanning is the fast path, not the only one.
 
-There is a Label button on a work order and on a part, and a bulk builder under
-Reports. The builder lets you pick the stock (Avery 5161, 20 up, or 5522
-WeatherProof polyester for chemicals) and the cell to start at, so a part-used
-sheet gets finished instead of binned. It also prints a 100 mm calibration bar:
-browsers silently apply "Fit to page" scaling, and ten seconds with a steel rule
-is cheaper than a wasted sheet of polyester.
+There is a Label button on a work order, a part, a mold, a board, an item and a
+lot, and a bulk builder under Reports.
 
-Coupon labels are text-only. A coupon ID is one character too long for the QR
-budget, and 12 mm tape could not hold a code anyway.
+### Two ways to print one
+
+**On a sheet**, for seeding an inventory. The builder lets you pick Avery 5161
+(20 up) or 5522 WeatherProof polyester for chemicals, and the cell to start at,
+so a part-used sheet gets finished instead of binned. It also prints a 100 mm
+calibration bar: browsers silently apply "Fit to page" scaling, and ten seconds
+with a steel rule is cheaper than a wasted sheet of polyester.
+
+**On a roll**, for every day after that. Once the shed is inventoried you need
+one label at a time — a lot gets opened, a panel comes off the table, a bin gets
+renamed — and printing one onto an Avery sheet wastes nineteen. The roll printer
+is a Brother QL on the shed wifi; you print to it from the phone's own print
+dialog over AirPrint, so there is no printer address to configure anywhere in
+the app. If it doesn't show up in the dialog it is off the network.
+
+The everyday stock is **DK-2210**, 29 mm continuous, cut at 101.6 mm — which is
+the Avery 5161 cell to within a millimetre, so it is the same label on different
+paper rather than a second design. **DK-1201** die-cut (29 x 90 mm) is there as
+a fallback and is 15 mm shorter, so long names wrap one tier earlier.
+
+Direct-thermal roll labels are for indoor bins, shelves, lots and consumables.
+They fade in UV, blacken with heat and smear under solvent, so anything going
+into a post-cure oven or getting wiped with IPA or acetone still gets a 5522
+polyester label off the sheet printer. That is not a fallback; it is the right
+stock for that job, and it is why the sheet path is not going away.
+
+**Label media** under Reports sets which one this browser uses. It is stored on
+the device, so the phone at the bench and a laptop at home can differ — which is
+the point. A lead can also set the team default, which only seeds a device
+nobody has configured.
+
+### A label with nothing behind it
+
+**Custom label**, under Inventory and Reports, prints typed text: a shelf edge, a
+cabinet, a warning. Same type sizes and the same FEB mark as every other label,
+with a live preview at print size, an optional QR, and the last ten kept for
+reprinting.
+
+It will not let you type something id-shaped into the second line. A hand-made
+label reading `MOLD-SN6-011` that no record answers to is the exact failure this
+whole system exists to end, and one that *does* match a record is refused too and
+sends you to that record's own Label button — which prints the identifying fact
+and a QR that resolves, instead of four words somebody remembered.
+
+Coupons carry a QR like everything else. That was not always true: when a coupon
+was a substring of a panel (`PNL-SN6-006-C03`, fifteen characters) it was one
+over the QR budget and coupon labels were text-only. A coupon is now a
+first-class R&D record — `CPN-SN6-042`, eleven characters, shorter than a mold.
 
 ## Scanning
 

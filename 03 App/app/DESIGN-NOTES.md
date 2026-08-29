@@ -197,6 +197,7 @@ number live". None of them are derivable from the code that reads them.
 | `config/trainings` | Trainings added beyond the six built-ins. Archives instead of deleting, so a historic grant keeps rendering its name |
 | `config/resins` | Per-resin cure-hold overrides. Never below the datasheet floor — see below |
 | `config/tracker` | The sheet feed's secret token. Never in source |
+| `config/labels` | The team's default label media. Only seeds a device nobody has set — the operative setting is per-device in `localStorage` |
 
 Three field names carry more weight than they look:
 
@@ -500,8 +501,47 @@ worse once it has resin on it.
 assertion is the whole guard.
 
 The same arithmetic caps an ID at 14 characters (47 − 30 of host − 3 of `/Q/`).
-Everything in the grammar fits except a coupon, `PNL-SN6-006-C03` at 15, which
-is why coupon labels are text-only.
+Everything in the grammar fits. It did not always: when a coupon was a substring
+of a panel, `PNL-SN6-006-C03` at 15 characters was one over, and coupon labels
+were text-only. A coupon is now a first-class `rnd` record at `CPN-SN6-042`,
+eleven characters, so it carries a QR like everything else. The rule did not
+move; which ids satisfy it did. `test_qr.mjs` keeps the old spelling as a
+counterfactual so the cliff stays proven rather than assumed.
+
+## Why the roll printer has no address in the app
+
+A browser cannot open a raw TCP socket, so the usual way to drive a label
+printer — port 9100 — is not available to us at all. Nor is its HTTP interface:
+the app is served over HTTPS from `feb-composites.web.app`, and an HTTPS page
+`fetch`ing `http://192.168.x.x` is blocked as mixed content. Every "just POST to
+the printer" design dies on one of those two.
+
+What is left is the operating system's own print path. The phone discovers the
+printer over Bonjour, `window.print()` reaches it through AirPrint, and the app
+never learns an IP, a port or a token. That is why **Label media** has a stock
+picker and no address field: there is nothing to type, and a printer that does
+not appear in the print dialog is off the network rather than misconfigured
+here.
+
+The cost is a print dialog per label. Removing it needs an always-on machine in
+the shed — the app writes a job to Firestore, something in the shed watches for
+it and prints — and there is no such machine. If one ever appears, the API key
+for whatever service does the printing belongs in a Functions secret and not in
+`config/`, for the reason the receipt parser already sets out.
+
+The geometry is why none of this cost a redesign. On a QL the roll's width runs
+across the print head and the length along the feed is whatever you cut, so
+29 mm stock cut at 101.6 mm **is** the Avery 5161 cell. `labelHtml()` was
+already written against that number for exactly this day. `labelMarkup()` is the
+one place the markup lives, and `tools/test_label_roll.mjs` asserts the sheet
+and roll labels come out byte-identical, because a fork is how the printed label
+and the public scan card start disagreeing about what an object is.
+
+`.roll-page` is deliberately not `.ws-page`: `sheetFileHtml()` injects
+`@media print { .ws-page { padding: 0 0.45in } }` into every saved standalone
+sheet, and 0.45 in either side of a 101.6 mm label leaves nothing. The preview
+would look right and only the saved file — the copy printed at the bench with no
+wifi — would be wrong.
 
 ## The dashboard
 

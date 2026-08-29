@@ -606,6 +606,7 @@ function invToolbar(active) {
     <button class="ib" onclick="invReceive('')">${icon("plus", 15)} Receive a delivery</button>
     ${rxResumeChip()}
     <button class="ib" onclick="openLabelBuilder('items')">${icon("print", 15)} Labels</button>
+    ${customLabelBtn()}
     <button class="ib" onclick="invExportModal()">${icon("download", 15)} Export</button>
     ${/* Bulk-links the containers campus EH&S already tagged, from the RSS
           export. Lead-only, like the mold import — it mints records. */""}
@@ -797,6 +798,7 @@ function renderInvContents(bin) {
     <button class="ib" onclick="clearInvSelection()">${icon("chevronLeft", 16)} Storage map</button>
     ${nowhere ? "" : `<button class="primary ib" onclick="view.edit=true;render()">${icon("edit", 15)} Edit location</button>`}
     ${nowhere ? "" : labelBtn("items", b.id)}
+    ${customLabelBtn()}
     ${nowhere ? "" : `<button class="ib" onclick="invMoveHere('${esc(b.id)}')">${icon("search", 15)} Move here (scan)</button>`}
     ${nowhere ? "" : `<button class="ib" onclick="invReceive('${esc(b.id)}')">${icon("plus", 15)} Receive delivery</button>`}
     ${nowhere ? "" : `<button class="ib" onclick="invConfirmContents('${esc(b.id)}')">${icon("check", 15)} Confirm contents</button>`}

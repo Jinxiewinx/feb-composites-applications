@@ -325,10 +325,37 @@ it should be tightened.
   bump under CS-000. **Ask before touching them.**
 - Per-record history/audit trail (Phase 5 of the inventory plan), deliberately
   deferred. Nothing depends on it and an empty array is a valid start.
+- **The one label test that needs the printer in hand.** Everything about the
+  roll path is proven in a browser except whether iOS lets a custom page length
+  through on CONTINUOUS stock, or forces a fixed size. If it forces one, switch
+  the default media to `dk1201` (die-cut, already built) and the label wraps one
+  tier earlier; nothing else changes. Test it from the shop PC first — Chrome
+  plus the Brother driver gives exact custom lengths and isolates the question
+  to iOS.
 
 ---
 
 ## Constraints — don't relitigate
+
+**The roll printer must be AirPrint, and that is not a preference.** A browser
+cannot open a raw TCP socket, so port 9100 is unavailable; and the app is
+served over HTTPS, so `fetch`ing a plain-HTTP LAN printer is blocked as mixed
+content. Every "just POST to the printer" design dies on one of those two, and
+a cheaper Bluetooth-only label maker cannot be driven from the app at all. The
+reasoning is in `03 App/app/DESIGN-NOTES.md`; what is here is the shopping
+constraint, because it is invisible from the code.
+
+**The laminated-tape option was checked and rejected on print height, not on
+price.** A Brother PT-P750W ($155) takes 24 mm TZe laminated tape — IPA-proof,
+−80 to +150 °C — and does support AirPrint, so it was a real candidate. Its
+**maximum print height is 18 mm** against the 21.4 mm the current label needs
+(25.4 less 2 mm margin top and bottom), so it cannot print this label without a
+tighter redesign and a QR dropped from 21.4 to ~17.5 mm. Tape is also 3–4× the
+cost per label. Simon chose the QL-810W direct-thermal path 2026-08-28 knowing
+the labels fade in UV, blacken with heat and smear under solvent — they are for
+shelves, bins and lots indoors, and anything that meets a post-cure oven or an
+IPA wipe keeps Avery 5522 polyester off the sheet printer. Do not "fix" this by
+switching to tape without redoing the vertical budget.
 
 **The shelved `projects` TABS row is hidden but is NOT an alias.** The four
 hidden rows under it (`stock`, `items`, `lots`, `weekplan`) are normalised
