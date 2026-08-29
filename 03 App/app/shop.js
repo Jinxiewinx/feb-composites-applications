@@ -569,7 +569,7 @@ function renderShopList(tab) {
       : `Use the buttons above to add one.`}</div>` : ""}
   ${(() => {
     const picking = shopPickOn() && (tab === "items" || tab === "lots");
-    if (grouped && D.length) return `<div class="card">${groupedBody()}</div>`;
+    if (grouped && D.length) return groupedBody();   // sections are their own cards
     if (!rows.length) return D.length ? `<div class="card">Nothing matches that filter.</div>` : "";
     return `<table class="list">
     <tr>${picking ? "<th></th>" : ""}${spec.list.map(k => `<th>${esc(shopColLabel(spec, k))}</th>`).join("")}</tr>

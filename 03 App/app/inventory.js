@@ -719,7 +719,7 @@ function invGroupRow(g, opts) {
     ${expDates.length ? `<span class="tny ${anyExpired ? "bad" : "muted"}">${anyExpired ? "expired" : "first exp " + esc(expDates[0])}</span>` : ""}
     ${cost ? `<span class="tny muted">${esc(shopMoneyText(cost, "unitCost"))}</span>` : ""}
     ${typeof matForLot === "function" ? matInfoHtml(matForLot(g.members[0]), { lite: true }) : ""}
-    <span class="tny muted">${esc(states)}</span>
+    <span class="tny muted grp-states">${esc(states)}</span>
     ${pill}
   </div>
   <div class="invgrp-body ${open ? "" : "folded"}">
@@ -757,13 +757,14 @@ function invLotList(arr, opts) {
     : invGroupRow(g, opts)).join("");
 }
 
-/* A section of the location page: the sticky group-header strip the rest of
-   the app uses (.pgrouphd), with a real count, and a per-kind accent class so
-   a long cabinet page reads as sections. The count is in the header because
-   "19 resin" should not require counting rows by eye. */
+/* A section of the location page: its own CARD, the way the Boards tab gives
+   every group its own — one blob per kind (Simon, 2026-08-28: sections need
+   more visual distinction than a header strip inside one long card). The
+   kind's accent runs down the card's left spine, and the count is in the
+   header because "19 resin" should not require counting rows by eye. */
 function invGroup(title, rows, meta, secCls) {
   if (!rows) return "";
-  return `<div class="invsec ${secCls || ""}">
+  return `<div class="card invsec ${secCls || ""}">
     <div class="pgrouphd"><span class="pg-name">${esc(title)}</span>${meta ? `<span class="pg-n">${esc(meta)}</span>` : ""}</div>
     ${rows}
   </div>`;
@@ -805,20 +806,22 @@ function renderInvContents(bin) {
     <div class="muted">${nowhere ? "Everything that has no recorded location. House these." : `${esc(b.id)}${b.site ? " · " + esc(b.site) : ""}${b.locKind ? " · " + esc(b.locKind) : ""}${b.flam === "Yes" ? " · rated for flammables" : ""}${age != null ? ` · contents confirmed ${age}d ago${b.walkedBy ? " by " + esc(b.walkedBy) : ""}` : " · contents never confirmed"}`}</div>
     ${warns.map(w => `<div class="warn">${icon("warning", 14)} ${esc(w.text)}</div>`).join("")}
     ${invBucketCount(bucket) === 0 ? `<p class="muted">Nothing recorded here yet.</p>` : ""}
-    ${invGroup("Molds", bucket.molds.map(o => invRow("molds", o, `<span class="pill ${shopStageClass(shopSpec("molds"), o)}">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.molds.length || ""), "sec-molds")}
-    ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="tny muted">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)}</span>`)).join(""), String(bucket.boards.length || ""), "sec-boards")}
-    ${invGroup("Test panels", bucket.panels.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.panels.length || ""), "sec-panels")}
-    ${invGroup("Jigs", bucket.jigs.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.jigs.length || ""), "sec-jigs")}
-    ${invGroup("Resin / hardener", lotRows(bucket.resin), invLotMeta(lotVisible(bucket.resin)), "sec-resin")}
-    ${invGroup("Fabric", lotRows(bucket.fabric), invLotMeta(lotVisible(bucket.fabric)), "sec-fabric")}
-    ${invGroup("Consumables", lotRows(bucket.consumables), invLotMeta(lotVisible(bucket.consumables)), "sec-consumables")}
-    ${invGroup("Parts stored here", bucket.parts.map(o => invRow("parts", o, "")).join(""), String(bucket.parts.length || ""), "sec-parts")}
-    ${nowhere && idx.legacyParts.length ? invGroup("Parts with free-text locations (legacy)",
-      idx.legacyParts.map(p => `<div class="pmini" onclick="openRecord('parts','${esc(p.id)}')">
-        <span class="pm-name">${esc(p.partName || p.id)}</span><span class="tny muted">"${esc(p.moldLocation)}"</span></div>`).join(""), String(idx.legacyParts.length), "sec-parts") : ""}
-    ${nowhere ? "" : `<div class="no-print" style="margin-top:12px"><div class="lg-label tny">Add here</div>
-      ${addBtn("PNL", "Test panel")}${addBtn("JIG", "Jig")}${addBtn("FAB", "Fabric")}${addBtn("RSN", "Resin / hardener")}${addBtn("CON", "Consumable")}</div>`}
-  </div>`;
+  </div>
+  ${/* Each kind is its own card, sibling to the header — the Boards idiom.
+        One blob per section, accent down the spine. */""}
+  ${invGroup("Molds", bucket.molds.map(o => invRow("molds", o, `<span class="pill ${shopStageClass(shopSpec("molds"), o)}">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.molds.length || ""), "sec-molds")}
+  ${invGroup("Tooling boards", bucket.boards.map(o => invRow("stock", o, `<span class="tny muted">${fmtDim(o.len)} × ${fmtDim(o.wid)} × ${fmtDim(o.thk)}</span>`)).join(""), String(bucket.boards.length || ""), "sec-boards")}
+  ${invGroup("Test panels", bucket.panels.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.panels.length || ""), "sec-panels")}
+  ${invGroup("Jigs", bucket.jigs.map(o => invRow("items", o, `<span class="pill">${esc(o.stage || "—")}</span>`)).join(""), String(bucket.jigs.length || ""), "sec-jigs")}
+  ${invGroup("Resin / hardener", lotRows(bucket.resin), invLotMeta(lotVisible(bucket.resin)), "sec-resin")}
+  ${invGroup("Fabric", lotRows(bucket.fabric), invLotMeta(lotVisible(bucket.fabric)), "sec-fabric")}
+  ${invGroup("Consumables", lotRows(bucket.consumables), invLotMeta(lotVisible(bucket.consumables)), "sec-consumables")}
+  ${invGroup("Parts stored here", bucket.parts.map(o => invRow("parts", o, "")).join(""), String(bucket.parts.length || ""), "sec-parts")}
+  ${nowhere && idx.legacyParts.length ? invGroup("Parts with free-text locations (legacy)",
+    idx.legacyParts.map(p => `<div class="pmini" onclick="openRecord('parts','${esc(p.id)}')">
+      <span class="pm-name">${esc(p.partName || p.id)}</span><span class="tny muted">"${esc(p.moldLocation)}"</span></div>`).join(""), String(idx.legacyParts.length), "sec-parts") : ""}
+  ${nowhere ? "" : `<div class="card no-print"><div class="lg-label tny">Add here</div>
+    ${addBtn("PNL", "Test panel")}${addBtn("JIG", "Jig")}${addBtn("FAB", "Fabric")}${addBtn("RSN", "Resin / hardener")}${addBtn("CON", "Consumable")}</div>`}`;
 }
 
 /* Standing at the shelf with a pile of things: scan each thing, it moves HERE.

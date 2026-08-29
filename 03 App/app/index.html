@@ -1997,14 +1997,17 @@
      folded-groups-print-open rule lives in the app's ONE @media print block
      further down — a second print block here confused the design-system
      token check, which reads the first block it finds. */
-  /* Breathing room between kinds: the sections read as sections, not one
-     continuous list (Simon, 2026-08-28). First one hugs the card heading. */
-  .invsec { margin-top: 22px; }
-  .invsec .pgrouphd { border-left: 3px solid var(--border-2); padding-left: 8px; margin-bottom: 4px; }
-  .invsec.sec-resin .pgrouphd { border-left-color: var(--accent); }
-  .invsec.sec-consumables .pgrouphd { border-left-color: var(--amber); }
-  .invsec.sec-fabric .pgrouphd { border-left-color: var(--ok); }
-  .invsec.sec-molds .pgrouphd, .invsec.sec-boards .pgrouphd { border-left-color: var(--brand-ink); }
+  /* Each kind is its own CARD — the Boards idiom, per Simon (2026-08-28):
+     a header strip inside one long card was not enough distinction. The
+     kind's accent runs down the card's left spine, the way an alerted
+     loccard wears its red one; the uppercase label is still what survives
+     grayscale. .card's own 14px bottom margin is the section gap. */
+  .invsec { border-left: 4px solid var(--border-2); }
+  .invsec .pgrouphd { margin-bottom: 6px; }
+  .invsec.sec-resin { border-left-color: var(--accent); }
+  .invsec.sec-consumables { border-left-color: var(--amber); }
+  .invsec.sec-fabric { border-left-color: var(--ok); }
+  .invsec.sec-molds, .invsec.sec-boards { border-left-color: var(--brand-ink); }
   /* A material with several containers folds to one line. The caret column
      keeps group and single rows aligned; the member list indents under it.
      The fold is a class so print still paints it (see the @media print rule),
@@ -2018,6 +2021,17 @@
   .ehs-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted);
     background: var(--surface-2); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
   .invrow .bad { color: var(--bad); font-weight: 600; }
+  /* On a phone the NAME is the row (Simon, 2026-08-28: the width was hiding
+     it behind the mix ratio and the TDS button). The knowledge tail and the
+     state breakdown go; the name gets its width back and may wrap to a
+     second line rather than ellipsize. Count, expiry, code and pill stay —
+     those are what a person at the shelf is checking. */
+  @media (max-width: 700px) {
+    .invrow.invgrp .matinfo, .invrow.invgrp .grp-states { display: none; }
+    /* .pmini.invrow beats the base .pmini .pm-name nowrap, which sits later
+       in the file and would win a specificity tie. */
+    .pmini.invrow .pm-name { white-space: normal; overflow: visible; }
+  }
   /* Material knowledge (materials.js): the info strip on a lot's detail page
      and the lite ratio/TDS tail on a group row. */
   .matstrip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 2px;

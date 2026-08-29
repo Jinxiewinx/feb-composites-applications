@@ -685,6 +685,11 @@ exception — or scan the shelf's own front-edge label, and you are on its
 contents page: every mold, board, panel, jig, lot and part that lives there,
 in sections with the count in each header, each row with a Move button.
 
+Each kind is its own card — the Boards idiom — with the kind's accent color
+down the card's spine and the count in its header. On a phone the name owns
+the row: the mix-ratio/TDS tail and the state breakdown drop out below 700px
+and a long name wraps instead of truncating.
+
 **Identical containers fold into one line.** The EH&S import made this matter:
 ten AT30 jugs are ten records (one tag, one container) and were ten identical
 rows. Lot rows now group by material — matKey when set, else the name — so the
