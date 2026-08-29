@@ -8,7 +8,7 @@
 # Track everything except build artifacts and OS junk:
 
 .DS_Store
-.venv/
+.venv
 node_modules/
 .firebase/
 __pycache__/
