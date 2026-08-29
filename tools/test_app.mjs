@@ -4977,6 +4977,13 @@ await t("the import state ticks FEB's sublocations, skips known barcodes, dedupe
   const take = ehsImpTake();
   assert(take.length === 1 && take[0].name === "IN2" && take[0].bin === "BIN-SN6-030",
     "only the unlinked FEB row would be created, already located: " + JSON.stringify(take.map(r => r.name)));
+  /* The per-row untick: a container the team deleted on purpose stays dead
+     across a re-import by unticking its row, without unticking the whole
+     sublocation. */
+  feb.rows.find(r => r.name === "IN2").take = false;
+  assert(ehsImpTake().length === 0, "an unticked row is not created");
+  feb.rows.find(r => r.name === "IN2").take = true;
+  assert(ehsImpTake().length === 1, "and ticks back on");
   EHS_IMP = null;
   DB.lots = []; DB.items = [];
 });

@@ -1153,6 +1153,11 @@
   .lblist .ehsub { border-top: 1px solid var(--line); }
   .lblist .ehsub:first-child { border-top: none; }
   .lblist .ehsub .chk { border-top: none; }
+  /* The per-row unticks under a ticked sublocation. */
+  .ehsub-rows { margin: 0 0 8px 26px; border-left: 2px solid var(--border-2); padding-left: 8px; }
+  .ehsub-rows .ehsrow { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .ehsub-rows .ehsrow .muted { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .ehsub-rows .ehsrow-pad { width: 13px; flex: none; }
 
   /* ---- documents ---- */
   .doccat { margin-bottom: 8px; }
@@ -1992,8 +1997,10 @@
      folded-groups-print-open rule lives in the app's ONE @media print block
      further down — a second print block here confused the design-system
      token check, which reads the first block it finds. */
-  .invsec { margin-top: 4px; }
-  .invsec .pgrouphd { border-left: 3px solid var(--border-2); padding-left: 8px; }
+  /* Breathing room between kinds: the sections read as sections, not one
+     continuous list (Simon, 2026-08-28). First one hugs the card heading. */
+  .invsec { margin-top: 22px; }
+  .invsec .pgrouphd { border-left: 3px solid var(--border-2); padding-left: 8px; margin-bottom: 4px; }
   .invsec.sec-resin .pgrouphd { border-left-color: var(--accent); }
   .invsec.sec-consumables .pgrouphd { border-left-color: var(--amber); }
   .invsec.sec-fabric .pgrouphd { border-left-color: var(--ok); }

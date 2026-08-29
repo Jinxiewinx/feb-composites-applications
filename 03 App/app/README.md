@@ -824,7 +824,9 @@ the Inventory toolbar (lead-only) takes the RSS web app's own .xlsx export,
 parsed in the browser with no library — the export is a zip of XML, and
 DecompressionStream has been in every supported browser since 2023. Pick the
 sublocations that are ours (Formula Electric's start ticked, every other RSO's
-start unticked), say which shelf each maps to, and every barcode the app does
+start unticked), untick any individual container you deliberately do not track
+— which is what keeps a re-import from resurrecting records you deleted — say
+which shelf each sublocation maps to, and every remaining barcode the app does
 not already know becomes a record: class and role guessed from the name,
 hazard from the GHS H-codes (no codes stays honestly unknown), received and
 expiry dates carried over. Import never edits and never deletes; a barcode

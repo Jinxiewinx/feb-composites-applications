@@ -69,7 +69,18 @@ function ehsImpHtml() {
         <select onchange="ehsImpSub(${i}).bin=this.value;ehsImpRefresh()">
           <option value="">— no location yet —</option>
           ${bins.map(b => `<option value="${esc(b.id)}" ${s.bin === b.id ? "selected" : ""}>${esc(b.name || b.id)}</option>`).join("")}
-        </select></div>` : ""}
+        </select></div>
+      <div class="ehsub-rows">
+        ${/* Per-row unticks, so a re-import cannot resurrect containers the
+              team deliberately deleted: untick them here instead of deleting
+              them again afterwards. Already-linked rows are facts, not
+              choices, so they get a label rather than a checkbox. */""}
+        ${s.rows.map((r, j) => r.linked
+          ? `<div class="ehsrow tny muted"><span class="ehsrow-pad"></span>${esc(r.name)} <span>already in Inventory</span></div>`
+          : `<label class="chk ehsrow tny"><input type="checkbox" ${r.take === false ? "" : "checked"}
+              onchange="ehsImpSub(${i}).rows[${j}].take=this.checked;ehsImpRefresh()">
+              ${esc(r.name)} <span class="muted">${esc(r.barcode.length > 8 ? "…" + r.barcode.slice(-6) : r.barcode)}</span></label>`).join("")}
+      </div>` : ""}
     </div>`).join("")}
   </div>
   ${EHS_IMP.dupes ? `<div class="warn">${icon("warning", 14)} ${EHS_IMP.dupes} row${EHS_IMP.dupes === 1 ? "" : "s"} repeated a barcode already in the file — first one wins.</div>` : ""}
@@ -92,13 +103,14 @@ function ehsImpRefresh() {
 // onchange attribute is a bug farm the index avoids.
 function ehsImpSub(i) { return [...EHS_IMP.subs.values()][i]; }
 
-/* The rows the current ticks would actually create. */
+/* The rows the current ticks would actually create: a ticked sublocation's
+   unlinked rows, minus any row unticked individually. */
 function ehsImpTake() {
   if (!EHS_IMP) return [];
   const out = [];
   for (const s of EHS_IMP.subs.values()) {
     if (!s.on) continue;
-    for (const r of s.rows) if (!r.linked) out.push({ ...r, bin: s.bin || "" });
+    for (const r of s.rows) if (!r.linked && r.take !== false) out.push({ ...r, bin: s.bin || "" });
   }
   return out;
 }
