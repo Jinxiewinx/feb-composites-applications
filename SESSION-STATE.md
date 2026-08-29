@@ -20,6 +20,15 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**The standards' editing surface is now Google Docs** (2026-08-29, Simon's
+call): folder "CS Standards" at the root of his My Drive, one Doc per
+standard plus INDEX and template, figures embedded. IDs and the sync-back
+rule live in `02 CS Standards/GOOGLE-DOCS.md`: Docs are where edits happen,
+`src/` markdown is still what builds the app copies, so Doc edits get synced
+back with a rev bump and rebuilt. Uploaded via Drive markdown import, which
+fetches and embeds the figure PNGs from the live host; docx-as-base64 does
+not fit through tool calls.
+
 **The CS standards engineering pass is MERGED to main** (2026-08-28, Simon
 reviewed the branch and asked for the merge). What landed: 13 SVG figures +
 `tools/render_figures.mjs`, the figure pipeline (build_docx.py images,
