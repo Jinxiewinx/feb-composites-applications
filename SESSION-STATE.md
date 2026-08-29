@@ -20,7 +20,7 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**INVENTORY ROUND 2 IS IN PROGRESS** (plan: the snoopy-dragon plan file on
+**INVENTORY ROUND 2 IS COMPLETE** (plan: the snoopy-dragon plan file on
 Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
 grouped lot display (groupLots keyed matKey-else-name; group rows fold via a
 CLASS, not <details> — print must paint; members show EH&S short codes),
@@ -36,14 +36,21 @@ delete (Select… on Items/Materials lists, view.shopPick, open to every
 member; firestore.rules items/lots delete moved from isLead()||mine() to
 onRoster() — RULES DEPLOYED; stock keeps the undo shape; occupied BINs are
 never deleted; cure/panel refs keep deleted ids as text on purpose —
-history is not rewritten; budget lines drop deleted lotRefs). Still to land:
-C scan-into-field
-for ehsBarcode (updShop("...","ehsBarcode",code) already does the dupe
-refusal), E materials.js knowledge table (matKey aliases + datasheet paths
-from docs/manifest.json + ratio/shelf-life ONLY from bundled TDS PDFs, cite
-them; backfill for the 50 imported records). A flaky test was fixed in
-passing: the dashboard "part of" assert now matches the chip markup, not the
-phrase — a Team-lore fact contains the words.
+history is not rewritten; budget lines drop deleted lotRefs). Landed:
+C scan-into-field (scanEhsInto on the detail "ehs" field type; rxScanEhs on
+the receiving cell appends sticky-scanned tags; sticky+onUnknown is now a
+supported openScan combination, debounced with a "u:" key) and E the
+materials table (materials.js: MATERIALS aliases→matKey, docs/manifest paths
+test-enforced via materialsTableProblems, ratio/shelf-life ONLY where read
+from a bundled TDS and cited in src — IN2/AT30 100:30 by weight + 12mo,
+WEST-209 3:1, WEST-206 5:1, XCR 12mo ratio-blank; matForName fills blank
+matKey in receiving + EH&S import; matstrip on lot detail; lite ratio/TDS on
+group rows; "Link materials" backfill on the Materials list fills blank
+matKeys and missing expiries from shelf life, stamped "shelf-life table").
+The whole round-2 plan is DONE. Simon still needs to press Link materials
+once, signed in, to backfill the 50 imported containers. A flaky test was
+fixed in passing: the dashboard "part of" assert now matches the chip
+markup, not the phrase — a Team-lore fact contains the words.
 
 **EH&S (RSS Chemicals) barcodes: ALL FOUR PHASES BUILT.** Phases 1–2 (the
 `ehsBarcode` field + one-tag-one-container, the scanner reading UC tags via

@@ -799,6 +799,26 @@ space-separated, dealt to the records in order; the confirm warns when the
 deal is short. Shelves can carry their RSS sublocation tag the same way, on
 the BIN record.
 
+The materials table (`materials.js`) knows what a material IS: name aliases
+that map "AT30 SLOW EPOXY HARDENER" to the `AT30` key, the bundled TDS and SDS
+for it, and the two numbers people used to walk to a laptop for — mix ratio
+and shelf life — each read from the datasheet it cites, never guessed. A lot's
+detail page shows the strip (ratio, shelf life, reorder threshold, TDS/SDS
+buttons), a grouped row carries the ratio and the TDS, and receiving and the
+EH&S import fill a blank material type from the aliases automatically. **Link
+materials** on the Materials list backfills records imported before the table
+existed: it proposes a key for every blank whose name matches, fills missing
+expiry dates from received date plus shelf life (stamped "shelf-life table",
+the enum value that finally has a table behind it), and touches nothing
+already filled in.
+
+An **EH&S barcode field** on a chemical or shelf record carries a camera
+button in edit mode: scan the UC sticker instead of retyping 24 characters.
+The same button on a receiving row appends tag after tag with the camera held
+open, so a three-jug line is three scans into one cell. Scanned and typed
+codes go through the same normalisation and the same one-tag-one-container
+refusal.
+
 For the containers EH&S tagged before this feature existed, **EH&S import** on
 the Inventory toolbar (lead-only) takes the RSS web app's own .xlsx export,
 parsed in the browser with no library — the export is a zip of XML, and

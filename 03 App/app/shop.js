@@ -544,6 +544,8 @@ function renderShopList(tab) {
         + classes.filter(c => c.newOn).map(c =>
           `<span class="muted tny">${esc(c.label)}s are added on the ${esc(c.newOn)}.</span>`).join("")
         + (D.length ? `<button class="ib" onclick="openLabelBuilder('${spec.coll}')">${icon("print", 15)} Labels</button>` : "")
+        + (D.length && tab === "lots" && typeof openMatLink === "function"
+          ? `<button class="ib" title="Fill blank material types from the materials table" onclick="openMatLink()">${icon("check", 15)} Link materials</button>` : "")
         + (D.length && (tab === "items" || tab === "lots") ? `<button class="sm" onclick="startShopPick()">Select…</button>` : "");
     })()}
   </div>
@@ -694,6 +696,12 @@ function renderShopDetail(tab, opts) {
           a read-only chip here rather than a schema field. */""}
     ${o.buyRef && o.buyRef.buyId ? `<div class="muted tny">From purchase
       <span class="chip" onclick="openRecord('budget','${esc(o.buyRef.buyId)}')">${esc(o.buyRef.buyId)}</span></div>` : ""}
+    ${/* What the material IS, from the materials table: mix ratio, shelf
+          life, reorder threshold, and the actual datasheets — the facts
+          people used to walk to a laptop for. Read-only; the record's own
+          matKey field stays the editable side. */""}
+    ${spec.coll === "lots" && typeof matForLot === "function" && matForLot(o)
+      ? `<div class="matstrip">${esc(matForLot(o).label)} ${matInfoHtml(matForLot(o))}</div>` : ""}
     ${E ? `<div class="editnote no-print">${icon("edit", 14)} Editing — every change saves as you make it.</div>` : ""}
 
     ${spec.classes && E ? `<h3>Kind</h3><div class="grid"><div class="f"><label>Kind</label>
@@ -802,6 +810,21 @@ function shopFld(spec, tab, o, f, c) {
   if (type === "money") {
     return `<div class="f"><label>${esc(label)}</label>
       <input type="number" inputmode="decimal" step="0.01" min="0" value="${esc(v)}" onchange="updShop('${tab}','${key}',this.value)"></div>`;
+  }
+  /* "ehs" — the UC tag serial, with a camera next to it: 24 characters of
+     CA00… is a thing you scan, not a thing you retype. The layout is
+     scanLotInto's (workorders.js); the write goes through updShop either
+     way, so typed and scanned codes meet the same normalisation and the
+     same one-tag-one-container refusal. */
+  if (type === "ehs") {
+    return `<div class="f"><label>${esc(label)}</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" style="flex:1 1 auto;min-width:0" value="${esc(v)}"
+          autocapitalize="characters" autocomplete="off" spellcheck="false"
+          onchange="updShop('${tab}','${key}',this.value)">
+        ${typeof scanSupported === "function" && scanSupported()
+          ? `<button type="button" class="sm ib" title="Scan the EH&S tag" onclick="scanEhsInto('${tab}')">${icon("scan", 15)}</button>` : ""}
+      </div></div>`;
   }
   const inputType = type === "date" ? "date" : type === "num" ? "number" : "text";
   return `<div class="f"><label>${esc(label)}</label>

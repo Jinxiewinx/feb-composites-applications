@@ -718,6 +718,7 @@ function invGroupRow(g, opts) {
     ${flam ? `<span class="kind lc-flam" title="Flammable">◆</span>` : ""}
     ${expDates.length ? `<span class="tny ${anyExpired ? "bad" : "muted"}">${anyExpired ? "expired" : "first exp " + esc(expDates[0])}</span>` : ""}
     ${cost ? `<span class="tny muted">${esc(shopMoneyText(cost, "unitCost"))}</span>` : ""}
+    ${typeof matForLot === "function" ? matInfoHtml(matForLot(g.members[0]), { lite: true }) : ""}
     <span class="tny muted">${esc(states)}</span>
     ${pill}
   </div>

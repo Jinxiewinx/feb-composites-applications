@@ -132,9 +132,21 @@ async function tickScan(det, video) {
       if (!code) continue;
       /* A readable code that no record wears. One-shot callers who said they
          can do something with that (scanToOpen offers the receiving desk) get
-         it; sticky flows just say so and keep the camera up — a pile of moves
-         should not be derailed into an enrolment dialog mid-pile. */
-      if (SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+         it and the modal closes. A STICKY caller with onUnknown takes code
+         after code without closing — that is the receiving desk scanning the
+         tags on a three-jug line — with the same held-in-frame debounce the
+         resolved path uses, keyed "u:" so a code and an id can never collide.
+         Sticky flows withOUT onUnknown just say so and keep the camera up:
+         a pile of moves should not be derailed into an enrolment dialog. */
+      if (SCAN.onUnknown) {
+        if (!SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+        const k = "u:" + code;
+        if (k === SCAN.lastId && Date.now() - SCAN.lastAt < 2500) continue;
+        SCAN.lastId = k; SCAN.lastAt = Date.now(); SCAN.count++;
+        SCAN.onUnknown(code);
+        setScanState(`${code} — ${SCAN.count} scanned. Keep going, or Done.`);
+        continue;
+      }
       setScanState(`${code} isn't on any record yet — log it at the receiving desk first.`);
     }
   } catch { /* a dropped frame is not an error worth reporting */ }
@@ -200,7 +212,13 @@ function scanManual() {
   if (SCAN.sticky && el) el.value = "";   // ready for the next one
   if (!id) {
     const code = scanEhsCode(raw);
-    if (code && SCAN.onUnknown && !SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+    if (code && SCAN.onUnknown) {
+      if (!SCAN.sticky) { const fn = SCAN.onUnknown; closeScan(); fn(code); return; }
+      SCAN.count++;
+      SCAN.onUnknown(code);
+      setScanState(`${code} — ${SCAN.count} scanned. Keep going, or Done.`);
+      return;
+    }
     if (code) { toast(`${code} isn't on any record yet — log it at the receiving desk first.`, "error"); return; }
     toast("That doesn't look like a code from a label.", "error");
     return;
@@ -366,6 +384,32 @@ function shopUndoBar() {
     <button class="sm ib" onclick="dismissShopUndo()">${icon("x", 14)}</button>
   </div>`;
 }
+/* Point the camera at a container's UC tag to fill the record's ehsBarcode
+   field — the Edit-mode alternative to retyping a 24-character serial off a
+   sticker. The polarity is inverted from every other scan on purpose:
+   onUnknown (a tag NO record wears) is the success path and writes through
+   updShop, which owns the normalisation, the one-tag-one-container refusal,
+   the save and the re-render. onCode firing means scanResolve found the tag
+   already on some record — that is the duplicate case, refused by naming the
+   wearer, with the same words updShop would use. */
+function scanEhsInto(tab) {
+  openScan({
+    title: "Scan the EH&S tag",
+    hint: "Point the camera at the UC barcode sticker on the container or shelf.",
+    onUnknown: code => updShop(tab, "ehsBarcode", code),
+    onCode: id => {
+      if (id === view.id) { toast("That tag is already on this record.", "info"); return; }
+      const o = recById("lots", id) || recById("items", id);
+      if (o && o.ehsBarcode) {
+        toast(`${ehsNorm(o.ehsBarcode)} is already on ${o.name || id} (${id}) — one tag, one container.`, "error");
+        return;
+      }
+      // An FEB id with no tag means the camera read one of OUR QR labels.
+      toast(`${id} is an FEB label, not a UC EH&S tag.`, "error");
+    },
+  });
+}
+
 /* Pre-filled leftover-board entry: origin = the mold it came off. A leftover
    is not a separate kind of thing, just a smaller board, so the only thing
    worth prefilling is where it came from — the size is whatever is left, which

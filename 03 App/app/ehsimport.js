@@ -217,6 +217,10 @@ async function ehsImpSubmit() {
       createdBy: myEmail(), rxBatch: batch,
     };
     if (g.role) o.role = g.role;
+    /* The alias table names the material, which is what makes the restock
+       engine and the grouped views see this container at all. */
+    const mat = typeof matForName === "function" ? matForName(r.name) : null;
+    if (mat) o.matKey = mat.matKey;
     if (r.vendor) o.supplier = r.vendor;
     if (r.received) o.receivedOn = r.received;
     if (r.opened) o.openedOn = r.opened;

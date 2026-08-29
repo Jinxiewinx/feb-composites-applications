@@ -251,6 +251,13 @@ function rxInferFromName(r) {
     if (!r.supplier && prior.supplier) r.supplier = prior.supplier;
     if (!r.unitCost && typeof prior.unitCost === "number") r.unitCost = String(prior.unitCost);
   }
+  /* The materials alias table is the second source: a human wrote "at30
+     means AT30" there, so it fills a still-blank matKey the same way a prior
+     lot would. It carries no safety fields, so nothing here can guess one. */
+  if (!r.matKey && typeof matForName === "function") {
+    const mat = matForName(name);
+    if (mat) r.matKey = mat.matKey;
+  }
   /* The restock table knows what a material IS — that acetone is flammable and
      AT30 is a hardener — in a way a delivery never does. Inference runs from
      the rule, never from pattern-matching the name: a wrong hazard guessed out
@@ -555,14 +562,16 @@ function rxRowHtml(r, cols) {
       </select>`,
     vendorLot: `<input id="rxv-${r.rid}" value="${esc(r.vendorLot)}" placeholder="lot #" aria-label="Vendor lot"
         onchange="rxUpd('${r.rid}','vendorLot',this.value)">`,
-    /* The UC EH&S tag going onto (or already on) this container. Free-typed or
-       scanned in with a keyboard-mode scanner; the camera path arrives with
-       the scan.js work. A row fanning out to several containers takes several
-       codes, space- or comma-separated, dealt to the records in order. */
+    /* The UC EH&S tag going onto (or already on) this container. Typed, fed
+       by a keyboard-mode scanner, or camera-scanned with the button — which
+       stays open across codes, so a three-jug line is three scans into one
+       cell. A row fanning out to several containers takes several codes,
+       space- or comma-separated, dealt to the records in order. */
     ehs: shopFieldApplies(spec, cls, "ehsBarcode")
-      ? `<input id="rxh-${r.rid}" value="${esc(r.ehs || "")}" placeholder="tag code" aria-label="EH&S tag"
+      ? `<span class="rx-ehs"><input id="rxh-${r.rid}" value="${esc(r.ehs || "")}" placeholder="tag code" aria-label="EH&S tag"
           autocapitalize="characters" autocomplete="off" spellcheck="false"
-          onchange="rxUpd('${r.rid}','ehs',this.value)">`
+          onchange="rxUpd('${r.rid}','ehs',this.value)">${typeof scanSupported === "function" && scanSupported()
+            ? `<button type="button" class="sm ib" tabindex="-1" title="Scan the tag(s) with the camera" onclick="rxScanEhs('${r.rid}')">${icon("scan", 13)}</button>` : ""}</span>`
       : `<span class="rx-na">—</span>`,
     expiresOn: shopFieldApplies(spec, cls, "expiresOn")
       ? `<input id="rxe-${r.rid}" type="date" value="${esc(r.expiresOn)}" aria-label="Expires"
@@ -757,6 +766,31 @@ function rxConfirmHtml() {
 function rxEhsTokens(r) {
   if (!shopFieldApplies(shopSpec("lots"), rxClassOf(r.cls).cls, "ehsBarcode")) return [];
   return String(r.ehs || "").split(/[\s,;]+/).map(ehsNorm).filter(Boolean);
+}
+
+/* Camera-scan tags into one line's cell, sticky: the camera stays open, each
+   new tag appends, a repeat of one already in the cell is said and skipped.
+   A code that resolves to an existing record is refused by accept() — that
+   tag is on a jug the app already tracks, not on this delivery. */
+function rxScanEhs(rid) {
+  openScan({
+    title: "Scan EH&S tags",
+    hint: "Point the camera at the UC sticker on each container for this line. The camera stays open.",
+    sticky: true,
+    accept: () => false,
+    onUnknown: code => {
+      const r = rxRow(rid);
+      if (!r) return;
+      const tags = String(r.ehs || "").split(/[\s,;]+/).filter(Boolean);
+      if (tags.some(t => ehsKey(t) === ehsKey(code))) { setScanState(`${code} is already on this line.`); return; }
+      tags.push(code);
+      r.ehs = tags.join(" ");
+      rxDraftSave();
+      const el = document.getElementById("rxh-" + rid);
+      if (el) el.value = r.ehs;
+      rxRefresh(rid);
+    },
+  });
 }
 
 /* One tag, one container — checked across the sheet AND against what already

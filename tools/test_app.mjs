@@ -15,7 +15,7 @@ const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8
    empty-blueprint bug: the fixtures said one thing, the tab did another, and no
    assertion sat between them. See the "fixtures satisfy every filter" block. */
 import * as FIX from "./lib/fixtures.mjs";
-import { loadApp } from "./lib/appload.mjs";
+import { loadApp, APP_ROOT } from "./lib/appload.mjs";
 
 /* ---------- DOM + browser stubs ---------- */
 let lastToast = "";
@@ -5162,6 +5162,127 @@ await t("the manual box routes an unknown tag to onUnknown, one-shot only", () =
   assert(got.unknown.join(",") === "UCB-777888", "the unknown tag reached onUnknown normalised");
   assert(got.codes.length === 0, "and never leaked into onCode");
   SCAN.onUnknown = null;
+});
+
+console.log("scanning a tag INTO a field (the polarity flips: unknown is success):");
+
+await t("scanEhsInto writes a fresh tag through updShop, with its dupe refusal intact", async () => {
+  DB.lots = [
+    { id: "RSN-SN6-095", cls: "RSN", name: "AT30 jug", stage: "Sealed", ehsBarcode: "" },
+    { id: "RSN-SN6-096", cls: "RSN", name: "other jug", stage: "Sealed", ehsBarcode: "CA-EXISTING-1" },
+  ];
+  DB.items = [];
+  view = { ...view, tab: "lots", mode: "detail", id: "RSN-SN6-095", edit: true };
+  await openScan({ title: "t", onUnknown: (code) => updShop("lots", "ehsBarcode", code) });
+  const el = { value: "CA0000000000000000FRESH1" };
+  const origGet = document.getElementById;
+  document.getElementById = (id) => id === "scan-manual" ? el : origGet.call(document, id);
+  try { scanManual(); } finally { document.getElementById = origGet; }
+  assert(DB.lots[0].ehsBarcode === "CA0000000000000000FRESH1", "the scanned tag landed, normalised, saved");
+  // A tag some record already wears resolves to an id, so onCode fires — and refuses.
+  await openScan({ title: "t", onUnknown: (code) => updShop("lots", "ehsBarcode", code),
+    onCode: (id) => { const o = recById("lots", id); if (o && o.ehsBarcode) toast("dupe", "error"); } });
+  const el2 = { value: "CA-EXISTING-1" };
+  document.getElementById = (id) => id === "scan-manual" ? el2 : origGet.call(document, id);
+  try { scanManual(); } finally { document.getElementById = origGet; }
+  assert(DB.lots[0].ehsBarcode === "CA0000000000000000FRESH1", "a worn tag never overwrites through the scan path");
+  closeScan();
+  view = { ...view, mode: "list", id: null, edit: false };
+  DB.lots = [];
+});
+
+await t("the receiving cell's camera appends tag after tag, skipping repeats", async () => {
+  DB.lots = []; DB.items = [];
+  RX = { rows: [{ rid: "r9", cls: "RSN:resin", name: "IN2", qty: "3", bin: "", vendorLot: "", ehs: "",
+    supplier: "", unitCost: "", expiresOn: "", matKey: "", buyRef: null }],
+    supplier: "", receivedOn: today(), buyId: "", defBin: "", lockBin: "", index: "orders" };
+  view = { ...view, tab: "inventory", invView: "desk", mode: "list" };
+  await rxScanEhs("r9");
+  const origGet = document.getElementById;
+  const feed = (v) => { const el = { value: v };
+    document.getElementById = (id) => id === "scan-manual" ? el : origGet.call(document, id);
+    try { scanManual(); } finally { document.getElementById = origGet; } };
+  feed("CA-TAG-A1"); feed("CA-TAG-A2"); feed("CATAGA1");   // the third is A1 retyped without dashes
+  assert(RX.rows[0].ehs === "CA-TAG-A1 CA-TAG-A2", "two tags in the cell, the dash-blind repeat skipped: " + RX.rows[0].ehs);
+  closeScan();
+  RX = null;
+});
+
+console.log("the materials table (name -> matKey -> datasheet, ratio, shelf life):");
+
+await t("every doc path in the table exists in the manifest, and every number cites a sheet", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  // APP_ROOT comes from appload; the DOM stub shadows global URL, so no new URL() here.
+  const manifest = JSON.parse(readFileSync(join(APP_ROOT, "docs", "manifest.json"), "utf8"));
+  const srcs = (Array.isArray(manifest) ? manifest : manifest.docs || []).map(d => d.src);
+  const problems = materialsTableProblems(srcs);
+  assert(problems.length === 0, "table hygiene: " + problems.join("; "));
+});
+
+await t("aliases resolve the RSS names the import actually produced", () => {
+  const cases = [
+    ["IN2 Epoxy Infusion Resin", "IN2"],
+    ["AT30 SLOW EPOXY HARDENER", "AT30"],
+    ["WEST SYSTEM® 209 Extra Slow Hardener", "WEST-209"],
+    ["91% Isopropyl Alcohol", "IPA-91"],
+    ["Isopropyl Rubbing Alcohol 70%", "IPA-70"],
+    ["Isopropyl alcohol  (2-propanol, IPA, isopropyl alcohol)", "IPA"],
+    ["Acetone", "ACETONE"],
+    ["3M Bondo lightweight body filler", "BONDO"],
+    ["frekote 700-nc", "FREKOTE"],
+    ["REXCO FORMULA FIVE Mold Release Wax", "F5-WAX"],
+    ["Rexco Formula Five Clean' N Glaze", "CLEAN-N-GLAZE"],
+    ["West System 404 High-Density Filler", "WEST-404"],
+    ["Vacuum pump oil", "PUMP-OIL"],
+  ];
+  for (const [name, want] of cases) {
+    const m = matForName(name);
+    assert(m && m.matKey === want, `${name} -> ${m ? m.matKey : "(none)"}, want ${want}`);
+  }
+  assert(matForName("UNLEADED GASOLINE") === null, "a name the table does not know stays unknown");
+  assert(matForName("") === null, "no name, no match");
+});
+
+await t("the verified numbers carry their citations, and nothing is guessed", () => {
+  const in2 = matByKey("IN2");
+  assert(in2.ratio.includes("100:30") && in2.shelfLifeMonths === 12 && /TDS/.test(in2.src),
+    "IN2: 100:30 by weight, 12 months, cited to the EC TDS");
+  assert(matByKey("WEST-209").ratio.includes("3:1"), "West 209: 3:1 per the 105/209 TDS");
+  assert(matByKey("WEST-206").ratio.includes("5:1"), "West 206: 5:1 per its TDS");
+  assert(!matByKey("XCR").ratio, "XCR's ratio could not be read from the sheet, so it is blank, not guessed");
+  assert(!matByKey("ACETONE").doc, "no bundled datasheet means no link, not a dead one");
+});
+
+await t("Link materials proposes only blank matKeys, and fills expiry from shelf life", () => {
+  DB.lots = [
+    { id: "RSN-SN6-101", cls: "RSN", name: "IN2 Epoxy Infusion Resin", stage: "Sealed", receivedOn: "2025-12-06" },
+    { id: "RSN-SN6-102", cls: "RSN", name: "AT30 SLOW EPOXY HARDENER", stage: "Sealed", matKey: "AT30" },
+    { id: "CON-SN6-101", cls: "CON", name: "UNLEADED GASOLINE", stage: "Sealed" },
+    { id: "CON-SN6-102", cls: "CON", name: "Acetone", stage: "Sealed", expiresOn: "2027-01-01" },
+  ];
+  openMatLink();
+  assert(MAT_LINK.length === 2, "the keyed record and the unknown name are not proposed: " + MAT_LINK.map(x => x.o.id).join(","));
+  assert(matLinkExpiry(MAT_LINK.find(x => x.o.id === "RSN-SN6-101").o, matByKey("IN2")) === "2026-12-06",
+    "received 2025-12-06 + 12 months = 2026-12-06");
+  assert(matLinkExpiry(DB.lots[3], matByKey("IN2")) === "", "an expiry somebody set is never overwritten");
+  runMatLink();
+  const jug = DB.lots[0];
+  assert(jug.matKey === "IN2" && jug.expiresOn === "2026-12-06" && jug.expirySource === "shelf-life table",
+    "linked, dated, and the source says the table did it");
+  assert(!DB.lots[2].matKey, "gasoline stays unkeyed");
+  closeModal();
+  DB.lots = [];
+});
+
+await t("an imported or received chemical gets its matKey from the alias table", () => {
+  assert(typeof matForName === "function", "table loaded");
+  const r = { name: "at30 slow epoxy hardener", cls: "RSN:hardener", matKey: "", supplier: "", unitCost: "" };
+  DB.lots = [];
+  rxInferFromName(r);
+  assert(r.matKey === "AT30", "the receiving desk fills it: " + r.matKey);
+  assert(r.cls === "RSN:hardener", "and the restock rule keeps the class honest");
+  DB.lots = [];
 });
 
 console.log("restock rules (the reorder threshold lives on the material, not the jug):");
