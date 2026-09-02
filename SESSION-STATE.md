@@ -25,7 +25,8 @@ every CFD sim, its results and plots, multi-user, lots of data. Lives at
 `09 CFD Sims Dashboard/`. Only the brief and `DECISIONS.md` exist; no code and
 no Firebase project yet. Decisions taken without Simon (he left them to me):
 web app on Firebase rather than downloadable, and Firestore-for-summaries /
-Storage-for-files. Recommended but unconfirmed: a separate Firebase project.
+Storage-for-files. Separate Firebase project `feb-cfd` created 2026-09-02 (Simon's call);
+Firestore, Storage and Auth not yet enabled on it. Repo renamed to `Jinxiewinx/feb-engineering-apps` the same day.
 Next step is a real Fluent export from aero to build `ingest/` against.
 
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
@@ -362,11 +363,6 @@ stays visible. Fixing it is an app change on the detail screen and needs Simon.
 
 ## Open questions for Simon
 
-- **Repo rename.** Simon wants `feb-composites-applications` renamed now that
-  it holds the CFD dashboard too. Possible with `gh repo rename <new>`; GitHub
-  redirects the old URL and `git remote set-url` fixes the local clone. Not
-  done because no new name was given. Suggested: `feb-engineering-apps`.
-  Firebase hosting is unaffected either way.
 **Two things need a human with a real device; automation cannot settle either.**
 
 1. **Tab through the Budget grid by hand.** The Tab-moves-field-to-field
@@ -597,7 +593,7 @@ Five sessions, newest first. Older entries live in `git log`, not here.
 
 **2026-09-02 (latest) — CFD Sims Dashboard folder created.** Brief,
 decisions, and empty `app/`, `ingest/`, `design/` under
-`09 CFD Sims Dashboard/`. Repo rename requested, waiting on a name.
+`09 CFD Sims Dashboard/`. Repo renamed to `feb-engineering-apps`.
 
 **2026-08-28 — the mold's stage became a stepper.** Simon asked for
 the Parts progress-bubble idiom on molds: the detail card now sets stage on a

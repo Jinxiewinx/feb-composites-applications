@@ -12,7 +12,7 @@ The files in this bundle are **design references created in HTML** — prototype
 
 - `FEB Website.dc.html` — the primary deliverable: the full home page as one scrolling site with working animations and easter eggs. Implement this.
 - `Team Website Mockups.dc.html` — the exploration board: 3 home-page directions (1a–1c) plus static mockups of all 8 pages (2a–2h: Home, About, Cars, Subteams, Sponsors, Join, News, Contact). Use these for the secondary pages.
-- `_ds/feb/` — the FEB Composites design system: `styles.css` (entry, @imports the rest), `tokens/tokens.css` (all design tokens, light/dark/print), `_ds_bundle.css` (component classes), `fonts/` (self-hosted Saira + Inter variable fonts). **Link `styles.css` as-is** — it is the same system used by the team's work-order app (repo: `Jinxiewinx/feb-composites-applications`, `06 Design System/`).
+- `_ds/feb/` — the FEB Composites design system: `styles.css` (entry, @imports the rest), `tokens/tokens.css` (all design tokens, light/dark/print), `_ds_bundle.css` (component classes), `fonts/` (self-hosted Saira + Inter variable fonts). **Link `styles.css` as-is** — it is the same system used by the team's work-order app (repo: `Jinxiewinx/feb-engineering-apps`, `06 Design System/`).
 
 Note: the `.dc.html` prototypes use a small templating runtime (`{{ }}` holes, `<x-dc>`); ignore that plumbing — the markup, inline styles, and the logic in the `<script data-dc-script>` class (scroll observers, count-ups, konami handler) are the reference behavior.
 

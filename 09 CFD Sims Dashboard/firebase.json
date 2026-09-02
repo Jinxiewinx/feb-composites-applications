@@ -1,0 +1,7 @@
+{
+  "//": "Separate Firebase project from the composites app on purpose (DECISIONS.md #2). Deploy from inside this folder only, so the composites project's rules are never in the blast radius. Hosting, Firestore and Storage sections get added when the app and its rules exist.",
+  "hosting": {
+    "public": "app",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"]
+  }
+}

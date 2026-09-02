@@ -19,9 +19,10 @@ wanted, the `07 CFD PDF Viewer/` folder already shows how to put Electron
 around a static app in this repo, and it can be done later without changing
 the app.
 
-## 2. Its own Firebase project, not the composites one (2026-09-02, recommended, unconfirmed)
+## 2. Its own Firebase project, not the composites one (2026-09-02, confirmed by Simon)
 
-Recommendation: a new project, working name `feb-cfd`. Reasons:
+Project ID `feb-cfd`, created 2026-09-02 under the same Google account as
+`feb-composites`. `.firebaserc` in this folder pins it. Reasons:
 
 - The composites app's `firestore.rules` and `storage.rules` are the thing
   that can lock the team out of their data, and the standing deploy rule
@@ -68,5 +69,6 @@ data rather than the other way round.
 ## 5. Same repo, new top-level folder (2026-09-02)
 
 Simon's call. It sits at `09 CFD Sims Dashboard/` next to the other numbered
-folders. The repo name `feb-composites-applications` no longer describes the
-contents; renaming it is in progress (see the root README and SESSION-STATE).
+folders. The repo was renamed from `feb-composites-applications` to
+`feb-engineering-apps` the same day, since it now holds more than composites.
+GitHub redirects the old URL.

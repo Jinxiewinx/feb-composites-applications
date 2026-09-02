@@ -38,13 +38,15 @@ piece of that (comparing two reports visually). This app is the wider thing:
 ## Status
 
 - 2026-09-02: folder created, brief and decisions written. No code yet.
-  Firebase project not yet created. Data model not yet written down beyond
-  the sketch in `DECISIONS.md`.
+  Firebase project `feb-cfd` created and pinned in `.firebaserc`; Firestore,
+  Storage and Auth are not yet enabled in it (they need a region and a
+  sign-in provider, chosen when the rules are written). Data model not yet
+  written down beyond the sketch in `DECISIONS.md`.
 
 ## Next
 
-1. Confirm the Firebase project choice (new project `feb-cfd` vs reusing the
-   composites one). `DECISIONS.md` recommends new.
+1. Enable Firestore (pick region), Storage and Google sign-in on `feb-cfd`,
+   and write its rules and roster allowlist.
 2. Write the sim record schema and the Firestore rules for it.
 3. Get one real Fluent export from aero and build `ingest/` against it before
    any UI, so the app is designed around data that exists.
