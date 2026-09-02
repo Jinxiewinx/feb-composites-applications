@@ -56,9 +56,23 @@ function loadRelease() {
   releaseWatched = true;
   fb.watchConfig("release", d => { window.RELEASE = d; render(); });
 }
+/* Numeric, field by field. A plain string compare says "4.10.0" < "4.9.0",
+   and a plain !== raised the banner on a build NEWER than the last announce:
+   v4.2.0 went live before anyone pressed Announce, so config/release still
+   said 4.1.1 and every screen was told to reload into a version it had
+   already left behind (Simon, 2026-09-02). Only an announce that is ahead
+   of the running code is news. */
+function versionNewer(a, b) {
+  const pa = String(a || "").split(".").map(Number), pb = String(b || "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
 function newerVersionOut() {
   const r = window.RELEASE;
-  return !!(r && r.version && r.version !== APP_VERSION && !view.relDismissed);
+  return !!(r && r.version && versionNewer(r.version, APP_VERSION) && !view.relDismissed);
 }
 function releaseBanner() {
   if (!newerVersionOut()) return "";

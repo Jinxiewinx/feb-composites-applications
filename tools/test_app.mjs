@@ -4170,14 +4170,21 @@ await t("the app knows its own version, and What's New has something to say", ()
   assert(WHATS_NEW.every(n => typeof n === "string" && n.length > 20), "and each line is a sentence, not a slug");
 });
 
-await t("the reload banner appears only for a DIFFERENT version, and takes no for an answer", () => {
+await t("the reload banner appears only for a NEWER version, and takes no for an answer", () => {
   view = { ...view, relDismissed: false };
   window.RELEASE = null;
   assert(releaseBanner() === "", "nothing to say before config/release has arrived");
   window.RELEASE = { version: APP_VERSION };
   assert(releaseBanner() === "", "the version you are already running is not news");
+  // The 2026-09-02 bug: v4.2.0 deployed, config/release still on 4.1.1 because
+  // nobody had pressed Announce yet, and every screen was told to "reload" into
+  // an older version. An announce BEHIND the running build is not news either.
+  window.RELEASE = { version: "0.0.1" };
+  assert(!newerVersionOut() && releaseBanner() === "", "an older announced version is not news");
+  assert(versionNewer("4.10.0", "4.9.0") && !versionNewer("4.9.0", "4.10.0"), "compared numerically, not as strings");
+  assert(versionNewer("5.0.0", "4.99.99") && versionNewer("4.2.1", "4.2.0") && !versionNewer("4.2.0", "4.2.0"), "field by field");
   window.RELEASE = { version: "99.0.0" };
-  assert(newerVersionOut() && releaseBanner().includes("99.0.0"), "a different version raises the banner");
+  assert(newerVersionOut() && releaseBanner().includes("99.0.0"), "a newer version raises the banner");
   assert(releaseBanner().includes("location.reload()"), "and the whole point is the reload");
   view.relDismissed = true;
   assert(releaseBanner() === "", "dismissing it means dismissed");
