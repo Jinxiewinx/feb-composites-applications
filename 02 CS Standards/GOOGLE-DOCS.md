@@ -10,22 +10,33 @@ Folder: **CS Standards** — https://drive.google.com/drive/folders/1tkD4LdUlk4j
 
 | Doc | Rev at upload | Google Doc ID |
 |---|---|---|
-| CS-000 Documentation Standards, Template & Revision Process | C | `16g5b2bcmUCexiGwLyuJv8TEOzykkgBPUBCD9giBzp2I` |
+| CS-000 Documentation Standards, Template & Revision Process | C | `1J2wJlA3pkHFi_-U0v8qE_MDsaT-A81J5wFg1UToVP7A` |
 | CS-001 Part, Mold & Material Labeling | F | `12uwnWFodClF54yFZiQGgdK6F6bTLR1oe4ltuz9SP_bs` |
-| CS-002 Layup Schedule Specification & Recording | E | `1t5EDifUg5PAIQMeR-CzS9tNYfM1IbwljpZNwJm8W7Rk` |
-| CS-003 Mold Design & Manufacturing | D | `1FELIY-aslzxwLrPD6pOb9rO8qLLsJRApfONW1Ui78cg` |
-| CS-004 Mold Sealing, Release & Surface Prep | D | `1RYhnOSXdk2_-WAXyBwTbYOFyX31v6gCp1GLDWsHBHas` |
+| CS-002 Layup Schedule Specification & Recording | E | `1enB6xj1ckJw7xVuGOGzLaF0AAloGctxl49vMbp4tteA` |
+| CS-003 Mold Design & Manufacturing | D | `1Ek_gJPlOd0ZkPoP36Dywvyu6bHMLCuCVEskim6mSocc` |
+| CS-004 Mold Sealing, Release & Surface Prep | D | `1o4229Tf0nLXsJt30dNbtusu7i49Cs0wDal79-p1j45g` |
 | CS-005 CNC Machining of Tooling Board (ShopSabre) | E | `1kNS7fH0AD9whatG-EU-FeMoaBtn_rZXAOsvLtjIVqvg` |
-| CS-006 Resin Infusion | C | `1NtSU5CwJldi0EliTt_xNMR2lxpSZIiA7oOvjBZ_Cg2g` |
-| CS-007 Wet Layup & Vacuum Bagging | C | `1hgShdFtwsymUSJan8t0CsctQyrwpb-yeKY9QI2NflNU` |
-| CS-008 Resins, Mixing & Cure Schedules | D | `106nqf71qjTlfP0i_OxVPWJB9wGgha-zdph7pFgGLk6o` |
-| CS-009 Trimming, Sanding & Finishing | C | `1UJauiuBFoOnOXSuT6kLlFBtyrFfB6ag03pCXgjAfPBw` |
+| CS-006 Resin Infusion | C | `1jiak6PFBfCwMYQw3BPh48pFjXI2NWSMBH0NocxlVBIg` |
+| CS-007 Wet Layup & Vacuum Bagging | C | `1ZXEhcTHVer8kPLRrDQa4LsI9NBhDjdz6im2bqslBci0` |
+| CS-008 Resins, Mixing & Cure Schedules | D | `16z73DhhlBbfwCx2UVrJMzv4bQJZmA1ftiR5vDC0q1fw` |
+| CS-009 Trimming, Sanding & Finishing | C | `17dNVY0uiMBPBiCSPs4iZXu9T7zDHuNQb1ZN6OZGF3so` |
 | CS-010 CF Grounding & Electrical Bonding | C | `1lSWJ1pglxJ3jd5s9wi__YNuYmLWmoyx3nSwoJIzCePY` |
-| CS-011 Inventory, Storage & Transport | D | `1eaeARRmKyrUNzX2t6wy74rgYMZLp5UnxNsF06Mw1EOw` |
+| CS-011 Inventory, Storage & Transport | D | `1awvXtYcept9sXTE3h23Yf2fVFovuta2e-Tfs7fHWMus` |
 | CS-012 Purchasing & Reimbursement | F | `15tG_DB032LMWDuAETWABhMbsZzgF4pUJxzAeDhgOg-M` |
-| CS-013 Work Orders & Part Traceability | F | `1ldS32TSC_wRVzUND2Hplfg3P1ddBprFRkgXEkQ46qcQ` |
+| CS-013 Work Orders & Part Traceability | F | `11zt1hgKyjZezSEhq5Z88kk2cIaVc86S5QwfILCbqps8` |
 | CS-INDEX — Composites Standards Master List | G | `1EfvSzxUHV6Rxpg2g9K5mP4-qUioCvh8pnKKktl7qn8o` |
 | CS-Template | — | `1cyg5az-SOovY0j8PCEbCBbVxhzWHEdK8B8uvfiJPldw` |
+
+**2026-09-02: ten Docs re-imported, new IDs.** The folder renumbering
+changed `04 Datasheets/` to `03 Datasheets/` and `03 App/` to
+`06 Composites App/` inside CS-000, 002, 003, 004, 006, 007, 008, 009, 011 and
+013. The Drive connector cannot edit a Doc's text in place and the gcloud
+token lacks the Docs API scope, so those ten were re-imported from the
+corrected markdown (no rev bump: a path fix rides free, Simon's call) and the
+old copies trashed. None had been edited since the 2026-08-29 upload, so no
+content was lost. Their IDs above are the new ones; the other six are
+unchanged. Same mechanism next time: a Doc that needs a repo-side fix is
+re-imported, not patched, until something can call the Docs API.
 
 ## What this changes
 
