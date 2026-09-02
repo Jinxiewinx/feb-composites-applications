@@ -108,7 +108,11 @@ if (dirty && !DRY) die("The tree is dirty. Commit or stash first — a release m
 
 /* ---- 2. the previous tag ------------------------------------------------ */
 let prev = null;
-try { prev = run("git", ["describe", "--tags", "--abbrev=0"]).trim(); } catch { /* no tags yet */ }
+/* --match keeps this to the composites app's bare vX.Y.Z tags. The CFD
+   dashboard (09 CFD Sims Dashboard/) shares the repo and tags as cfd-vX.Y.Z;
+   without the match, a cfd tag sitting nearer HEAD would be taken as the
+   previous composites release and the changelog would start from it. */
+try { prev = run("git", ["describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"]).trim(); } catch { /* no tags yet */ }
 const range = prev ? `${prev}..HEAD` : "HEAD";
 say(prev ? `  since ${prev}` : "  first tagged release — reading the whole history");
 

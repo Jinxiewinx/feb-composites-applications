@@ -48,16 +48,21 @@ firebase deploy --only firestore:rules,storage:rules --project feb-cfd
 |---|---|
 | Hosting | Live, placeholder page at https://feb-cfd.web.app |
 | Firestore | Created, `us-west1` (same region as `feb-composites`). Rules deployed |
-| Storage | Not enabled. The default bucket needs the Blaze plan. Rules are written and tested locally, not deployed |
-| Auth | Not enabled. Initializing Auth outside the console needs Blaze too. The rules and tests assume email/password plus anonymous guests, as in the composites app |
+| Storage | Enabled, default bucket `feb-cfd.firebasestorage.app` in `us-west1`. Rules deployed |
+| Auth | Enabled: email/password and anonymous (guest), the same two providers as the composites app |
 
-Blaze means linking the billing account that `feb-composites` already uses.
-No charge until usage passes the free tier. Once linked, enabling Storage and
-Auth is two commands and the storage rules deploy.
+The project is on the Blaze plan, linked 2026-09-02 to the billing account
+`feb-composites` uses. Nothing is charged until usage passes the free tier.
+
+## Releases
+
+Tags are `cfd-vX.Y.Z`, never bare `vX.Y.Z`, which belongs to the composites
+app in the same repo. Version numbers follow the composites rubric at the
+top of the root `CHANGELOG.md`; this folder gets its own `CHANGELOG.md` with
+the first release.
 
 ## Next
 
-1. Link billing, enable Storage and Auth, deploy `storage.rules`.
-2. Talk to the team about what the app tracks and how it should look.
-3. Write the data model and replace the placeholder collections, tests in
+1. Talk to the team about what the app tracks and how it should look.
+2. Write the data model and replace the placeholder collections, tests in
    the same commit.

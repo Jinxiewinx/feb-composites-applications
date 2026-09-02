@@ -34,7 +34,8 @@ Project ID `feb-cfd`, created 2026-09-02 under the same Google account as
 - Rosters differ. Aero and composites overlap but are not the same people.
 
 Cost: a second roster to maintain, and the Blaze plan on the new project,
-since Storage and Auth cannot be enabled without it. Both are small. The design system, the guest-view pattern, and the auth flow are
+since Storage and Auth cannot be enabled without it. Linked 2026-09-02 to
+the same billing account as `feb-composites`. Both costs are small. The design system, the guest-view pattern, and the auth flow are
 copied over, not shared live, so the two apps can diverge.
 
 ## 3. Where data lives: Firestore for what you sort by, Storage for what you look at (2026-09-02)
@@ -63,4 +64,5 @@ at a time.
 Simon's call. It sits at `09 CFD Sims Dashboard/` next to the other numbered
 folders. The repo was renamed from `feb-composites-applications` to
 `feb-engineering-apps` the same day, since it now holds more than composites.
-GitHub redirects the old URL.
+GitHub redirects the old URL. Release tags: composites keeps bare `vX.Y.Z`,
+the dashboard uses `cfd-vX.Y.Z` (see the root `CHANGELOG.md`).

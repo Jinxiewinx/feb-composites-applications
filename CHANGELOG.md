@@ -7,6 +7,13 @@ deploys hosting and prints a Slack note for `#composites` — with one or two
 pictures to attach to it, on every Major and Minor. See
 [the release section of the tools README](tools/README.md).
 
+## Two apps, two tag series
+
+Since September 2026 the repo also holds the CFD dashboard. The composites
+app keeps the bare `vX.Y.Z` tags this file has always used, so every existing
+tag and link stays valid. The dashboard tags as `cfd-vX.Y.Z` and keeps its own
+changelog in its folder. `tools/release.mjs` only looks at bare `v` tags.
+
 ## What the numbers mean
 
 The app is a shop tool, not a library, so the scale is about **what the team has

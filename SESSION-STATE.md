@@ -21,13 +21,12 @@ git log -p --follow -- SESSION-STATE.md
 ## Now
 
 **CFD Sims Dashboard: harness done, app not started** (2026-09-02). Its
-own Firebase project `feb-cfd`: Firestore in us-west1 with rules deployed,
-hosting live with a placeholder. **Storage and Auth are blocked on Blaze**;
-enabling either outside the console fails with BILLING_NOT_ENABLED. Linking
-the billing account feb-composites uses is Simon's call, asked 2026-09-02.
-Simon does not want the app's functionality written down until he has talked
-to the team; the three collections in `firestore.rules` are placeholders.
-The folder README says what is wired and what is not.
+own Firebase project `feb-cfd` on Blaze: Firestore and Storage in us-west1,
+both rules deployed, Auth with email/password and anonymous, hosting live
+with a placeholder. Simon does not want the app's functionality written down
+until he has talked to the team; the three collections in `firestore.rules`
+are placeholders. Tags: composites keeps bare `vX.Y.Z`, the dashboard uses
+`cfd-vX.Y.Z`; `release.mjs` now matches only `v[0-9]*`.
 
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per
