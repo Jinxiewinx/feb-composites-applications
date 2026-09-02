@@ -13,7 +13,7 @@ for everything in here.
 |---|---|---|
 | `03 App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
 | `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
-| `09 CFD Sims Dashboard/` | New (Sept 2026): shared dashboard for every CFD sim, its results and plots. Brief and decisions only so far, no code | `README.md`, `DECISIONS.md` |
+| `09 CFD Sims Dashboard/` | The CFD sims dashboard, started Sept 2026 on its own Firebase project (`feb-cfd`). Infrastructure, rules and tests are in place; the app itself waits on the team's brief | `README.md`, `DECISIONS.md` |
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output. Figures are SVG in `src/figures/` with rendered PNGs beside them | `CS-INDEX` |
@@ -42,6 +42,12 @@ node tools/test_designsystem.mjs             # CSS drift check, ~1 second
 
 The live app needs no setup at all: it is at https://feb-composites.web.app,
 and access is controlled by the roster inside it.
+
+The repo was renamed from `feb-composites-applications` to
+`feb-engineering-apps` on 2026-09-02, when the CFD dashboard joined it. The
+old URL redirects. The two apps are separate Firebase projects on purpose:
+`feb-composites` and `feb-cfd`, each deployed from its own folder, so a
+deploy of one can never touch the other's rules or data.
 
 ## The app
 

@@ -20,14 +20,14 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**CFD Sims Dashboard started** (2026-09-02, Simon's ask): a new app tracking
-every CFD sim, its results and plots, multi-user, lots of data. Lives at
-`09 CFD Sims Dashboard/`. Only the brief and `DECISIONS.md` exist; no code and
-no Firebase project yet. Decisions taken without Simon (he left them to me):
-web app on Firebase rather than downloadable, and Firestore-for-summaries /
-Storage-for-files. Separate Firebase project `feb-cfd` created 2026-09-02 (Simon's call);
-Firestore, Storage and Auth not yet enabled on it. Repo renamed to `Jinxiewinx/feb-engineering-apps` the same day.
-Next step is a real Fluent export from aero to build `ingest/` against.
+**CFD Sims Dashboard: harness done, app not started** (2026-09-02). Its
+own Firebase project `feb-cfd`: Firestore in us-west1 with rules deployed,
+hosting live with a placeholder. **Storage and Auth are blocked on Blaze**;
+enabling either outside the console fails with BILLING_NOT_ENABLED. Linking
+the billing account feb-composites uses is Simon's call, asked 2026-09-02.
+Simon does not want the app's functionality written down until he has talked
+to the team; the three collections in `firestore.rules` are placeholders.
+The folder README says what is wired and what is not.
 
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per

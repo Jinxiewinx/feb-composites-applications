@@ -1,0 +1,15 @@
+{
+  "name": "feb-cfd-dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FEB CFD sims dashboard: every sim, its results and plots, shared",
+  "scripts": {
+    "serve": "python3 -m http.server 8792 --directory app",
+    "emulators": "firebase emulators:start --project demo-feb-cfd",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-feb-cfd \"node tools/test_rules.mjs\"",
+    "test:storage": "firebase emulators:exec --only auth,storage --project demo-feb-cfd \"node tools/test_storage_rules.mjs\"",
+    "test": "npm run test:rules && npm run test:storage",
+    "deploy": "firebase deploy --only hosting --project feb-cfd"
+  }
+}

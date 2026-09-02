@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+/* Storage-rules SMOKE test for storage.rules against the Storage emulator,
+   same scope as 03 App's tools/test_storage_rules.mjs: the emulator's simple
+   upload endpoint does not set request.resource.contentType, so the ALLOW
+   cases cannot be asserted here. What this proves is the boundary: a guest or
+   an unauthenticated caller can write nowhere, and an account can write
+   nowhere outside the three allowed trees. Run from this folder:
+     npm run test:storage                                                     */
+
+const PID = "demo-feb-cfd";
+const STORAGE = `http://127.0.0.1:9198/v0/b/${PID}.appspot.com/o`;
+const AUTH = `http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake`;
+
+async function signUp(body) {
+  const r = await fetch(AUTH, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, returnSecureToken: true }) });
+  const j = await r.json();
+  if (!j.idToken) throw new Error("auth emulator signUp failed: " + JSON.stringify(j));
+  return j.idToken;
+}
+async function write(token, path) {
+  const headers = { "Content-Type": "application/pdf" };
+  if (token) headers.Authorization = "Bearer " + token;
+  const res = await fetch(`${STORAGE}?name=${encodeURIComponent(path)}`, { method: "POST", headers, body: Buffer.alloc(8, 1) });
+  return res.status;
+}
+
+const account = await signUp({ email: "smoke@feb.test", password: "password123" });
+const guest = await signUp({});
+let pass = 0, fail = 0;
+async function denied(label, tok, path) {
+  const s = await write(tok, path);
+  const ok = s === 403;
+  ok ? pass++ : fail++;
+  console.log(`${ok ? "  ok" : "FAIL"}  ${label}  → ${s} (want 403)`);
+}
+
+console.log("a guest may not write anywhere:");
+await denied("guest write to sims/", guest, "sims/SIM-SN6-001/report.pdf");
+await denied("guest write to geometries/", guest, "geometries/GEO-SN6-001/wing.step");
+await denied("guest write to its own avatar path", guest, "avatars/uid-guest");
+
+console.log("unauthenticated may not write anywhere:");
+await denied("unauthenticated write to sims/", null, "sims/SIM-SN6-001/report.pdf");
+await denied("unauthenticated write to geometries/", null, "geometries/GEO-SN6-001/wing.step");
+await denied("unauthenticated write to avatars/", null, "avatars/someuid");
+
+console.log("an account may not write outside the allowed trees:");
+await denied("account write to bucket root", account, "report.pdf");
+await denied("account write to an unmatched tree", account, "secret/x.pdf");
+await denied("account write to someone else's avatar", account, "avatars/not-my-uid");
+await denied("account write too deep under sims/", account, "sims/SIM-SN6-001/nested/x.pdf");
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

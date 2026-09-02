@@ -47,3 +47,6 @@ ds-bundle
 # Team website: the design system copied in from "06 Design System/" by
 # "08 Website/build.mjs". Generated, one source of truth, never edited here.
 08 Website/site/_ds/
+09 CFD Sims Dashboard/firestore-debug.log
+09 CFD Sims Dashboard/ui-debug.log
+09 CFD Sims Dashboard/firebase-debug.log

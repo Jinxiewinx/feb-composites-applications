@@ -33,8 +33,8 @@ Project ID `feb-cfd`, created 2026-09-02 under the same Google account as
   quota story readable.
 - Rosters differ. Aero and composites overlap but are not the same people.
 
-Cost: a second roster to maintain and a second set of CLI credentials. Both
-are small. The design system, the guest-view pattern, and the auth flow are
+Cost: a second roster to maintain, and the Blaze plan on the new project,
+since Storage and Auth cannot be enabled without it. Both are small. The design system, the guest-view pattern, and the auth flow are
 copied over, not shared live, so the two apps can diverge.
 
 ## 3. Where data lives: Firestore for what you sort by, Storage for what you look at (2026-09-02)
@@ -58,15 +58,7 @@ Cross-sim charts (CD against mesh count, say) read only the summary numbers,
 so they stay fast at any sim count. Per-sim time series are fetched one sim
 at a time.
 
-## 4. Ingest is a tool beside Fluent, not a browser upload form (2026-09-02)
-
-People will not hand-enter forty settings per sim. The uploader reads the
-case's exports and builds the record. The web app still allows editing after
-the fact and attaching extra files, but the primary path is the script. Build
-the ingest against a real export before the UI, so the schema follows the
-data rather than the other way round.
-
-## 5. Same repo, new top-level folder (2026-09-02)
+## 4. Same repo, new top-level folder (2026-09-02)
 
 Simon's call. It sits at `09 CFD Sims Dashboard/` next to the other numbered
 folders. The repo was renamed from `feb-composites-applications` to

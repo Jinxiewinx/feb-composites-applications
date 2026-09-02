@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FEB CFD</title>
+<link rel="stylesheet" href="ds/tokens.css">
+<link rel="stylesheet" href="ds/components.css">
+<style>
+  /* Placeholder shell. The real app replaces this file; ds/ stays. */
+  body { display: grid; place-items: center; min-height: 100vh; }
+  .hold { max-width: 32rem; padding: 2rem; }
+</style>
+</head>
+<body>
+<main id="main" class="hold">
+  <div class="card">
+    <h1>FEB CFD dashboard</h1>
+    <p>Not built yet. This page proves hosting, the design tokens and the
+    Firebase config are wired. See <code>README.md</code> in the repo folder
+    for what comes next.</p>
+    <p id="fbstate" class="muted">Firebase: checking…</p>
+  </div>
+</main>
+<script src="firebase-config.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  const el = document.getElementById("fbstate");
+  try {
+    const app = initializeApp(window.FIREBASE_CONFIG);
+    el.textContent = "Firebase: configured for " + app.options.projectId;
+  } catch (e) { el.textContent = "Firebase: " + e.message; }
+</script>
+</body>
+</html>
