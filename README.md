@@ -13,6 +13,7 @@ for everything in here.
 |---|---|---|
 | `03 App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
 | `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
+| `09 CFD Sims Dashboard/` | New (Sept 2026): shared dashboard for every CFD sim, its results and plots. Brief and decisions only so far, no code | `README.md`, `DECISIONS.md` |
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output. Figures are SVG in `src/figures/` with rendered PNGs beside them | `CS-INDEX` |

@@ -20,6 +20,14 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**CFD Sims Dashboard started** (2026-09-02, Simon's ask): a new app tracking
+every CFD sim, its results and plots, multi-user, lots of data. Lives at
+`09 CFD Sims Dashboard/`. Only the brief and `DECISIONS.md` exist; no code and
+no Firebase project yet. Decisions taken without Simon (he left them to me):
+web app on Firebase rather than downloadable, and Firestore-for-summaries /
+Storage-for-files. Recommended but unconfirmed: a separate Firebase project.
+Next step is a real Fluent export from aero to build `ingest/` against.
+
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per
 standard plus INDEX and template, figures embedded. IDs and the sync-back
@@ -354,6 +362,11 @@ stays visible. Fixing it is an app change on the detail screen and needs Simon.
 
 ## Open questions for Simon
 
+- **Repo rename.** Simon wants `feb-composites-applications` renamed now that
+  it holds the CFD dashboard too. Possible with `gh repo rename <new>`; GitHub
+  redirects the old URL and `git remote set-url` fixes the local clone. Not
+  done because no new name was given. Suggested: `feb-engineering-apps`.
+  Firebase hosting is unaffected either way.
 **Two things need a human with a real device; automation cannot settle either.**
 
 1. **Tab through the Budget grid by hand.** The Tab-moves-field-to-field
@@ -582,7 +595,11 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-08-28 (latest) — the mold's stage became a stepper.** Simon asked for
+**2026-09-02 (latest) — CFD Sims Dashboard folder created.** Brief,
+decisions, and empty `app/`, `ingest/`, `design/` under
+`09 CFD Sims Dashboard/`. Repo rename requested, waiting on a name.
+
+**2026-08-28 — the mold's stage became a stepper.** Simon asked for
 the Parts progress-bubble idiom on molds: the detail card now sets stage on a
 tappable `.pstage` stepper (all six values, Retired dashed and off the track),
 with setPartStage's grading — one step forward instant with the undo bar,
@@ -604,16 +621,3 @@ part, blueprint-sparse by design, and a row IS a part. The dashboard stopped
 saying things twice — shop status split, T-minus once, issues folded into the
 run they hold up. Details leads on a part in edit mode, and issue photos work
 after creation.
-
-**2026-08-25 (latest) — v1.0.0: the tracker becomes a work tracker.** The
-Tickets tab is shelved behind `hidden: true` with its data and links intact;
-issues moved onto the work order as their own section, resolving through the
-one existing CS-003 gate. The app gained a version, a What's New panel, a
-`config/release` reload banner and `tools/release.mjs`. Also: a boot splash
-that lays up the mark's two plies, and "Load SN5 archive" off the toolbar.
-
-**2026-08-25 (latest) — storage map, and the receiving count column.** Adding a
-location moved from the items list to the map, where the shelves are. Empty
-shelves stopped collapsing into a text strip: they are quieter cards now, so
-every location is visible and clickable anywhere, which the strip was not. The
-HOW MANY readout was wrapping to three lines and reads "1 of 12" on one line.
