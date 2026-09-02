@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Files for the CFD dashboard: report PDFs, contour images, monitor CSVs,
+// result tables, and roster avatars. Everything large lives here and never
+// in Firestore (DECISIONS.md #3).
+//
+// Same shape and same known residual as 06 Composites App/storage.rules: storage rules
+// cannot read the Firestore roster, so a signed-in account not yet on the
+// roster can read an object if it already knows the exact path. Listing is
+// denied and paths carry a sim id, so that is impractical rather than
+// impossible. Custom claims set by a Cloud Function would close it.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    // A signed-in human with an account. Guests (anonymous auth) are signed in
+    // and are NOT this. Every write below uses it, so a guest can never write.
+    function accountOf() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function simFile() {
+      return request.resource.size < 50 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'text/csv'
+          || request.resource.contentType == 'text/plain'
+          || request.resource.contentType == 'application/json');
+    }
+
+    // sims/<simId>/<file>: everything attached to one sim.
+    match /sims/{simId}/{file} {
+      allow read: if signedIn();
+      allow write: if accountOf() && simFile();
+    }
+    // geometries/<geomId>/<file>: CAD exports and images for a design revision.
+    match /geometries/{geomId}/{file} {
+      allow read: if signedIn();
+      allow write: if accountOf()
+        && request.resource.size < 200 * 1024 * 1024;
+    }
+    // avatars/<uid>: only your own.
+    match /avatars/{uid} {
+      allow read: if signedIn();
+      allow write: if accountOf() && request.auth.uid == uid
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    // Everything else: no rule, so denied.
+  }
+}

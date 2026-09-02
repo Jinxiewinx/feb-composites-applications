@@ -404,7 +404,7 @@ it should be tightened.
   has the old print CSS.
 - `reports.js` "Print status board" still calls raw `window.print()`. It is now
   the only printable in the app that does — the cut list was the other one.
-- `05 Printables/printables.html` is open to redesign. Simon said there is no
+- `04 Printables/printables.html` is open to redesign. Simon said there is no
   house style to conform to.
 - Per-record history/audit trail (Phase 5 of the inventory plan), deliberately
   deferred. Nothing depends on it and an empty array is a valid start.
@@ -425,7 +425,7 @@ cannot open a raw TCP socket, so port 9100 is unavailable; and the app is
 served over HTTPS, so `fetch`ing a plain-HTTP LAN printer is blocked as mixed
 content. Every "just POST to the printer" design dies on one of those two, and
 a cheaper Bluetooth-only label maker cannot be driven from the app at all. The
-reasoning is in `03 App/app/DESIGN-NOTES.md`; what is here is the shopping
+reasoning is in `06 Composites App/app/DESIGN-NOTES.md`; what is here is the shopping
 constraint, because it is invisible from the code.
 
 **The laminated-tape option was checked and rejected on print height, not on
@@ -445,12 +445,12 @@ hidden rows under it (`stock`, `items`, `lots`, `weekplan`) are normalised
 away in `render()` so their own render never runs. `projects` still renders
 itself, because the issue detail page lives there and is reached only by chip
 and by `#/PROJ-` link. Adding a normalisation line for it kills every link to
-every issue, silently. `03 App/app/SHELVED.md` is the full record.
+every issue, silently. `06 Composites App/app/SHELVED.md` is the full record.
 
 
 Each of these cost something to learn and would be easy to undo by accident.
 Anything already explained in a README is deliberately not repeated here; see
-`README.md`, `SETUP.md`, `tools/README.md`, `03 App/app/README.md`,
+`README.md`, `SETUP.md`, `tools/README.md`, `06 Composites App/app/README.md`,
 `HANDOFF.md` and `.design-sync/NOTES.md`.
 
 ### Deploying
@@ -590,9 +590,11 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-02 (latest) — CFD Sims Dashboard folder created.** Brief,
+**2026-09-02 (latest) — folders renumbered, CFD dashboard wired.** `03 App/`
+is `06 Composites App/`; every tracked path reference, the parent CLAUDE.md,
+the simon agent and the memory index were rewritten in one pass. Brief,
 decisions, and empty `app/`, `ingest/`, `design/` under
-`09 CFD Sims Dashboard/`. Repo renamed to `feb-engineering-apps`.
+`08 CFD Sims Dashboard/`. Repo renamed to `feb-engineering-apps`.
 
 **2026-08-28 — the mold's stage became a stepper.** Simon asked for
 the Parts progress-bubble idiom on molds: the detail card now sets stage on a

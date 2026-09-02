@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bundle the team's reference docs into the app so the Documents tab can open
-them in-browser. Copies into `03 App/app/docs/` and writes manifest.json.
+them in-browser. Copies into `06 Composites App/app/docs/` and writes manifest.json.
 
 - Datasheets (public manufacturer PDFs)  -> docs/datasheets/*.pdf   (kind: pdf)
 - CS standards (our markdown + built docx) -> docs/standards/*        (kind: md, with docx download)
@@ -21,7 +21,7 @@ import json, re, shutil, subprocess
 from pathlib import Path
 
 RES = Path(__file__).resolve().parent.parent          # SN6 Resources/
-APP = RES / "03 App" / "app"
+APP = RES / "06 Composites App" / "app"
 DOCS = APP / "docs"
 
 for sub in ("datasheets", "standards"):
@@ -90,7 +90,7 @@ def md_to_pdf(md_path, pdf_path):
 
 
 # 1. Datasheets (PDF)
-ds_dir = RES / "04 Datasheets"
+ds_dir = RES / "03 Datasheets"
 for pdf in sorted(ds_dir.glob("*.pdf")):
     dst = DOCS / "datasheets" / pdf.name
     shutil.copy2(pdf, dst)
@@ -145,7 +145,7 @@ if pp_md.exists():
 # 4. Printables (HTML)
 # Through add(), not straight onto the manifest: this used to bypass UNLISTED
 # entirely, so "stop showing it" had no switch and meant deleting the block.
-pr = RES / "05 Printables" / "printables.html"
+pr = RES / "04 Printables" / "printables.html"
 if pr.exists():
     shutil.copy2(pr, DOCS / "printables.html")
     add({"category": "Guides", "title": "Shop Printables",

@@ -10,7 +10,7 @@
    V8 keys coverage by script URL. A single concatenated `(0, eval)` has no URL,
    so it reports nothing and there was no way to know what was covered. Give each
    script its real filename and `node --test --experimental-test-coverage`
-   attributes lines to "03 App/app/core.js" by name.
+   attributes lines to "06 Composites App/app/core.js" by name.
 
    runInThisContext puts each script's top-level let/const into the GLOBAL
    LEXICAL environment — shared across scripts, and readable from an ESM test
@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "03 App", "app");
+export const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "06 Composites App", "app");
 
 /* The load order comes from index.html's own <script> tags rather than a list
    kept by hand. The hand-kept list in test_app.mjs held the same 31 files but in

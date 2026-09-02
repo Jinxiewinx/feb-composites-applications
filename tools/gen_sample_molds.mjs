@@ -3,7 +3,7 @@
 
    The Stock tab's mold planner needs an STL before it can show you anything,
    and "export one from Fusion first" is a poor way to meet a tool. These three
-   land in 03 App/app/samples/, are served by Hosting alongside the app, and are
+   land in 06 Composites App/app/samples/, are served by Hosting alongside the app, and are
    offered directly in the "Plan a mold" modal — so a new lead can see the
    planner work on their phone thirty seconds after signing in.
 
@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "06 Composites App", "app");
 let src = ["slicer.js", "stlio.js"].map(f => readFileSync(join(root, f), "utf8")).join("\n;\n");
 globalThis.window = globalThis;
 (0, eval)(src.replace(/"use strict";\n/g, ""));

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/* Storage-rules SMOKE test for 03 App/storage.rules against the Storage
+/* Storage-rules SMOKE test for 06 Composites App/storage.rules against the Storage
    emulator. Scope note: the emulator's rules-enforced upload endpoint (/v0)
    doesn't set request.resource.contentType on a simple upload, so the *allow*
    cases (which gate on contentType) can't be asserted here without the full
    resumable protocol — those are exercised by the app's Firebase SDK in prod.
    What this proves cleanly is the security boundary that matters: sign-in is
    required, and writes outside the six allowed path trees (avatars/, projects/,
-   parts/, documents/, budget/, stackplans/) are denied. Run from "03 App/":
+   parts/, documents/, budget/, stackplans/) are denied. Run from "06 Composites App/":
      firebase emulators:exec --only auth,storage --project demo-feb-work-orders \
        "node '../tools/test_storage_rules.mjs'"                                */
 

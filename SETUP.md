@@ -17,7 +17,7 @@ https://feb-composites.web.app, and access is the roster inside it.
 | **A JDK** (21 is fine) | the Firebase emulator the rules suites run against | the emulator will not start |
 | **Python 3** | the document pipeline only (`build_docx.py` and friends) | standards cannot be rebuilt; nothing else is affected |
 
-The app itself has **no build step and no dependencies**. `03 App/app/` is
+The app itself has **no build step and no dependencies**. `06 Composites App/app/` is
 plain classic scripts. Node is for the tooling, not for the app.
 
 ## macOS
@@ -88,7 +88,7 @@ almost always PATH — see the traps.
 
 Everything runs **from the repo root**, because the scripts in `tools/` resolve
 their paths relative to it. The one exception is `firebase`, which must run
-from inside `03 App/`.
+from inside `06 Composites App/`.
 
 The app, seeded, no Firebase, nothing saves and a reload resets it:
 
@@ -125,9 +125,9 @@ node tools/test_app.mjs
 node tools/test_appui.mjs
 ```
 
-`test_website` needs the site built first: `node "08 Website/build.mjs"`.
+`test_website` needs the site built first: `node "09 Website/build.mjs"`.
 
-**Against the Firebase emulator**, from `03 App/`:
+**Against the Firebase emulator**, from `06 Composites App/`:
 
 ```bash
 firebase emulators:exec --only firestore --project demo-feb-work-orders "node ../tools/test_wo_rules.mjs"
@@ -157,7 +157,7 @@ exist.
 firebase login
 ```
 
-Then, **from `03 App/`**, and only after your work is committed and pushed, so
+Then, **from `06 Composites App/`**, and only after your work is committed and pushed, so
 that whatever is live always matches a commit and a rollback is "redeploy an
 earlier one" rather than an archaeology dig:
 

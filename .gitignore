@@ -2,8 +2,8 @@
 # composites app, datasheets, printables, and the tooling that builds them.
 #
 # The git root is SN6 Resources/ because the scripts in tools/ resolve their
-# paths as  <tools>/../03 App/... , so they only run correctly from here.
-# Note that firebase deploy still runs from inside "03 App/".
+# paths as  <tools>/../06 Composites App/... , so they only run correctly from here.
+# Note that firebase deploy still runs from inside "06 Composites App/".
 #
 # Track everything except build artifacts and OS junk:
 
@@ -21,7 +21,7 @@ __pycache__/
 .gstack/
 
 # Firebase emulator log, rewritten every time tools/test_wo_rules.mjs runs.
-03 App/firestore-debug.log
+06 Composites App/firestore-debug.log
 
 # Sheet images written by tools/test_drawings.mjs --shots
 .drawing-shots/
@@ -44,9 +44,9 @@ ds-bundle
 .design-sync/learnings/
 .design-sync/node_modules
 
-# Team website: the design system copied in from "06 Design System/" by
-# "08 Website/build.mjs". Generated, one source of truth, never edited here.
-08 Website/site/_ds/
-09 CFD Sims Dashboard/firestore-debug.log
-09 CFD Sims Dashboard/ui-debug.log
-09 CFD Sims Dashboard/firebase-debug.log
+# Team website: the design system copied in from "05 Design System/" by
+# "09 Website/build.mjs". Generated, one source of truth, never edited here.
+09 Website/site/_ds/
+08 CFD Sims Dashboard/firestore-debug.log
+08 CFD Sims Dashboard/ui-debug.log
+08 CFD Sims Dashboard/firebase-debug.log

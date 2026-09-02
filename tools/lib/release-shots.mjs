@@ -17,7 +17,7 @@
  * release.mjs skips this entirely.
  *
  * Each shot is the same shape make_mockups.mjs's SHOTS table uses:
- *   id     the file name stem: 03 App/design/release-v<version>-<id>.png
+ *   id     the file name stem: 06 Composites App/design/release-v<version>-<id>.png
  *   js     run in the booted, fixture-seeded app to get to the view
  *   vh     viewport height of the raw capture (1440 wide)
  *   title  the caption, in the voice of somebody telling the team what changed

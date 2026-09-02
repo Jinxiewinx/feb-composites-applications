@@ -37,7 +37,7 @@ What parts/processes/materials this applies to, and what it explicitly does not 
 
 | Ref | Document | Where |
 |---|---|---|
-| R1 | Product TDS/SDS | `04 Datasheets/<file>.pdf` |
+| R1 | Product TDS/SDS | `03 Datasheets/<file>.pdf` |
 | R2 | Related standard | CS-YYY |
 | R3 | Pain point / incident record | PP-XX (FEB-COMP-PP-001) |
 

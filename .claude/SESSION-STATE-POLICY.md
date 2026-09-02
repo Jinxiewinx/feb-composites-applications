@@ -33,7 +33,7 @@ this file without deleting from it, you have done half of an edit.
    before you keep. An entry describing deleted code is worse than no entry,
    because it will be believed.
 4. **Not already written down elsewhere.** Check `README.md`, `SETUP.md`,
-   `HANDOFF.md`, `tools/README.md`, `03 App/app/README.md`, `CLAUDE.md`,
+   `HANDOFF.md`, `tools/README.md`, `06 Composites App/app/README.md`, `CLAUDE.md`,
    `.design-sync/NOTES.md`. If it is there, delete it here. If it *belongs*
    there and isn't, **put it there** — those files are maintained and read by
    humans; this one is neither.

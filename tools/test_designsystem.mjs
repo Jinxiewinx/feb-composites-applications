@@ -1,7 +1,7 @@
-/* test_designsystem.mjs — the app and 06 Design System must not drift apart.
+/* test_designsystem.mjs — the app and 05 Design System must not drift apart.
  *
  * WHY THIS EXISTS
- * 06 Design System/ was extracted FROM the app's stylesheet, not imported by
+ * 05 Design System/ was extracted FROM the app's stylesheet, not imported by
  * it. That leaves two copies of the same design with nothing holding them
  * together, and copies rot: by the time anyone looked, the app's kanban column
  * and modal had drifted 1px off the radius token, .stage had lost its
@@ -19,7 +19,7 @@
  * is the one that should stay stable. The exception is a genuinely new
  * component, which belongs in components.css AND in
  * .design-sync/conventions.md — see the rule at the end of
- * 06 Design System/README.md.
+ * 05 Design System/README.md.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -35,9 +35,9 @@ const ok = (name, cond, detail = "") => {
   else { fail++; console.log(`  FAIL ${name}${detail ? "\n         " + detail : ""}`); }
 };
 
-const appHtml = readFileSync(join(ROOT, "03 App", "app", "index.html"), "utf8");
-const tokensCss = readFileSync(join(ROOT, "06 Design System", "tokens.css"), "utf8");
-const compCss = readFileSync(join(ROOT, "06 Design System", "components.css"), "utf8");
+const appHtml = readFileSync(join(ROOT, "06 Composites App", "app", "index.html"), "utf8");
+const tokensCss = readFileSync(join(ROOT, "05 Design System", "tokens.css"), "utf8");
+const compCss = readFileSync(join(ROOT, "05 Design System", "components.css"), "utf8");
 
 const styleStart = appHtml.indexOf("<style>");
 const styleEnd = appHtml.indexOf("</style>");
@@ -358,7 +358,7 @@ if (VERBOSE) {
    (`class="${x ? "a" : "b"}"`) is skipped rather than guessed at, so this
    under-reports and never cries wolf. */
 {
-  const appDir = join(ROOT, "03 App", "app");
+  const appDir = join(ROOT, "06 Composites App", "app");
   const files = readdirSync(appDir).filter(f => f.endsWith(".js"));
   const defined = new Set();
   for (const css of [appCss, compCss, readFileSync(join(appDir, "print.css"), "utf8")]) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Tests for "03 App/sheets/Sync.gs", the Apps Script that writes the app's
+/* Tests for "06 Composites App/sheets/Sync.gs", the Apps Script that writes the app's
  * part list into the Composites Master Tracker.
  *
  * This is the only code in the repo that writes into somebody else's live
@@ -118,7 +118,7 @@ globalThis.UrlFetchApp = { fetch: () => RESPONSE };
 globalThis.SpreadsheetApp = { getActive: () => globalThis.__SS };
 globalThis.ScriptApp = { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create() {} }) }) }), deleteTrigger() {} };
 
-const src = readFileSync(join(root, "03 App/sheets/Sync.gs"), "utf8");
+const src = readFileSync(join(root, "06 Composites App/sheets/Sync.gs"), "utf8");
 (0, eval)(src);
 FEED_URL = "https://firestore.googleapis.com/v1/projects/feb-composites/databases/(default)/documents/tracker/TESTTOKEN";
 

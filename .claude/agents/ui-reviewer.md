@@ -25,8 +25,8 @@ something else. Judge it that way.
 - **A directory of PNGs** written by `tools/shoot_ui.mjs`, named
   `<label>-<state>-<width>-<theme>.png`. States are `list`, `list-all`,
   `detail`, `detail-edit`; widths `1440`, `900`, `393`; themes `light`, `dark`.
-- **The code that produced them** — usually `03 App/app/<tab>.js` and the
-  `<style>` block in `03 App/app/index.html`.
+- **The code that produced them** — usually `06 Composites App/app/<tab>.js` and the
+  `<style>` block in `06 Composites App/app/index.html`.
 - Sometimes **several labelled variants at once**, to be compared.
 
 **Look at every image before you write anything.** Read the PNGs — you can see

@@ -1,0 +1,68 @@
+# Decisions
+
+Load-bearing calls for the CFD dashboard. Each one says what it decided, why,
+and what the alternative was, so a future session can reverse it on purpose
+rather than by accident.
+
+## 1. Web app on Firebase, not a downloadable desktop app (2026-09-02)
+
+Simon left this open. The brief settles it: "collaboration between lots of
+people" and "lots of data available quickly" both point at a hosted app with
+a shared backend. A downloadable app would need its own sync layer to do the
+same job, and the team already has the Firebase habit, the roster allowlist
+pattern, and the deploy routine from `06 Composites App/`.
+
+What we give up: offline use in the shop, and native file access to a Fluent
+working directory. The first is not a CFD use case (sims are run and read at
+a desk). The second is what `ingest/` is for. If a desktop wrapper is ever
+wanted, the `07 CFD PDF Viewer/` folder already shows how to put Electron
+around a static app in this repo, and it can be done later without changing
+the app.
+
+## 2. Its own Firebase project, not the composites one (2026-09-02, confirmed by Simon)
+
+Project ID `feb-cfd`, created 2026-09-02 under the same Google account as
+`feb-composites`. `.firebaserc` in this folder pins it. Reasons:
+
+- The composites app's `firestore.rules` and `storage.rules` are the thing
+  that can lock the team out of their data, and the standing deploy rule
+  keeps them off-limits unless they change. Adding a second app's collections
+  to the same rules file makes every CFD rules change a composites risk.
+- Storage volume. Contour images and CSV exports for hundreds of sims will
+  dwarf the composites app's photos. A separate project keeps the billing and
+  quota story readable.
+- Rosters differ. Aero and composites overlap but are not the same people.
+
+Cost: a second roster to maintain, and the Blaze plan on the new project,
+since Storage and Auth cannot be enabled without it. Linked 2026-09-02 to
+the same billing account as `feb-composites`. Both costs are small. The design system, the guest-view pattern, and the auth flow are
+copied over, not shared live, so the two apps can diverge.
+
+## 3. Where data lives: Firestore for what you sort by, Storage for what you look at (2026-09-02)
+
+The "lots of data, quickly" requirement is really two requirements with two
+answers.
+
+- **Firestore** holds one document per sim: identity, settings, status, and
+  the summary result numbers. Small, indexed, live-updating. This is what the
+  table, filters, and cross-sim plots read. Target: a sim document stays
+  under a few KB so listing a thousand of them is one cheap query.
+- **Cloud Storage** holds everything large: report PDFs, contour PNGs,
+  residual and monitor CSVs, and the full result tables. The sim document
+  carries the paths. These load on demand when a sim is opened, never on
+  the list view.
+- **Nothing large in Firestore, ever.** No base64 images, no arrays of ten
+  thousand residual points. If a plot needs a data series, the series is a
+  file in Storage and the app fetches and plots it client-side.
+
+Cross-sim charts (CD against mesh count, say) read only the summary numbers,
+so they stay fast at any sim count. Per-sim time series are fetched one sim
+at a time.
+
+## 4. Same repo, new top-level folder (2026-09-02)
+
+Simon's call. It sits at `08 CFD Sims Dashboard/` next to the other numbered
+folders. The repo was renamed from `feb-composites-applications` to
+`feb-engineering-apps` the same day, since it now holds more than composites.
+GitHub redirects the old URL. Release tags: composites keeps bare `vX.Y.Z`,
+the dashboard uses `cfd-vX.Y.Z` (see the root `CHANGELOG.md`).

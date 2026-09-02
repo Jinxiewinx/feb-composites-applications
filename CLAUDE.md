@@ -16,7 +16,7 @@ land or ship work himself:
   "never push to main". Branches and PRs are still fine when a change wants
   review, but landing finished, tested work on main without asking is the
   normal path. Force-pushes over real history remain off limits.
-- **Deploy Firebase hosting without asking**, from `03 App/`:
+- **Deploy Firebase hosting without asking**, from `06 Composites App/`:
   `firebase deploy --only hosting` to `feb-composites.web.app`. This includes
   deploys done purely to test or verify a change live, not only "section done"
   deploys. Deploy from a state that is pushed, so live always matches a commit

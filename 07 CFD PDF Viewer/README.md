@@ -177,7 +177,7 @@ npm test
 
 ## Notes
 
-The app uses ES modules, unlike the composites app in `03 App/`, which
+The app uses ES modules, unlike the composites app in `06 Composites App/`, which
 uses classic scripts sharing global scope. pdf.js forces it.
 
 Only one report exists so far, `DP_22.pdf`. Testing uses it against itself, where

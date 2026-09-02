@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// Access model, copied from the composites app (06 Composites App/firestore.rules) and
+// trimmed to what the CFD dashboard needs. An email allowlist ("roster"):
+// anyone can create a Firebase Auth account, nothing is readable or writable
+// until a lead has added their email to /roster. These rules are the
+// enforcement; hidden buttons in the app are only UX.
+//
+// The three data collections below are PLACEHOLDERS that prove the harness.
+// The real collections get named once the team has settled what the app
+// tracks. Adding a collection means adding a match block here AND a case in
+// tools/test_rules.mjs, in the same commit.
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function onRoster() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(db)/documents/roster/$(request.auth.token.email));
+    }
+    // A guest: Firebase anonymous auth. Read only. Gated on the sign-in
+    // provider, not on "no email", for the reason given in the composites
+    // rules: a future federated login without an email must not become a guest.
+    function guest() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    function reader() { return onRoster() || guest(); }
+    function isLead() {
+      return onRoster()
+        && get(/databases/$(db)/documents/roster/$(request.auth.token.email)).data.role == "lead";
+    }
+    // Your own record: deletable by you, because the app's Undo means delete
+    // and a member has to be able to undo their own mistake. Records that
+    // predate createdBy stay lead-only.
+    function mine() {
+      return onRoster()
+        && resource.data.keys().hasAny(['createdBy'])
+        && resource.data.createdBy == request.auth.token.email;
+    }
+
+    // sims: one document per simulation run. Summary numbers and paths only,
+    // never large arrays or images (DECISIONS.md #3).
+    match /sims/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+    // geometries: the design revisions sims are run against (a CAD export and
+    // its notes). Fewer, longer-lived, so delete stays lead-only.
+    match /geometries/{id} { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead(); }
+    // studies: a named group of sims (a sweep, a comparison). Same undo shape
+    // as sims.
+    match /studies/{id}    { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }
+
+    match /roster/{email} {
+      allow read: if reader();
+      allow create, delete: if isLead();
+      // A member edits only their own name and avatar, never their role.
+      allow update: if isLead() || (
+        onRoster()
+        && request.auth.token.email == email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avatar', 'name'])
+      );
+    }
+
+    // meta/<collection> = { next: int }: a shared id counter, increment-only.
+    match /meta/{id} {
+      allow read: if onRoster();
+      allow create: if onRoster() && request.resource.data.next is int;
+      allow update: if onRoster()
+        && request.resource.data.next is int
+        && request.resource.data.next > resource.data.next;
+      allow delete: if false;
+    }
+
+    // config/<key>: app-wide settings a lead sets (release note, defaults).
+    match /config/{id} {
+      allow read: if reader();
+      allow write: if isLead();
+    }
+  }
+}

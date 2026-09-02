@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Legibility tests for the mold drawing sheets (03 App/app/drawings.js).
+/* Legibility tests for the mold drawing sheets (06 Composites App/app/drawings.js).
 
    WHY THIS EXISTS
    ===============
@@ -28,7 +28,7 @@
 
    Text boxes come from getBoundingClientRect(), so they are what the browser
    ACTUALLY laid out in the real font — which is why the drawing font is bundled
-   (see 03 App/app/fonts/osifont-LICENSE.md). Geometry is read as segments from
+   (see 06 Composites App/app/fonts/osifont-LICENSE.md). Geometry is read as segments from
    the element attributes and mapped through the SVG's CTM, NOT as bounding
    boxes: a diagonal line's box covers a huge empty triangle and would report a
    collision with every label near it.

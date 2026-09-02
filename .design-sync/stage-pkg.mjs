@@ -1,11 +1,11 @@
-// Stage "06 Design System/" as an npm-package-shaped tree the design-sync
+// Stage "05 Design System/" as an npm-package-shaped tree the design-sync
 // converter can read.
 //
 // The FEB design system is plain CSS: tokens, components, two woff2 faces, no
 // JavaScript. The converter is built for React packages and reads its inputs
 // from a package directory under a node_modules root, so this script mirrors
 // the canonical files into that shape. Nothing here is authored — it is a copy,
-// regenerated on every run, and the files under "06 Design System/" stay the
+// regenerated on every run, and the files under "05 Design System/" stay the
 // single source of truth.
 //
 // The emitted dist entry is deliberately empty. With no PascalCase exports and
@@ -19,7 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = join(ROOT, '06 Design System');
+const SRC = join(ROOT, '05 Design System');
 const PKG_NAME = 'feb-composites-design-system';
 // A real node_modules root: the converter vendors react out of it for the
 // preview runtime even when the DS itself ships no JavaScript.
@@ -33,7 +33,7 @@ cpSync(join(SRC, 'components.css'), join(PKG, 'components.css'));
 cpSync(join(SRC, 'fonts'), join(PKG, 'fonts'), { recursive: true });
 
 // Split the @font-face rules out of tokens.css into their own file, the way
-// "06 Design System/build.mjs" already does for the style guide. The converter
+// "05 Design System/build.mjs" already does for the style guide. The converter
 // copies tokens.css into ds-bundle/tokens/ verbatim but harvests fonts from a
 // separate cfg.extraFonts stylesheet, so a face left in tokens.css would keep
 // its url('fonts/…') and resolve one directory too deep.

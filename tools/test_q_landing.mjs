@@ -32,7 +32,7 @@ function eq(got, want, msg) { ok(got === want, msg, `got ${JSON.stringify(got)},
 const chromium = await loadChromium();
 if (!chromium) { console.log(skipMessage("the scan landing page")); process.exit(0); }
 
-/* Firebase Hosting rewrites /Q/** to q.html (see 03 App/firebase.json). The
+/* Firebase Hosting rewrites /Q/** to q.html (see 06 Composites App/firebase.json). The
    static server here has no rewrites, so register the paths this file visits
    explicitly — which also documents exactly which URLs the rewrite has to
    cover. Both cases: labels carry uppercase, hand-typed codes may not. */

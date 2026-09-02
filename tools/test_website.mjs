@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Tests for the public team website in "08 Website/site".
+/* Tests for the public team website in "09 Website/site".
 
    The site is static HTML with no framework, so the things that can silently
    break are not logic bugs — they are the design system failing to load, a
@@ -9,7 +9,7 @@
    absent rather than pretending to pass.
 
    Run from SN6 Resources/:  node tools/test_website.mjs
-   (run `node "08 Website/build.mjs"` first — the test needs site/_ds/feb/) */
+   (run `node "09 Website/build.mjs"` first — the test needs site/_ds/feb/) */
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ import { existsSync } from "node:fs";
 import { loadChromium, serveDir, skipMessage } from "./lib/browser.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SITE = join(ROOT, "08 Website", "site");
+const SITE = join(ROOT, "09 Website", "site");
 const PAGES = ["index", "about", "cars", "subteams", "sponsors", "join", "news", "contact"];
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 
@@ -28,7 +28,7 @@ const ok = (name, cond, detail = "") => {
 };
 
 if (!existsSync(join(SITE, "_ds", "feb", "styles.css"))) {
-  console.error('The design system is not built. Run: node "08 Website/build.mjs"');
+  console.error('The design system is not built. Run: node "09 Website/build.mjs"');
   process.exit(1);
 }
 

@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 
-export const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "03 App", "app");
+export const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "06 Composites App", "app");
 
 const MIME = {
   ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
@@ -37,7 +37,7 @@ export function serveApp(routes) {
 }
 
 /* Same server over an arbitrary directory, for the team website in
-   "08 Website/site". A bare directory path serves its index.html so "/" works
+   "09 Website/site". A bare directory path serves its index.html so "/" works
    the way it will on Firebase Hosting. */
 export function serveDir(root, routes) {
   return new Promise(resolve => {

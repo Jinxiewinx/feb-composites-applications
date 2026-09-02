@@ -6,7 +6,7 @@ Asserts:
     an owning deliverable (a CS-xxx or the WO system).
  2. Every CS doc cites at least one PP-xx, SN5 source doc, or datasheet.
  3. Every csRef / standardsRefs in the retro work orders resolves to a real CS doc.
- 4. Every datasheet file cited in CS References tables exists in 04 Datasheets/.
+ 4. Every datasheet file cited in CS References tables exists in 03 Datasheets/.
  5. CS-INDEX rows match the actual CS source files (IDs and titles).
 
 Exit 0 = all pass; prints a report either way.
@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CS_DIR = ROOT / "02 CS Standards" / "src"
 PP = (ROOT / "01 Pain Points and Improvements" / "src" / "pain-points.md").read_text(encoding="utf-8")
-DS_DIR = ROOT / "04 Datasheets"
+DS_DIR = ROOT / "03 Datasheets"
 
 fails = []
 
@@ -49,11 +49,11 @@ for f in cs_files:
         cs_ids.add(f"CS-{m.group(1)}")
     if f.name == "CS-INDEX.md":
         continue
-    cited = bool(re.search(r"PP-\d{2}", t) or "SN5 Composites/" in t or "04 Datasheets/" in t)
+    cited = bool(re.search(r"PP-\d{2}", t) or "SN5 Composites/" in t or "03 Datasheets/" in t)
     check(cited, f"{f.name} cites at least one PP / SN5 doc / datasheet")
 
 # 3. WO refs resolve
-wos = json.loads((ROOT / "03 App" / "data" / "sn5-work-orders.json").read_text(encoding="utf-8"))
+wos = json.loads((ROOT / "06 Composites App" / "data" / "sn5-work-orders.json").read_text(encoding="utf-8"))
 bad_refs = set()
 for w in wos:
     for ref in w.get("standardsRefs", []):
@@ -69,7 +69,7 @@ check(len(wos) == 26, f"retro WO count == 26 (got {len(wos)})")
 # 4. cited datasheet files exist
 missing = set()
 for f in cs_files:
-    for m in re.finditer(r"04 Datasheets/([\w .\-'&]+\.pdf)", f.read_text(encoding="utf-8")):
+    for m in re.finditer(r"03 Datasheets/([\w .\-'&]+\.pdf)", f.read_text(encoding="utf-8")):
         if not (DS_DIR / m.group(1)).exists():
             missing.add(m.group(1))
 check(not missing, f"all cited datasheet PDFs exist {sorted(missing) if missing else ''}")

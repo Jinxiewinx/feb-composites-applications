@@ -30,7 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
+const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "06 Composites App", "app");
 
 let pass = 0, fail = 0;
 function ok(cond, msg, detail) {

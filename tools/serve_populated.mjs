@@ -8,7 +8,7 @@
  * states a screenshot sweep cannot reach, and on a phone they are where the
  * remaining risk is.
  *
- * So: a static server over 03 App/app with /fb.js swapped for the test stub and
+ * So: a static server over 06 Composites App/app with /fb.js swapped for the test stub and
  * lib/fixtures.mjs + lib/fixtures-content.mjs applied on boot. No Firebase, no
  * auth, no network, and nothing written anywhere — every save lands in an async
  * no-op, so you can break things freely and reload to reset.
@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 import { APPLY_CONTENT } from "./lib/fixtures-content.mjs";
 
-const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
+const APP = join(dirname(fileURLToPath(import.meta.url)), "..", "06 Composites App", "app");
 const i = process.argv.indexOf("--port");
 const PORT = i >= 0 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 0;
 

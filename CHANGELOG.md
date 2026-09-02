@@ -260,7 +260,7 @@ tracker into a work tracker.
 - **The Tickets tab is shelved.** The app stopped being a place to track
   projects. Every existing ticket is still in Firestore and still opens from a
   link or a chip — it is only off the sidebar. See
-  [`03 App/app/SHELVED.md`](03%20App/app/SHELVED.md) for what was paused and how
+  [`06 Composites App/app/SHELVED.md`](06%20Composites%20App/app/SHELVED.md) for what was paused and how
   to bring it back.
 - **Work Orders filter on open issues**, so "which runs are held up" is one chip.
 - **Creating or editing a work order opens on Details.** It used to open below a

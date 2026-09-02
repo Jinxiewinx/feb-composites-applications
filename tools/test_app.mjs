@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Functional tests for the FEB composites app (03 App/app/*.js).
+/* Functional tests for the FEB composites app (06 Composites App/app/*.js).
    Loads the classic-script app files into a DOM stub with a fake window.fb, so
    app logic across all tabs is tested without a browser or Firebase. Rules
    enforcement is tested separately against the emulator (test_wo_rules.mjs).
@@ -8,7 +8,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "03 App", "app");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "06 Composites App", "app");
 const woSeed = JSON.parse(readFileSync(join(root, "sn5-work-orders.json"), "utf8"));
 /* The fixtures, so this suite can assert that they satisfy the filters the app
    applies to them. Until now these two never met, and that gap IS the
@@ -141,7 +141,7 @@ globalThis.fb = {
 /* ---------- load the app (classic scripts, one vm.Script each) ----------
    loadApp() reads the file list and order from index.html's own <script> tags
    and runs each file as its own script carrying its real path. That is what
-   lets --experimental-test-coverage attribute lines to "03 App/app/core.js"
+   lets --experimental-test-coverage attribute lines to "06 Composites App/app/core.js"
    rather than to an anonymous eval, and it is why the two regex allowlists
    that used to rewrite ~70 top-level const/let into implicit globals are gone:
    runInThisContext puts them in the global lexical scope, where the bare names
@@ -1010,7 +1010,7 @@ await t("one person holding both roles is one chip, not two identical faces", ()
    tools/test_safearea.mjs, which can measure; this asserts the wiring, because
    the DOM stub computes no styles. */
 await t("the undo bar is sticky, and clears the topbar rather than hiding under it", () => {
-  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const css = readFileSync(join(root, "..", "..", "06 Composites App", "app", "index.html"), "utf8");
   const rule = (css.match(/\.undobar \{[^}]*\}/) || [""])[0];
   assert(/position: sticky/.test(rule), "sticky: " + rule);
   assert(/z-index: 4/.test(rule), "under the topbar (5), over the panes: " + rule);
@@ -1018,7 +1018,7 @@ await t("the undo bar is sticky, and clears the topbar rather than hiding under 
   assert(!/\.undobar \{[^}]*top: 0/.test(css), "and never pinned at 0, which put it behind the topbar");
 });
 await t("the season tiles are pinned above an open part, but not on a phone", () => {
-  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const css = readFileSync(join(root, "..", "..", "06 Composites App", "app", "index.html"), "utf8");
   const resp = css.slice(css.indexOf("@media (max-width: 640px)"));
   assert(/\.pstats\.compact \{ display: none; \}/.test(resp),
     "≤640 drops them — the index is one tap away and already carries them");
@@ -8057,7 +8057,7 @@ await t("MOBILE the saved sheet is a standalone document, without the app's chro
 await t("MOBILE the screen fit is reset for paper, and torn down on close", () => {
   // The zoom is a screen aid for a small display. Left applied it would print a
   // Letter traveler at half size in the corner of the page.
-  const printCss = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const printCss = readFileSync(join(root, "..", "..", "06 Composites App", "app", "index.html"), "utf8");
   assert(/#printroot \.ws-page \{[^}]*zoom: 1 !important/.test(printCss),
     "@media print forces zoom back to 1");
   assert(/removeProperty\("--pv-zoom"\)/.test(closePrintPreview.toString()),
@@ -8816,7 +8816,7 @@ await t("a jump into a folded section opens it before scrolling", () => {
   assert(/class="card wosec">\s*<button[^>]*id="wo-overview"/.test(main.innerHTML), "and the pane re-rendered with it open");
 });
 await t("the folded-section print rule exists — paper always gets the whole record", () => {
-  const css = readFileSync(join(root, "..", "..", "03 App", "app", "index.html"), "utf8");
+  const css = readFileSync(join(root, "..", "..", "06 Composites App", "app", "index.html"), "utf8");
   const print = css.slice(css.indexOf("@media print"));
   assert(print.includes(".wosec-body { display: block !important; }"),
     "the print block force-shows .wosec-body; without it a folded section vanishes from a browser print");

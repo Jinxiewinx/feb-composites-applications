@@ -13,13 +13,13 @@ Three running things and a body of documents.
 `feb-composites`: Firestore database, Storage bucket, Hosting. The team signs
 in with email and password; nobody can see anything until a lead adds their
 email to the roster (Roster button in the header). You are that lead. The
-manual is `03 App/app/README.md`.
+manual is `06 Composites App/app/README.md`.
 
 **The CFD viewer**, `07 CFD PDF Viewer/`. Nothing hosted; it runs locally or
 as a desktop build people pass around. Nothing to maintain unless Fluent
 changes its export format, and `npm test` in that folder tells you if it did.
 
-**The website**, `08 Website/`. Built but never deployed. Before it ships it
+**The website**, `09 Website/`. Built but never deployed. Before it ships it
 needs photos, a real application form and someone checking the copy; its
 README lists all of it.
 
@@ -74,7 +74,7 @@ watch.
 
 ## Changing things
 
-**The app's code** lives in `03 App/app/`, plain JS with no build step. The
+**The app's code** lives in `06 Composites App/app/`, plain JS with no build step. The
 workflow that keeps it safe:
 
 1. Make the change, then run the tests from the repo root. Minimum
@@ -84,7 +84,7 @@ workflow that keeps it safe:
 2. Commit and push first, then deploy:
 
    ```bash
-   cd "03 App" && firebase deploy --only hosting
+   cd "06 Composites App" && firebase deploy --only hosting
    ```
 
    Push first so that whatever is live always matches a commit, which makes a
@@ -108,11 +108,11 @@ themselves changed, test them against the emulator first
 (`tools/test_wo_rules.mjs`, `test_storage_rules.mjs`, `test_pub_rules.mjs`),
 and say so in the commit.
 
-**Cure hold numbers** live in `03 App/app/resins.js`, one file, one entry per
+**Cure hold numbers** live in `06 Composites App/app/resins.js`, one file, one entry per
 resin system, each carrying the datasheet figure, the hold FEB actually
 enforces, and who signed it off. A test refuses a hold below its datasheet
 figure or without a name on it. Changing a hold is editing that file and
-deploying; adding a resin means having its TDS in `04 Datasheets/` first.
+deploying; adding a resin means having its TDS in `03 Datasheets/` first.
 
 **The standards** are edited in `02 CS Standards/src/` (the markdown is
 canonical; the .docx is built). Then:
@@ -146,7 +146,7 @@ tamper-proof: any roster member can edit any record, and the monthly Drive
 exports are the audit trail. If a record looks wrong, that is a conversation
 with a person, not a software problem.
 
-The offline `03 App/work-orders.html` opens any exported JSON forever, with
+The offline `06 Composites App/work-orders.html` opens any exported JSON forever, with
 nothing installed. It is the disaster-recovery path and the archive viewer.
 Don't delete it, and don't let it become a second source of truth.
 

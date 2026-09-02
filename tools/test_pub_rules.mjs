@@ -17,7 +17,7 @@
  * spread a whole record into the projection would otherwise publish layup
  * stacks and people's names with nothing to stop it.
  *
- * Run from "03 App/":
+ * Run from "06 Composites App/":
  *   firebase emulators:exec --only firestore --project demo-feb-work-orders \
  *     "node '../tools/test_pub_rules.mjs'"
  */

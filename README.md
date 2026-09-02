@@ -11,16 +11,16 @@ for everything in here.
 
 | Folder | Contents | Start with |
 |---|---|---|
-| `03 App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
-| `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
-| `09 CFD Sims Dashboard/` | The CFD sims dashboard, started Sept 2026 on its own Firebase project (`feb-cfd`). Infrastructure, rules and tests are in place; the app itself waits on the team's brief | `README.md`, `DECISIONS.md` |
 | `00 Agent/` | The "simon" reviewer-agent definition. Archival copy; the live one is at `composites_programs/.claude/agents/simon.md` | |
 | `01 Pain Points and Improvements/` | The SN5 season review: what went well, 10 major problems with root-cause analyses, traceability to the fixes | the .docx |
 | `02 CS Standards/` | 14 numbered composites standards (CS-000 to CS-013). The markdown in `src/` is the canonical text; the .docx files are built output. Figures are SVG in `src/figures/` with rendered PNGs beside them | `CS-INDEX` |
-| `04 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
-| `05 Printables/` | Shop reference sheets meant to be printed: resin ratios, flowcharts, checklists | `README.md` |
-| `06 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
-| `08 Website/` | The public team website, built on the design system. Not deployed; its README has the state of it | `README.md` |
+| `03 Datasheets/` | 25 manufacturer TDS/SDS PDFs for the products we actually use | `INDEX.md` |
+| `04 Printables/` | Shop reference sheets meant to be printed: resin ratios, flowcharts, checklists | `README.md` |
+| `05 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
+| `06 Composites App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
+| `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
+| `08 CFD Sims Dashboard/` | The CFD sims dashboard, started Sept 2026 on its own Firebase project (`feb-cfd`). Infrastructure, rules and tests are in place; the app itself waits on the team's brief | `README.md`, `DECISIONS.md` |
+| `09 Website/` | The public team website, built on the design system. Not deployed; its README has the state of it | `README.md` |
 | `tools/` | Everything that builds and checks the rest: the docx builder, the generators, the servers, and 19 test suites | `README.md` |
 
 ## Getting started
@@ -45,7 +45,9 @@ and access is controlled by the roster inside it.
 
 The repo was renamed from `feb-composites-applications` to
 `feb-engineering-apps` on 2026-09-02, when the CFD dashboard joined it. The
-old URL redirects. The two apps are separate Firebase projects on purpose:
+old URL redirects. The folders were renumbered the same day: reference
+material first, the shared design system, then the four apps together, with
+`03 App/` becoming `06 Composites App/`. The two apps are separate Firebase projects on purpose:
 `feb-composites` and `feb-cfd`, each deployed from its own folder, so a
 deploy of one can never touch the other's rules or data.
 
@@ -55,13 +57,13 @@ Anyone can open it and press **View as guest**: the whole app, read-only, with n
 account and nothing to ask a lead for. Editing needs a name, because every
 buy-off carries one.
 
-`03 App/app/` is the team's shared workspace for a season, running on Firebase
+`06 Composites App/app/` is the team's shared workspace for a season, running on Firebase
 with an email allowlist for the roster. It updates live for everyone and works
 on phones and tablets as well as desktop. The full manual lives in
-`03 App/app/README.md` and the architecture in `03 App/app/DESIGN-NOTES.md`;
+`06 Composites App/app/README.md` and the architecture in `06 Composites App/app/DESIGN-NOTES.md`;
 this is the short tour.
 
-![Dashboard: the pit board — four lanes, none of which can render empty](03%20App/design/dashboard-mockup-20260827.png)
+![Dashboard: the pit board — four lanes, none of which can render empty](06%20Composites%20App/design/dashboard-mockup-20260827.png)
 
 Twelve tabs, grouped in the sidebar by who is asking:
 
@@ -107,9 +109,9 @@ Twelve tabs, grouped in the sidebar by who is asking:
   step refuses an untrained signer unless a lead overrides with a logged
   reason.
 
-![Inventory: the storage map, one card per shelf with contents and warnings](03%20App/design/inventory-mockup-20260825.png)
+![Inventory: the storage map, one card per shelf with contents and warnings](06%20Composites%20App/design/inventory-mockup-20260825.png)
 
-![Parts: the index of every part beside the selected one, each stage a row of steps](03%20App/design/parts-mockup-20260826.png)
+![Parts: the index of every part beside the selected one, each stage a row of steps](06%20Composites%20App/design/parts-mockup-20260826.png)
 
 Cross-links are everywhere; click a chip to jump to the related record. ⌘K
 searches everything. Light and dark themes follow the system setting, and
@@ -130,11 +132,11 @@ cure buy-off captures which fabric roll and which resin and hardener lots
 went in, and "I don't know" is a recorded answer. The bulk builder prints
 Avery sheets with a 100 mm calibration bar, because browsers silently scale.
 
-![Labels: a printed Avery sheet with IDs, key facts and QR codes](03%20App/design/labels-mockup-20260825.png)
+![Labels: a printed Avery sheet with IDs, key facts and QR codes](06%20Composites%20App/design/labels-mockup-20260825.png)
 
-![Scanning: the public nameplate a phone camera opens, no sign-in](03%20App/design/scan-mockup-20260825.png)
+![Scanning: the public nameplate a phone camera opens, no sign-in](06%20Composites%20App/design/scan-mockup-20260825.png)
 
-The old single-file `03 App/work-orders.html` stays as an offline backup and
+The old single-file `06 Composites App/work-orders.html` stays as an offline backup and
 archive viewer. It opens any exported JSON with no server at all. Don't delete
 it.
 
@@ -156,7 +158,7 @@ code; its `README.md` has a two-command way to try it on the sample reports.
 from: 10 root-caused SN5 problems, each mapped to a numbered standard that
 fixes it. `CS-INDEX` is the lookup and `python3 tools/check_traceability.py`
 audits the mapping. Every quantitative claim cites a datasheet in
-`04 Datasheets/` or a recorded team measurement, and every standard ships
+`03 Datasheets/` or a recorded team measurement, and every standard ships
 "Draft, pending Lead signature" until someone signs the approval table.
 
 **Datasheets and Printables** (`04`, `05`) are reference material: manufacturer
@@ -204,6 +206,6 @@ can write with `--shots`; the tests measure, but only eyes catch "unreadable".
 After a UI change, `node tools/make_mockups.mjs` regenerates the annotated
 screenshots in this and the other READMEs.
 
-One quirk worth knowing: the git root is this folder rather than `03 App/`,
+One quirk worth knowing: the git root is this folder rather than `06 Composites App/`,
 because the scripts in `tools/` resolve their paths relative to here.
-`firebase deploy` still has to run from inside `03 App/`.
+`firebase deploy` still has to run from inside `06 Composites App/`.

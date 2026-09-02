@@ -72,7 +72,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const APP = join(ROOT, "03 App");
+const APP = join(ROOT, "06 Composites App");
 const CORE = join(APP, "app", "core.js");
 const CHANGELOG = join(ROOT, "CHANGELOG.md");
 const HOST = "https://feb-composites.web.app";
@@ -109,7 +109,7 @@ if (dirty && !DRY) die("The tree is dirty. Commit or stash first — a release m
 /* ---- 2. the previous tag ------------------------------------------------ */
 let prev = null;
 /* --match keeps this to the composites app's bare vX.Y.Z tags. The CFD
-   dashboard (09 CFD Sims Dashboard/) shares the repo and tags as cfd-vX.Y.Z;
+   dashboard (08 CFD Sims Dashboard/) shares the repo and tags as cfd-vX.Y.Z;
    without the match, a cfd tag sitting nearer HEAD would be taken as the
    previous composites release and the changelog would start from it. */
 try { prev = run("git", ["describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"]).trim(); } catch { /* no tags yet */ }
@@ -164,7 +164,7 @@ say(`\n  core.js: v${from} → v${version}`);
    release's copy and would go out describing the wrong version. */
 if (prev) {
   let prevCore = "";
-  try { prevCore = run("git", ["show", `${prev}:03 App/app/core.js`]); } catch { /* file is new */ }
+  try { prevCore = run("git", ["show", `${prev}:06 Composites App/app/core.js`]); } catch { /* file is new */ }
   const prevNotes = (prevCore.match(nRe) || [])[0];
   const nowNotes = (core.match(nRe) || [])[0];
   if (prevNotes && nowNotes && prevNotes === nowNotes) {
@@ -275,7 +275,7 @@ for (const s of SUITES) {
 /* ---- 7. commit, tag, push ---------------------------------------------- */
 const msg = `Release v${version}\n\n` + subjects.map(l => `- ${l}`).join("\n") + "\n";
 act("commit, tag and push", () => {
-  run("git", ["add", "CHANGELOG.md", "03 App/app/core.js"]);
+  run("git", ["add", "CHANGELOG.md", "06 Composites App/app/core.js"]);
   run("git", ["commit", "-m", msg]);
   run("git", ["tag", "-a", "v" + version, "-m", msg]);
   // HTTPS, never SSH: the machine's SSH key authenticates as the wrong account

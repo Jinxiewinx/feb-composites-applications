@@ -33,7 +33,7 @@ import { APPLY_FIXTURES } from "./lib/fixtures.mjs";
 import { RELEASE_SHOTS } from "./lib/release-shots.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-const APP = join(REPO, "03 App", "app");
+const APP = join(REPO, "06 Composites App", "app");
 
 function arg(name, dflt) {
   const i = process.argv.indexOf("--" + name);
@@ -87,7 +87,7 @@ if (!chromium) {
 
 const browser = await chromium.launch();
 const server = await serveApp({});
-const outDir = join(REPO, "03 App", "design");
+const outDir = join(REPO, "06 Composites App", "design");
 await mkdir(outDir, { recursive: true });
 const written = [];
 const problems = [];

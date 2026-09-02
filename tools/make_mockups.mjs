@@ -12,10 +12,10 @@
  *   node tools/make_mockups.mjs --date 20260803      # override the date stamp
  *
  * Output goes straight into the folders the READMEs reference:
- *   03 App/design/<id>-mockup-<date>.png     the app tour
+ *   06 Composites App/design/<id>-mockup-<date>.png     the app tour
  *   07 CFD PDF Viewer/design/…               the viewer
- *   08 Website/design/…                      the public site
- *   06 Design System/…                       the style guide
+ *   09 Website/design/…                      the public site
+ *   05 Design System/…                       the style guide
  *
  * It is a camera plus a picture frame, not a test — it asserts nothing beyond
  * "the seed loaded". Needs Playwright, same as shoot_ui.mjs, and skips loudly
@@ -174,16 +174,16 @@ const SHOTS = [
     note: "Mesh counts, solver settings, iterations and residuals from every open report in one table, changed values highlighted. Often answers the question before you look at a single contour." },
 
   { id: "website-home", kind: "site", badge: 2, vh: 1100,
-    dir: "08 Website/design",
+    dir: "09 Website/design",
     title: "The public site · sponsors and recruits",
     note: "Built on the same design system as the app, plain HTML and CSS. Photos are placeholders and the application form is not wired yet; the README has the list." },
 
   { id: "styleguide-light", kind: "guide", badge: 2, vh: 1300, theme: "light",
-    dir: "06 Design System",
+    dir: "05 Design System",
     title: "The design system · light",
     note: "Color, type and spacing tokens plus the component library, extracted from the app so the next FEB tool starts on-brand. tools/test_designsystem.mjs keeps this and the app from drifting apart." },
   { id: "styleguide-dark", kind: "guide", badge: 3, vh: 1300, theme: "dark",
-    dir: "06 Design System",
+    dir: "05 Design System",
     title: "The design system · dark",
     note: "The same tokens re-pointed for dark. Every surface, chip and status color changes with the theme; printing always comes out black on white regardless." },
 ];
@@ -290,8 +290,8 @@ async function portFor(kind) {
     app: null, // serveApp
     q: null,
     cfd: join(REPO, "07 CFD PDF Viewer", "app"),
-    site: join(REPO, "08 Website", "site"),
-    guide: join(REPO, "06 Design System"),
+    site: join(REPO, "09 Website", "site"),
+    guide: join(REPO, "05 Design System"),
   };
   const key = kind === "q" ? "app" : kind;
   if (!servers[key]) {
@@ -389,7 +389,7 @@ for (const shot of shots) {
   });
   const fpage = await fctx.newPage();
   await fpage.setContent(frame, { waitUntil: "load" });
-  const outDir = join(REPO, shot.dir || "03 App/design");
+  const outDir = join(REPO, shot.dir || "06 Composites App/design");
   await mkdir(outDir, { recursive: true });
   const file = join(outDir, `${shot.id}-mockup-${DATE}.png`);
   await fpage.screenshot({ path: file, fullPage: true });

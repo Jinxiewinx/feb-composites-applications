@@ -5,7 +5,7 @@ Repo-specific gotchas for future syncs. Read this before re-running.
 ## Shape: tokens-only, off the standard path
 
 `/design-sync` is built for React component libraries. This design system is plain
-CSS: `06 Design System/{tokens.css, components.css, fonts/}`, no JavaScript, no
+CSS: `05 Design System/{tokens.css, components.css, fonts/}`, no JavaScript, no
 `dist/`, no React anywhere in the repo. The converter has a first-class
 tokens-only path (`[ZERO_MATCH] no component exports — treating as tokens-only
 DS`) that it takes when there are no PascalCase exports and `cfg.cssEntry` is
@@ -25,7 +25,7 @@ Consequences, all expected:
 `stage-pkg.mjs` mirrors the canonical CSS into an npm-package-shaped tree under
 `.design-sync/.cache/node_modules/feb-composites-design-system/`, because the
 converter reads its inputs from a package directory under a node_modules root.
-It is a copy, regenerated every run. `06 Design System/` stays the source of
+It is a copy, regenerated every run. `05 Design System/` stays the source of
 truth. `cfg.buildCmd` points at it, so a re-sync picks it up automatically.
 
 Two things the staging script has to do that are not obvious:
@@ -39,7 +39,7 @@ Two things the staging script has to do that are not obvious:
   into `ds-bundle/tokens/` but harvests fonts only from the `cssEntry` and
   `extraFonts` stylesheets. A face left in `tokens.css` keeps its
   `url('fonts/…')` and resolves one directory too deep, so both brand faces
-  silently fall back to system fonts. `06 Design System/build.mjs` already does
+  silently fall back to system fonts. `05 Design System/build.mjs` already does
   the same split for the style guide.
 
 `cfg.extraFonts` paths resolve relative to the staged package, not the git root.
@@ -78,9 +78,9 @@ rather than hand-editing it to numbers you would be guessing at.
   named in it must appear in `_ds_bundle.css` / `tokens/tokens.css`), but
   nothing detects a class added to `components.css` and never documented. After
   editing `components.css`, diff its selector list against the header's table.
-- **`06 Design System/README.md` says the app is still the source of truth for
+- **`05 Design System/README.md` says the app is still the source of truth for
   anything not yet lifted into `components.css`.** Styles still living in
-  `03 App/app/index.html` are invisible to this sync. If the app grows a pattern
+  `06 Composites App/app/index.html` are invisible to this sync. If the app grows a pattern
   worth reusing, lift it into `components.css` first, then re-sync.
 - **If the team ever builds a React frontend**, the whole calculus changes: real
   components could ship as importable exports with preview cards, and this
@@ -89,7 +89,7 @@ rather than hand-editing it to numbers you would be guessing at.
 - The staged package pins `version: 1.0.0`. It is not read from anything real,
   so it never changes and never invalidates anything.
 - **Documented but unstyled is invisible.** The header validator checks that
-  every class it names exists in the built CSS, and `06 Design System/README.md`
+  every class it names exists in the built CSS, and `05 Design System/README.md`
   tells the design agent "a class not listed here has no styling behind it" —
   which makes the converse trap silent: listed, but equally unstyled. The
   2026-08-25 sync found 25 such classes (Receiving, Export, Storage map, Search

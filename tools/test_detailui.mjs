@@ -408,7 +408,7 @@ const report = [];
 
 let PHOTO = null;
 async function photo() {
-  if (!PHOTO) PHOTO = await readFile(new URL("../03 App/app/icon-192.png", import.meta.url));
+  if (!PHOTO) PHOTO = await readFile(new URL("../06 Composites App/app/icon-192.png", import.meta.url));
   return PHOTO;
 }
 
