@@ -193,6 +193,13 @@ tests) the shape is `CA` + sixteen `0` + six hex, and only those six move.
 The linear formats stay until someone walks the shelves — one sheet of tags
 is not a survey.
 
+**Reload banner fixed and live** (2026-09-02, b2217b2): v4.2.0 went out
+before anyone pressed Announce, so config/release still said 4.1.1 and every
+screen showed "v4.1.1 is out, you are running v4.2.0, reload". The banner now
+fires only when the announced version is numerically NEWER than the running
+one (`versionNewer()` in core.js). Not a release cut. **Still Simon's press:
+⋯ → Announce this release, standing in v4.2.0.**
+
 **v4.2.0 IS PUSHED AND LIVE** (2026-08-29) — Budget's two status tracks and
 the Charged to field, on Simon's ask. The one thing not to re-litigate: `status`
 and `reimb` are two fields, not one enum, because "Ordered" was a fact about
