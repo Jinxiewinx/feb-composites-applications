@@ -17,7 +17,7 @@
      - the Panels rows come from matchPanels (59 of them);
      - the difference view on the same file twice reads exactly 0.00%;
      - Save view hands the current query to the library;
-     - the theme toggle flips data-theme and the viewer canvas stays dark;
+     - the app is always dark and the sidebar is always the icon rail;
      - a local file picked through the input is opened AND handed to the
        library upload with the indexer's counts and numbers, and a thumbnail.
 
@@ -97,13 +97,14 @@ try {
   await page.goto(`http://127.0.0.1:${port}/app/`);
   await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2 && document.querySelector(".rcard"), null, { timeout: 15000 });
   t("Dashboard is the landing page", await page.evaluate(() => window.CFD.S.page) === "dashboard");
-  t("sidebar carries the mark and both tabs", await page.evaluate(() => !!document.querySelector(".sb-brand .feb-mark") && document.querySelectorAll(".sb-item").length === 2));
+  t("sidebar is the icon rail: mark and two icons, no labels, no toggle", await page.evaluate(() => !!document.querySelector(".sb-brand .feb-mark") && document.querySelectorAll(".sb-item").length === 2 && !document.querySelector(".sb-label") && !document.querySelector(".sb-toggle") && document.querySelector("#app > .sidebar").getBoundingClientRect().width === 56));
+  t("always dark, no theme toggle", await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" && !document.querySelector(".topbar .icon-btn[title*='theme']")));
   t("four stat tiles, latest DP first", await page.evaluate(() => document.querySelectorAll(".dstats .stat-tile").length === 4 && document.querySelector(".dstats .stat-label").textContent.includes("DP 23")));
   t("downforce tile shows positive newtons", (await page.evaluate(() => document.querySelector(".dstats .bignum").textContent)).trim() === "501 N");
   t("two trend charts with a point per report", await page.evaluate(() => document.querySelectorAll("svg.trend").length === 2 && document.querySelectorAll("svg.trend .dot").length === 4));
   t("saved view listed", await page.evaluate(() => document.querySelectorAll(".vrow").length === 1 && document.querySelector(".vrow b").textContent === "22 vs 23 swipe"));
   t("a card per report with thumbnail, DP pill and numbers", await page.evaluate(() => document.querySelectorAll(".rcard").length === 2 && document.querySelectorAll(".rcard img.rthumb").length === 2 && document.querySelector(".rcard .pill").textContent === "DP 23"));
-  if (process.env.SHOTS) { await page.screenshot({ path: process.env.SHOTS + "/dashboard-light.png" }); }
+  if (process.env.SHOTS) { await page.screenshot({ path: process.env.SHOTS + "/dashboard.png" }); }
   t("note on the card, prompt link where there is none", await page.evaluate(() => [...document.querySelectorAll(".rcard .rnote")].map(n => n.textContent.trim())).then(a => a.includes("baseline") && a.some(x => x.startsWith("Add a note"))));
 
   // Thumbnail opens the lightbox.
@@ -112,18 +113,12 @@ try {
   await page.keyboard.press("Escape");
   t("Escape closes it", await page.evaluate(() => !document.querySelector("#lightbox.open")));
 
-  // Theme toggle flips the shell, not the viewer.
-  const before = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
-  await page.click(".topbar .icon-btn[title*='theme']");
-  const after = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
-  t("theme toggle flips data-theme", before !== after, `${before} -> ${after}`);
-  if (process.env.SHOTS) { await page.screenshot({ path: process.env.SHOTS + "/dashboard-dark.png" }); }
 
   // A card's Open lands in the viewer with that report open.
   await page.click(".rcard .primary");
   await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 1 && !window.CFD.S.docs[0].loading && window.CFD.S.docs[0].index, null, { timeout: 60000 });
   t("card Open lands in the viewer with the report open", await page.evaluate(() => window.CFD.S.docs[0].reportId === "RPT-BBBBBBBB"));
-  t("viewer canvas is dark whatever the theme", await page.evaluate(() => getComputedStyle(document.querySelector(".viewer")).backgroundColor) === "rgb(11, 15, 22)");
+  t("viewer canvas is dark", await page.evaluate(() => getComputedStyle(document.querySelector(".viewer")).backgroundColor) === "rgb(11, 15, 22)");
   t("URL names the page and the report", (await page.url()).includes("p=viewer") && (await page.url()).includes("open=RPT-BBBBBBBB"), await page.url());
 
   /* ---- the viewer from a URL ---- */

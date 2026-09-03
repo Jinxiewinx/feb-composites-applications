@@ -47,7 +47,7 @@ Check; neither needs a login.
 
 | Path | What it is |
 |---|---|
-| `app/` | The app. `core.js` routes between Dashboard and Viewer and holds the state; `shell.js` is the composites-style sidebar, topbar, theme and lightbox; `dashboard.js` and `chart.js` the landing page; `extract.js` reads numbers out of a report's text; `library.js` is the only file that talks to Firebase; the rest are the viewer's views ported from `07`. `vendor/` is pdf.js. `ds/` is copied from `05 Design System/` and a test keeps it byte-identical |
+| `app/` | The app. `core.js` routes between Dashboard and Viewer and holds the state; `shell.js` is the composites-style icon rail, topbar and lightbox (always dark, no toggles); `dashboard.js` and `chart.js` the landing page; `extract.js` reads numbers out of a report's text; `library.js` is the only file that talks to Firebase; the rest are the viewer's views ported from `07`. `vendor/` is pdf.js. `ds/` is copied from `05 Design System/` and a test keeps it byte-identical |
 | `firebase.json`, `.firebaserc` | Pins `feb-cfd`. Hosting root `app/`. Emulator ports offset from the composites app's so both can run |
 | `firestore.rules` | `reports` and `views` are open with fixed record shapes; a report's dp, results, meta and thumb may be written by any opener (backfill). The other collections keep the composites roster model, unused until something needs sign-in |
 | `storage.rules` | `reports/<id>/report.pdf` (PDF, under 60 MB) and `reports/<id>/thumb.png` (PNG, under 2 MB): public read and write. Other trees keep their roster gating |

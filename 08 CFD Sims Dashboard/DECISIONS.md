@@ -67,11 +67,14 @@ folders. The repo was renamed from `feb-composites-applications` to
 GitHub redirects the old URL. Release tags: composites keeps bare `vX.Y.Z`,
 the dashboard uses `cfd-vX.Y.Z` (see the root `CHANGELOG.md`).
 
-## 5. The viewer keeps its own dark tokens inside the composites shell (2026-09-03)
+## 5. Always dark, always the icon rail, the viewer's own tokens inside the shell (2026-09-03)
 
-Simon asked for the app to match the composites app: its sidebar, topbar,
-cards and light/dark toggle. The viewer's page canvas does not follow the
-toggle. Contour plots are vivid rainbow images and a bright surround shifts
+Simon asked for the app to match the composites app: its sidebar, topbar
+and cards. After seeing it with a full sidebar and a theme toggle he chose
+the opposite of both: the sidebar is always the 56 px icon rail and the app
+is always dark, with no toggles, so the viewer gets the width and the
+Dashboard reads like the viewer. The viewer's page canvas is dark for a
+reason of its own. Contour plots are vivid rainbow images and a bright surround shifts
 how the colour scales read, which is why Fluent, ParaView and EnSight all
 use dark chrome. So `styles.css` nests every viewer rule under `.viewer`
 with the design system's dark values as that subtree's own tokens, and the

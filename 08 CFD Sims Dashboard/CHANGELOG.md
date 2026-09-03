@@ -7,6 +7,12 @@ relearn navigation, Minor for a new capability, Patch for fixes and copy.
 
 ---
 
+## cfd-v0.2.1 — 2026-09-03
+
+- The sidebar is always the icon rail and the app is always dark; both
+  toggles are gone (Simon's call after seeing 0.2.0).
+- The Dashboard fills the full width beside the rail.
+
 ## cfd-v0.2.0 — 2026-09-03
 
 A Dashboard, saved views, and the composites app's shell.

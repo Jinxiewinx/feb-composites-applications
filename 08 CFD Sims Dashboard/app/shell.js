@@ -50,48 +50,18 @@ export const TABS = [
   { id: "viewer", label: "Viewer", ic: "viewer", tip: "Open reports side by side: pages, plots, overlays, numbers" },
 ];
 
-/* ---------- theme (light / dark) ----------
-   The no-FOUC <head> script set data-theme before paint; this flips and
-   persists it. The viewer keeps its own dark tokens under .viewer, so the
-   toggle never reaches the page canvas. */
-export function currentTheme() {
-  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-}
-export function applyTheme(t) {
-  document.documentElement.setAttribute("data-theme", t);
-  try { localStorage.setItem("cfd-theme", t); } catch (e) { /* private mode */ }
-}
-export function themeToggleBtn() {
-  const dark = currentTheme() === "dark";
-  const label = dark ? "Switch to light theme" : "Switch to dark theme";
-  return `<button class="icon-btn" title="${label}" aria-label="${label}" onclick="cfd.toggleTheme()">${icon(dark ? "sun" : "moon", 18)}</button>`;
-}
-
-/* ---------- sidebar rail ---------- */
-export function railOn() {
-  try { return localStorage.getItem("cfd-rail") === "1"; } catch (e) { return false; }
-}
-export function setRail(on) {
-  try { localStorage.setItem("cfd-rail", on ? "1" : "0"); } catch (e) { /* private mode */ }
-  document.documentElement.classList.toggle("rail", on);
-  // The content pane changed width without the window changing size; the
-  // viewer's columns measure themselves on resize.
-  window.dispatchEvent(new Event("resize"));
-}
+/* No theme toggle and no rail toggle: the app is always dark and the sidebar
+   is always the icon rail (Simon, 2026-09-03). index.html sets both before
+   first paint. */
 
 export function renderSidebar(page) {
-  const rail = railOn();
   document.getElementById("sidebar").innerHTML = `
-    <div class="sb-brand" onclick="cfd.setTab('dashboard')" title="Home">${cfdMark(26)}<span class="sb-brand-txt">FEB <span>CFD</span></span></div>
+    <div class="sb-brand" onclick="cfd.setTab('dashboard')" title="FEB CFD · Dashboard">${cfdMark(28)}</div>
     <div class="sb-nav">
-      ${TABS.map(t => `<button class="sb-item ${page === t.id ? "active" : ""}" title="${esc(t.tip)}" onclick="cfd.setTab('${t.id}')">
-        <span class="ic">${icon(t.ic, 19)}</span><span class="sb-label">${t.label}</span>
+      ${TABS.map(t => `<button class="sb-item ${page === t.id ? "active" : ""}" title="${esc(t.label)} · ${esc(t.tip)}" aria-label="${esc(t.label)}" onclick="cfd.setTab('${t.id}')">
+        <span class="ic">${icon(t.ic, 20)}</span>
       </button>`).join("")}
-    </div>
-    <button class="sb-toggle" title="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}"
-      aria-label="${rail ? "Expand the sidebar" : "Collapse the sidebar to icons"}" aria-pressed="${rail}" onclick="cfd.toggleRail()">
-      <span class="ic">${icon(rail ? "chevronRight" : "chevronLeft", 18)}</span><span class="sb-label">Collapse</span>
-    </button>`;
+    </div>`;
 }
 
 export function renderTopbar(page, version, extra = "") {
@@ -101,7 +71,6 @@ export function renderTopbar(page, version, extra = "") {
     <div class="actions">
       <span class="muted tny tb-ver">v${esc(version)}</span>
       ${extra}
-      ${themeToggleBtn()}
       <button class="primary" onclick="cfd.pick()">${icon("upload", 16)} Open PDFs</button>
     </div>`;
 }

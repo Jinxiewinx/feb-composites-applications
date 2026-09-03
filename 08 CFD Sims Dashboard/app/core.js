@@ -34,7 +34,7 @@ import { $, el, esc, toast, fmtMB, shortDate } from "./util.js";
 export { $, el, esc, toast };
 
 /* Bumped by hand at release time; tags are cfd-vX.Y.Z (see README). */
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.2.1";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.mjs", import.meta.url).href;
 
@@ -621,8 +621,6 @@ addEventListener("resize", () => { if (S.docs.length && inViewer()) render(); })
 window.cfd = {
   setTab, pick, saveView, openView, renameView, deleteView,
   openInViewer, renameReport, editNote, deleteReport, reportMenu,
-  toggleTheme() { shell.applyTheme(shell.currentTheme() === "dark" ? "light" : "dark"); shell.renderTopbar(S.page, APP_VERSION); },
-  toggleRail() { shell.setRail(!shell.railOn()); shell.renderSidebar(S.page); },
   closeLightbox: shell.closeLightbox, lbStep: shell.lbStep,
 };
 

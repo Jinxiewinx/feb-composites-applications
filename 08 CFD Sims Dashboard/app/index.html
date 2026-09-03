@@ -3,20 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#00294d">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f16">
+<meta name="theme-color" content="#0b0f16">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <title>FEB CFD</title>
 <script>
-  /* Set the theme before first paint (no flash): saved choice, else system.
-     Same mechanism as the composites app, its own keys. */
-  (function(){try{var t=localStorage.getItem('cfd-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('cfd-rail')==='1'){document.documentElement.classList.add('rail');}}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+  /* Always dark, always the icon rail (Simon, 2026-09-03): set before first
+     paint so nothing flashes. No toggle exists for either. */
+  document.documentElement.setAttribute('data-theme','dark');
+  document.documentElement.classList.add('rail');
 </script>
 <!-- The design system, copied byte for byte from 05 Design System/ (a test
-     checks). The viewer keeps its own dark tokens under .viewer in styles.css,
-     so the theme toggle never reaches the page canvas. -->
+     checks), used in its dark theme only. -->
 <link rel="preload" href="ds/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="ds/fonts/saira-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="ds/tokens.css">
