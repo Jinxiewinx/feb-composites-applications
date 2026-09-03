@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Same family as the composites mark (navy tile, blue and gold): here the
+       gold is a wing section and the blue is the flow over it. -->
+  <rect width="512" height="512" rx="112" fill="#00294d"/>
+  <g fill="none" stroke="#2f6be4" stroke-width="30" stroke-linecap="round">
+    <path d="M92 168 C 190 168, 230 114, 330 114 C 380 114, 410 126, 430 138"/>
+    <path d="M92 236 C 200 236, 240 176, 340 176 C 385 176, 412 194, 430 206"/>
+  </g>
+  <path d="M84 330 C 150 262, 300 246, 440 300 C 330 318, 190 352, 84 330 Z" fill="#fdb515"/>
+  <g fill="none" stroke="#2f6be4" stroke-width="30" stroke-linecap="round">
+    <path d="M92 404 C 200 404, 260 372, 350 372 C 390 372, 415 384, 430 396"/>
+  </g>
+</svg>
