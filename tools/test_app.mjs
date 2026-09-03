@@ -6262,6 +6262,24 @@ await t("a lead can show as a member without giving anything up", async () => {
   fb.user = wasUser; fb.roster = wasRoster; DB.users = wasUsers;
 });
 
+await t("a ticket chip opens the issue on its work order, never the retired Tickets tab", () => {
+  DB.workOrders = [{ id: "WO-SN6-001", partName: "Nose", status: "Draft", steps: [] }];
+  DB.projects = [
+    { id: "PROJ-SN6-001", title: "Bridged corner", kind: "issue", workOrderId: "WO-SN6-001", status: "Open", assignees: ["nico@x.y"] },
+    { id: "PROJ-SN5-009", title: "Old ticket", status: "Open" },
+  ];
+  const c = chip("projects", "PROJ-SN6-001", "Bridged corner");
+  assert(c.includes("openIssue('PROJ-SN6-001')") && !c.includes("openRecord('projects'"), "the chip routes through openIssue");
+  view = { ...view, tab: "people", mode: "list", id: null };
+  openIssue("PROJ-SN6-001");
+  assert(view.tab === "workorders" && view.mode === "detail" && view.id === "WO-SN6-001", "which lands on the work order: " + view.tab + "/" + view.id);
+  lastToast = "";
+  openIssue("PROJ-SN5-009");
+  assert(view.tab === "workorders" && view.id === "WO-SN6-001", "a ticket with no run does not move you");
+  assert(/retired tracker/.test(lastToast), "and says why: " + lastToast);
+  assert(chip("parts", "P-X", "x").includes("openRecord('parts'"), "other chips are as they were");
+});
+
 await t("re-rendering keeps each rail where it was scrolled", () => {
   /* The bug: every render() rebuilt <main> with innerHTML, which zeroed the
      rail's scrollTop, and the scrollIntoView that followed then parked the

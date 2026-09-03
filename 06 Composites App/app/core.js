@@ -27,7 +27,7 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.3.4";
+var APP_VERSION = "4.3.5";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
@@ -903,7 +903,25 @@ function chip(coll, id, label) {
   // data-open: the ctrl/cmd/middle-click hook (see the delegated listeners by
   // the routing block) — a modified click opens #/<ID> in a new tab instead
   // of navigating this one.
-  return `<button type="button" class="chip" data-open="${esc(id)}" onclick="event.stopPropagation();openRecord('${tab}','${esc(id)}')">${esc(label || id)}${known ? "" : " ?"}</button>`;
+  /* A ticket chip never lands on the retired Tickets tab (Simon, 2026-09-03:
+     "it goes to a 'ticket' tab which shouldn't be there"). An issue lives in
+     the Issues section of its work order, so that is where the chip goes. */
+  const go = coll === "projects" ? `openIssue('${esc(id)}')` : `openRecord('${tab}','${esc(id)}')`;
+  return `<button type="button" class="chip" data-open="${esc(id)}" onclick="event.stopPropagation();${go}">${esc(label || id)}${known ? "" : " ?"}</button>`;
+}
+/* Where a ticket id goes now that the tracker is shelved: the work order the
+   issue is on, scrolled to its Issues section. A ticket with no run behind it
+   is history from the retired tracker, and says so rather than opening a tab
+   that is no longer in the sidebar. */
+function openIssue(id) {
+  const p = recById("projects", id);
+  const woId = p && p.workOrderId;
+  if (woId && recById("workOrders", woId)) {
+    openRecord("workorders", woId);
+    if (typeof woJump === "function") woJump("wo-issues");
+    return;
+  }
+  toast(p ? `${id} is a ticket from the retired tracker and has no work order to open.` : `${id} is not here.`, "info");
 }
 /* ---------- lineage: where a record sits in the chain ----------
    Part > Run > Mold > Plan > Drawings, drawn identically on every record that
