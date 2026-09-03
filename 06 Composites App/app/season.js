@@ -165,8 +165,8 @@ function seasonLine(p) {
    its name. This is NOT the thirteen-header table v3.0.0 replaced: the header
    is still one row on the line's own tracks, costs no width, and the arrow is
    a CSS ::after on the active cell so the cell text stays a bare label (the
-   header contract test reads the text). The select above stays because it is
-   the only home for "Group: subteam", and it mirrors whatever is chosen here.
+   header contract test reads the text). The sort select and the direction
+   arrow are gone (v4.3.3); "Group: subteam" is one toggle in the filter row.
    The rail cell sorts by layup progress, the last of the three stages; "Who"
    is two faces and has no sort.
 
@@ -260,12 +260,6 @@ const SEASON_SORT_EXTRA = {
 };
 /* Only what is on screen is offered. A sort by a value you cannot see teaches
    nothing: you get a reordered list and no way to tell why it reordered. */
-const SEASON_SORT_LABELS = {
-  layupDeadline: "Sort: Deadline", status: "Sort: Status", partName: "Sort: Part",
-  subteam: "Sort: Subteam", cadProgress: "Sort: CAD", moldProgress: "Sort: Mold",
-  layupProgress: "Sort: Layup", layupType: "Sort: Layup type",
-  moldLocation: "Sort: Mold loc.", group: "Group: subteam",
-};
 function seasonSortVal(p, key) {
   if (SEASON_SORT_EXTRA[key]) return SEASON_SORT_EXTRA[key](p);
   const f = typeof PART_SORT_COLS === "object" && PART_SORT_COLS[key];
@@ -292,7 +286,6 @@ function seasonSortBy(key) {
   else { view.seasonSort = key; view.seasonDir = "asc"; }
   render();
 }
-function toggleSeasonSortDir() { view.seasonDir = view.seasonDir === "desc" ? "asc" : "desc"; render(); }
 function resetSeasonFilters() {
   view = { ...view, seasonSub: "", seasonQ: "", seasonSort: null, seasonDir: null };
   render();
@@ -460,10 +453,11 @@ function renderSeason() {
       <option value="">All subteams</option>
       ${SUBTEAMS.map(s => `<option ${view.seasonSub === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
     </select>
-    <select title="Sort by" onchange="seasonSortBy(this.value)">
-      ${Object.keys(SEASON_SORT_LABELS).map(k => `<option value="${k}" ${sortKey === k ? "selected" : ""}>${esc(SEASON_SORT_LABELS[k])}</option>`).join("")}
-    </select>
-    <button class="sm sortdir" title="Reverse sort order" onclick="toggleSeasonSortDir()">${view.seasonDir === "desc" ? "▼" : "▲"}</button>
+    ${/* Sorting moved into the column names (v4.3.2), and the select and the
+          direction arrow went with it (v4.3.3, Simon). Grouping is the one
+          choice that is not a column, so it keeps a switch of its own. */""}
+    <button class="sm ${sortKey === "group" ? "primary" : ""}" title="${sortKey === "group" ? "Ungroup" : "One block per subteam"}"
+      onclick="seasonSortBy('${sortKey === "group" ? "layupDeadline" : "group"}')">Group: subteam</button>
     <button class="sm sortdir" title="Clear filters" onclick="resetSeasonFilters()">✕</button>
   </div>
   <div class="card">

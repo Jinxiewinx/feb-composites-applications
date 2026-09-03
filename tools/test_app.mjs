@@ -6229,7 +6229,10 @@ await t("Season column names sort on click, reverse on a second click, and wear 
   assert(view.seasonDir === "desc" && seasonRows().map(p => p.partName).join() === "Bravo,Alpha", "clicking again reverses");
   head = (main.innerHTML.match(/class="shead"[\s\S]*?<\/div>/) || [""])[0];
   assert(/\bon desc\b/.test(head), "and the triangle points down");
-  assert(main.innerHTML.includes('<option value="partName" selected>'), "the select mirrors the header");
+  assert(!main.innerHTML.includes('title="Sort by"') && !main.innerHTML.includes("toggleSeasonSortDir"), "the sort select and the direction arrow are gone from the toolbar");
+  assert(main.innerHTML.includes("seasonSortBy('group')"), "grouping keeps its own switch");
+  seasonSortBy("group");
+  assert(main.innerHTML.includes("seasonSortBy('layupDeadline')") && main.innerHTML.includes('class="sm primary"'), "which lights up and ungroups on a second press");
   const cells = [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map(m => m[1].trim());
   assert(cells.length === 8 && cells[0] === "Part", "the cell text is still the bare label, so the header contract holds");
   view = { ...view, seasonSort: null, seasonDir: null };
