@@ -3,10 +3,12 @@
 
    test_viewer_smoke.mjs stubs library.js out; this one does not. It boots the
    app on localhost (so library.js talks to the emulators on this app's ports),
-   picks the fixture through the file input, and checks the record and file
-   both landed; then reloads with ?open=<id> and checks the report comes back
-   out of the emulator bucket through getDownloadURL + fetch, which is the
-   path the bucket's CORS policy exists for in production.
+   picks the fixture through the file input, and checks the record, the file,
+   the numbers and the thumbnail all landed; reloads with ?open=<id> and checks
+   the report comes back out of the emulator bucket through getDownloadURL +
+   fetch (the path the bucket's CORS policy exists for in production); strips
+   a record back to the pre-dashboard shape and checks opening it backfills
+   the numbers and the thumbnail; and round-trips a saved view.
 
    Run:  npm run test:library   (from "08 CFD Sims Dashboard/"; starts the
    emulators itself through emulators:exec). Skips when Playwright is absent. */
@@ -29,15 +31,22 @@ const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", e => errors.push(String(e)));
+  page.on("dialog", d => d.type() === "prompt" ? d.accept("first run of the season") : d.accept());
   await page.goto(`http://localhost:${port}/`);
   await page.waitForFunction(() => window.CFD && Array.isArray(window.CFD.S.library), null, { timeout: 20000 });
   t("library listener connected to the Firestore emulator", true);
 
   await page.setInputFiles("#filepick", FIXTURE);
-  await page.waitForFunction(() => window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].reportId, null, { timeout: 90000 });
+  await page.waitForFunction(() => window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].reportId
+    && window.CFD.S.library.some(r => r.id === window.CFD.S.docs[0].reportId && r.thumb && r.note), null, { timeout: 120000 });
   const rec = await page.evaluate(() => window.CFD.S.library.find(r => r.id === window.CFD.S.docs[0].reportId));
-  t("record written with the indexer's counts", rec && rec.pages === 39 && rec.panels === 59 && rec.size > 8_000_000, JSON.stringify(rec));
+  t("record written with the indexer's counts", rec && rec.pages === 39 && rec.panels === 59 && rec.size > 8_000_000, JSON.stringify(rec).slice(0, 200));
   t("record has a 64-char sha256", rec && /^[0-9a-f]{64}$/.test(rec.sha256));
+  t("record carries dp, results and meta from the report", rec.dp === 22 && rec.results.total.lift === -486.6432 && rec.meta.analyst === "beldon", JSON.stringify([rec.dp, rec.results && rec.results.total, rec.meta]));
+  t("record carries the thumbnail with a download URL", rec.thumb && rec.thumb.path === `reports/${rec.id}/thumb.png` && /^http/.test(rec.thumb.url) && rec.thumb.panel === "stat-car-0", JSON.stringify(rec.thumb));
+  t("the note typed at upload was saved", rec.note === "first run of the season", rec.note);
+  const thumbOk = await page.evaluate(async url => { const r = await fetch(url); return r.ok && (r.headers.get("content-type") || "").includes("png"); }, rec.thumb.url);
+  t("thumb.png is fetchable from the emulator bucket", thumbOk);
 
   // Same file again: no second upload, the existing record is reused.
   await page.setInputFiles("#filepick", FIXTURE);
@@ -46,19 +55,40 @@ try {
   const same = await page.evaluate(() => window.CFD.S.docs[0].reportId === window.CFD.S.docs[1].reportId);
   t("re-uploading the same bytes dedups to one record", n === 1 && same, `records=${n} same=${same}`);
 
-  // Fresh page, opened from the URL: bytes come back out of the bucket.
+  // Save a view, and see it on the Dashboard.
+  await page.click("#saveview");
+  await page.waitForFunction(() => window.CFD.S.views.length === 1, null, { timeout: 20000 });
+  const v = await page.evaluate(() => window.CFD.S.views[0]);
+  t("saved view round-trips with the query and report ids", v.query.includes("open=") && v.reports.length === 1 && v.name.length > 0, JSON.stringify(v));
+
+  // Strip the record back to the pre-dashboard shape, then open it fresh: backfill.
+  await page.evaluate(async id => {
+    const lib = await import("/library.js");
+    await lib.patch(id, { dp: null, results: {}, meta: {} });
+  }, rec.id);
   await page.goto(`http://localhost:${port}/?open=${rec.id}&tab=panels`);
   await page.waitForFunction(() => window.CFD && window.CFD.S.docs.length === 1 && !window.CFD.S.docs[0].loading && window.CFD.S.docs[0].index, null, { timeout: 90000 });
-  const back = await page.evaluate(() => [window.CFD.S.docs[0].reportId, window.CFD.S.docs[0].index.numPages, window.CFD.S.tab]);
-  t("report fetched from the emulator bucket and indexed", back[0] === rec.id && back[1] === 39 && back[2] === "panels", JSON.stringify(back));
+  const back = await page.evaluate(() => [window.CFD.S.docs[0].reportId, window.CFD.S.docs[0].index.numPages, window.CFD.S.tab, window.CFD.S.page]);
+  t("report fetched from the emulator bucket and indexed, into the viewer", back[0] === rec.id && back[1] === 39 && back[2] === "panels" && back[3] === "viewer", JSON.stringify(back));
+  await page.waitForFunction(id => { const r = window.CFD.S.library.find(r => r.id === id); return r && r.dp === 22 && r.results && r.results.total; }, rec.id, { timeout: 60000 });
+  t("opening a stripped record backfilled dp and results", true);
+
+  // Open the saved view from the Dashboard.
+  await page.click(".sb-item:not(.active)");
+  await page.waitForFunction(() => window.CFD.S.page === "dashboard" && document.querySelector(".vrow .vopen"), null, { timeout: 10000 });
+  t("Dashboard card shows the thumbnail and the numbers", await page.evaluate(() => !!document.querySelector(".rcard img.rthumb") && document.querySelector(".rcard .numrow b").textContent.includes("487")));
+  await page.click(".vrow .vopen");
+  await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].index, null, { timeout: 90000 });
+  t("opening a saved view lands in the viewer with its report", true);
 
   // Delete through the library API; the listener empties the list.
   await page.evaluate(async (id) => {
     const lib = await import("/library.js");
     await lib.remove(window.CFD.S.library.find(r => r.id === id));
+    for (const v of window.CFD.S.views) await lib.removeView(v.id);
   }, rec.id);
-  await page.waitForFunction(() => window.CFD.S.library.length === 0, null, { timeout: 20000 });
-  t("delete removed the record", true);
+  await page.waitForFunction(() => window.CFD.S.library.length === 0 && window.CFD.S.views.length === 0, null, { timeout: 20000 });
+  t("delete removed the record, its files and the view", true);
 
   t("no page errors", errors.length === 0, errors.join(" | ").slice(0, 400));
 } finally {

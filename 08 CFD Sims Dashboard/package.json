@@ -9,12 +9,13 @@
     "emulators": "firebase emulators:start --project demo-feb-cfd",
     "test:rules": "firebase emulators:exec --only firestore --project demo-feb-cfd \"node tools/test_rules.mjs\"",
     "test:storage": "firebase emulators:exec --only auth,storage --project demo-feb-cfd \"node tools/test_storage_rules.mjs\"",
-    "test": "npm run test:rules && npm run test:storage && npm run test:indexer && npm run test:smoke && npm run test:library",
+    "test": "npm run test:ds && npm run test:rules && npm run test:storage && npm run test:indexer && npm run test:smoke && npm run test:library",
     "deploy": "firebase deploy --only hosting --project feb-cfd",
     "test:indexer": "node test/test_indexer.mjs",
     "test:smoke": "node test/test_viewer_smoke.mjs",
     "vendor": "node tools/vendor-pdfjs.mjs",
-    "test:library": "firebase emulators:exec --only firestore,storage --project demo-feb-cfd \"node test/test_library_emu.mjs\""
+    "test:library": "firebase emulators:exec --only firestore,storage --project demo-feb-cfd \"node test/test_library_emu.mjs\"",
+    "test:ds": "node tools/check_ds.mjs"
   },
   "devDependencies": {
     "pdfjs-dist": "6.1.200"

@@ -20,17 +20,17 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**The CFD viewer is live at feb-cfd.web.app, cfd-v0.1.0** (2026-09-02).
-07's viewer ported into `08 CFD Sims Dashboard/app/` with a shared report
-library; the library is seeded with DP_22 and its variant. Decisions that
-must not be re-asked: open access with no sign-in (Simon's call, recorded in
-the README with the caps that bound it), shared library in Storage, 07 stays
-untouched. The three data collections in `firestore.rules` other than
-`reports` are still placeholders for the dashboard proper, which waits on
-Simon's talk with the team. The bucket's CORS is applied by gsutil, not by
-deploy; re-apply if the bucket is ever recreated. `.claude/launch.json`
-serves app/ on :8792 for the browser pane; the pane refuses to navigate to
-sub-paths, so the server root has to be app/ itself.
+**The CFD app is at cfd-v0.2.0: Dashboard, saved views, composites shell**
+(2026-09-03). Decisions that must not be re-asked: open access with no
+sign-in; shared library in Storage; 07 untouched; the viewer canvas stays
+dark in both themes (DECISIONS #5); charts are the CFD app's own (#6); the
+thumbnail plot is `stat-car-0` with a first-contour fallback; trend x-axis
+is the design point parsed from the name. Records backfill dp/results/
+meta/thumb on first open, so no migration script exists or is needed. The
+three placeholder collections in `firestore.rules` still wait on Simon's
+talk with the team. The bucket's CORS is applied by gsutil, not by deploy.
+`.claude/launch.json` serves app/ on :8792 for the browser pane, which
+refuses sub-path navigation, so the server root is app/ itself.
 
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per
@@ -594,7 +594,9 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-02 (latest) — CFD viewer live, folders renumbered.** The 07 viewer
+**2026-09-03 (latest) — CFD Dashboard, saved views, composites shell (cfd-v0.2.0).**
+
+**2026-09-02 — CFD viewer live, folders renumbered.** The 07 viewer
 is hosted at feb-cfd.web.app with a shared library, tagged cfd-v0.1.0. `03 App/`
 is `06 Composites App/`; every tracked path reference, the parent CLAUDE.md,
 the simon agent and the memory index were rewritten in one pass. Brief,

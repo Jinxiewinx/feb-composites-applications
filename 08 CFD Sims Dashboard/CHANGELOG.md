@@ -7,6 +7,25 @@ relearn navigation, Minor for a new capability, Patch for fixes and copy.
 
 ---
 
+## cfd-v0.2.0 — 2026-09-03
+
+A Dashboard, saved views, and the composites app's shell.
+
+- The app now opens on a Dashboard: the latest design point's downforce,
+  drag and L/D as tiles, two trend charts by design point, the saved views,
+  and a card for every report in the library with a thumbnail of its
+  `stat-car-0` contour, its date, analyst and mesh size, a note, and its
+  numbers. Clicking a card opens the report in the viewer.
+- Every upload reads the force numbers out of the report's own Report
+  Definitions page and renders the thumbnail from the open PDF. Reports
+  uploaded before this catch up the first time anyone opens them.
+- Save view: what is open, with the tab, the plot and the overlay, becomes a
+  named view on the Dashboard that anyone can open.
+- The same sidebar, topbar, cards and light/dark toggle as the composites
+  app, with the CFD mark in the sidebar. The viewer's page canvas stays dark
+  in both themes.
+- A note asked after upload, editable later, shown on the card.
+
 ## cfd-v0.1.0 — 2026-09-02
 
 The desktop CFD viewer, hosted. Everything `07 CFD PDF Viewer` did (Pages,

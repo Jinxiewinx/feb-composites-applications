@@ -66,3 +66,23 @@ folders. The repo was renamed from `feb-composites-applications` to
 `feb-engineering-apps` the same day, since it now holds more than composites.
 GitHub redirects the old URL. Release tags: composites keeps bare `vX.Y.Z`,
 the dashboard uses `cfd-vX.Y.Z` (see the root `CHANGELOG.md`).
+
+## 5. The viewer keeps its own dark tokens inside the composites shell (2026-09-03)
+
+Simon asked for the app to match the composites app: its sidebar, topbar,
+cards and light/dark toggle. The viewer's page canvas does not follow the
+toggle. Contour plots are vivid rainbow images and a bright surround shifts
+how the colour scales read, which is why Fluent, ParaView and EnSight all
+use dark chrome. So `styles.css` nests every viewer rule under `.viewer`
+with the design system's dark values as that subtree's own tokens, and the
+rest of the page themes normally. The design system's `components.css` is
+loaded as-is; the viewer's colliding class names were renamed (`.vtool`,
+`.vside`, `.vcol`) rather than fought.
+
+## 6. Trend charts are this app's own vocabulary (2026-09-03)
+
+The composites app has no charts by a written decision (`rnd.js`: adding a
+chart family commits the design system to something it does not have). The
+CFD app needs trendlines by request, so `chart.js` is a small SVG line chart
+that lives here, styled from the design tokens, and is not added to
+`05 Design System/`. One measure per chart, never two axes.

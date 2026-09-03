@@ -78,12 +78,12 @@ function markPanel(c, panel) {
 
 export function renderPages(main) {
   cols = [];
-  const wrap = el("div", "cols");
+  const wrap = el("div", "vcols");
   const ready = S.docs.filter(d => d.index);
 
   for (const doc of ready) {
-    const col = el("div", "col");
-    col.innerHTML = `<div class="col-h">
+    const col = el("div", "vcol");
+    col.innerHTML = `<div class="vcol-h">
       <span class="swatch" style="background:${doc.color}"></span>
       <span class="nm">${esc(doc.name)}</span>
       <span class="meta">${doc.index.numPages} pages</span>

@@ -16,7 +16,7 @@
    Two identical reports must come out at exactly 0.00%, which doubles as a
    correctness check on the whole alignment and rendering path. */
 
-import { S, el, esc, panelRows, currentRow, selectPanel } from "./core.js";
+import { S, el, esc, panelRows, currentRow, selectPanel, syncUrl } from "./core.js";
 import { renderPanel, panelRange, jointCrop } from "./render.js";
 
 const MODES = [
@@ -53,7 +53,7 @@ export function renderOverlay(main) {
   const seg = el("div", "seg");
   for (const [id, label] of MODES) {
     const b = el("button", S.overlay.mode === id ? "active" : "", label);
-    b.onclick = () => { S.overlay.mode = id; renderOverlayStage(); };
+    b.onclick = () => { S.overlay.mode = id; renderOverlayStage(); syncUrl(); };
     seg.appendChild(b);
   }
   bar.appendChild(seg);
@@ -66,7 +66,7 @@ export function renderOverlay(main) {
       if (S.overlay[which] === i) o.selected = true;
       s.appendChild(o);
     });
-    s.onchange = () => { S.overlay[which] = +s.value; renderOverlayStage(); };
+    s.onchange = () => { S.overlay[which] = +s.value; renderOverlayStage(); syncUrl(); };
     return s;
   };
   const pairing = el("label", "", "");

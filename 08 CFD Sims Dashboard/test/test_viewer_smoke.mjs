@@ -1,19 +1,25 @@
 #!/usr/bin/env node
-/* Browser smoke test for the ported viewer, with no Firebase.
+/* Browser smoke test for the app, with no Firebase.
 
    The risky part of hosting pdf.js is that it starts a MODULE worker, which
-   depends entirely on page origin and MIME types; the rest of the app is
+   depends entirely on page origin and MIME types; the rest of the viewer is
    node-tested through the indexer. So this boots the real app in Chromium
    over a static server, with library.js swapped for an in-memory stand-in
-   (route interception, so nothing is left in app/), and checks:
+   (route interception, so nothing is left in app/), and checks the shell,
+   the Dashboard, the viewer and the URL round trip:
 
+     - the Dashboard is the landing page: stat tiles, two trend charts with a
+       point per report, a saved view, a card per report with its thumbnail;
+     - a card's Open lands in the viewer with that report open;
+     - ?open=A,B&tab=overlay&mode=diff restores two library reports, the tab
+       and the overlay mode from the URL;
      - the worker starts and DP_22.pdf indexes to 39 pages / 59 panels;
-     - ?open=A,B&tab=overlay restores two library reports from the URL;
      - the Panels rows come from matchPanels (59 of them);
-     - the difference view on the same file twice reads exactly 0.00%, the
-       invariant every alignment change is judged by;
+     - the difference view on the same file twice reads exactly 0.00%;
+     - Save view hands the current query to the library;
+     - the theme toggle flips data-theme and the viewer canvas stays dark;
      - a local file picked through the input is opened AND handed to the
-       library upload with the indexer's counts.
+       library upload with the indexer's counts and numbers, and a thumbnail.
 
    Run:  npm run test:smoke   (from "08 CFD Sims Dashboard/")
    Skips, exit 0, when Playwright is not installed. */
@@ -26,28 +32,36 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");                 // served, so /app/ and /test/fixtures/ are both reachable
 const FIXTURE = join(HERE, "fixtures", "DP_22.pdf");
 
+const THUMB = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const LIB_STUB = `
 export const usingEmulators = false;
 export const MAX_BYTES = 60 * 1024 * 1024;
+const results = (lift, drag) => ({ total: { lift, drag, cl: lift / 245, cd: drag / 245 } });
 const recs = [
-  { id: "RPT-AAAAAAAA", name: "DP_22 (A)", path: "reports/RPT-AAAAAAAA/report.pdf", size: 8470000, sha256: "a".repeat(64), pages: 39, panels: 59, note: "", createdAt: "2026-09-01T00:00:00Z" },
-  { id: "RPT-BBBBBBBB", name: "DP_22 (B)", path: "reports/RPT-BBBBBBBB/report.pdf", size: 8470000, sha256: "b".repeat(64), pages: 39, panels: 59, note: "", createdAt: "2026-09-02T00:00:00Z" },
+  { id: "RPT-AAAAAAAA", name: "DP_22", dp: 22, path: "reports/RPT-AAAAAAAA/report.pdf", size: 8470000, sha256: "a".repeat(64), pages: 39, panels: 59, note: "baseline", createdAt: "2026-09-01T00:00:00Z",
+    results: results(-486.6, 179.6), meta: { analyst: "beldon", cells: 5304451 }, thumb: { path: "reports/RPT-AAAAAAAA/thumb.png", url: "${THUMB}", panel: "stat-car-0" } },
+  { id: "RPT-BBBBBBBB", name: "DP_23", dp: 23, path: "reports/RPT-BBBBBBBB/report.pdf", size: 8470000, sha256: "b".repeat(64), pages: 39, panels: 59, note: "", createdAt: "2026-09-02T00:00:00Z",
+    results: results(-501.2, 183.0), meta: {}, thumb: { path: "reports/RPT-BBBBBBBB/thumb.png", url: "${THUMB}", panel: "stat-car-0" } },
 ];
-window.__stub = { uploads: [] };
-let listener = null;
+const views = [{ id: "VW-AAAAAAAA", name: "22 vs 23 swipe", query: "p=viewer&open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay", reports: ["RPT-AAAAAAAA", "RPT-BBBBBBBB"], createdAt: "2026-09-02T00:00:00Z" }];
+window.__stub = { uploads: [], thumbs: [], patches: [], savedViews: [] };
+let listener = null, vlistener = null;
 export function watchReports(cb) { listener = cb; setTimeout(() => cb(recs.slice()), 0); return () => {}; }
+export function watchViews(cb) { vlistener = cb; setTimeout(() => cb(views.slice()), 0); return () => {}; }
 export async function findByHash() { return null; }
 export async function sha256Hex() { return "c".repeat(64); }
 export function newId() { return "RPT-CCCCCCCC"; }
 export function cleanName(n) { return String(n || "report").replace(/\\.pdf$/i, "").trim().slice(0, 120); }
 export async function upload(bytes, name, meta, onProgress) {
   onProgress?.(0.5); onProgress?.(1);
-  const rec = { id: newId(), name: cleanName(name), path: "reports/RPT-CCCCCCCC/report.pdf", size: bytes.byteLength, sha256: "c".repeat(64), pages: meta.pages, panels: meta.panels, note: "", createdAt: new Date().toISOString() };
+  const rec = { id: newId(), name: cleanName(name), path: "reports/RPT-CCCCCCCC/report.pdf", size: bytes.byteLength, sha256: "c".repeat(64), pages: meta.pages, panels: meta.panels, dp: meta.dp, results: meta.results, meta: meta.meta, note: "", createdAt: new Date().toISOString() };
   window.__stub.uploads.push({ name, bytes: bytes.byteLength, meta });
   recs.unshift(rec);
   listener?.(recs.slice());   // what the real onSnapshot does after a write
   return rec;
 }
+export async function uploadThumb(id, blob, panel) { window.__stub.thumbs.push({ id, size: blob.size, panel }); return { path: "reports/" + id + "/thumb.png", url: "${THUMB}", panel }; }
+export async function patch(id, fields) { window.__stub.patches.push({ id, fields }); const r = recs.find(r => r.id === id); if (r) Object.assign(r, fields); listener?.(recs.slice()); }
 export async function fetchBytes(rec) {
   const res = await fetch("/test/fixtures/DP_22.pdf");
   return new Uint8Array(await res.arrayBuffer());
@@ -55,6 +69,9 @@ export async function fetchBytes(rec) {
 export async function rename() {}
 export async function setNote() {}
 export async function remove() {}
+export async function saveView(name, query, reports) { window.__stub.savedViews.push({ name, query, reports }); views.unshift({ id: "VW-B", name, query, reports, createdAt: new Date().toISOString() }); vlistener?.(views.slice()); }
+export async function renameView() {}
+export async function removeView() {}
 `;
 
 let pass = 0, fail = 0;
@@ -64,50 +81,105 @@ function t(name, ok, detail) {
 }
 
 const chromium = await loadChromium();
-if (!chromium) { console.log(skipMessage("the CFD viewer")); process.exit(0); }
+if (!chromium) { console.log(skipMessage("the CFD app")); process.exit(0); }
 
 const { server, port } = await serveDir(ROOT);
 const browser = await chromium.launch();
 const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", e => errors.push(String(e)));
-  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+  page.on("pageerror", e => { errors.push(String(e)); if (process.env.DEBUG) console.log("PAGEERROR", e); });
+  page.on("console", m => { if (m.type() === "error") { errors.push(m.text()); if (process.env.DEBUG) console.log("CONSOLE", m.text()); } });
+  page.on("dialog", d => d.type() === "prompt" ? d.accept(d.defaultValue() || "x") : d.accept());
   await page.route("**/library.js", r => r.fulfill({ contentType: "text/javascript", body: LIB_STUB }));
 
-  await page.goto(`http://127.0.0.1:${port}/app/?open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay`);
-  await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2, null, { timeout: 15000 });
-  t("library snapshot reached the app (2 records)", true);
+  /* ---- the Dashboard ---- */
+  await page.goto(`http://127.0.0.1:${port}/app/`);
+  await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2 && document.querySelector(".rcard"), null, { timeout: 15000 });
+  t("Dashboard is the landing page", await page.evaluate(() => window.CFD.S.page) === "dashboard");
+  t("sidebar carries the mark and both tabs", await page.evaluate(() => !!document.querySelector(".sb-brand .feb-mark") && document.querySelectorAll(".sb-item").length === 2));
+  t("four stat tiles, latest DP first", await page.evaluate(() => document.querySelectorAll(".dstats .stat-tile").length === 4 && document.querySelector(".dstats .stat-label").textContent.includes("DP 23")));
+  t("downforce tile shows positive newtons", (await page.evaluate(() => document.querySelector(".dstats .bignum").textContent)).trim() === "501 N");
+  t("two trend charts with a point per report", await page.evaluate(() => document.querySelectorAll("svg.trend").length === 2 && document.querySelectorAll("svg.trend .dot").length === 4));
+  t("saved view listed", await page.evaluate(() => document.querySelectorAll(".vrow").length === 1 && document.querySelector(".vrow b").textContent === "22 vs 23 swipe"));
+  t("a card per report with thumbnail, DP pill and numbers", await page.evaluate(() => document.querySelectorAll(".rcard").length === 2 && document.querySelectorAll(".rcard img.rthumb").length === 2 && document.querySelector(".rcard .pill").textContent === "DP 23"));
+  if (process.env.SHOTS) { await page.screenshot({ path: process.env.SHOTS + "/dashboard-light.png" }); }
+  t("note on the card, prompt link where there is none", await page.evaluate(() => [...document.querySelectorAll(".rcard .rnote")].map(n => n.textContent.trim())).then(a => a.includes("baseline") && a.some(x => x.startsWith("Add a note"))));
 
+  // Thumbnail opens the lightbox.
+  await page.click(".rcard img.rthumb");
+  t("thumbnail opens the lightbox", await page.evaluate(() => document.querySelector("#lightbox.open") && document.getElementById("lb-name").textContent.includes("stat-car-0")));
+  await page.keyboard.press("Escape");
+  t("Escape closes it", await page.evaluate(() => !document.querySelector("#lightbox.open")));
+
+  // Theme toggle flips the shell, not the viewer.
+  const before = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+  await page.click(".topbar .icon-btn[title*='theme']");
+  const after = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+  t("theme toggle flips data-theme", before !== after, `${before} -> ${after}`);
+  if (process.env.SHOTS) { await page.screenshot({ path: process.env.SHOTS + "/dashboard-dark.png" }); }
+
+  // A card's Open lands in the viewer with that report open.
+  await page.click(".rcard .primary");
+  await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 1 && !window.CFD.S.docs[0].loading && window.CFD.S.docs[0].index, null, { timeout: 60000 });
+  t("card Open lands in the viewer with the report open", await page.evaluate(() => window.CFD.S.docs[0].reportId === "RPT-BBBBBBBB"));
+  t("viewer canvas is dark whatever the theme", await page.evaluate(() => getComputedStyle(document.querySelector(".viewer")).backgroundColor) === "rgb(11, 15, 22)");
+  t("URL names the page and the report", (await page.url()).includes("p=viewer") && (await page.url()).includes("open=RPT-BBBBBBBB"), await page.url());
+
+  /* ---- the viewer from a URL ---- */
+  await page.goto(`http://127.0.0.1:${port}/app/?open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay&mode=diff`);
+  await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2, null, { timeout: 15000 });
   await page.waitForFunction(() => {
     const S = window.CFD.S; return S.docs.length === 2 && S.docs.every(d => !d.loading && d.index);
   }, null, { timeout: 60000 });
   const shape = await page.evaluate(() => window.CFD.S.docs.map(d => [d.reportId, d.index.numPages, d.index.panels.length]));
   t("both URL reports opened from the library", shape[0][0] === "RPT-AAAAAAAA" && shape[1][0] === "RPT-BBBBBBBB", JSON.stringify(shape));
   t("module worker started: 39 pages / 59 panels per report", shape.every(s => s[1] === 39 && s[2] === 59), JSON.stringify(shape));
-  t("tab restored from the URL", await page.evaluate(() => window.CFD.S.tab) === "overlay");
+  t("tab and overlay mode restored from the URL", await page.evaluate(() => window.CFD.S.tab === "overlay" && window.CFD.S.overlay.mode === "diff"));
   t("panel rows come from matchPanels (59)", await page.evaluate(() => window.CFD.panelRows().length) === 59);
-  t("URL still names both reports", (await page.url()).includes("open=RPT-AAAAAAAA%2CRPT-BBBBBBBB") || (await page.url()).includes("open=RPT-AAAAAAAA,RPT-BBBBBBBB"), await page.url());
-
-  await page.evaluate(() => { window.CFD.S.overlay.mode = "difference"; window.CFD.render(); });
   await page.waitForFunction(() => window.__lastDiff && typeof window.__lastDiff.pct === "number", null, { timeout: 30000 });
   const diff = await page.evaluate(() => window.__lastDiff);
   t("difference of the same report against itself is exactly 0.00%", diff.pct === 0 && diff.changed === 0, JSON.stringify(diff));
+  // A carries numbers and meta, so nothing is written for it; B has an empty
+  // meta, so opening it extracts and writes what differs from the stub.
+  const patched = await page.evaluate(() => window.__stub.patches.map(p => p.id));
+  t("backfill touches only the record that was missing something", !patched.includes("RPT-AAAAAAAA") && patched.includes("RPT-BBBBBBBB"), JSON.stringify(patched));
+
+  // Save view hands the current query to the library.
+  await page.click("#saveview");
+  await page.waitForFunction(() => window.__stub.savedViews.length === 1, null, { timeout: 5000 });
+  const sv = await page.evaluate(() => window.__stub.savedViews[0]);
+  t("Save view stores the query and the report ids", sv.query.includes("open=RPT-AAAAAAAA%2CRPT-BBBBBBBB") && sv.query.includes("tab=overlay") && sv.query.includes("mode=diff") && sv.reports.length === 2, JSON.stringify(sv));
 
   // Panels view renders one column per report for the selected row.
   await page.evaluate(() => { window.CFD.S.tab = "panels"; window.CFD.render(); window.CFD.renderChrome(); });
-  await page.waitForFunction(() => document.querySelectorAll("#main canvas").length >= 2, null, { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelectorAll("#vmain canvas").length >= 2, null, { timeout: 30000 });
   t("panels view drew a canvas per report", true);
+  if (process.env.SHOTS) { await page.waitForTimeout(800); await page.screenshot({ path: process.env.SHOTS + "/viewer-panels.png" }); }
 
-  // A local file through the picker: opened, then handed to the library.
+  // A local file through the picker: opened, then handed to the library with its numbers and a thumbnail.
   await page.setInputFiles("#filepick", FIXTURE);
-  await page.waitForFunction(() => window.__stub.uploads.length === 1 && window.CFD.S.docs.length === 3 && window.CFD.S.docs[2].reportId, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__stub.uploads.length === 1 && window.__stub.thumbs.length === 1 && window.CFD.S.docs.length === 3 && window.CFD.S.docs[2].reportId, null, { timeout: 90000 });
   const up = await page.evaluate(() => window.__stub.uploads[0]);
-  t("picked file was uploaded with the indexer's counts", up.meta.pages === 39 && up.meta.panels === 59 && up.bytes > 8_000_000, JSON.stringify(up));
+  t("picked file was uploaded with the indexer's counts and the report's numbers", up.meta.pages === 39 && up.meta.panels === 59 && up.meta.dp === 22 && up.meta.results.total.lift === -486.6432 && up.meta.meta.analyst === "beldon", JSON.stringify(up.meta));
+  const th = await page.evaluate(() => window.__stub.thumbs[0]);
+  t("a stat-car-0 thumbnail was rendered and uploaded", th.panel === "stat-car-0" && th.size > 5000, JSON.stringify(th));
   t("the new doc carries the library id", await page.evaluate(() => window.CFD.S.docs[2].reportId) === "RPT-CCCCCCCC");
+  t("library list shows all three records", await page.evaluate(() => document.querySelectorAll("#liblist .doc.lib").length) === 3);
 
-  const libRows = await page.evaluate(() => document.querySelectorAll("#liblist .doc.lib").length);
-  t("library list shows all three records", libRows === 3, String(libRows));
+  // Back to the Dashboard: the new card is there, three points per chart.
+  await page.click(".sb-item:not(.active)");
+  await page.waitForFunction(() => window.CFD.S.page === "dashboard" && document.querySelectorAll(".rcard").length === 3, null, { timeout: 5000 });
+  t("Dashboard shows the new report with three points per chart", await page.evaluate(() => document.querySelectorAll("svg.trend .dot").length === 6));
+  // Opening a saved view replaces what is open with the view's reports and settings.
+  await page.click(".vrow .vopen");
+  await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 2 && window.CFD.S.docs.every(d => d.index) && window.CFD.S.tab === "overlay", null, { timeout: 60000 });
+  t("opening a saved view lands in the viewer with its two reports and tab", await page.evaluate(() => window.CFD.S.docs.map(d => d.reportId).join(",")) === "RPT-AAAAAAAA,RPT-BBBBBBBB");
+  await page.click(".sb-item:not(.active)");
+  await page.waitForFunction(() => window.CFD.S.page === "dashboard", null, { timeout: 5000 });
+  await page.click(".sb-item:not(.active)");
+  await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 2, null, { timeout: 5000 });
+  t("returning to the viewer keeps its open reports", true);
 
   t("no page errors", errors.length === 0, errors.join(" | ").slice(0, 400));
 } finally {

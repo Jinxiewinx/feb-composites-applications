@@ -11,19 +11,30 @@ on Firebase, its own Firebase project, where data lives).
 
 ## How to use it
 
-Open the site. The library on the left lists every report anyone has
-uploaded; click Open on two of them and the views light up: Pages scroll
-together, Panels puts the same named plot from every report side by side,
-Overlay lays one over another (blend, swipe, or a difference map that reads
-0.00% for identical reports), Summary diffs the mesh and solver numbers.
+The site opens on the **Dashboard**: the latest design point's downforce,
+drag and L/D, two trend charts by design point, the team's saved views, and
+a card per report with a thumbnail of its `stat-car-0` contour (or the first
+contour it has, named under the picture), when it was uploaded, who ran it,
+a note, and its numbers. Open on a card puts that report in the **Viewer**
+alongside whatever is already open.
+
+In the Viewer, Pages scroll together, Panels puts the same named plot from
+every report side by side, Overlay lays one over another (blend, swipe, or
+a difference map that reads 0.00% for identical reports), Summary diffs the
+mesh and solver numbers. **Save view** keeps what is open, with the tab, the
+plot and the overlay, as a named view on the Dashboard for everyone.
 
 To add a report, drop a Fluent PDF onto the window or press Open PDFs. It
 opens immediately and, with the checkbox on, uploads to the library for
-everyone. The same file uploaded twice is recognised by its hash and not
-stored again. Rename or delete through the ⋯ button on a library row.
+everyone: the force numbers are read off the report's Report Definitions
+page, a thumbnail is rendered from the open PDF, and a one-line note is
+asked for (skippable, editable later from the card's ⋯). The same file
+uploaded twice is recognised by its hash and not stored again. Reports
+uploaded before the Dashboard existed catch up the first time anyone opens
+them.
 
-The address bar carries what you have open, the tab and the plot. Copy it
-and send it: the link is the comparison.
+The address bar carries what you have open, the tab, the plot and the
+overlay. Copy it and send it: the link is the comparison.
 
 **Access is open.** No sign-in to read, upload, rename or delete; Simon's
 call (2026-09-02) so nobody has to be added to anything. What the bucket
@@ -36,13 +47,13 @@ Check; neither needs a login.
 
 | Path | What it is |
 |---|---|
-| `app/` | The viewer. `core.js` is the shell and state, `library.js` the only file that talks to Firebase, the rest are the views ported from `07`. `vendor/` is pdf.js. `ds/` is copied from `05 Design System/` and must stay byte-identical |
+| `app/` | The app. `core.js` routes between Dashboard and Viewer and holds the state; `shell.js` is the composites-style sidebar, topbar, theme and lightbox; `dashboard.js` and `chart.js` the landing page; `extract.js` reads numbers out of a report's text; `library.js` is the only file that talks to Firebase; the rest are the viewer's views ported from `07`. `vendor/` is pdf.js. `ds/` is copied from `05 Design System/` and a test keeps it byte-identical |
 | `firebase.json`, `.firebaserc` | Pins `feb-cfd`. Hosting root `app/`. Emulator ports offset from the composites app's so both can run |
-| `firestore.rules` | `reports` is open with a fixed record shape. The other collections keep the composites roster model, unused until the dashboard needs sign-in |
-| `storage.rules` | `reports/<id>/report.pdf`: public read, PDF-only writes under 60 MB. Other trees keep their roster gating |
+| `firestore.rules` | `reports` and `views` are open with fixed record shapes; a report's dp, results, meta and thumb may be written by any opener (backfill). The other collections keep the composites roster model, unused until something needs sign-in |
+| `storage.rules` | `reports/<id>/report.pdf` (PDF, under 60 MB) and `reports/<id>/thumb.png` (PNG, under 2 MB): public read and write. Other trees keep their roster gating |
 | `cors.json` | The bucket's CORS policy. Applied by hand with gsutil, never by `firebase deploy` |
-| `test/` | `test_indexer.mjs` (the PDF indexer against the real DP_22 fixture), `test_viewer_smoke.mjs` (Playwright, library stubbed), `test_library_emu.mjs` (the real library against the emulators) |
-| `tools/` | Rules tests and the pdf.js vendoring script |
+| `test/` | `test_indexer.mjs` (the PDF indexer and the number extraction against the real DP_22 fixture), `test_viewer_smoke.mjs` (Playwright, library stubbed: Dashboard, viewer, URL and saved-view round trips; `SHOTS=<dir>` saves screenshots), `test_library_emu.mjs` (the real library against the emulators: upload, numbers, thumbnail, backfill, views) |
+| `tools/` | Rules tests, the design-system byte check, and the pdf.js vendoring script |
 | `CHANGELOG.md` | Released versions, `cfd-vX.Y.Z` |
 
 ## Running it
@@ -51,7 +62,7 @@ Node, the Firebase CLI and a JDK (for the emulators), same as `SETUP.md` at
 the repo root. From this folder:
 
 ```bash
-npm test            # rules, indexer, browser smoke, emulator round trip
+npm test            # ds check, rules, indexer, browser smoke, emulator round trip
 npm run emulators   # auth, Firestore, storage, hosting, with the UI on :4001
 npm run serve       # the app on :8792; on localhost it talks to the emulators
 npm run deploy      # hosting only, to feb-cfd.web.app

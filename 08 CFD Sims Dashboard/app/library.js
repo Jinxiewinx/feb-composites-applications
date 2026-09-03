@@ -37,6 +37,7 @@ if (usingEmulators) {
 
 export const MAX_BYTES = 60 * 1024 * 1024;   // mirrors storage.rules and firestore.rules
 const COLL = "reports";
+const VIEWS = "views";
 
 /* Every reader gets the whole library, newest first, live. A few hundred
    records at ~300 bytes each is one cheap listener. */
@@ -77,6 +78,7 @@ export function newId() {
    uploads nothing. Storage first, then Firestore: a record never points at a
    file that is not there. */
 export async function upload(bytes, name, meta = {}, onProgress) {
+  /* meta: { pages, panels, dp, results, meta } from the indexer and extract.js. */
   if (bytes.byteLength >= MAX_BYTES) throw new Error(`Over the ${Math.round(MAX_BYTES / 1048576)} MB library limit`);
   const sha256 = await sha256Hex(bytes);
   const dup = await findByHash(sha256);
@@ -89,6 +91,9 @@ export async function upload(bytes, name, meta = {}, onProgress) {
   const rec = {
     id, name: cleanName(name), path, size: bytes.byteLength, sha256,
     pages: meta.pages | 0, panels: meta.panels | 0, createdAt: serverTimestamp(),
+    dp: Number.isInteger(meta.dp) ? meta.dp : null,
+    results: meta.results && typeof meta.results === "object" ? meta.results : {},
+    meta: meta.meta && typeof meta.meta === "object" ? meta.meta : {},
   };
   await setDoc(doc(db, COLL, id), rec);
   return { ...rec, createdAt: new Date().toISOString() };
@@ -108,15 +113,56 @@ export async function fetchBytes(rec) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/* Whatever a record is missing: dp, results, meta, thumb. The rules let
+   anyone write those four and nothing else, so an old record catches up the
+   first time anyone opens it. */
+export async function patch(id, fields) {
+  const allowed = {};
+  for (const k of ["dp", "results", "meta", "thumb"]) if (k in fields) allowed[k] = fields[k];
+  if (Object.keys(allowed).length) await updateDoc(doc(db, COLL, id), allowed);
+}
+
+/* The card thumbnail, next to the report in the bucket. Returns the thumb
+   field for the record. */
+export async function uploadThumb(id, blob, panel) {
+  const path = `${COLL}/${id}/thumb.png`;
+  const r = sRef(storage, path);
+  const task = uploadBytesResumable(r, blob, { contentType: "image/png" });
+  await new Promise((res, rej) => task.on("state_changed", null, rej, res));
+  const url = await getDownloadURL(r);
+  return { path, url, panel: String(panel || "").slice(0, 120) };
+}
+
 export async function rename(id, name) {
   await updateDoc(doc(db, COLL, id), { name: cleanName(name) });
 }
 export async function setNote(id, note) {
   await updateDoc(doc(db, COLL, id), { note: String(note || "").slice(0, 500) });
 }
-/* File first, then the record; a missing file counts as already gone. */
+/* Files first, then the record; a missing file counts as already gone. */
 export async function remove(rec) {
-  try { await deleteObject(sRef(storage, rec.path)); }
-  catch (e) { if (e?.code !== "storage/object-not-found") throw e; }
+  for (const path of [rec.path, rec.thumb && rec.thumb.path].filter(Boolean)) {
+    try { await deleteObject(sRef(storage, path)); }
+    catch (e) { if (e?.code !== "storage/object-not-found") throw e; }
+  }
   await deleteDoc(doc(db, COLL, rec.id));
 }
+
+/* ---------- saved views ----------
+   A view is a name for a viewer URL query: which reports, which tab, which
+   plot, which overlay. The report ids ride alongside so the Dashboard can
+   say "DP_22 vs DP_23" without parsing the query. */
+export function watchViews(cb, onError) {
+  const q = query(collection(db, VIEWS), orderBy("createdAt", "desc"));
+  return onSnapshot(q, snap => cb(snap.docs.map(d => normalise(d.data()))),
+    err => { console.error("views", err); onError?.(err); });
+}
+export async function saveView(name, queryString, reportIds) {
+  const id = "VW-" + newId().slice(4);
+  const rec = { id, name: String(name).slice(0, 80), query: String(queryString).slice(0, 600),
+    reports: reportIds.slice(0, 12), createdAt: serverTimestamp() };
+  await setDoc(doc(db, VIEWS, id), rec);
+  return { ...rec, createdAt: new Date().toISOString() };
+}
+export async function renameView(id, name) { await updateDoc(doc(db, VIEWS, id), { name: String(name).slice(0, 80) }); }
+export async function removeView(id) { await deleteDoc(doc(db, VIEWS, id)); }

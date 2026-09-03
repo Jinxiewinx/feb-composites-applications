@@ -19,7 +19,7 @@ for everything in here.
 | `05 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
 | `06 Composites App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
 | `07 CFD PDF Viewer/` | The desktop original of the CFD viewer, kept buildable; the hosted version lives in `08` | `README.md` |
-| `08 CFD Sims Dashboard/` | The CFD app, live at feb-cfd.web.app on its own Firebase project: the report viewer from `07` with a shared library. The wider dashboard waits on the team's brief | `README.md` |
+| `08 CFD Sims Dashboard/` | The CFD app, live at feb-cfd.web.app on its own Firebase project: a dashboard of every report with its downforce and drag by design point, saved views, and the report viewer from `07`, all in the composites app's shell | `README.md` |
 | `09 Website/` | The public team website, built on the design system. Not deployed; its README has the state of it | `README.md` |
 | `tools/` | Everything that builds and checks the rest: the docx builder, the generators, the servers, and 19 test suites | `README.md` |
 
