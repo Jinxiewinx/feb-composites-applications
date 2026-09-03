@@ -34,15 +34,15 @@ import { $, el, esc, toast, fmtMB, shortDate } from "./util.js";
 export { $, el, esc, toast };
 
 /* Bumped by hand at release time; tags are cfd-vX.Y.Z (see README). */
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.3.1";
 
 /* ---------- boot splash ----------
    index.html paints it before this module (and pdf.js behind it) has even
    downloaded. Three milestones light three lamps; when all three are lit the
-   sheet leaves by itself after a short floor so it never flashes. It becomes
-   a gate only when the connection is slow (4 s: Continue anyway) or has
-   failed (12 s, or the library errored: Retry). */
-const SPLASH_T0 = performance.now();
+   Continue button appears and the sheet waits for it (or a tap, Enter,
+   Space, Escape), the composites app's gate. A slow boot (4 s) offers
+   Continue early; a failed one (12 s, or the library errored) offers Retry.
+   Nothing here dismisses the sheet on a timer. */
 const SPLASH = { fonts: 0, library: 0, views: 0 };   // 0 pending, 1 done, -1 failed
 const SPLASH_LABEL = { fonts: "fonts", library: "the library", views: "saved views" };
 let splashDone = false;
@@ -68,13 +68,12 @@ function splashStep(key, state) {
   const step = el.querySelector("#sp-step");
   if (step) step.textContent = failed.length ? `Could not reach ${failed.map(k => SPLASH_LABEL[k]).join(" and ")}.` : pending.length ? `Waiting for ${pending.join(", ")}…` : "Ready.";
   if (failed.length) el.classList.add("failed");
-  if (!pending.length && !failed.length) hideSplash();
+  if (!pending.length && !failed.length) el.classList.add("ready");
 }
-function hideSplash(force) {
+/* Somebody said go. The only way down. */
+function hideSplash() {
   if (splashDone) return;
   const el = splashEl(); if (!el) return;
-  const floor = 700 - (performance.now() - SPLASH_T0);
-  if (!force && floor > 0) { setTimeout(() => hideSplash(true), floor); return; }
   splashDone = true;
   el.setAttribute("aria-hidden", "true");
   el.classList.add("gone");
@@ -90,9 +89,15 @@ function hideSplash(force) {
   catch (e) { splashStep("fonts", 1); }
   setTimeout(() => { if (!splashDone) el.classList.add("slow"); }, 4000);
   setTimeout(() => { if (!splashDone) { for (const k in SPLASH) if (SPLASH[k] === 0) SPLASH[k] = -1; splashStep("library", SPLASH.library); } }, 12000);
-  el.querySelector("#sp-go").onclick = () => hideSplash(true);
-  el.querySelector("#sp-retry").onclick = () => location.reload();
-  el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === "Escape") hideSplash(true); });
+  const armed = () => el.classList.contains("ready") || el.classList.contains("slow") || el.classList.contains("failed");
+  el.querySelector("#sp-go").onclick = e => { e.stopPropagation(); hideSplash(); };
+  el.querySelector("#sp-retry").onclick = e => { e.stopPropagation(); location.reload(); };
+  // A tap anywhere on the sheet, or Enter / Space / Escape, once it is armed.
+  el.addEventListener("click", () => { if (armed()) hideSplash(); });
+  document.addEventListener("keydown", e => {
+    if (splashDone || !armed()) return;
+    if (["Enter", " ", "Escape"].includes(e.key)) { e.preventDefault(); hideSplash(); }
+  });
 })();
 
 /* ---------- mobile ----------

@@ -90,16 +90,15 @@ CFD app needs trendlines by request, so `chart.js` is a small SVG line chart
 that lives here, styled from the design tokens, and is not added to
 `05 Design System/`. One measure per chart, never two axes.
 
-## 7. The splash leaves by itself (2026-09-03)
+## 7. The splash is a gate, like the composites app's (2026-09-03)
 
-The composites app's boot splash is a gate: it waits for a press, by a
-deliberate decision there. This app's splash has the same look and the same
-honest lamps (three real milestones, never a timer) but takes itself down
-once they light, after a 700 ms floor so it never flashes. It turns into a
-gate only when the boot is slow (4 s, Continue anyway) or failed (12 s or a
-library error, Retry). A dashboard people open several times a day should
-not ask to be let in each time; a shop tablet that stays open all day is a
-different case.
+First cut had the sheet leave by itself once its lamps lit, on the argument
+that a dashboard opened several times a day should not ask to be let in.
+Simon wanted the Continue button, as in the composites app, and that stands:
+the lamps are still three real milestones, and once they are lit the sheet
+waits for Continue, a tap anywhere, Enter, Space or Escape. A slow boot
+offers Continue early; a failed one offers Retry. Nothing dismisses it on a
+timer.
 
 ## 8. A phone gets one report at a time (2026-09-03)
 

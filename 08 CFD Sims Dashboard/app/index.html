@@ -26,9 +26,9 @@
 
 <!-- Boot splash, the composites app's idea with this app's mark: the flow
      lines draw in over the wing while pdf.js and the library arrive. Three
-     lamps are three real milestones (fonts, library, views); it leaves on its
-     own once they are lit, and only turns into a gate if the connection is
-     slow or fails. core.js owns it. -->
+     lamps are three real milestones (fonts, library, views); once they are
+     lit the Continue button is the door, as in the composites app. A slow or
+     failed boot offers Continue anyway / Retry. core.js owns it. -->
 <div id="splash">
   <div class="sp-mark">
     <svg viewBox="0 0 512 512" fill="none" aria-hidden="true">
@@ -49,9 +49,10 @@
   <p class="sp-fact" id="sp-fact"></p>
   <div class="sp-slow">Still connecting. The library is one request away; the reader is a bigger download the first time.</div>
   <div class="sp-acts">
-    <button type="button" class="sp-go" id="sp-go">Continue anyway</button>
+    <button type="button" class="sp-go" id="sp-go">Continue</button>
     <button type="button" class="sp-retry" id="sp-retry">Retry</button>
   </div>
+  <div class="sp-hint" id="sp-hint">or press Enter</div>
 </div>
 
 <div id="app">

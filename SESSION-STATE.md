@@ -20,7 +20,7 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**The CFD app is at cfd-v0.3.0: Dashboard, saved views, composites shell, splash, mobile**
+**The CFD app is at cfd-v0.3.1: Dashboard, saved views, composites shell, splash, mobile**
 (2026-09-03). Decisions that must not be re-asked: open access with no
 sign-in; shared library in Storage; 07 untouched; the viewer canvas stays
 dark in both themes (DECISIONS #5); charts are the CFD app's own (#6); the
@@ -596,7 +596,8 @@ Five sessions, newest first. Older entries live in `git log`, not here.
 
 **2026-09-03 (latest) — CFD app through cfd-v0.3.0:** Dashboard, saved views,
 composites shell, then always-dark icon rail (0.2.1), then the boot splash
-and a one-report-at-a-time phone layout (0.3.0).
+and a one-report-at-a-time phone layout (0.3.0), then the splash made a
+Continue gate like the composites app's (0.3.1).
 
 **2026-09-02 — CFD viewer live, folders renumbered.** The 07 viewer
 is hosted at feb-cfd.web.app with a shared library, tagged cfd-v0.1.0. `03 App/`

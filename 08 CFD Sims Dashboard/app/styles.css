@@ -392,7 +392,13 @@ svg.trend .lastlbl { fill: var(--ink); font-weight: 600; font-variant-numeric: t
 .sp-go, .sp-retry { display: none; font: 600 13.5px var(--font); padding: 9px 18px; border-radius: 8px; cursor: pointer; }
 .sp-go { background: var(--gold); color: #1b1d22; border: 1px solid var(--gold); }
 .sp-retry { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35); }
-#splash.slow .sp-go, #splash.failed .sp-go, #splash.failed .sp-retry { display: inline-block; }
+#splash.ready .sp-go, #splash.slow .sp-go, #splash.failed .sp-go { display: inline-block; }
+#splash.failed .sp-retry { display: inline-block; }
+.sp-go { animation: sp-fade .3s ease both; }
+.sp-hint { font-size: 11.5px; color: var(--sb-text); opacity: 0; transition: opacity .3s; min-height: 1.2em; }
+#splash.ready .sp-hint, #splash.slow .sp-hint { opacity: .7; }
+#splash.ready { cursor: pointer; }
+@media (pointer: coarse) { .sp-hint { visibility: hidden; } }
 #app.sp-arrive { animation: sp-fade .45s ease both; }
 
 /* ---------- mobile: one report at a time ----------

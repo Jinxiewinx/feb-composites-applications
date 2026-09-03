@@ -32,8 +32,10 @@ try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", e => errors.push(String(e)));
   page.on("dialog", d => d.type() === "prompt" ? d.accept("first run of the season") : d.accept());
+  const go = async () => { await page.waitForSelector("#splash.ready", { timeout: 20000 }); await page.click("#sp-go"); };
   await page.goto(`http://localhost:${port}/`);
   await page.waitForFunction(() => window.CFD && Array.isArray(window.CFD.S.library), null, { timeout: 20000 });
+  await go();
   t("library listener connected to the Firestore emulator", true);
 
   await page.setInputFiles("#filepick", FIXTURE);
@@ -67,6 +69,7 @@ try {
     await lib.patch(id, { dp: null, results: {}, meta: {} });
   }, rec.id);
   await page.goto(`http://localhost:${port}/?open=${rec.id}&tab=panels`);
+  await go();
   await page.waitForFunction(() => window.CFD && window.CFD.S.docs.length === 1 && !window.CFD.S.docs[0].loading && window.CFD.S.docs[0].index, null, { timeout: 90000 });
   const back = await page.evaluate(() => [window.CFD.S.docs[0].reportId, window.CFD.S.docs[0].index.numPages, window.CFD.S.tab, window.CFD.S.page]);
   t("report fetched from the emulator bucket and indexed, into the viewer", back[0] === rec.id && back[1] === 39 && back[2] === "panels" && back[3] === "viewer", JSON.stringify(back));

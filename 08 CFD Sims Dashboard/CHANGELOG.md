@@ -7,6 +7,11 @@ relearn navigation, Minor for a new capability, Patch for fixes and copy.
 
 ---
 
+## cfd-v0.3.1 — 2026-09-03
+
+- The splash waits for Continue once its lamps are lit, as in the composites
+  app. A tap anywhere, Enter, Space or Escape also work.
+
 ## cfd-v0.3.0 — 2026-09-03
 
 - A boot splash like the composites app's: the mark draws in while pdf.js

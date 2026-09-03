@@ -97,8 +97,11 @@ try {
   await page.goto(`http://127.0.0.1:${port}/app/`);
   await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2 && document.querySelector(".rcard"), null, { timeout: 15000 });
   t("Dashboard is the landing page", await page.evaluate(() => window.CFD.S.page) === "dashboard");
+  await page.waitForFunction(() => document.querySelector("#splash.ready") && getComputedStyle(document.getElementById("sp-go")).display !== "none", null, { timeout: 5000 });
+  t("splash lit its lamps and offers Continue", await page.evaluate(() => document.querySelectorAll("#sp-lights .sp-lamp.on").length === 3 && document.getElementById("sp-go").textContent === "Continue"));
+  await page.click("#sp-go");
   await page.waitForFunction(() => !document.getElementById("splash"), null, { timeout: 5000 });
-  t("splash lit its lamps and left on its own", true);
+  t("Continue takes the splash down", true);
   t("sidebar is the icon rail: mark and two icons, no labels, no toggle", await page.evaluate(() => !!document.querySelector(".sb-brand .feb-mark") && document.querySelectorAll(".sb-item").length === 2 && !document.querySelector(".sb-label") && !document.querySelector(".sb-toggle") && document.querySelector("#app > .sidebar").getBoundingClientRect().width === 56));
   t("always dark, no theme toggle", await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" && !document.querySelector(".topbar .icon-btn[title*='theme']")));
   t("four stat tiles, latest DP first", await page.evaluate(() => document.querySelectorAll(".dstats .stat-tile").length === 4 && document.querySelector(".dstats .stat-label").textContent.includes("DP 23")));
@@ -126,6 +129,9 @@ try {
   /* ---- the viewer from a URL ---- */
   await page.goto(`http://127.0.0.1:${port}/app/?open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay&mode=diff`);
   await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2, null, { timeout: 15000 });
+  await page.waitForSelector("#splash.ready", { timeout: 5000 }); await page.keyboard.press("Enter");
+  await page.waitForFunction(() => !document.getElementById("splash"), null, { timeout: 5000 });
+  t("Enter takes the splash down too", true);
   await page.waitForFunction(() => {
     const S = window.CFD.S; return S.docs.length === 2 && S.docs.every(d => !d.loading && d.index);
   }, null, { timeout: 60000 });
@@ -184,7 +190,10 @@ try {
   mob.on("dialog", d => d.accept(d.defaultValue() || "x"));
   await mob.route("**/library.js", r => r.fulfill({ contentType: "text/javascript", body: LIB_STUB }));
   await mob.goto(`http://127.0.0.1:${port}/app/`);
-  await mob.waitForFunction(() => window.CFD && window.CFD.S.library && document.querySelector(".rcard") && !document.getElementById("splash"), null, { timeout: 15000 });
+  await mob.waitForFunction(() => window.CFD && window.CFD.S.library && document.querySelector(".rcard") && document.querySelector("#splash.ready"), null, { timeout: 15000 });
+  await mob.tap("#splash");
+  await mob.waitForFunction(() => !document.getElementById("splash"), null, { timeout: 5000 });
+  t("mobile: a tap anywhere on the ready splash takes it down", true);
   t("mobile: the rail is a bottom bar the width of the screen", await mob.evaluate(() => { const r = document.querySelector("#app > .sidebar").getBoundingClientRect(); return r.width === 390 && r.bottom === 844 && window.CFD.isMobile(); }));
   t("mobile: stat tiles in two columns, cards in one", await mob.evaluate(() => getComputedStyle(document.querySelector(".dstats")).gridTemplateColumns.split(" ").length === 2 && getComputedStyle(document.querySelector(".rgrid")).gridTemplateColumns.split(" ").length === 1));
   if (process.env.SHOTS) { await mob.screenshot({ path: process.env.SHOTS + "/mobile-dashboard.png" }); }
@@ -198,6 +207,7 @@ try {
   t("mobile: picking another report replaces the open one", true);
   if (process.env.SHOTS) { await mob.waitForTimeout(800); await mob.screenshot({ path: process.env.SHOTS + "/mobile-viewer.png" }); }
   await mob.goto(`http://127.0.0.1:${port}/app/?open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay`);
+  await mob.waitForSelector("#splash.ready", { timeout: 15000 }); await mob.tap("#sp-go");
   await mob.waitForFunction(() => window.CFD && window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].index && !document.getElementById("splash"), null, { timeout: 60000 });
   t("mobile: a two-report link opens only the first, on Pages", await mob.evaluate(() => window.CFD.S.docs[0].reportId === "RPT-AAAAAAAA" && window.CFD.S.tab === "pages"));
   await mob.close();
