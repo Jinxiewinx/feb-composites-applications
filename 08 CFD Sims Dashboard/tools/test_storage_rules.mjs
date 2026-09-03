@@ -51,5 +51,15 @@ await denied("account write to an unmatched tree", account, "secret/x.pdf");
 await denied("account write to someone else's avatar", account, "avatars/not-my-uid");
 await denied("account write too deep under sims/", account, "sims/SIM-SN6-001/nested/x.pdf");
 
+console.log("reports/: open, but only report.pdf and only a PDF (deny cases; the emulator's simple upload does not carry Content-Type into request.resource.contentType, so the allow case is exercised by the SDK in the smoke test and live):");
+await denied("unauthenticated write of another file name under reports/<id>/", null, "reports/RPT-AAAAAAAA/other.pdf");
+await denied("unauthenticated write to reports/ root", null, "reports/report.pdf");
+await denied("unauthenticated write one level too deep", null, "reports/RPT-AAAAAAAA/x/report.pdf");
+{
+  const res = await fetch(`${STORAGE}?name=${encodeURIComponent("reports/RPT-CCCCCCCC/report.pdf")}`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: Buffer.alloc(8, 1) });
+  const ok = res.status === 403; ok ? pass++ : fail++;
+  console.log(`${ok ? "  ok" : "FAIL"}  text/plain to report.pdf  → ${res.status} (want 403)`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

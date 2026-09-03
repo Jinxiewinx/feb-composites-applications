@@ -27,6 +27,17 @@ service firebase.storage {
           || request.resource.contentType == 'application/json');
     }
 
+    // reports/<id>/report.pdf: the CFD report library. Open to anyone on
+    // purpose (see firestore.rules). What an open, billed bucket still
+    // refuses: anything that is not a PDF, anything over 60 MB, and any file
+    // name other than report.pdf, so one record means one file.
+    match /reports/{id}/report.pdf {
+      allow read: if true;
+      allow write: if request.resource == null
+        || (request.resource.contentType == 'application/pdf'
+            && request.resource.size < 60 * 1024 * 1024);
+    }
+
     // sims/<simId>/<file>: everything attached to one sim.
     match /sims/{simId}/{file} {
       allow read: if signedIn();

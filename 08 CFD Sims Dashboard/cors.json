@@ -1,0 +1,9 @@
+[
+  {
+    "//": "The app fetches report PDFs from the bucket with fetch(), a cross-origin request from the hosting domain. Apply with: gsutil cors set cors.json gs://feb-cfd.firebasestorage.app",
+    "origin": ["https://feb-cfd.web.app", "https://feb-cfd.firebaseapp.com", "http://localhost:8792", "http://localhost:5051"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Range", "Accept-Ranges"],
+    "maxAgeSeconds": 3600
+  }
+]

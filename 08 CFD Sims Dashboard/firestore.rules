@@ -39,6 +39,31 @@ service cloud.firestore {
         && resource.data.createdBy == request.auth.token.email;
     }
 
+    // reports: the CFD report library. OPEN TO ANYONE, on purpose (Simon,
+    // 2026-09-02): no sign-in to read, upload, rename or delete. The bucket is
+    // billed, so what the rules do instead of gating WHO is bounding WHAT: a
+    // record is a fixed shape, the path is derived from the id, and only name
+    // and note change after creation. storage.rules caps the file itself.
+    function validReport(d) {
+      return d.keys().hasOnly(['id','name','path','size','sha256','pages','panels','note','createdAt'])
+        && d.id is string && d.id.size() >= 4 && d.id.size() <= 40
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 120
+        && d.path == 'reports/' + d.id + '/report.pdf'
+        && d.size is int && d.size > 0 && d.size < 60 * 1024 * 1024
+        && d.sha256 is string && d.sha256.size() == 64
+        && d.pages is int && d.pages >= 0 && d.pages < 10000
+        && d.panels is int && d.panels >= 0 && d.panels < 10000
+        && (!('note' in d) || (d.note is string && d.note.size() <= 500))
+        && d.createdAt is timestamp;
+    }
+    match /reports/{id} {
+      allow read: if true;
+      allow create: if validReport(request.resource.data) && request.resource.data.id == id;
+      allow update: if validReport(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'note']);
+      allow delete: if true;
+    }
+
     // sims: one document per simulation run. Summary numbers and paths only,
     // never large arrays or images (DECISIONS.md #3).
     match /sims/{id}       { allow read: if reader(); allow create, update: if onRoster(); allow delete: if isLead() || mine(); }

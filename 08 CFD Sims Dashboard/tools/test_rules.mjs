@@ -113,6 +113,27 @@ await expect(200, "member", "PATCH", "/meta/sims", { next: N(5) });
 await expect(403, "member", "PATCH", "/meta/sims", { next: N(3) });
 await expect(403, "lead",   "DELETE", "/meta/sims");
 
+console.log("reports: open library, bounded shape:");
+const T = (iso) => ({ timestampValue: iso });
+const rep = (id, extra = {}) => ({ id: S(id), name: S("DP 22"), path: S(`reports/${id}/report.pdf`), size: N(8500000),
+  sha256: S("a".repeat(64)), pages: N(39), panels: N(59), createdAt: T("2026-09-02T00:00:00Z"), ...extra });
+await expect(200, "none",  "PATCH", "/reports/RPT-AAAAAAAA", rep("RPT-AAAAAAAA"));          // anyone creates
+await expect(200, "none",  "GET",   "/reports/RPT-AAAAAAAA");                                // anyone reads
+await expect(200, "guest", "GET",   "/reports/RPT-AAAAAAAA");
+await expect(200, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { name: S("DP 22 baseline") }, ["name"]);
+await expect(200, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { note: S("first run") }, ["note"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { path: S("reports/other/report.pdf") }, ["path"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { sha256: S("b".repeat(64)) }, ["sha256"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { size: N(1) }, ["size"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-BBBBBBBB", rep("RPT-CCCCCCCC"));        // id must match doc id
+await expect(403, "none",  "PATCH", "/reports/RPT-DDDDDDDD", rep("RPT-DDDDDDDD", { path: S("reports/RPT-DDDDDDDD/other.pdf") }));
+await expect(403, "none",  "PATCH", "/reports/RPT-EEEEEEEE", rep("RPT-EEEEEEEE", { size: N(70 * 1024 * 1024) }));
+await expect(403, "none",  "PATCH", "/reports/RPT-FFFFFFFF", rep("RPT-FFFFFFFF", { note: S("x".repeat(501)) }));
+await expect(403, "none",  "PATCH", "/reports/RPT-GGGGGGGG", rep("RPT-GGGGGGGG", { extra: S("no") }));
+await expect(403, "none",  "PATCH", "/reports/RPT-HHHHHHHH", rep("RPT-HHHHHHHH", { sha256: S("short") }));
+await expect(200, "none",  "DELETE", "/reports/RPT-AAAAAAAA");                              // anyone deletes
+await expect(403, "none",  "PATCH", "/config/release", { version: S("1") });                // config still closed
+
 console.log("lead:");
 await expect(200, "lead", "PATCH", "/roster/new@feb.test", { name: S("New"), role: S("member") });
 await expect(200, "lead", "DELETE", "/roster/new@feb.test");
