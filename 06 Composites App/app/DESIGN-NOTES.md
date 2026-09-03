@@ -192,7 +192,7 @@ number live". None of them are derivable from the code that reads them.
 
 | Doc | Holds |
 |---|---|
-| `config/season` | Season name, competition date and milestones — what the dashboard counts down to |
+| `config/season` | Season code (`SN6`), name, competition date and milestones. The code goes into every new id and picks which season the rails show |
 | `config/restock` | CS-011 §5 minimums per material, with the standard's own reasoning attached. Editable because §5 calls them "starting values; tune with usage data" |
 | `config/trainings` | Trainings added beyond the six built-ins. Archives instead of deleting, so a historic grant keeps rendering its name |
 | `config/resins` | Per-resin cure-hold overrides. Never below the datasheet floor — see below |
@@ -225,6 +225,39 @@ write a per-resin override into `config/resins`, but only the hold and its
 sign-off can move: the datasheet floor stays in code, and an override below it
 is refused at write time **and** ignored at read time, so nothing can weaken a
 hold from either side.
+
+## Seasons and `archived` (v4.3.0)
+
+Nothing is deleted to make room. Two axes, both in `core.js` beside
+`inSeason()`:
+
+| | |
+|---|---|
+| `recSeason(rec)` | read off the id (`P-SN5-001` is SN5); an explicit `season` field wins |
+| `seasonCode()` | `config/season.code`, `"SN6"` when unset |
+| `thisSeason(rec)` | the two agree |
+| `isArchived(rec)` | the raw `archived` flag on a part, work order or R&D study |
+| `setArchived(coll, ids, on)` | the one write path; stamps `archivedAt` / `archivedBy`, any roster member |
+
+`inSeason()` now also requires `!archived && thisSeason()`, so the dashboard,
+the Season blueprint and the Sheet mirror drop archived and last-season
+records without any of those files knowing either flag exists.
+
+The rails default to this season with archived hidden. Two chips, same
+swap-not-add shape as R&D: the other-season chip (named after the season when
+there is only one) adds last season back, and the archived chip *replaces* the
+list with what is put away. `view.allSeasons` survives `setTab()` so a lead
+reading the SN5 archive can walk Parts to Work Orders; `view.showArch` does
+not.
+
+Rolling a season over is one edit in Season settings. `fb.allocId` mints with
+the new code and a fresh `<key>@<code>` counter, while the SN6 counter keys
+stay byte-identical (re-keying a live counter resets it to 1 and mints
+duplicates over real records).
+
+`archived` is **not** `retro`. An archived run still enforces its gates if
+somebody restores and works it; the flag changes where a record is listed,
+never what it means.
 
 ## `rnd` is not a second `retro`
 

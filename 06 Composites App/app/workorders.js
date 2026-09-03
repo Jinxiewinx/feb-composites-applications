@@ -390,6 +390,17 @@ function woPickAll(on) {
 }
 function woPickedIds() { return Object.keys(view.woPick || {}); }
 function deletePickedWOs() { woBulkDelete(woPickedIds()); }
+function archivePickedWOs(on) {
+  const n = setArchived("workOrders", woPickedIds(), on);
+  view = { ...view, woPick: null };
+  toast(`${n} work order${n === 1 ? "" : "s"} ${on ? "archived" : "restored"}.`);
+  render();
+}
+function archiveWO(id, on) {
+  setArchived("workOrders", [id], on);
+  toast(`${id} ${on ? "archived — find it under the archived chip" : "restored"}.`);
+  render();
+}
 
 /* Two ways to be a blocker, and both have to keep working. The rule field is
    how new templates say it. The title match is how every record already saved
@@ -803,6 +814,9 @@ function woIndexRows() {
        trial still surfaces where lateness is looked for. The open run is
        re-added below, so a deep link or a ⌘K hit still opens. */
     .filter(w => (view.woOnlyRnd ? woIsRnd(w) : !woIsRnd(w)))
+    // This season by default and archived swapped out, exactly as on Parts.
+    .filter(w => view.allSeasons || thisSeason(w))
+    .filter(w => (view.showArch ? isArchived(w) : !isArchived(w)))
     .filter(w => !q || w.id.toLowerCase().includes(q) || (w.partName || "").toLowerCase().includes(q));
   // The open run never falls out from under you — a filter that would hide what
   // you are reading keeps it in place instead. This is the whole point of a
@@ -813,7 +827,7 @@ function woIndexRows() {
 }
 
 function woSummary() {
-  const D = DB.workOrders || [];
+  const D = railLive(DB.workOrders);
   const open = D.filter(w => w.status !== "Complete");
   let curing = 0, blocked = 0, issues = 0;
   D.forEach(w => { const f = woFlags(w); if (f.curing) curing++; if (f.blocked) blocked++; if (openIssuesForWO(w.id).length) issues++; });
@@ -887,10 +901,10 @@ function woIndexItem(w, opts) {
     ? `<input type="checkbox" class="wopick" ${ticked ? "checked" : ""} aria-label="Select ${esc(w.id)}"
         onclick="event.stopPropagation();toggleWOPick('${esc(w.id)}')"> `
     : "";
-  return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""} ${ticked ? "picked" : ""}" id="pi-${esc(w.id)}"
+  return `<div class="pitem ${sel ? "sel" : ""} ${done ? "isdone" : ""} ${ticked ? "picked" : ""} ${isArchived(w) ? "isarch" : ""}" id="pi-${esc(w.id)}"
       role="option" aria-selected="${picking ? ticked : sel}" title="${esc(w.id)} · ${esc(w.processType || "")} · ${esc(w.status || "")}"
       onclick="${picking ? `toggleWOPick('${esc(w.id)}')` : `selectWO('${esc(w.id)}')`}">
-    <span class="pi-name">${box}${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(woIsRnd(w))}</span>
+    <span class="pi-name">${box}${name}${w.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(woIsRnd(w))}${archivedPill(w, true)}</span>
     <span class="pi-due ${late ? "warn" : ""}">${w.dueDate ? shortDate(w.dueDate) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${woProgBar(pr)}${flag || `<span class="tny">${esc(opts.hidePart ? (w.processType || "") : (w.subteam || ""))}</span>`}</span>
     <span class="pi-who">${engs.map(e => avatar(e, 20)).join("")}</span>
@@ -998,15 +1012,17 @@ function renderWOIndex() {
           return `<button class="sm" onclick="woPickAll(true)">All ${rows.length}</button>
             <button class="sm" onclick="woPickAll(false)">None</button>
             <span class="muted tny">${n} selected</span>
-            <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedWOs()">Delete ${n || ""}</button>
+            <button class="sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="archivePickedWOs(${view.showArch ? "false" : "true"})">${view.showArch ? "Restore" : "Archive"} ${n || ""}</button>
+            ${isLead() ? `<button class="danger sm" ${n ? "" : "disabled"} onclick="deletePickedWOs()">Delete ${n || ""}</button>` : ""}
             <button class="sm ib" onclick="cancelWOPick()">${icon("x", 14)}</button>`;
         })() : `<button class="primary ib"${gx("Sign in to start a run.")} onclick="newWO()">${icon("plus", 15)} New WO</button>
         <button class="ib" onclick="newWO(true)">${icon("plus", 15)} R&amp;D run</button>
         <button class="sm" onclick="openBlankTraveler()">Blank traveler</button>
-        ${/* Lead-only, because firestore.rules allows a workOrders delete to
-              leads only and there is no mine() clause — a member's bulk delete
+        ${/* Any roster member can pick, because Archive is a plain update. The
+              Delete button inside pick mode is what stays lead-only: the rules
+              allow a workOrders delete to leads only, so a member's bulk delete
               would fail server-side, one record at a time, after the confirm. */""}
-        ${isLead() ? `<button class="sm" onclick="startWOPick()">Select…</button>` : ""}
+        ${canEdit() ? `<button class="sm" onclick="startWOPick()">Select…</button>` : ""}
         <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} work orders</span>`}
       </div>
       <div class="psum">
@@ -1022,6 +1038,9 @@ function renderWOIndex() {
               because while it is off that is the number being held back. */""}
         ${(() => { const n = (DB.workOrders || []).filter(woIsRnd).length;
           return n ? summaryChip("R&D", n, !!view.woOnlyRnd, "view.woOnlyRnd=!view.woOnlyRnd;render()") : ""; })()}
+        ${(() => { const h = railHeldBack(DB.workOrders);
+          return (h.other ? summaryChip(h.otherLabel, h.other, !!view.allSeasons, "view.allSeasons=!view.allSeasons;render()") : "")
+            + (h.arch ? summaryChip("archived", h.arch, !!view.showArch, "view.showArch=!view.showArch;render()") : ""); })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search id / part…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -1305,6 +1324,7 @@ function renderWODetail() {
     <button onclick="openPrintPreview('${wo.id}')">Print</button>
     ${labelBtn("workOrders", wo.id)}
     <button onclick="woJump('wo-issues')">⚠ Issues</button>
+    ${E ? `<button onclick="archiveWO('${wo.id}',${isArchived(wo) ? "false" : "true"})">${isArchived(wo) ? "Restore" : "Archive"}</button>` : ""}
     ${E && isLead() ? `<button onclick="resetSteps(woById('${wo.id}'))">Reset steps to standard</button>
     <button class="danger" onclick="delWO('${wo.id}')">Delete</button>` : ""}
     <span class="mdnav no-print">
@@ -1317,7 +1337,7 @@ function renderWODetail() {
         section is open. A gate you can navigate away from is a gate that gets
         walked past. */""}
   <div class="card wohead">
-    <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(woIsRnd(wo))}</h2>
+    <h2>${esc(wo.id)} · ${esc(wo.partName || "(unnamed)")} ${wo.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(woIsRnd(wo))}${archivedPill(wo)}</h2>
     ${/* The facts band replaces the old middle-dot run-on line: the answers
           someone actually comes for (can I work it, how far along, when is it
           due, is it on mass, whose is it) each get their own labeled slot.

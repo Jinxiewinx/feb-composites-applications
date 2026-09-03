@@ -225,7 +225,16 @@ await t("member topbar hides Restore/Roster", () => {
 });
 
 console.log("work orders:");
-await t("seed loads, 26 rows", () => { setTab("workorders"); onFbData("workOrders", woSeed.slice()); assert(DB.workOrders.length === 26); assert(main.innerHTML.includes("26 of 26 work orders")); });
+await t("seed loads, 26 rows — held back as SN5 until the chip is on", () => {
+  setTab("workorders"); onFbData("workOrders", woSeed.slice());
+  assert(DB.workOrders.length === 26);
+  // v4.3.0: the rail defaults to this season, and the SN5 archive is one chip away.
+  assert(main.innerHTML.includes("0 of 26 work orders"), "SN5 runs are held back by default");
+  assert(main.innerHTML.includes("<b>26</b> SN5"), "and the chip says how many and which season");
+  view.allSeasons = true; render();
+  assert(main.innerHTML.includes("26 of 26 work orders"), "the chip brings them all back");
+  view.allSeasons = false;
+});
 await t("newWO allocates + saves + opens detail", async () => { calls.length = 0; await newWO(); assert(calls.some(c => c[0] === "allocId" && c[1] === "workOrders")); assert(calls.some(c => c[0] === "save" && c[1] === "workOrders")); assert(view.mode === "detail" && view.edit); });
 await t("blocker blocks later buy-off", () => { const id = view.id; lastToast = ""; buyoff(2); assert(lastToast.includes("Blocked")); assert(!isSigned(woById(id).steps[2])); });
 /* ---- evidence on a buy-off ----------------------------------------------
@@ -1236,7 +1245,7 @@ await t("every SN5 record renders in both panes with no migration", () => {
   const seed = JSON.parse(readFileSync(join(root, "sn5-parts.json"), "utf8"));
   DB.parts = seed.map(p => ({ ...p }));
   DB.workOrders = []; DB.projects = []; DB.schedule = []; DB.users = [];
-  view = { ...view, tab: "parts", mode: "list", id: null, edit: false, q: "", fSub: "", fDone: true, fLate: false, fMine: false, fEng: "", sortKey: null };
+  view = { ...view, tab: "parts", mode: "list", id: null, edit: false, q: "", fSub: "", fDone: true, fLate: false, fMine: false, fEng: "", sortKey: null, allSeasons: true };
   render();
   seed.forEach(p => assert(main.innerHTML.includes(`id="pi-${p.id}"`), p.id + " missing from the index"));
   seed.forEach(p => {
@@ -1247,6 +1256,7 @@ await t("every SN5 record renders in both panes with no migration", () => {
     assert(main.innerHTML.includes("pgrid"), p.id + " edit mode failed to render");
     view.edit = false;
   });
+  view.allSeasons = false;
 });
 await t("the ≤900 collapse is a stylesheet rule, in the one responsive block, keyed off the same has-sel state", () => {
   const css = readFileSync(join(root, "index.html"), "utf8");
@@ -6018,10 +6028,14 @@ await t("a member cannot bulk-delete, and the rail does not offer it", async () 
 
   view = { ...view, tab: "workorders", mode: "list", id: null, woPick: null };
   render();
-  assert(!main.innerHTML.includes("startWOPick()"), "a member is not offered the picker");
+  assert(main.innerHTML.includes("startWOPick()"), "a member is offered the picker (archive is a plain update)");
+  startWOPick(); toggleWOPick("WO-SN6-001");
+  assert(!main.innerHTML.includes("deletePickedWOs()"), "but not the Delete button inside it");
+  assert(main.innerHTML.includes("archivePickedWOs(true)"), "Archive is what a member gets");
+  cancelWOPick();
   fb.roster = { name: "Simon", role: "lead" };
   render();
-  assert(main.innerHTML.includes("startWOPick()"), "a lead is");
+  assert(main.innerHTML.includes("startWOPick()"), "a lead is too");
 
   // Picking mode swaps the rail's toolbar and puts a box on every row.
   startWOPick();
@@ -6045,10 +6059,13 @@ await t("Parts has the same Select… picker as Work orders, lead-only, one dele
 
   view = { ...view, tab: "parts", mode: "list", id: null, partPick: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false, fEng: "" };
   render();
-  assert(!main.innerHTML.includes("startPartPick()"), "a member is not offered the picker");
+  assert(main.innerHTML.includes("startPartPick()"), "a member is offered the picker, for archiving");
+  startPartPick(); togglePartPick("P-SN6-001");
+  assert(!main.innerHTML.includes("deletePickedParts()"), "but a member sees no Delete inside it");
+  cancelPartPick();
   fb.roster = { name: "Simon", role: "lead" };
   render();
-  assert(main.innerHTML.includes("startPartPick()"), "a lead is");
+  assert(main.innerHTML.includes("startPartPick()"), "a lead is too");
 
   startPartPick();
   assert(main.innerHTML.includes("togglePartPick('P-SN6-001')"), "rows toggle in pick mode instead of opening");
@@ -6067,6 +6084,104 @@ await t("Parts has the same Select… picker as Work orders, lead-only, one dele
   view = { ...view, partPick: { "P-SN6-001": true }, woPick: { "WO-X": true } };
   setTab("dashboard");
   assert(view.partPick === null && view.woPick === null, "setTab clears both pick maps");
+});
+
+await t("a record's season is read off its id, and the current one comes from config", () => {
+  const was = window.SEASON;
+  window.SEASON = null;
+  assert(seasonCode() === "SN6", "no config doc means SN6, so live data is unchanged");
+  assert(recSeason({ id: "P-SN5-001" }) === "SN5", "P-SN5-001 is SN5");
+  assert(recSeason({ id: "WO-SN6-010" }) === "SN6", "WO-SN6-010 is SN6");
+  assert(recSeason({ id: "X1" }) === "SN6", "an id with no code reads as the current season");
+  assert(recSeason({ id: "P-SN5-001", season: "SN6" }) === "SN6", "an explicit season field wins");
+  assert(thisSeason({ id: "P-SN5-001" }) === false && thisSeason({ id: "P-SN6-001" }) === true, "thisSeason compares the two");
+  window.SEASON = { code: "SN7" };
+  assert(thisSeason({ id: "P-SN6-001" }) === false, "rolling the code over moves SN6 out of the season");
+  assert(localId("parts").startsWith("P-SN7-"), "and offline ids mint with the new code");
+  window.SEASON = was;
+  assert(inSeason({ id: "P-SN6-001" }) === true, "a plain SN6 part is on the board");
+  assert(inSeason({ id: "P-SN6-001", archived: true }) === false, "an archived one is not");
+  assert(inSeason({ id: "P-SN5-001" }) === false, "and neither is last season's, retro flag or not");
+});
+
+await t("the rails show this season by default, hide archived, and the chips swap the lists", () => {
+  DB.parts = [
+    { id: "P-SN6-001", partName: "Nose" },
+    { id: "P-SN6-002", partName: "Seat", archived: true },
+    { id: "P-SN5-003", partName: "Old wing", retro: true },
+  ];
+  DB.workOrders = [
+    { id: "WO-SN6-001", partName: "Nose", status: "Draft" },
+    { id: "WO-SN6-002", partName: "Seat", status: "Draft", archived: true },
+    { id: "WO-SN5-003", partName: "Old wing", status: "Complete", retro: true },
+  ];
+  fb.roster = { name: "Simon", role: "lead" };
+  view = { ...view, tab: "parts", mode: "list", id: null, partPick: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false, fEng: "", allSeasons: false, showArch: false };
+  let ids = partIndexRows().map(p => p.id);
+  assert(ids.join() === "P-SN6-001", "only the live SN6 part: " + ids.join());
+  render();
+  assert(main.innerHTML.includes("<b>1</b> SN5"), "the other-season chip names the season when there is one");
+  assert(main.innerHTML.includes("<b>1</b> archived"), "and the archived chip counts what is put away");
+  view.allSeasons = true;
+  ids = partIndexRows().map(p => p.id);
+  assert(ids.includes("P-SN5-003") && !ids.includes("P-SN6-002"), "all seasons brings SN5 back, still not the archived one");
+  view.allSeasons = false; view.showArch = true;
+  ids = partIndexRows().map(p => p.id);
+  assert(ids.join() === "P-SN6-002", "the archived chip REPLACES the list: " + ids.join());
+  view.showArch = false;
+
+  view = { ...view, tab: "workorders", woOpen: false, woDone: false, woLate: false, woMine: false, woIssues: false, woOnlyRnd: false, fStatus: "" };
+  ids = woIndexRows().map(w => w.id);
+  assert(ids.join() === "WO-SN6-001", "same on the work-order rail: " + ids.join());
+  view.allSeasons = true;
+  assert(woIndexRows().some(w => w.id === "WO-SN5-003"), "all seasons shows the SN5 run");
+  view.allSeasons = false;
+
+  // A deep link into an archived record still opens it.
+  view = { ...view, mode: "detail", id: "WO-SN6-002", edit: true };
+  assert(woIndexRows().some(w => w.id === "WO-SN6-002"), "the open record never falls out from under you");
+  render();
+  assert(main.innerHTML.includes("archiveWO('WO-SN6-002',false)"), "and its page offers Restore, not Archive");
+  view.edit = false;
+  setTab("dashboard");
+  assert(view.showArch === false, "setTab drops the archived swap");
+});
+
+await t("archiving writes the flag and the stamp, restoring clears them, and it is not a delete", () => {
+  DB.parts = [{ id: "P-SN6-001", partName: "Nose" }, { id: "P-SN6-002", partName: "Seat" }];
+  fb.roster = { name: "Nico", role: "member" };
+  calls.length = 0;
+  const n = setArchived("parts", ["P-SN6-001", "P-SN6-002", "P-NOPE"], true);
+  assert(n === 2, "two archived, the unknown id ignored");
+  assert(DB.parts.every(p => p.archived === true && p.archivedAt && p.archivedBy !== undefined), "flag and stamp set locally");
+  assert(calls.filter(c => c[0] === "save" && c[1] === "parts").length === 6, "three fields saved per record");
+  assert(!calls.some(c => c[0] === "del"), "and nothing was deleted");
+  assert(setArchived("parts", ["P-SN6-001"], true) === 0, "archiving an archived record is a no-op");
+  assert(setArchived("parts", ["P-SN6-001"], false) === 1 && DB.parts[0].archived === false, "restore clears it");
+  assert(DB.parts[0].archivedAt === "" && DB.parts[0].archivedBy === "", "and the stamp");
+  view = { ...view, tab: "parts", mode: "list", id: null, partPick: { "P-SN6-002": true } };
+  archivePickedParts(false);
+  assert(DB.parts[1].archived === false && view.partPick === null, "the pick-mode button restores and leaves pick mode");
+});
+
+await t("an archived R&D study leaves the index with its batches, and can come back", () => {
+  DB.rnd = [
+    { id: "RDS-SN6-001", cls: "RDS", name: "Cure sweep", status: "Active" },
+    { id: "RDS-SN6-002", cls: "RDS", name: "Batch A", status: "Active", parent: "RDS-SN6-001" },
+    { id: "RDS-SN6-003", cls: "RDS", name: "Bond shear", status: "Active" },
+  ];
+  fb.roster = { name: "Nico", role: "member" };
+  view = { ...view, tab: "rnd", mode: "list", id: null, rdStudy: "RDS-SN6-003", rdArch: false };
+  rdArchiveStudy("RDS-SN6-001", true);
+  assert(DB.rnd[0].archived && DB.rnd[1].archived && !DB.rnd[2].archived, "root and batch archived, the other study untouched");
+  render();
+  assert(!main.innerHTML.includes("rdOpen('RDS-SN6-001')"), "the archived study is off the index");
+  assert(main.innerHTML.includes("1 archived study"), "and the index says one is put away");
+  view.rdArch = true; render();
+  assert(main.innerHTML.includes("rdOpen('RDS-SN6-001')"), "the toggle brings it back");
+  rdArchiveStudy("RDS-SN6-001", false);
+  assert(!DB.rnd[0].archived && !DB.rnd[1].archived, "restore clears the batch too");
+  view.rdArch = false;
 });
 
 await t("re-rendering keeps each rail where it was scrolled", () => {

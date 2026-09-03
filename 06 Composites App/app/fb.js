@@ -116,6 +116,13 @@ const COLLECTIONS = ["workOrders", "parts", "projects", "schedule", "budget", "d
    that forgot its class silently mint an `RND-` id — a prefix ID_TO_COLL does
    not know, which routes nowhere, and only offline, where localId() is the
    allocator. Leaving the entry out makes that a visible mistake instead. */
+/* The season code new ids carry, from config/season.code (core.js loads it
+   into window.SEASON). "SN6" when unset, so nothing changes on the live data.
+   The counter key stays BYTE-IDENTICAL for SN6 — re-keying a live counter
+   resets it to 1 and mints duplicates over real records — and every later
+   season gets its own `<key>@<code>` counter, so SN7 starts at 001. */
+function seasonCodeFb() { return (window.SEASON && window.SEASON.code) || "SN6"; }
+function counterKeyFor(key, code) { return code === "SN6" ? key : `${key}@${code}`; }
 const ID_PREFIX = { workOrders: "WO", parts: "P", projects: "PROJ", budget: "BUY", documents: "DOC", stock: "BRD", stackplans: "STK", molds: "MOLD" };
 
 /* ---- the public mirror ----
@@ -361,13 +368,14 @@ const fb = {
   async allocId(coll, cls) {
     noWrites();
     const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
-    const counterKey = cls || coll;
+    const code = seasonCodeFb();
+    const counterKey = counterKeyFor(cls || coll, code);
     return runTransaction(db, async (tx) => {
       const ref = doc(db, "meta", counterKey);
       const snap = await tx.get(ref);
       const n = (snap.exists() && snap.data().next) || 1;
       tx.set(ref, { next: n + 1 }, { merge: true });
-      return `${prefix}-SN6-${String(n).padStart(3, "0")}`;
+      return `${prefix}-${code}-${String(n).padStart(3, "0")}`;
     });
   },
 
@@ -390,14 +398,15 @@ const fb = {
     if (!(n > 0)) return [];
     if (n > 50) throw new Error("id block too large: " + n);
     const prefix = cls || ID_PREFIX[coll] || coll.toUpperCase();
-    const counterKey = cls || coll;
+    const code = seasonCodeFb();
+    const counterKey = counterKeyFor(cls || coll, code);
     return runTransaction(db, async (tx) => {
       const ref = doc(db, "meta", counterKey);
       const snap = await tx.get(ref);
       const first = (snap.exists() && snap.data().next) || 1;
       tx.set(ref, { next: first + n }, { merge: true });
       const out = [];
-      for (let i = 0; i < n; i++) out.push(`${prefix}-SN6-${String(first + i).padStart(3, "0")}`);
+      for (let i = 0; i < n; i++) out.push(`${prefix}-${code}-${String(first + i).padStart(3, "0")}`);
       return out;
     });
   },

@@ -317,6 +317,11 @@
   .pill.Draft { background: var(--fill); }
   .pill.OnHold { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad); }
   .pill.retro { background: var(--retro-bg); border-color: var(--retro-border); color: var(--retro); }
+  /* Archived: put away, not gone. Grey, and the rail row dims so a restored
+     one visibly comes back to life. */
+  .pill.archived { background: var(--fill); border-color: var(--line); color: var(--muted); border-style: dashed; }
+  .pitem.isarch { opacity: .62; }
+  .rdindex .rdarch { display: block; padding: 6px 4px 2px; }
   /* "This purchase is on somebody else's line." Purple, the app's existing
      colour for a record that is real but sits outside the normal flow — the
      pill carries the budget's name, so it reads as a label rather than as a

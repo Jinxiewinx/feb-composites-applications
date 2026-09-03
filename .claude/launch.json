@@ -12,6 +12,16 @@
         "08 CFD Sims Dashboard/app"
       ],
       "port": 8792
+    },
+    {
+      "name": "composites-populated",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/serve_populated.mjs",
+        "--port",
+        "8793"
+      ],
+      "port": 8793
     }
   ]
 }

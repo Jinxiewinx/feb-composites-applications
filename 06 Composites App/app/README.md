@@ -103,6 +103,13 @@ without one.
 - On the clock — *"No cure is running."* plus the next milestone and the
   countdown, so it is never empty once a season exists.
 
+**Season settings** (a lead, from the ⋯ menu) holds the season code, the
+competition name and date, and the milestones. The code is the `SN6` in every
+new id and the season the rails show by default. When the next car starts,
+change it to `SN7`: ids restart at 001 on their own counters, the rails show
+SN7, and every SN6 record stays where it is, one chip away. Nothing needs
+deleting between seasons.
+
 **Role.** A lead also sees purchases over $50 awaiting sign-off, cure holds they
 could release, and open work with nobody's name on it. A member sees the steps
 they can actually sign. A **guest** gets the showcase — the season, the build
@@ -348,9 +355,11 @@ issues whose work order no longer resolved — and an issue cannot exist without
 one, the app refuses to make one — every photo and CAD file still sitting in
 storage where nothing could find it again, and links on parts, molds and test
 panels pointing at nothing. There is one delete path now and it takes a list,
-so the single delete gets the same cleanup. **Select…** on the rail (leads
-only, because the database rules allow the delete to leads only) ticks as many
-runs as you like; the confirm counts exactly what goes — so many issues, so
+so the single delete gets the same cleanup. **Select…** on the rail is open to
+every roster member for **Archive** and Restore, which is the normal way to put
+a finished or abandoned run away; the Delete button inside it appears for leads
+only, because the database rules allow the delete to leads only. Delete ticks
+as many runs as you like; the confirm counts exactly what goes — so many issues, so
 many uploaded files — and what merely loses a link, since a part outlives the
 run that made it. Material a run already consumed stays consumed, because it
 really was used, and the confirm says so. There is **no undo**: a deleted file
@@ -369,13 +378,20 @@ The page is built from the same section cards as a work order: a jump bar with a
 count per section and a warn dot, Progress, the layup stack and the runs open by
 default, and the reference sections folded until asked for.
 
-**Select…** on the Parts rail (leads only, matching the database rule) is the
-same picker Work Orders has: tick as many parts as you like, All or None, then
-Delete them together after one confirm that counts what goes. The Delete button
-on a part's own page is the same path with a list of one. Work orders that
-pointed at a deleted part keep their link field; the run's history matters more
-than a tidy pointer, and the app already tolerates a part that is not there.
-There is no undo, so export a backup first if unsure.
+**Archive, don't delete.** A part you are done with gets **Archive** on its
+page (in edit mode) or in **Select…** mode on the rail, where any roster
+member can tick several and archive them together. Archived parts leave the
+rail, the dashboard and the Season blueprint but stay in the database with
+who archived them and when; the **archived** chip on the rail shows the list
+and offers Restore. Delete is still there for leads, inside Select… and on the
+page, for records that should never have existed. It is the same one path with
+a list of one, there is no undo, and work orders that pointed at a deleted
+part keep their link field.
+
+**This season by default.** The rail reads a part's season off its id
+(P-SN5-001 is SN5) and shows the current season only. Last season's parts are
+one chip away, named after the season when there is only one (**SN5**). The
+chip stays on as you move between Parts and Work Orders.
 
 Both rails keep their scroll position across every re-render. Ticking a box
 or opening a row used to throw the list back to the top and then park the
@@ -1156,6 +1172,10 @@ record is then precise, confident and wrong. An honest gap is worth more. The
 lots print on the traveler too, unflattering source and all.
 
 ## The R&D bench
+
+**Archive a study** from the toolbar when it is open (batches under it follow).
+It leaves the index and the "N archived studies" checkbox at the foot of the
+index brings it back, with Restore in the same place.
 
 **For coupons, not for parts.** Ten flat panels at two cure temperatures, six
 infusion trials, a box of offcuts you want to keep track of. There is no work

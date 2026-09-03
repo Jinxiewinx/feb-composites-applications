@@ -616,7 +616,8 @@ function renderRnd() {
      press away, and pressing the open study closes it. */
   let sel = rdStudy(view.rdStudy);
   if (!sel) {
-    const first = rdStudies().filter(s => s.status === "Active")[0] || rdStudies()[0];
+    const live = rdStudies().filter(s => !isArchived(s));
+    const first = live.filter(s => s.status === "Active")[0] || live[0] || rdStudies()[0];
     if (first) { view.rdStudy = first.id; sel = first; }
   }
   /* The empty state is for an EMPTY BENCH, not for "nothing selected" — it says
@@ -632,6 +633,7 @@ function rdToolbar(sel) {
     ${sel && !sel.parent ? `<button class="ib"${gx("Sign in to add a batch.")} onclick="rdNewStudyModal('${esc(sel.id)}')">${icon("plus", 15)} New batch</button>` : ""}
     <span class="tny muted">${coupons} coupon${coupons === 1 ? "" : "s"} · ${studies} stud${studies === 1 ? "y" : "ies"}</span>
     <span style="flex:1"></span>
+    ${sel && !sel.parent && canEdit() ? `<button class="sm" onclick="rdArchiveStudy('${esc(sel.id)}',${isArchived(sel) ? "false" : "true"})">${isArchived(sel) ? "Restore" : "Archive"} study</button>` : ""}
     ${!sel ? ""
       : rdIsParent(sel)
         /* A project holds batches, and a coupon belongs in one of them. Offering
@@ -670,18 +672,33 @@ function rdStudyRow(s, isChild) {
   return `<div class="rdrow${isChild ? " rdchild" : ""}${on ? " on" : ""}">
     <button class="rd-open" onclick="rdOpen('${esc(s.id)}')">${esc(s.name || s.id)}</button>
     <span class="tny muted">${n} coupon${n === 1 ? "" : "s"}</span>
-    <span class="stage ${s.status === "Done" ? "st-done" : s.status === "Parked" ? "st-na" : "st-mid"}">${esc(s.status || "Active")}</span>
+    <span class="stage ${s.status === "Done" ? "st-done" : s.status === "Parked" ? "st-na" : "st-mid"}">${esc(s.status || "Active")}</span>${archivedPill(s, true)}
     <span class="tny muted">${ins || res ? `${ins} in · ${res} result` : ""}</span>
   </div>`;
 }
 
 function rdIndexHtml(sel) {
-  const roots = rdRoots();
-  if (!roots.length) return "";
+  const all = rdRoots();
+  if (!all.length) return "";
+  /* Archived studies (and their batches) leave the index, not the database;
+     the open study stays listed so archiving it does not blank the sheet. */
+  const arch = all.filter(isArchived).length;
+  const roots = all.filter(r => view.rdArch ? isArchived(r) : (!isArchived(r) || (sel && sel.id === r.id)));
   return `<div class="card rdindex no-print">
     ${roots.map(r => rdStudyRow(r, false) + rdChildren(r.id).map(c => rdStudyRow(c, true)).join("")).join("")}
+    ${arch ? `<label class="tny muted rdarch"><input type="checkbox" ${view.rdArch ? "checked" : ""} onchange="view.rdArch=this.checked;render()"> ${arch} archived stud${arch === 1 ? "y" : "ies"}</label>` : ""}
     ${rdPartsHtml()}
   </div>`;
+}
+/* A study is archived as a whole: the batches under it follow the root, so a
+   parked project does not leave stray batches in the index. */
+function rdArchiveStudy(id, on) {
+  const s = rdStudy(id);
+  if (!s) return;
+  const ids = [id].concat(rdChildren(id).map(c => c.id));
+  const n = setArchived("rnd", ids, on);
+  if (n) toast(`${s.name || s.id} ${on ? "archived" : "restored"}.`);
+  render();
 }
 
 /* The read-only cross-reference to R&D PARTS.

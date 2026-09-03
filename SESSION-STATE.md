@@ -585,6 +585,13 @@ empty so it never reaches paper looking like data.
 covering titles, notes and event-log text. Stored data is untouched, so the
 archive keeps its original wording.
 
+**Seasons and `archived` (v4.3.0).** A record's season is read off its id;
+the current one is `config/season.code` (Season settings, fallback SN6).
+`inSeason()` now also requires this season and not archived. Rails default to
+this season with archived hidden; chips swap in SN5 / archived. New ids for a
+later season mint on `<key>@<code>` counters, SN6 keys unchanged. Nothing is
+deleted to roll a season over. Simon's ask, 2026-09-03: archive, never delete.
+
 **`render()` snapshots and restores every `.plist` rail's scrollTop** (v4.2.1),
 keyed by aria-label. Anything new that scrolls inside `<main>` and must survive
 a re-render should be a `.plist` or get the same treatment.
@@ -598,10 +605,11 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-03 (latest) — composites app v4.2.1:** rails keep their scroll
-across re-renders (the multi-select and select-a-part scroll bugs Simon
-reported), and Parts got the same lead-only Select… bulk delete as Work
-Orders. Pushed and deployed.
+**2026-09-03 (latest) — composites app v4.2.1 then v4.3.0:** rails keep
+their scroll across re-renders (the multi-select and select-a-part scroll bugs
+Simon reported); Parts got Select… bulk actions. Then archive-not-delete for
+parts, work orders and R&D studies, season read off ids with a season code in
+Season settings, rails defaulting to this season. Pushed and deployed.
 
 **2026-09-03 — CFD app through cfd-v0.3.0:** Dashboard, saved views,
 composites shell, then always-dark icon rail (0.2.1), then the boot splash

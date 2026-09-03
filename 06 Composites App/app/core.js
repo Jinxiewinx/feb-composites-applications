@@ -27,15 +27,17 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.2.1";
+var APP_VERSION = "4.3.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "The Parts and Work Orders rails stay where you scrolled them. Ticking a box or opening a row no longer throws the list back to the top.",
-  "Parts has a Select… button for leads, like Work Orders: tick several, All / None, then Delete them in one go.",
-]
+  "Archive instead of delete. Parts, work orders and R&D studies now have Archive (and Restore) on their page and in Select… mode. Archived records leave the rails and the dashboard but stay in the database.",
+  "The rails show this season by default. Last season's records are one chip away (the SN5 chip on Parts and Work Orders), and an archived chip shows what has been put away.",
+  "Season settings has a season code. Changing it to SN7 next year starts fresh ids and rails; nothing from SN6 needs deleting.",
+  "Select… is open to every roster member for archiving. Delete stays lead-only.",
+];
 
 /* ---------- config/release ----------
    { version, notes[], publishedAt }, written by a lead from the ⋯ menu after a
@@ -364,10 +366,11 @@ async function allocIds(coll, cls, n) {
    collision is offline-only, silent, and produces well-formed ids, which is the
    worst combination there is. */function localId(coll, cls) {
   const prefix = cls || ID_PREFIX_LOCAL[coll] || coll.toUpperCase();
-  const re = new RegExp("^" + prefix + "-SN6-(\\d+)$");
+  const code = typeof seasonCode === "function" ? seasonCode() : "SN6";
+  const re = new RegExp("^" + prefix + "-" + code + "-(\\d+)$");
   let max = 0;
   (DB[coll] || []).forEach(o => { const m = String(o.id).match(re); if (m) max = Math.max(max, +m[1]); });
-  return `${prefix}-SN6-${String(max + 1).padStart(3, "0")}`;
+  return `${prefix}-${code}-${String(max + 1).padStart(3, "0")}`;
 }
 // Mirrors ID_PREFIX in fb.js, which is module-scoped and invisible here.
 // Multi-class collections are absent on purpose: they must be given a class.
@@ -563,7 +566,65 @@ function isRnd(rec) { return !!(rec && rec.rnd); }
    forgotten in nine, and the reason is that each site has to remember a flag
    test. A second flag on a second axis would double that failure. Nothing
    should ever spell out `!p.retro && !isRnd(p)` by hand. */
-function inSeason(rec) { return !!rec && !rec.retro && !isRnd(rec); }
+function inSeason(rec) { return !!rec && !rec.retro && !isRnd(rec) && !rec.archived && thisSeason(rec); }
+
+/* ---------- seasons and archiving (v4.3.0) ----------
+   A record's season is READ OFF ITS ID: P-SN5-001 is SN5, WO-SN6-010 is SN6.
+   Every id this app has ever minted carries the code (CS-013 §4.1), so nothing
+   needs a backfill and nothing can disagree with its own id. An explicit
+   `season` field wins when present, for the day a record has to be re-homed.
+   The CURRENT season is config/season.code, set in Season settings; "SN6" is
+   the fallback so a missing config doc changes nothing on the live data.
+
+   Rolling a season over is therefore one edit in Season settings: new ids
+   mint with the new code and their own counters (fb.allocId), the rails
+   default to the new season, and last season's records are one chip away
+   rather than deleted. Nothing is ever deleted to make room (Simon,
+   2026-09-03: "in the future we won't want to have deleted anything").
+
+   `archived` is the other axis: a record we are done with inside a season.
+   Off the board (inSeason is false), off the rails by default, still there,
+   still openable, restorable. NOT retro: an archived run still enforces its
+   gates if somebody reopens and works it. */
+function seasonCode() { return (window.SEASON && window.SEASON.code) || "SN6"; }
+function recSeason(rec) {
+  if (!rec) return "";
+  if (rec.season) return rec.season;
+  const m = String(rec.id || "").match(/-(SN\d+)-/);
+  return m ? m[1] : seasonCode();
+}
+function thisSeason(rec) { return recSeason(rec) === seasonCode(); }
+function isArchived(rec) { return !!(rec && rec.archived); }
+/* What a rail's summary tiles and overview count: this season, not archived.
+   R&D and retro are left in, because the tiles already know about those. */
+function railLive(list) { return (list || []).filter(r => thisSeason(r) && !isArchived(r)); }
+/* The counts a rail chip needs: how many of this collection are archived, and
+   how many belong to some other season. Counted over what EXISTS, not what is
+   on screen, because while the chip is off that number is what is held back. */
+function railHeldBack(list) {
+  const arch = (list || []).filter(isArchived).length;
+  const other = (list || []).filter(r => !thisSeason(r)).length;
+  const codes = [...new Set((list || []).filter(r => !thisSeason(r)).map(recSeason))].sort();
+  return { arch, other, otherLabel: codes.length === 1 ? codes[0] : "other seasons" };
+}
+/* Archive or restore a list of records in one collection. Any roster member,
+   because the rules allow the update and archiving is a visibility change,
+   not a destruction: the record keeps every field and can be restored. */
+function setArchived(coll, ids, on) {
+  if (guestBlocked("Sign in to archive.")) return 0;
+  const set = new Set(ids || []);
+  const recs = (DB[coll] || []).filter(r => set.has(r.id) && !!r.archived !== !!on);
+  recs.forEach(r => {
+    r.archived = !!on;
+    r.archivedAt = on ? today() : "";
+    r.archivedBy = on ? myEmail() : "";
+    save(coll, r, "archived"); save(coll, r, "archivedAt"); save(coll, r, "archivedBy");
+  });
+  return recs.length;
+}
+function archivedPill(rec, tny) {
+  return isArchived(rec) ? ` <span class="pill archived${tny ? " tny" : ""}" title="Archived${rec.archivedAt ? " " + esc(rec.archivedAt) : ""}${rec.archivedBy ? " by " + esc(userName(rec.archivedBy)) : ""}">archived</span>` : "";
+}
 
 /* A run's programme is its PART's, asked fresh every time.
 
@@ -2399,7 +2460,9 @@ function setTab(id) {
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", fReimb: "", fBudget: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
     woOpen: false, woLate: false, woMine: false, woDone: false, woOnlyRnd: false,
     // A half-finished Select… on one rail must not be waiting when you come back.
-    woPick: null, partPick: null };
+    // showArch is per-visit too; allSeasons is NOT reset, so a lead reading the
+    // SN5 archive can walk Parts → Work Orders without re-toggling.
+    woPick: null, partPick: null, showArch: false };
   closeDrawer();
   render(); syncUrl();
 }

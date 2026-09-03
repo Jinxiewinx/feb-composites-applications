@@ -190,7 +190,7 @@ function scanEhsCode(raw) {
   const m = v.match(/^[A-Za-z]+:\/\/[^/]+\/(.*)$/);
   if (m) v = m[1].split(/[?#]/)[0].split("/").filter(Boolean).pop() || "";
   const code = typeof ehsNorm === "function" ? ehsNorm(v) : "";
-  if (/^[A-Z]+-SN\d-\d+/.test(code)) return "";
+  if (/^[A-Z]+-SN\d+-\d+/.test(code)) return "";
   /* And a word is a word: "hello" typed into the box should read as not-a-code,
      not as an unknown tag. Every barcode serial anyone has seen has digits. */
   return code.length >= 4 && /\d/.test(code) ? code : "";
@@ -205,7 +205,7 @@ function idFromScan(raw) {
   const m = v.match(/\/Q\/([0-9A-Z-]+)/);
   if (m) v = m[1];
   v = v.replace(/^HTTPS?:\/\/[^/]+\//, "").replace(/[^0-9A-Z-]/g, "");
-  return /^[A-Z]+-SN\d-\d+/.test(v) ? v : "";
+  return /^[A-Z]+-SN\d+-\d+/.test(v) ? v : "";
 }
 
 function acceptScan(id) {

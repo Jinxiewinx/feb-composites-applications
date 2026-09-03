@@ -412,6 +412,17 @@ function partPickAll(on) {
 }
 function partPickedIds() { return Object.keys(view.partPick || {}); }
 function deletePickedParts() { partBulkDelete(partPickedIds()); }
+function archivePickedParts(on) {
+  const n = setArchived("parts", partPickedIds(), on);
+  view = { ...view, partPick: null };
+  toast(`${n} part${n === 1 ? "" : "s"} ${on ? "archived" : "restored"}.`);
+  render();
+}
+function archivePart(id, on) {
+  setArchived("parts", [id], on);
+  toast(`${id} ${on ? "archived — find it under the archived chip" : "restored"}.`);
+  render();
+}
 
 /* ---------- selection ---------- */
 // Selected == view.mode "detail" with a part that exists. Same condition the
@@ -496,6 +507,11 @@ function partIndexRows() {
            list. That is the one time both kinds appear at once, and it is the
            existing "never falls out from under you" rule doing its job. */
     .filter(p => (view.onlyRnd ? isRnd(p) : !isRnd(p)))
+    /* This season by default, last season's one chip away; and the archived
+       list REPLACES the live one, the same swap the R&D chip does. Two more
+       flags on the same rail, same reasoning as the note above. */
+    .filter(p => view.allSeasons || thisSeason(p))
+    .filter(p => (view.showArch ? isArchived(p) : !isArchived(p)))
     .filter(p => !q || (p.partName || "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
   // The selected part never falls out from under you — a filter that would hide
   // what you are reading keeps it in place instead (this is the whole point of
@@ -525,10 +541,10 @@ function partIndexItem(p, mixedRetro) {
     ? `<input type="checkbox" class="wopick" ${ticked ? "checked" : ""} aria-label="Select ${esc(p.id)}"
         onclick="event.stopPropagation();togglePartPick('${esc(p.id)}')"> `
     : "";
-  return `<div class="pitem ${sel ? "sel" : ""} ${partDone(p) ? "isdone" : ""} ${ticked ? "picked" : ""}" id="pi-${esc(p.id)}"
+  return `<div class="pitem ${sel ? "sel" : ""} ${partDone(p) ? "isdone" : ""} ${ticked ? "picked" : ""} ${isArchived(p) ? "isarch" : ""}" id="pi-${esc(p.id)}"
       role="option" aria-selected="${picking ? ticked : sel}" title="${esc(p.id)} · ${esc(p.layupType || "")}"
       onclick="${picking ? `togglePartPick('${esc(p.id)}')` : `selectPart('${esc(p.id)}')`}">
-    <span class="pi-name">${box}${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(isRnd(p))}</span>
+    <span class="pi-name">${box}${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(isRnd(p))}${archivedPill(p, true)}</span>
     <span class="pi-due ${late ? "warn" : ""}">${p.layupDeadline ? shortDate(p.layupDeadline) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${stageRail(p)}<span class="tny">${esc(p.subteam || "")}</span></span>
     <span class="pi-who">${engs.map(e => avatar(e.email || e.name, 20)).join("") || ""}</span>
@@ -572,7 +588,7 @@ function partIndexBody(rows, mixedRetro) {
    These two live in the index header (every width) and, in more detail, in the
    right pane when nothing is selected. */
 function partSummary() {
-  const D = DB.parts;
+  const D = railLive(DB.parts);
   const open = D.filter(p => !partDone(p));
   return {
     total: D.length,
@@ -632,11 +648,12 @@ function renderPartIndex() {
           return `<button class="sm" onclick="partPickAll(true)">All ${rows.length}</button>
             <button class="sm" onclick="partPickAll(false)">None</button>
             <span class="muted tny">${n} selected</span>
-            <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedParts()">Delete ${n || ""}</button>
+            <button class="sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="archivePickedParts(${view.showArch ? "false" : "true"})">${view.showArch ? "Restore" : "Archive"} ${n || ""}</button>
+            ${isLead() ? `<button class="danger sm" ${n ? "" : "disabled"} onclick="deletePickedParts()">Delete ${n || ""}</button>` : ""}
             <button class="sm ib" onclick="cancelPartPick()">${icon("x", 14)}</button>`;
         })() : `<button class="primary ib"${gx("Sign in to add a part.")} onclick="newPart()">${icon("plus", 15)} New Part</button>
         <button class="ib" onclick="newPart(true)">${icon("plus", 15)} R&amp;D part</button>
-        ${isLead() ? `<button class="sm" onclick="startPartPick()">Select…</button>` : ""}
+        ${canEdit() ? `<button class="sm" onclick="startPartPick()">Select…</button>` : ""}
         <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>`}
       </div>
       <div class="psum">
@@ -652,6 +669,9 @@ function renderPartIndex() {
               showing you — which is the thing worth saying. */""}
         ${(() => { const n = (DB.parts || []).filter(isRnd).length;
           return n ? summaryChip("R&D", n, !!view.onlyRnd, "view.onlyRnd=!view.onlyRnd;render()") : ""; })()}
+        ${(() => { const h = railHeldBack(DB.parts);
+          return (h.other ? summaryChip(h.otherLabel, h.other, !!view.allSeasons, "view.allSeasons=!view.allSeasons;render()") : "")
+            + (h.arch ? summaryChip("archived", h.arch, !!view.showArch, "view.showArch=!view.showArch;render()") : ""); })()}
       </div>
       <div class="pfilters">
         <input id="searchbox" placeholder="search part / id…" value="${esc(view.q)}" oninput="searchInput(this)">
@@ -695,9 +715,10 @@ function renderPartIndex() {
    there the index owns the whole screen. */
 function renderPartOverview() {
   const s = partSummary();
-  const late = DB.parts.filter(partLate).sort((a, b) => (a.layupDeadline || "").localeCompare(b.layupDeadline || ""));
-  const mine = DB.parts.filter(p => !partDone(p) && isMine([p.moldEngineer, p.manufacturingEngineer]));
-  const soon = DB.parts.filter(p => !partDone(p) && !partLate(p) && daysUntil(p.layupDeadline) != null && daysUntil(p.layupDeadline) <= 21)
+  const live = railLive(DB.parts);
+  const late = live.filter(partLate).sort((a, b) => (a.layupDeadline || "").localeCompare(b.layupDeadline || ""));
+  const mine = live.filter(p => !partDone(p) && isMine([p.moldEngineer, p.manufacturingEngineer]));
+  const soon = live.filter(p => !partDone(p) && !partLate(p) && daysUntil(p.layupDeadline) != null && daysUntil(p.layupDeadline) <= 21)
     .sort((a, b) => (a.layupDeadline || "").localeCompare(b.layupDeadline || ""));
   const miniRow = p => `<div class="pmini" onclick="selectPart('${esc(p.id)}')">
     <span class="pm-name">${esc(p.partName || p.id)}</span>${stageRail(p)}
@@ -1543,6 +1564,7 @@ function renderPartDetail() {
       <button class="ib" onclick="clearPartSelection()">${icon("chevronLeft", 16)} All parts</button>
       <button class="primary ib" onclick="view.edit=!view.edit;render()">${icon(E ? "check" : "edit", 15)} ${E ? "Done" : "Edit"}</button>
       ${labelBtn("parts", p.id)}
+      ${E ? `<button onclick="archivePart('${esc(p.id)}',${isArchived(p) ? "false" : "true"})">${isArchived(p) ? "Restore" : "Archive"}</button>` : ""}
       ${E && isLead() ? `<button class="danger" onclick="delPart('${esc(p.id)}')">Delete</button>` : ""}
       ${rndControl(p, E)}
       <span class="mdnav no-print">
@@ -1555,7 +1577,7 @@ function renderPartDetail() {
           lead had to press Esc to see it and Enter to get back. Pinned. */""}
     ${partStatRow(true)}
     <div class="card wohead">
-      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(isRnd(p))}</h2>
+      <h2>${esc(p.partName || "(unnamed part)")} ${p.retro ? '<span class="pill retro">retro record</span>' : ""}${rndBadge(isRnd(p))}${archivedPill(p)}</h2>
       <div class="muted">${esc(p.id)}${p.subteam ? " · " + esc(p.subteam) : ""}${p.layupType ? " · " + esc(p.layupType) : ""}${
         linkedWO ? " · work order " + chip("workOrders", linkedWO.id, linkedWO.id) : ""}${
         p.updatedAt ? " · saved " + fmtWhen(p.updatedAt) + " by " + esc(p.updatedBy || "?") : ""}</div>

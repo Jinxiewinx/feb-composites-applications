@@ -387,6 +387,8 @@ function editSeason() {
   const s = window.SEASON || {};
   openModal(`
     <h2>Season settings</h2>
+    <div class="field"><label>Season code</label><input id="sea-code" value="${esc(s.code || "SN6")}" placeholder="SN6" pattern="SN\\d+">
+      <div class="tny muted">Goes into every new id (WO-SN6-041) and picks which season the rails show. Change it once, when the next car starts; last season's records stay, one chip away.</div></div>
     <div class="field"><label>Competition name</label><input id="sea-name" value="${esc(s.compName || "")}" placeholder="FSAE Michigan"></div>
     <div class="field"><label>Competition date</label><input id="sea-date" type="date" value="${esc(s.compDate || "")}"></div>
     <div class="field"><label>Season start (optional)</label><input id="sea-start" type="date" value="${esc(s.seasonStart || "")}"></div>
@@ -400,7 +402,10 @@ async function submitSeason() {
     .map(l => l.trim()).filter(Boolean)
     .map(l => { const m = l.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/); return m ? { date: m[1], label: m[2] } : null; })
     .filter(Boolean);
+  const code = document.getElementById("sea-code").value.trim().toUpperCase();
+  if (!/^SN\d+$/.test(code)) { toast("Season code looks like SN6 or SN7.", "error"); return; }
   const data = {
+    code,
     compName: document.getElementById("sea-name").value.trim(),
     compDate: document.getElementById("sea-date").value,
     seasonStart: document.getElementById("sea-start").value,
