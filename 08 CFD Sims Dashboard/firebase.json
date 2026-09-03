@@ -2,19 +2,66 @@
   "//": "Separate Firebase project from the composites app on purpose (DECISIONS.md #2). Deploy from inside this folder only, so the composites project's rules are never in the blast radius. Emulator ports are offset from 06 Composites App's (8080/9099/9199/5050) so both apps' emulators can run at once.",
   "hosting": {
     "public": "app",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/README.md"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/README.md",
+      "**/*.md"
+    ],
     "headers": [
-      { "source": "**/*.@(html|js|json|css)", "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }] },
-      { "source": "**/*.@(woff2|png|svg|ico)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+      {
+        "source": "**/*.@(html|js|json|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0"
+          }
+        ]
+      },
+      {
+        "//": "pdf.js is 1.8 MB and changes only with npm run vendor (VERSION beside it). A day of caching keeps repeat opens fast without hiding a vendor bump for long.",
+        "source": "vendor/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(woff2|png|svg|ico)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      }
     ]
   },
-  "firestore": { "rules": "firestore.rules" },
-  "storage": { "rules": "storage.rules" },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "emulators": {
-    "auth": { "port": 9098 },
-    "firestore": { "port": 8090 },
-    "storage": { "port": 9198 },
-    "hosting": { "port": 5051 },
-    "ui": { "enabled": true, "port": 4001 }
+    "auth": {
+      "port": 9098
+    },
+    "firestore": {
+      "port": 8090
+    },
+    "storage": {
+      "port": 9198
+    },
+    "hosting": {
+      "port": 5051
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4001
+    }
   }
 }

@@ -1,35 +1,101 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0f16">
 <title>FEB CFD</title>
+<!-- Design-system tokens and fonts only. components.css is deliberately NOT
+     loaded: it styles .topbar, .sidebar and button for the composites app and
+     would fight the viewer's own layout. The page is pinned dark (data-theme
+     on <html>, no toggle): contour plots read differently against a bright
+     surround, so the chrome stays dark like Fluent and ParaView. -->
+<link rel="preload" href="ds/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="ds/tokens.css">
-<link rel="stylesheet" href="ds/components.css">
-<style>
-  /* Placeholder shell. The real app replaces this file; ds/ stays. */
-  body { display: grid; place-items: center; min-height: 100vh; }
-  .hold { max-width: 32rem; padding: 2rem; }
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main id="main" class="hold">
-  <div class="card">
-    <h1>FEB CFD dashboard</h1>
-    <p>Not built yet. This page proves hosting, the design tokens and the
-    Firebase config are wired. See <code>README.md</code> in the repo folder
-    for what comes next.</p>
-    <p id="fbstate" class="muted">Firebase: checking…</p>
+
+<header class="topbar">
+  <div class="brand">FEB <span>CFD</span></div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="spacer"></div>
+
+  <div class="ctl" id="synccontrols">
+    <button id="synctoggle" class="tgl on" title="Lock scrolling together (S)">
+      <span class="ico">⇅</span><span class="lbl">Synced</span>
+    </button>
+    <button id="resync" title="Snap every report back to the leader (R)">Re-sync</button>
   </div>
-</main>
+
+  <div class="ctl zoom">
+    <button id="zoomout" title="Zoom out">−</button>
+    <span id="zoomlabel">100%</span>
+    <button id="zoomin" title="Zoom in">+</button>
+    <button id="zoomfit" title="Fit width">Fit</button>
+  </div>
+
+  <button class="primary" id="openbtn">Open PDFs</button>
+</header>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="side-sec">
+      <div class="side-h">Open</div>
+      <div id="doclist" class="doclist"></div>
+      <div id="doclist-empty" class="lib-note">Nothing open. Pick from the library below, or open PDFs from this computer.</div>
+      <button class="ghost wide" id="addbtn">+ Open PDFs from this computer</button>
+      <label class="chk"><input type="checkbox" id="addtolib" checked> Also add them to the shared library</label>
+    </div>
+
+    <div class="side-sec lib">
+      <div class="side-h">Library <span class="hint" id="libcount"></span></div>
+      <input id="libsearch" class="search" placeholder="filter reports…" autocomplete="off">
+      <div id="liblist" class="doclist scroll"></div>
+    </div>
+
+    <div class="side-sec grow">
+      <div class="side-h">
+        Find
+        <span class="hint" id="searchcount"></span>
+      </div>
+      <input id="search" class="search" placeholder="plot name or text…  (/)" autocomplete="off">
+      <div id="results" class="results"></div>
+    </div>
+
+    <div class="ver" id="ver"></div>
+  </aside>
+
+  <main id="main">
+    <div id="empty" class="empty">
+      <div class="empty-card">
+        <h1>Compare CFD reports</h1>
+        <p>
+          Open two or more Fluent report PDFs. They scroll together, and every
+          named plot is matched across reports so you can put the same contour
+          side by side, or lay one over the other to see what moved.
+        </p>
+        <p>
+          Reports opened here go into a library the whole team shares, so the
+          next person opens them from the list on the left. The address bar
+          carries what you have open, so a link is a comparison.
+        </p>
+        <div class="empty-actions">
+          <button class="primary" id="openbtn2">Open PDFs from this computer</button>
+        </div>
+        <p class="fineprint">Drag PDFs anywhere onto this window.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="drop" class="drop"><div class="drop-inner">Drop CFD reports to open</div></div>
+<div id="toasts"></div>
+<input type="file" id="filepick" accept="application/pdf,.pdf" multiple hidden>
+
 <script src="firebase-config.js"></script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-  const el = document.getElementById("fbstate");
-  try {
-    const app = initializeApp(window.FIREBASE_CONFIG);
-    el.textContent = "Firebase: configured for " + app.options.projectId;
-  } catch (e) { el.textContent = "Firebase: " + e.message; }
-</script>
+<script type="module" src="core.js"></script>
 </body>
 </html>

@@ -159,8 +159,8 @@ match /reports/{id}/report.pdf {
 
 ## Order of work (each step pushed on its own)
 
-- [ ] 1. Rules + tests + CORS file (harness first, deployable alone).
-- [ ] 2. Copy the viewer modules and vendor, index.html, styles; Electron lines out; serve locally and confirm parity with `07`.
-- [ ] 3. library.js + sidebar + upload/open/delete + dedup.
-- [ ] 4. URL state, matchPanels consolidation, touch swipe.
+- [x] 1. Rules + tests + CORS file (harness first, deployable alone).
+- [x] 2. Copy the viewer modules and vendor, index.html, styles; Electron lines out; serve locally and confirm parity with `07`.
+- [x] 3. library.js + sidebar + upload/open/delete + dedup.
+- [x] 4. URL state, matchPanels consolidation, touch swipe.
 - [ ] 5. Smoke test, docs, deploy, seed, tag.
