@@ -6147,6 +6147,28 @@ await t("the rails show this season by default, hide archived, and the chips swa
   assert(view.showArch === false, "setTab drops the archived swap");
 });
 
+await t("the 'no run yet' headers on the Work Orders rail follow the season and archive switches", () => {
+  DB.parts = [
+    { id: "P-SN6-001", partName: "Clamshell" },
+    { id: "P-SN5-001", partName: "Clamshell", retro: true },
+    { id: "P-SN6-002", partName: "Seat", archived: true },
+    { id: "P-SN6-003", partName: "Coupon", rnd: true },
+  ];
+  DB.workOrders = [];
+  view = { ...view, tab: "workorders", mode: "list", id: null, allSeasons: false, showArch: false, woOnlyRnd: false, sortKey: null, q: "" };
+  let ids = woPartsNoRun().map(p => p.id);
+  assert(ids.join() === "P-SN6-001", "this season, live, deliverable only: " + ids.join());
+  view.allSeasons = true;
+  assert(woPartsNoRun().length === 2, "the SN5 chip brings the SN5 clamshell back");
+  view.allSeasons = false; view.showArch = true;
+  assert(woPartsNoRun().map(p => p.id).join() === "P-SN6-002", "the archived chip swaps to the archived part");
+  view.showArch = false; view.woOnlyRnd = true;
+  assert(woPartsNoRun().map(p => p.id).join() === "P-SN6-003", "and R&D swaps to the coupon");
+  view.woOnlyRnd = false;
+  render();
+  assert((main.innerHTML.match(/no run yet/g) || []).length === 1, "one header on the rail, not four");
+});
+
 await t("archiving writes the flag and the stamp, restoring clears them, and it is not a delete", () => {
   DB.parts = [{ id: "P-SN6-001", partName: "Nose" }, { id: "P-SN6-002", partName: "Seat" }];
   fb.roster = { name: "Nico", role: "member" };

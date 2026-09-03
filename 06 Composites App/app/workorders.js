@@ -936,6 +936,16 @@ function woGroupHead(label, rows, extra) {
    and are not in woIndexRows(), so the keyboard never lands on one; they are
    the visible answer to "what haven't we started yet", which is the question
    the flat table could not answer without leaving the tab. */
+/* Parts with no run, under the SAME season / archived / R&D switches as the
+   runs beside them. Before v4.3.0 this read DB.parts whole, so with the rail
+   showing SN6 the "no run yet" headers still listed every SN5 part, and a
+   name both seasons used (CLAMSHELL, DASHBOARD) appeared twice. */
+function woPartsNoRun() {
+  return (DB.parts || []).filter(p => !partRuns(p).length)
+    .filter(p => view.allSeasons || thisSeason(p))
+    .filter(p => (view.showArch ? isArchived(p) : !isArchived(p)))
+    .filter(p => (view.woOnlyRnd ? isRnd(p) : !isRnd(p)));
+}
 function woIndexBody(rows) {
   const key = woSortKey();
   const grouping = WO_GROUPS[key];
@@ -957,9 +967,8 @@ function woIndexBody(rows) {
     // Parts nobody has started. Interleaved alphabetically rather than dumped in
     // a block at the end, because the point is to see the gap where a run should
     // be, next to the parts that have one.
-    (DB.parts || []).forEach(p => {
+    woPartsNoRun().forEach(p => {
       if (groups.has(p.id)) return;
-      if (partRuns(p).length) return;       // has runs, just filtered out of view
       entries.push({ sort: (p.partName || p.id).toLowerCase(), pid: p.id, p, rows: [], empty: true });
     });
     entries.sort((a, b) => a.sort.localeCompare(b.sort));
@@ -1095,7 +1104,7 @@ function renderWOOverview() {
   open.forEach(w => { const f = woFlags(w); if (f.curing) curing.push({ w, h: f.curing }); if (f.blocked) blocked.push({ w, b: f.blocked }); });
   const late = D.filter(isWoLate).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   const mine = open.filter(w => isMine([w.moldEngineer, w.manufacturingEngineer]));
-  const noRun = (DB.parts || []).filter(p => !partRuns(p).length);
+  const noRun = woPartsNoRun();
   const mini = (w, right) => `<div class="pmini" onclick="selectWO('${esc(w.id)}')">
     <span class="pm-name">${esc(w.partName || w.id)}</span>
     ${woProgBar(woProgress(w))}
