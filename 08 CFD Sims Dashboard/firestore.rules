@@ -45,7 +45,7 @@ service cloud.firestore {
     // record is a fixed shape, the path is derived from the id, and only name
     // and note change after creation. storage.rules caps the file itself.
     function validReport(d) {
-      return d.keys().hasOnly(['id','name','path','size','sha256','pages','panels','note','createdAt'])
+      return d.keys().hasOnly(['id','name','path','size','sha256','pages','panels','note','createdAt','dp','results','meta','thumb'])
         && d.id is string && d.id.size() >= 4 && d.id.size() <= 40
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 120
         && d.path == 'reports/' + d.id + '/report.pdf'
@@ -54,13 +54,40 @@ service cloud.firestore {
         && d.pages is int && d.pages >= 0 && d.pages < 10000
         && d.panels is int && d.panels >= 0 && d.panels < 10000
         && (!('note' in d) || (d.note is string && d.note.size() <= 500))
+        && d.createdAt is timestamp
+        // Dashboard fields, all optional so records from before them stay valid.
+        && (!('dp' in d) || d.dp == null || (d.dp is int && d.dp >= 0 && d.dp < 100000))
+        && (!('results' in d) || d.results is map)
+        && (!('meta' in d) || d.meta is map)
+        && (!('thumb' in d) || (d.thumb is map
+            && d.thumb.path == 'reports/' + d.id + '/thumb.png'
+            && d.thumb.url is string && d.thumb.url.size() < 2048
+            && d.thumb.panel is string && d.thumb.panel.size() <= 120));
+    }
+    // A saved view: a name for a URL query the viewer already understands.
+    function validView(d) {
+      return d.keys().hasOnly(['id','name','query','reports','createdAt'])
+        && d.id is string && d.id.size() >= 4 && d.id.size() <= 40
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 80
+        && d.query is string && d.query.size() <= 600
+        && d.reports is list && d.reports.size() <= 12
         && d.createdAt is timestamp;
     }
     match /reports/{id} {
       allow read: if true;
       allow create: if validReport(request.resource.data) && request.resource.data.id == id;
+      // name and note are edits; dp, results, meta and thumb are the backfill
+      // any opener performs on a record that predates them. Identity (id,
+      // path, sha256, size) never changes.
       allow update: if validReport(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'note']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'note', 'dp', 'results', 'meta', 'thumb']);
+      allow delete: if true;
+    }
+    match /views/{id} {
+      allow read: if true;
+      allow create: if validView(request.resource.data) && request.resource.data.id == id;
+      allow update: if validView(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
       allow delete: if true;
     }
 

@@ -131,7 +131,30 @@ await expect(403, "none",  "PATCH", "/reports/RPT-EEEEEEEE", rep("RPT-EEEEEEEE",
 await expect(403, "none",  "PATCH", "/reports/RPT-FFFFFFFF", rep("RPT-FFFFFFFF", { note: S("x".repeat(501)) }));
 await expect(403, "none",  "PATCH", "/reports/RPT-GGGGGGGG", rep("RPT-GGGGGGGG", { extra: S("no") }));
 await expect(403, "none",  "PATCH", "/reports/RPT-HHHHHHHH", rep("RPT-HHHHHHHH", { sha256: S("short") }));
+// Dashboard fields: results/meta maps, dp, and a thumb whose path is derived.
+const M = (o) => ({ mapValue: { fields: o } });
+const D = (v) => ({ doubleValue: v });
+const res = M({ total: M({ lift: D(-486.6), drag: D(179.6), cl: D(-1.98), cd: D(0.73) }) });
+await expect(200, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { results: res, dp: N(22), meta: M({ analyst: S("beldon") }) }, ["results", "dp", "meta"]);
+await expect(200, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { thumb: M({ path: S("reports/RPT-AAAAAAAA/thumb.png"), url: S("https://x/y"), panel: S("stat-car-0") }) }, ["thumb"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { thumb: M({ path: S("reports/RPT-ZZZZZZZZ/thumb.png"), url: S("https://x/y"), panel: S("stat-car-0") }) }, ["thumb"]);
+await expect(403, "none",  "PATCH", "/reports/RPT-AAAAAAAA", { dp: S("22") }, ["dp"]);          // dp is an int
+await expect(200, "none",  "PATCH", "/reports/RPT-IIIIIIII", rep("RPT-IIIIIIII", { dp: N(23), results: res }));  // create with them
+await expect(200, "none",  "DELETE", "/reports/RPT-IIIIIIII");
 await expect(200, "none",  "DELETE", "/reports/RPT-AAAAAAAA");                              // anyone deletes
+
+console.log("views: open, bounded shape, only the name changes:");
+const L = (arr) => ({ arrayValue: { values: arr } });
+const view = (id, extra = {}) => ({ id: S(id), name: S("22 vs 23 overlay"), query: S("open=RPT-A,RPT-B&tab=overlay&mode=swipe"),
+  reports: L([S("RPT-A"), S("RPT-B")]), createdAt: T("2026-09-02T00:00:00Z"), ...extra });
+await expect(200, "none",  "PATCH", "/views/VW-AAAAAAAA", view("VW-AAAAAAAA"));
+await expect(200, "guest", "GET",   "/views/VW-AAAAAAAA");
+await expect(200, "none",  "PATCH", "/views/VW-AAAAAAAA", { name: S("renamed") }, ["name"]);
+await expect(403, "none",  "PATCH", "/views/VW-AAAAAAAA", { query: S("open=RPT-C") }, ["query"]);
+await expect(403, "none",  "PATCH", "/views/VW-BBBBBBBB", view("VW-CCCCCCCC"));            // id must match
+await expect(403, "none",  "PATCH", "/views/VW-DDDDDDDD", view("VW-DDDDDDDD", { query: S("x".repeat(601)) }));
+await expect(403, "none",  "PATCH", "/views/VW-EEEEEEEE", view("VW-EEEEEEEE", { extra: S("no") }));
+await expect(200, "none",  "DELETE", "/views/VW-AAAAAAAA");
 await expect(403, "none",  "PATCH", "/config/release", { version: S("1") });                // config still closed
 
 console.log("lead:");

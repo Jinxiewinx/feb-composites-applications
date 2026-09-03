@@ -61,5 +61,9 @@ await denied("unauthenticated write one level too deep", null, "reports/RPT-AAAA
   console.log(`${ok ? "  ok" : "FAIL"}  text/plain to report.pdf  → ${res.status} (want 403)`);
 }
 
+console.log("reports/<id>/thumb.png: PNG only:");
+await denied("a PDF-typed write to thumb.png", null, "reports/RPT-AAAAAAAA/thumb.png");
+await denied("thumb under a different name", null, "reports/RPT-AAAAAAAA/thumb.jpg");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

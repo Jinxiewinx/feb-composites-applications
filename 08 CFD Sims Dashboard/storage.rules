@@ -38,6 +38,15 @@ service firebase.storage {
             && request.resource.size < 60 * 1024 * 1024);
     }
 
+    // reports/<id>/thumb.png: the card thumbnail, rendered in the browser
+    // from the report itself at upload (or on first open, for older records).
+    match /reports/{id}/thumb.png {
+      allow read: if true;
+      allow write: if request.resource == null
+        || (request.resource.contentType == 'image/png'
+            && request.resource.size < 2 * 1024 * 1024);
+    }
+
     // sims/<simId>/<file>: everything attached to one sim.
     match /sims/{simId}/{file} {
       allow read: if signedIn();
