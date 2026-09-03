@@ -20,6 +20,15 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
+**CFD viewer port is the current job** (approved 2026-09-02). The plan is
+`08 CFD Sims Dashboard/PLAN.md`, with a checklist at the bottom; read it before
+touching the folder. Step 1 (rules, tests, CORS) is in the working tree:
+Firestore rules + 64 cases pass; the storage suite's ALLOW case fails because
+the emulator's simple upload does not carry Content-Type into
+request.resource.contentType, so that case has to become deny-only as the
+composites suite already is. Decisions that must not be re-asked: open
+access with no sign-in, shared library in Storage, 07 stays untouched.
+
 **CFD Sims Dashboard: harness done, app not started** (2026-09-02). Its
 own Firebase project `feb-cfd` on Blaze: Firestore and Storage in us-west1,
 both rules deployed, Auth with email/password and anonymous, hosting live
