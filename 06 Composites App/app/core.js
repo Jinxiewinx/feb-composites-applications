@@ -27,16 +27,16 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.3.5";
+var APP_VERSION = "4.4.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "Archive instead of delete. Parts, work orders and R&D studies now have Archive (and Restore) on their page and in Select… mode. Archived records leave the rails and the dashboard but stay in the database.",
-  "The rails show this season by default. Last season's records are one chip away (the SN5 chip on Parts and Work Orders), and an archived chip shows what has been put away.",
-  "Season settings has a season code. Changing it to SN7 next year starts fresh ids and rails; nothing from SN6 needs deleting.",
-  "Select… is open to every roster member for archiving. Delete stays lead-only.",
+  "Accounts are self-serve. Sign up with a name, a username and a password and start working as a member; no email and no waiting for a lead. Old email accounts still sign in as before.",
+  "Change your display name any time: Change name on your own row in People. Old signatures keep the name they were made with.",
+  "Leads still decide who is a lead, on People or the Roster page. Removing someone now needs their account disabled in the Firebase console too, since anyone can join.",
+  "Archive instead of delete on parts, work orders and R&D studies, and the rails show this season by default with SN5 one chip away (v4.3).",
 ];
 
 /* ---------- config/release ----------
@@ -1938,16 +1938,75 @@ async function loadArchive() {
   toast("SN5 archive — " + report.join(" · "), "info");
 }
 
-/* ---------- auth screens ---------- */
+/* ---------- accounts (v4.4.0) ----------
+   Simon, 2026-09-03: anyone creates an account with a name, a username and a
+   password, starts as a member, and can change their display name. Leads keep
+   who is a lead and who is removed.
+
+   Firebase Auth only knows email+password, so a username is stored as the
+   synthetic address <username>@USER_DOMAIN. Everything keyed on email (roster
+   doc ids, buy-off stamps, updatedBy) keeps working unchanged, and every
+   account from before, made with a real email, still signs in with it: the
+   sign-in box takes either, and anything with an @ in it is used as typed.
+   userHandle() is what the screen shows, so nobody reads the synthetic
+   domain. The trade: an account with no real email has no password reset
+   (see doReset). */
+const USER_DOMAIN = "members.feb-composites.app";
+function validUsername(u) { return /^[a-z0-9][a-z0-9._-]{2,23}$/.test(String(u || "")); }
+function loginEmailFor(id) {
+  id = String(id || "").trim().toLowerCase();
+  return id.includes("@") ? id : `${id}@${USER_DOMAIN}`;
+}
+function userHandle(email) {
+  email = String(email || "");
+  return email.endsWith("@" + USER_DOMAIN) ? email.slice(0, -(USER_DOMAIN.length + 1)) : email;
+}
 async function doSignIn() {
-  const email = document.getElementById("li-email").value, pass = document.getElementById("li-pass").value;
-  try { await fb.signIn(email, pass); } catch (e) { toast("Sign-in failed: " + e.message,"error"); }
+  const id = document.getElementById("li-email").value, pass = document.getElementById("li-pass").value;
+  if (!id.trim()) { toast("Type your username or email.", "error"); return; }
+  try { await fb.signIn(loginEmailFor(id), pass); } catch (e) { toast("Sign-in failed: " + e.message,"error"); }
 }
 async function doSignUp() {
   const name = document.getElementById("li-name").value.trim();
-  const email = document.getElementById("li-email").value, pass = document.getElementById("li-pass").value;
+  const user = document.getElementById("li-user").value.trim().toLowerCase();
+  const pass = document.getElementById("li-pass").value;
   if (!name) { toast("Enter your name — it goes on your buy-offs and assignments.","error"); return; }
-  try { await fb.signUp(name, email, pass); } catch (e) { toast("Sign-up failed: " + e.message,"error"); }
+  if (!validUsername(user)) { toast("Username: 3 to 24 characters, letters, numbers, dots, dashes or underscores, starting with a letter or number.","error"); return; }
+  if ((pass || "").length < 6) { toast("Password: at least 6 characters.","error"); return; }
+  try { await fb.signUp(name, loginEmailFor(user), pass); }
+  catch (e) {
+    const taken = /email-already-in-use/.test(String(e && e.code));
+    toast(taken ? `The username ${user} is taken — pick another, or sign in if it is yours.` : "Sign-up failed: " + e.message, "error");
+  }
+}
+/* Display name. Written to the roster doc, which is what every name on screen
+   reads (userName), and to the Auth profile so a fresh sign-in agrees. Old
+   buy-offs keep the name they were signed with: a signature is a record of
+   who signed, as they were called then. */
+function openChangeName() {
+  const cur = (fb.roster && fb.roster.name) || (fb.user && fb.user.name) || "";
+  openModal(`
+    <h2>Your display name</h2>
+    <p class="muted tny">Goes on your buy-offs, assignments and comments from now on. Past signatures keep the name they were made with.</p>
+    <div class="field"><label for="nm-name">Name</label><input id="nm-name" value="${esc(cur)}" autocomplete="name" onkeydown="if(event.key==='Enter')submitChangeName()"></div>
+    <div class="foot"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="submitChangeName()">Save</button></div>
+  `);
+  const el = document.getElementById("nm-name"); if (el && el.focus) el.focus();
+}
+async function submitChangeName() {
+  const name = (document.getElementById("nm-name").value || "").trim();
+  if (name.length < 2) { toast("A name needs at least two characters.", "error"); return; }
+  try {
+    await fb.setMyName(name);
+    closeModal(); render(); toast(`You are now ${name}.`);
+  } catch (e) { toast("Couldn't change your name: " + e.message, "error"); }
+}
+/* The pending screen's door. Before v4.4.0 only a lead could put an address
+   on the roster; now an account joins itself as a member, and the rules
+   allow exactly that write (own email, role member, nothing else). */
+async function joinRoster() {
+  try { await fb.joinRoster(); }
+  catch (e) { toast("Couldn't join: " + e.message, "error"); }
 }
 async function doGuest() {
   try {
@@ -1972,6 +2031,11 @@ async function doGuest() {
 async function doReset() {
   const email = document.getElementById("li-email").value.trim();
   if (!email) { toast("Type your email first, then hit Forgot password.","error"); return; }
+  /* A username account has no mailbox behind it. The way back in is a lead
+     deleting the Auth user in the Firebase console and the person signing up
+     again with the same username: the roster doc is keyed by the synthetic
+     address, so the name, role, trainings and every old signature reattach. */
+  if (!email.includes("@")) { toast("Usernames have no email to reset with. Ask a composites lead to reset your account; signing up again with the same username brings your record back.", "info"); return; }
   try { await fb.resetPassword(email); toast("Reset email sent to " + email + "."); }
   catch (e) { toast("Reset failed: " + e.message,"error"); }
 }
@@ -1983,9 +2047,10 @@ function renderLogin() {
   const up = view.authMode === "up";
   return `<div class="card login">
     <div style="display:flex;align-items:center;gap:11px;margin-bottom:6px">${febMark(34)}<h2 style="margin:0">FEB <span style="color:var(--gold)">Composites</span></h2></div>
-    <p class="muted">Team database. ${up ? "Create your account with your Berkeley email. The lead has to add you to the roster before you can see anything." : "Sign in with your team account."}</p>
-    ${up ? `<div class="f"><label>Name (goes on your buy-offs)</label><input id="li-name" autocomplete="name"></div>` : ""}
-    <div class="f"><label>Email</label><input id="li-email" type="email" autocomplete="username"></div>
+    <p class="muted">Team database. ${up ? "Pick a username and a password. You start as a member and can work right away; a lead makes leads." : "Sign in with your team account."}</p>
+    ${up ? `<div class="f"><label>Name (goes on your buy-offs)</label><input id="li-name" autocomplete="name"></div>
+    <div class="f"><label>Username</label><input id="li-user" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. nico"></div>`
+      : `<div class="f"><label>Username or email</label><input id="li-email" autocomplete="username" autocapitalize="none" spellcheck="false"></div>`}
     <div class="f"><label>Password</label><input id="li-pass" type="password" autocomplete="${up ? "new-password" : "current-password"}" onkeydown="if(event.key==='Enter')${up ? "doSignUp()" : "doSignIn()"}"></div>
     <div class="row">
       <button class="primary" onclick="${up ? "doSignUp()" : "doSignIn()"}">${up ? "Create account" : "Sign in"}</button>
@@ -2005,9 +2070,10 @@ function renderPending() {
   return `<div class="card login">
     <h2>Almost in</h2>
     ${fb.rosterCheckFailed ? `<p><b>Couldn't reach the database</b> — this looks like a network problem, not a roster problem. Get on better wifi and hit Check again.</p>` : ""}
-    <p>Signed in as <b>${esc(fb.user.email)}</b>, but you're not on the roster yet, so the database won't talk to you. Ask the composites lead to add <b>${esc(fb.user.email)}</b> (Roster button in their header).</p>
+    <p>Signed in as <b>${esc(userHandle(fb.user.email))}</b>, but this account is not on the roster, so the database won't talk to you yet. Join as a member to start working${fb.user.email && fb.user.email.includes("@" + USER_DOMAIN) ? "" : ", or ask a composites lead if you were removed"}.</p>
     <div class="row">
-      <button class="primary" onclick="recheckRoster()">Check again</button>
+      <button class="primary" onclick="joinRoster()">Join as a member</button>
+      <button onclick="recheckRoster()">Check again</button>
       <button onclick="fb.signOut()">Sign out</button>
     </div>
   </div>`;
@@ -2042,9 +2108,9 @@ function renderRoster() {
   <div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} Back</button></div>
   <div class="card">
     <h2>Roster</h2>
-    <p class="muted">Who can use this database. Anyone can create an account, but nothing works until their email is on this list. Remove people when they leave — accounts stick around, access shouldn't.</p>
+    <p class="muted">Who can use this database. Anyone who creates an account joins this list as a member on their own; leads are made here or on People. Removing someone takes their access away until they join again, so for somebody who should stay out, disable the account in the Firebase console too.</p>
     <table class="sub"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(r.email)}</td><td>${esc(r.name)}</td><td>${esc(r.role)}${r.role === "lead" && r.showAs === "member" ? ' <span class="muted tny">(shown as member)</span>' : ""}</td>
+      ${rows.map(r => `<tr><td>${esc(userHandle(r.email))}</td><td>${esc(r.name)}</td><td>${esc(r.role)}${r.role === "lead" && r.showAs === "member" ? ' <span class="muted tny">(shown as member)</span>' : ""}</td>
         <td><button class="danger" onclick="rosterDel('${esc(r.email)}')">remove</button></td></tr>`).join("")}
     </tbody></table>
     <h3>Add member</h3>

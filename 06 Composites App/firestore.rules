@@ -1,9 +1,10 @@
 rules_version = '2';
 
-// Access model: email allowlist ("roster"). Anyone can create a Firebase Auth
-// account, but nothing here is readable or writable until the lead has added
-// their email to /roster. These rules are the actual enforcement — the app's
-// hidden buttons are just UX.
+// Access model: the roster. Anyone can create a Firebase Auth account and,
+// since v4.4.0 (Simon, 2026-09-03), joins /roster on their own as a MEMBER;
+// only a lead can make a lead, change a role, or remove someone. Nothing here
+// is readable or writable without a roster doc. These rules are the actual
+// enforcement — the app's hidden buttons are just UX.
 service cloud.firestore {
   match /databases/{db}/documents {
 
@@ -135,7 +136,18 @@ service cloud.firestore {
          costs is names, photos and training grants. An app that shows initials
          where a name belongs, for no protection. */
       allow read: if reader();
-      allow create, delete: if isLead();
+      allow delete: if isLead();
+      /* Self-join: a signed-in account may create ITS OWN roster doc, as a
+         member, with exactly the four fields sign-up writes. It cannot name
+         a role, and it cannot create anyone else's doc. A lead can still add
+         anybody with any role, as before. */
+      allow create: if isLead() || (
+        request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email == email
+        && request.resource.data.role == "member"
+        && request.resource.data.keys().hasOnly(['name', 'role', 'addedBy', 'addedAt'])
+      );
       allow update: if isLead() || (
         onRoster()
         && request.auth.token.email == email

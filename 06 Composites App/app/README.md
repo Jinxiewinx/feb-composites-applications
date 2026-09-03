@@ -1362,22 +1362,34 @@ see the login screen again. **Sign in** in the header signs out first.
 
 ## How access works
 
-Anyone can create an account at the login page, but a new account can't see or
-touch anything until a lead adds their email to the roster using the Roster
-button in the header. This is enforced server-side by `../firestore.rules`, not
-just by hidden buttons.
+Anyone creates an account at the login page with a name, a username and a
+password, and starts working straight away as a member (v4.4.0). No email is
+needed; accounts made before v4.4.0 with a Berkeley email keep signing in with
+it, since the sign-in box takes either. The rules in `../firestore.rules` let
+an account create only its own roster entry, only as a member.
 
 There are two roles. A `member` does all day-to-day work across every tab. A
 `lead` can also delete records, restore from a backup file, load the SN5 archive
-and manage the roster.
+and manage the roster: only a lead makes someone a lead, on People or on the
+Roster page.
+
+Your display name is yours to change: **Change name** on your own row in
+People. New buy-offs, assignments and comments carry the new name; old
+signatures keep the name they were made with.
+
+A username account has no mailbox, so there is no password reset for it. A
+lead deletes the account in the Firebase console and the person signs up again
+with the same username; the roster entry is keyed by that username, so their
+name, role, trainings and every old signature reattach.
 
 A lead who would rather not wear the label can tick **show me as member** on
 their own row in People. Only the pill changes: the account menu drops the
 "· lead" suffix and People lists them as a member, while every permission
 stays. The Roster page, which only leads open, still shows the real role.
 
-When someone leaves the team, remove them from the roster. Their account keeps
-existing but stops working.
+When someone leaves the team, remove them from the roster. Since anyone can
+join as a member, removal is a nudge rather than a lock: somebody who should
+stay out needs their account disabled in the Firebase console as well.
 
 Firebase Auth handles passwords, including hashing and reset emails. We never
 see or store them, and "Forgot password" on the login page works on its own.

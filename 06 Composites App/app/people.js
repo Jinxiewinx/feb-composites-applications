@@ -87,12 +87,12 @@ function renderPeopleList(rows) {
       return `<tr>
         <td><div style="display:flex;align-items:center;gap:8px">${avatar(u.email, 26)}
           <div><div class="pname">${esc(u.name || u.email)}${me ? ' <span class="muted tny">(you)</span>' : ""}</div>
-          <div class="muted tny">${esc(u.email)}</div></div></div></td>
+          <div class="muted tny">${esc(userHandle(u.email))}</div></div></div></td>
         <td>${isLead() && !me
           ? `<select onchange="setRole('${esc(u.email)}',this.value)"><option ${u.role === "member" ? "selected" : ""}>member</option><option ${u.role === "lead" ? "selected" : ""}>lead</option></select>
              <button class="sm danger no-print" onclick="rosterDel('${esc(u.email)}')">Remove</button>`
           : `<span class="pill">${esc(displayRole(u))}</span>`}
-          ${me ? ` <button class="sm" onclick="setMyAvatar()">Set photo</button>` : ""}
+          ${me ? ` <button class="sm" onclick="setMyAvatar()">Set photo</button> <button class="sm" onclick="openChangeName()">Change name</button>` : ""}
           ${me && isLead() ? `<label class="tny muted" style="display:block;margin-top:4px" title="Only what the pill says changes. You keep every lead permission."><input type="checkbox" ${u.showAs === "member" ? "checked" : ""} onchange="setMyShowAs(this.checked)"> show me as member</label>` : ""}</td>
         <td><div class="trwrap">${trainingPills(u)}
           ${isLead() ? `<button class="ib sm no-print" title="Edit ${esc(u.name || u.email)}'s trainings" aria-label="Edit ${esc(u.name || u.email)}'s trainings" onclick="openPersonTrainings('${esc(u.email)}')">${icon("edit", 13)}</button>` : ""}</div></td>

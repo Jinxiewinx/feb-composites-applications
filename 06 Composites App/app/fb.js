@@ -231,9 +231,40 @@ const fb = {
   async signIn(email, pass) {
     await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
   },
+  /* Creates the Auth user AND its roster doc, then resolves — because the
+     auth listener fires the moment the user exists, which is before the doc
+     does, and would otherwise park a brand-new member on the pending screen
+     until they press Check again. The roster write is the self-join shape the
+     rules allow: own address, role member, nothing else. */
   async signUp(name, email, pass) {
-    const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
+    email = email.trim().toLowerCase();
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
     if (name) await updateProfile(cred.user, { displayName: name.trim() });
+    await setDoc(doc(db, "roster", email), {
+      name: (name || email).trim(), role: "member", addedBy: "self", addedAt: serverTimestamp(),
+    });
+    await resolveUser(cred.user);
+  },
+  /* The pending screen's door: an existing account (an old email one whose
+     roster doc was removed, or one whose sign-up write failed) joins as a
+     member. Same shape as the write in signUp. */
+  async joinRoster() {
+    const u = auth.currentUser;
+    if (!u || u.isAnonymous || !u.email) throw new Error("not signed in");
+    const email = u.email.toLowerCase();
+    await setDoc(doc(db, "roster", email), {
+      name: (u.displayName || email).trim(), role: "member", addedBy: "self", addedAt: serverTimestamp(),
+    });
+    await resolveUser(u);
+  },
+  /* Display name, on the roster doc (what every name on screen reads) and on
+     the Auth profile (so a fresh sign-in agrees). */
+  async setMyName(name) {
+    noWrites();
+    await updateDoc(doc(db, "roster", fb.user.email), { name });
+    if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: name });
+    fb.user.name = name;
+    if (fb.roster) fb.roster.name = name;
   },
   async resetPassword(email) {
     await sendPasswordResetEmail(auth, email.trim().toLowerCase());

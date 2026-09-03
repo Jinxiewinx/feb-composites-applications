@@ -585,6 +585,17 @@ empty so it never reaches paper looking like data.
 covering titles, notes and event-log text. Stored data is untouched, so the
 archive keeps its original wording.
 
+**Accounts are self-serve (v4.4.0).** Sign-up is name + username + password;
+a username is the synthetic address `<u>@members.feb-composites.app`
+(`USER_DOMAIN`, `loginEmailFor`, `userHandle` in core.js), so every email-keyed
+path is unchanged and old email accounts still sign in. `firestore.rules`
+lets an account create only its own roster doc, as member, with the four
+sign-up fields; leads keep roles and removal. **Deployed rules** on
+2026-09-03, purely additive on `/roster` create. Removal is a nudge now:
+a removed person can rejoin, so a real lock is disabling the Auth user in
+the console. Username accounts have no password reset; recovery is delete
+the Auth user, sign up again with the same username.
+
 **Seasons and `archived` (v4.3.0).** A record's season is read off its id;
 the current one is `config/season.code` (Season settings, fallback SN6).
 `inSeason()` now also requires this season and not archived. Rails default to

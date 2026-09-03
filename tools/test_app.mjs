@@ -126,6 +126,10 @@ globalThis.fb = {
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
   async rosterPatch(email, fields) { calls.push(["rosterPatch", email, fields]); },
+  async setMyName(name) { calls.push(["setMyName", name]); fb.user.name = name; if (fb.roster) fb.roster.name = name; },
+  async joinRoster() { calls.push(["joinRoster"]); },
+  async signIn(email, pass) { calls.push(["signIn", email]); },
+  async signUp(name, email, pass) { calls.push(["signUp", name, email]); },
   async rosterDelete() { calls.push(["rosterDelete"]); },
   async rosterGrant(email, id) { calls.push(["rosterGrant", email, id]); },
   async rosterRevoke(email, id) { calls.push(["rosterRevoke", email, id]); },
@@ -6278,6 +6282,64 @@ await t("a ticket chip opens the issue on its work order, never the retired Tick
   assert(view.tab === "workorders" && view.id === "WO-SN6-001", "a ticket with no run does not move you");
   assert(/retired tracker/.test(lastToast), "and says why: " + lastToast);
   assert(chip("parts", "P-X", "x").includes("openRecord('parts'"), "other chips are as they were");
+});
+
+await t("accounts: a username is a synthetic address, an email is itself, and the screen shows the handle", () => {
+  assert(loginEmailFor("Nico") === "nico@" + USER_DOMAIN, "username lower-cased onto the member domain");
+  assert(loginEmailFor(" starbuck@berkeley.edu ") === "starbuck@berkeley.edu", "an email is used as typed (trimmed, lower-cased)");
+  assert(userHandle("nico@" + USER_DOMAIN) === "nico" && userHandle("starbuck@berkeley.edu") === "starbuck@berkeley.edu", "the handle drops only the synthetic domain");
+  assert(validUsername("nico") && validUsername("n.jepsen-2") && !validUsername("ni") && !validUsername("-nico") && !validUsername("Nico Jepsen"), "username shape");
+  fb.state = "signedout"; fb.guest = false;
+  view = { ...view, authMode: "up" };
+  let html = renderLogin();
+  assert(html.includes('id="li-user"') && html.includes('id="li-name"') && !html.includes('type="email"'), "sign-up asks name, username, password");
+  assert(/start as a member/.test(html) && !/Berkeley email/.test(html) && !/lead has to add you/.test(html), "and says you can work right away");
+  view = { ...view, authMode: "in" };
+  html = renderLogin();
+  assert(html.includes("Username or email") && /doGuest\(\)/.test(html), "sign-in takes either, and the guest door is still there");
+  fb.state = "ready";
+});
+
+await t("accounts: sign-up writes through fb.signUp with the synthetic address, and a member can rename themself", async () => {
+  const wasUser = fb.user, wasRoster = fb.roster;
+  const fields = { "li-name": "Nico Jepsen", "li-user": "Nico", "li-pass": "secret1" };
+  const gid = document.getElementById;
+  document.getElementById = id => (id in fields ? { value: fields[id] } : gid.call(document, id));
+  calls.length = 0;
+  await doSignUp();
+  assert(calls.some(c => c[0] === "signUp" && c[1] === "Nico Jepsen" && c[2] === "nico@" + USER_DOMAIN), "signUp got the name and the synthetic address: " + JSON.stringify(calls));
+  fields["li-user"] = "N"; lastToast = ""; calls.length = 0;
+  await doSignUp();
+  assert(!calls.length && /Username/.test(lastToast), "a bad username is refused before any call");
+  fields["li-email"] = "Nico"; calls.length = 0;
+  await doSignIn();
+  assert(calls.some(c => c[0] === "signIn" && c[1] === "nico@" + USER_DOMAIN), "sign-in maps a username the same way");
+  document.getElementById = gid;
+
+  fb.user = { email: "nico@" + USER_DOMAIN, name: "Nico Jepsen" };
+  fb.roster = { email: fb.user.email, name: "Nico Jepsen", role: "member" };
+  DB.users = [fb.roster];
+  view = { ...view, tab: "people", mode: "list", id: null };
+  render();
+  const row = (main.innerHTML.match(/<tr>[\s\S]*?nico[\s\S]*?<\/tr>/) || [""])[0];
+  assert(/openChangeName\(\)/.test(row), "Change name sits on your own row");
+  assert(!row.includes(USER_DOMAIN) && row.includes(">nico<"), "and the row shows the handle, not the synthetic domain");
+  openChangeName();
+  const nm = document.getElementById("nm-name"); nm.value = "Nick Jepsen";
+  calls.length = 0;
+  await submitChangeName();
+  assert(calls.some(c => c[0] === "setMyName" && c[1] === "Nick Jepsen"), "Save writes the name");
+  assert(signerName() === "Nick Jepsen", "and buy-offs from now on sign with it");
+  fb.user = wasUser; fb.roster = wasRoster;
+});
+
+await t("accounts: the pending screen offers Join as a member", () => {
+  const wasUser = fb.user, wasState = fb.state;
+  fb.user = { email: "nico@" + USER_DOMAIN, name: "Nico" }; fb.rosterCheckFailed = false;
+  const html = renderPending();
+  assert(/joinRoster\(\)/.test(html) && /Join as a member/.test(html), "the door is on the screen");
+  assert(!html.includes(USER_DOMAIN) && html.includes("<b>nico</b>"), "and it shows the handle");
+  fb.user = wasUser; fb.state = wasState;
 });
 
 await t("re-rendering keeps each rail where it was scrolled", () => {

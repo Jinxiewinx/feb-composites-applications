@@ -52,6 +52,7 @@ const AUTH = {
   lead: "Bearer " + token("lead@feb.test", "uid-lead"),
   member: "Bearer " + token("member@feb.test", "uid-member"),
   rando: "Bearer " + token("rando@feb.test", "uid-rando"), // signed in, NOT on the roster
+  joiner: "Bearer " + token("joiner@feb.test", "uid-joiner"), // signed in, about to self-join (v4.4.0)
   guest: "Bearer " + anonToken("uid-guest"),               // "view as guest"
   none: null,                                              // the phone that scanned the label
 };
@@ -261,6 +262,26 @@ await expect(403, "guest", "GET", "/pub", null, "and pub still cannot be enumera
 console.log("\ndeleting the feed is a lead's call:");
 await expect(403, "member", "DELETE", `/tracker/${TOKEN}`, null, "unlike pub, this is not member-deletable");
 await expect(200, "lead", "DELETE", `/tracker/${TOKEN}`);
+
+
+/* ---------- self-join (v4.4.0) ----------
+   Anyone signs up and lands on the roster as a member by writing their OWN
+   doc with exactly the four sign-up fields. Everything a lead used to do to
+   roles stays lead-only. */
+const T = v => ({ timestampValue: v });
+const JOIN = { name: S("Joiner"), role: S("member"), addedBy: S("self"), addedAt: T("2026-09-03T00:00:00Z") };
+console.log("\nself-join: a new account puts itself on the roster, as a member, and nothing more:");
+await expect(403, "joiner", "PATCH", "/roster/joiner@feb.test", { ...JOIN, role: S("lead") }, "cannot make itself a lead");
+await expect(403, "joiner", "PATCH", "/roster/joiner@feb.test", { ...JOIN, avatar: S("x") }, "cannot ride extra fields in");
+await expect(403, "joiner", "PATCH", "/roster/somebody@feb.test", JOIN, "cannot create anyone else's doc");
+await expect(403, "guest", "PATCH", "/roster/guest@feb.test", JOIN, "a guest has no email to join with");
+await expect(200, "joiner", "PATCH", "/roster/joiner@feb.test", JOIN, "own doc, member, four fields: in");
+await expect(200, "joiner", "GET", "/parts/P-SN6-007", null, "and the database talks to them now");
+await expect(403, "joiner", "PATCH", "/roster/joiner@feb.test", { role: S("lead") }, "promotion is still not self-service");
+await expect(200, "joiner", "PATCH", "/roster/joiner@feb.test?updateMask.fieldPaths=name", { name: S("Renamed") }, "but the display name is theirs to change");
+await expect(200, "lead", "PATCH", "/roster/joiner@feb.test?updateMask.fieldPaths=role", { role: S("lead") }, "a lead makes leads");
+await expect(403, "member", "DELETE", "/roster/joiner@feb.test", null, "and only a lead removes");
+await expect(200, "lead", "DELETE", "/roster/joiner@feb.test");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
