@@ -18,8 +18,8 @@ for everything in here.
 | `04 Printables/` | Shop reference sheets meant to be printed: resin ratios, flowcharts, checklists | `README.md` |
 | `05 Design System/` | The app's visual language as a reusable system: tokens, component CSS, a living style guide | `styleguide.html` |
 | `06 Composites App/` | The composites work-order app, live at feb-composites.web.app | `app/README.md` |
-| `07 CFD PDF Viewer/` | Desktop/web app for comparing Fluent CFD reports side by side | `README.md` |
-| `08 CFD Sims Dashboard/` | The CFD sims dashboard, started Sept 2026 on its own Firebase project (`feb-cfd`). Infrastructure, rules and tests are in place; the app itself waits on the team's brief | `README.md`, `DECISIONS.md` |
+| `07 CFD PDF Viewer/` | The desktop original of the CFD viewer, kept buildable; the hosted version lives in `08` | `README.md` |
+| `08 CFD Sims Dashboard/` | The CFD app, live at feb-cfd.web.app on its own Firebase project: the report viewer from `07` with a shared library. The wider dashboard waits on the team's brief | `README.md` |
 | `09 Website/` | The public team website, built on the design system. Not deployed; its README has the state of it | `README.md` |
 | `tools/` | Everything that builds and checks the rest: the docx builder, the generators, the servers, and 19 test suites | `README.md` |
 

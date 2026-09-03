@@ -1,5 +1,9 @@
 # FEB CFD Viewer
 
+> **Hosted now.** Since 2026-09-02 this viewer runs at https://feb-cfd.web.app
+> with a shared report library, from `08 CFD Sims Dashboard/`. This folder is
+> the desktop original, kept buildable and unchanged; new work happens in 08.
+
 Compare Fluent CFD reports without opening two PDFs side by side and hunting for
 the same plot in each.
 

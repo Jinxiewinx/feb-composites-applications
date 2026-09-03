@@ -20,22 +20,17 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**CFD viewer port is the current job** (approved 2026-09-02). The plan is
-`08 CFD Sims Dashboard/PLAN.md`, with a checklist at the bottom; read it before
-touching the folder. Step 1 (rules, tests, CORS) is in the working tree:
-Firestore rules + 64 cases pass; the storage suite's ALLOW case fails because
-the emulator's simple upload does not carry Content-Type into
-request.resource.contentType, so that case has to become deny-only as the
-composites suite already is. Decisions that must not be re-asked: open
-access with no sign-in, shared library in Storage, 07 stays untouched.
-
-**CFD Sims Dashboard: harness done, app not started** (2026-09-02). Its
-own Firebase project `feb-cfd` on Blaze: Firestore and Storage in us-west1,
-both rules deployed, Auth with email/password and anonymous, hosting live
-with a placeholder. Simon does not want the app's functionality written down
-until he has talked to the team; the three collections in `firestore.rules`
-are placeholders. Tags: composites keeps bare `vX.Y.Z`, the dashboard uses
-`cfd-vX.Y.Z`; `release.mjs` now matches only `v[0-9]*`.
+**The CFD viewer is live at feb-cfd.web.app, cfd-v0.1.0** (2026-09-02).
+07's viewer ported into `08 CFD Sims Dashboard/app/` with a shared report
+library; the library is seeded with DP_22 and its variant. Decisions that
+must not be re-asked: open access with no sign-in (Simon's call, recorded in
+the README with the caps that bound it), shared library in Storage, 07 stays
+untouched. The three data collections in `firestore.rules` other than
+`reports` are still placeholders for the dashboard proper, which waits on
+Simon's talk with the team. The bucket's CORS is applied by gsutil, not by
+deploy; re-apply if the bucket is ever recreated. `.claude/launch.json`
+serves app/ on :8792 for the browser pane; the pane refuses to navigate to
+sub-paths, so the server root has to be app/ itself.
 
 **The standards' editing surface is now Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per
@@ -599,7 +594,8 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-02 (latest) — folders renumbered, CFD dashboard wired.** `03 App/`
+**2026-09-02 (latest) — CFD viewer live, folders renumbered.** The 07 viewer
+is hosted at feb-cfd.web.app with a shared library, tagged cfd-v0.1.0. `03 App/`
 is `06 Composites App/`; every tracked path reference, the parent CLAUDE.md,
 the simon agent and the memory index were rewritten in one pass. Brief,
 decisions, and empty `app/`, `ingest/`, `design/` under
