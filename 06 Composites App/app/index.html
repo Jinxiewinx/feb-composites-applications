@@ -562,6 +562,13 @@
     border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 700;
     letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .shead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Click-to-sort headers. The triangle sits right after the name as a
+     ::after, so the cell's text is the bare label and the tracks stay put. */
+  .shead .shd { cursor: pointer; user-select: none; border-radius: 4px; padding: 0 2px; margin: 0 -2px; }
+  .shead .shd:hover, .shead .shd:focus-visible { color: var(--text); background: var(--fill); outline: none; }
+  .shead .shd.on { color: var(--text); }
+  .shead .shd.on::after { content: "\25B2"; font-size: 9px; margin-left: 4px; color: var(--accent); }
+  .shead .shd.on.desc::after { content: "\25BC"; }
 
   /* .sline and not .srow — that name has belonged to the dashboard's module
      rows since round four, and the .dboard/.board collision is already one

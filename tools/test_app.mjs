@@ -4060,7 +4060,9 @@ await t("the blueprint is columnated, and one header labels every line under it"
     "and the manifest says so, since 'where' is what tells you which fields need the part opening");
   /* Both are droppable below 1240px by ONE display:none rule, which only works
      while the header's cells wear the line's classes. */
-  assert((html.match(/class="sl-type"/g) || []).length === 3,
+  // The header cell carries other classes too since v4.3.2 (shd, and on/asc
+  // when it is the sort), so count the class by word rather than by attribute.
+  assert((html.match(/class="[^"]*\bsl-type\b/g) || []).length === 3,
     "the header's own cell wears the line's class, so one rule hides the column everywhere");
 
   /* An empty cell stays empty. A blueprint is mostly blank for months — that is
@@ -6204,6 +6206,33 @@ await t("an archived R&D study leaves the index with its batches, and can come b
   rdArchiveStudy("RDS-SN6-001", false);
   assert(!DB.rnd[0].archived && !DB.rnd[1].archived, "restore clears the batch too");
   view.rdArch = false;
+});
+
+await t("Season column names sort on click, reverse on a second click, and wear the triangle", () => {
+  DB.parts = [
+    { id: "P-SN6-001", partName: "Bravo", subteam: "AERO", layupDeadline: "2026-11-03" },
+    { id: "P-SN6-002", partName: "Alpha", subteam: "BERGO", layupDeadline: "2026-10-20" },
+  ];
+  fb.roster = { name: "Simon", role: "lead" };
+  view = { ...view, tab: "season", mode: "list", id: null, seasonQ: "", seasonSub: "", seasonSort: null, seasonDir: null };
+  render();
+  let head = (main.innerHTML.match(/class="shead"[\s\S]*?<\/div>/) || [""])[0];
+  assert(/class="shd[^"]*\bon asc\b[^"]*"[^>]*onclick="seasonSortBy\('layupDeadline'\)"/.test(head), "the default sort, deadline, wears the up triangle");
+  assert((head.match(/\bon (asc|desc)\b/g) || []).length === 1, "and only one header is marked");
+  assert(!/seasonSortBy\('who'\)/i.test(head) && head.includes("<span>Who</span>"), "Who has no sort");
+  seasonSortBy("partName");
+  assert(view.seasonSort === "partName" && view.seasonDir === "asc", "clicking a name sorts by it, ascending");
+  assert(seasonRows().map(p => p.partName).join() === "Alpha,Bravo", "rows follow: " + seasonRows().map(p => p.partName).join());
+  head = (main.innerHTML.match(/class="shead"[\s\S]*?<\/div>/) || [""])[0];
+  assert(/class="shd[^"]*\bon asc\b[^"]*"[^>]*onclick="seasonSortBy\('partName'\)"/.test(head), "the triangle moved to Part");
+  seasonSortBy("partName");
+  assert(view.seasonDir === "desc" && seasonRows().map(p => p.partName).join() === "Bravo,Alpha", "clicking again reverses");
+  head = (main.innerHTML.match(/class="shead"[\s\S]*?<\/div>/) || [""])[0];
+  assert(/\bon desc\b/.test(head), "and the triangle points down");
+  assert(main.innerHTML.includes('<option value="partName" selected>'), "the select mirrors the header");
+  const cells = [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map(m => m[1].trim());
+  assert(cells.length === 8 && cells[0] === "Part", "the cell text is still the bare label, so the header contract holds");
+  view = { ...view, seasonSort: null, seasonDir: null };
 });
 
 await t("re-rendering keeps each rail where it was scrolled", () => {

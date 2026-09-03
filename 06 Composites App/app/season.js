@@ -160,9 +160,15 @@ function seasonLine(p) {
    them: a row on the same grid tracks as .sline, sharing one declaration of
    those tracks so it cannot drift off them.
 
-   NOT a <th> and not sortable. Thirteen sortable headers are what this tab was
-   before v3.0.0 and what made it 1,700px wide; sorting lives in the one select
-   above, where it costs no width at all. This is a label and nothing else.
+   Sortable by click since v4.3.2 (Simon's ask): click a name to sort by it,
+   click again to reverse, and the active column wears a triangle right after
+   its name. This is NOT the thirteen-header table v3.0.0 replaced: the header
+   is still one row on the line's own tracks, costs no width, and the arrow is
+   a CSS ::after on the active cell so the cell text stays a bare label (the
+   header contract test reads the text). The select above stays because it is
+   the only home for "Group: subteam", and it mirrors whatever is chosen here.
+   The rail cell sorts by layup progress, the last of the three stages; "Who"
+   is two faces and has no sort.
 
    Five of the eight labels are read out of SEASON_COLS rather than typed here,
    so a field renamed in the manifest is renamed on screen. The other three are
@@ -180,14 +186,21 @@ function seasonHead() {
   const lbl = k => { const c = seasonCol(k); return esc(c ? c.label : k); };
   const rail = typeof PART_STAGES !== "undefined"
     ? PART_STAGES.map(s => esc(s.short)).join(" / ") : "C / M / L";
+  const cur = view.seasonSort || "layupDeadline";
+  const hd = (key, text, cls) => {
+    const on = key === cur;
+    return `<span class="shd ${cls || ""} ${on ? (view.seasonDir === "desc" ? "on desc" : "on asc") : ""}" role="button" tabindex="0"
+      title="Sort by ${esc(text)}${on ? " (click to reverse)" : ""}" onclick="seasonSortBy('${key}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();seasonSortBy('${key}')}">${text}</span>`;
+  };
   return `<div class="shead">
-    <span>${lbl("partName")}</span>
-    <span>${lbl("subteam")}</span>
-    <span class="sl-type">${lbl("layupType")}</span>
-    <span>${rail}</span>
-    <span>State</span>
-    <span class="sl-loc">${lbl("moldLocation")}</span>
-    <span>${lbl("layupDeadline")}</span>
+    ${hd("partName", lbl("partName"))}
+    ${hd("subteam", lbl("subteam"))}
+    ${hd("layupType", lbl("layupType"), "sl-type")}
+    ${hd("layupProgress", rail)}
+    ${hd("status", "State")}
+    ${hd("moldLocation", lbl("moldLocation"), "sl-loc")}
+    ${hd("layupDeadline", lbl("layupDeadline"))}
     <span>Who</span>
   </div>`;
 }
