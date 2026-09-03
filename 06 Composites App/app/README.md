@@ -1371,6 +1371,11 @@ There are two roles. A `member` does all day-to-day work across every tab. A
 `lead` can also delete records, restore from a backup file, load the SN5 archive
 and manage the roster.
 
+A lead who would rather not wear the label can tick **show me as member** on
+their own row in People. Only the pill changes: the account menu drops the
+"· lead" suffix and People lists them as a member, while every permission
+stays. The Roster page, which only leads open, still shows the real role.
+
 When someone leaves the team, remove them from the roster. Their account keeps
 existing but stops working.
 

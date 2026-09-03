@@ -27,7 +27,7 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.3.3";
+var APP_VERSION = "4.3.4";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
@@ -522,6 +522,24 @@ function canEdit() {
   return !!(window.fb && fb.state === "ready" && !fb.guest && fb.roster);
 }
 function isLead() { return canEdit() && fb.roster.role === "lead"; }
+/* A lead who would rather not be read as one. `showAs: "member"` on the
+   roster doc changes what the role PILL says wherever a role is shown to the
+   team (People, the account menu); isLead() and firestore.rules never look at
+   it, so permissions are untouched. Simon, 2026-09-03: "I don't want members
+   thinking I am lead." The Roster admin page, which only a lead opens, still
+   prints the real role so leads can see who actually holds it. */
+function displayRole(u) {
+  if (!u) return "member";
+  return u.role === "lead" && u.showAs === "member" ? "member" : (u.role || "member");
+}
+function showsAsLead() { return isLead() && displayRole(fb.roster) === "lead"; }
+async function setMyShowAs(asMember) {
+  if (!isLead()) return;
+  try {
+    await fb.rosterPatch(myEmail(), { showAs: asMember ? "member" : "" });
+    toast(asMember ? "You now appear as a member. Your lead access is unchanged." : "You appear as a lead again.");
+  } catch (e) { toast("Couldn't change that: " + e.message, "error"); }
+}
 function signerName() {
   if (!window.fb) return "?";
   return (fb.roster && fb.roster.name) || (fb.user && fb.user.name) || "?";
@@ -2008,7 +2026,7 @@ function renderRoster() {
     <h2>Roster</h2>
     <p class="muted">Who can use this database. Anyone can create an account, but nothing works until their email is on this list. Remove people when they leave — accounts stick around, access shouldn't.</p>
     <table class="sub"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(r.email)}</td><td>${esc(r.name)}</td><td>${esc(r.role)}</td>
+      ${rows.map(r => `<tr><td>${esc(r.email)}</td><td>${esc(r.name)}</td><td>${esc(r.role)}${r.role === "lead" && r.showAs === "member" ? ' <span class="muted tny">(shown as member)</span>' : ""}</td>
         <td><button class="danger" onclick="rosterDel('${esc(r.email)}')">remove</button></td></tr>`).join("")}
     </tbody></table>
     <h3>Add member</h3>
@@ -2542,7 +2560,7 @@ function renderTopbar() {
         ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
         <button onclick="openRoster()">Roster</button>` : ""}
         <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
-        <span class="muted">${esc(signerName())}${isLead() ? " · lead" : ""}</span>
+        <span class="muted">${esc(signerName())}${showsAsLead() ? " · lead" : ""}</span>
         <button onclick="fb.signOut()">Sign out</button>`}
       </span>
       <button class="icon-btn tb-morebtn" title="More" aria-label="More" onclick="openMoreMenu()">${icon("more", 20)}</button>

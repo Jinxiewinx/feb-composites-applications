@@ -125,6 +125,7 @@ globalThis.fb = {
   async importMany(coll, arr) { calls.push(["importMany", coll, arr.length]); },
   async rosterAll() { return [{ email: "a@b.c", name: "A", role: "member" }]; },
   async rosterSet() { calls.push(["rosterSet"]); },
+  async rosterPatch(email, fields) { calls.push(["rosterPatch", email, fields]); },
   async rosterDelete() { calls.push(["rosterDelete"]); },
   async rosterGrant(email, id) { calls.push(["rosterGrant", email, id]); },
   async rosterRevoke(email, id) { calls.push(["rosterRevoke", email, id]); },
@@ -6236,6 +6237,29 @@ await t("Season column names sort on click, reverse on a second click, and wear 
   const cells = [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map(m => m[1].trim());
   assert(cells.length === 8 && cells[0] === "Part", "the cell text is still the bare label, so the header contract holds");
   view = { ...view, seasonSort: null, seasonDir: null };
+});
+
+await t("a lead can show as a member without giving anything up", async () => {
+  const wasUser = fb.user, wasRoster = fb.roster, wasUsers = DB.users;
+  fb.user = { email: "simon@x.y", name: "Simon" };
+  fb.roster = { email: "simon@x.y", name: "Simon", role: "lead", showAs: "member" };
+  DB.users = [fb.roster, { email: "nico@x.y", name: "Nico", role: "member" }, { email: "nick@x.y", name: "Nick", role: "lead" }];
+  assert(isLead() === true, "permissions are the real role");
+  assert(displayRole(fb.roster) === "member", "the pill is the shown role");
+  assert(displayRole(DB.users[2]) === "lead" && displayRole(DB.users[1]) === "member", "and nobody else is affected");
+  assert(showsAsLead() === false, "so the account menu drops the · lead suffix");
+  view = { ...view, tab: "people", mode: "list", id: null };
+  render();
+  const row = (main.innerHTML.match(/<tr>[\s\S]*?simon@x\.y[\s\S]*?<\/tr>/) || [""])[0];
+  assert(/<span class="pill">member<\/span>/.test(row), "People shows Simon as a member");
+  assert(/show me as member/.test(row) && /checked/.test(row), "with the lead-only switch on his own row, ticked");
+  assert(!/<span class="pill">lead<\/span>/.test(row), "and no lead pill anywhere in that row");
+  calls.length = 0;
+  await setMyShowAs(false);
+  assert(calls.some(c => c[0] === "rosterPatch" && c[1] === "simon@x.y" && c[2].showAs === ""), "unticking clears the field on the roster doc");
+  fb.roster.showAs = "";
+  assert(showsAsLead() === true, "and the suffix comes back");
+  fb.user = wasUser; fb.roster = wasRoster; DB.users = wasUsers;
 });
 
 await t("re-rendering keeps each rail where it was scrolled", () => {

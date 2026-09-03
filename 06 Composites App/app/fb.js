@@ -483,6 +483,13 @@ const fb = {
       .sort((a, b) => a.email.localeCompare(b.email));
   },
   // Lead-only per rules. merge:true so a member's self-set avatar/name survive.
+  /* A few fields on one roster doc, merged. The self-update rule allows a
+     member only avatar and name; a lead can patch anything, which is what
+     showAs (see displayRole in core.js) rides on. */
+  async rosterPatch(email, fields) {
+    noWrites();
+    await setDoc(doc(db, "roster", email.trim().toLowerCase()), fields, { merge: true });
+  },
   async rosterSet(email, name, role) {
     noWrites();
     email = email.trim().toLowerCase();
