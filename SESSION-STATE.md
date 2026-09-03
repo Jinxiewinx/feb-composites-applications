@@ -585,6 +585,10 @@ empty so it never reaches paper looking like data.
 covering titles, notes and event-log text. Stored data is untouched, so the
 archive keeps its original wording.
 
+**`render()` snapshots and restores every `.plist` rail's scrollTop** (v4.2.1),
+keyed by aria-label. Anything new that scrolls inside `<main>` and must survive
+a re-render should be a `.plist` or get the same treatment.
+
 **Storage-backed features (avatar, file upload) need the Firebase Blaze plan.**
 They are built and tested against the emulator.
 
@@ -594,7 +598,12 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-03 (latest) — CFD app through cfd-v0.3.0:** Dashboard, saved views,
+**2026-09-03 (latest) — composites app v4.2.1:** rails keep their scroll
+across re-renders (the multi-select and select-a-part scroll bugs Simon
+reported), and Parts got the same lead-only Select… bulk delete as Work
+Orders. Pushed and deployed.
+
+**2026-09-03 — CFD app through cfd-v0.3.0:** Dashboard, saved views,
 composites shell, then always-dark icon rail (0.2.1), then the boot splash
 and a one-report-at-a-time phone layout (0.3.0), then the splash made a
 Continue gate like the composites app's (0.3.1).

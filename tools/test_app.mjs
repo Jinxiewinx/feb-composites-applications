@@ -6034,6 +6034,60 @@ await t("a member cannot bulk-delete, and the rail does not offer it", async () 
   assert(!main.innerHTML.includes("wopick"), "and cancelling puts the rail back");
 });
 
+await t("Parts has the same Select… picker as Work orders, lead-only, one delete path", async () => {
+  DB.parts = [{ id: "P-SN6-001", partName: "Nose" }, { id: "P-SN6-002", partName: "Seat" }];
+  fb.roster = { name: "Nobody", role: "member" };
+  calls.length = 0;
+  await partBulkDelete(["P-SN6-001"]);
+  assert(!calls.some(c => c[0] === "del" || c[0] === "delMany"), "a member deletes nothing");
+  assert(/only a lead/i.test(lastToast), "and is told why: " + lastToast);
+  assert(DB.parts.length === 2, "and the local copy is untouched");
+
+  view = { ...view, tab: "parts", mode: "list", id: null, partPick: null, q: "", fSub: "", fLate: false, fMine: false, fDone: false, onlyRnd: false, fEng: "" };
+  render();
+  assert(!main.innerHTML.includes("startPartPick()"), "a member is not offered the picker");
+  fb.roster = { name: "Simon", role: "lead" };
+  render();
+  assert(main.innerHTML.includes("startPartPick()"), "a lead is");
+
+  startPartPick();
+  assert(main.innerHTML.includes("togglePartPick('P-SN6-001')"), "rows toggle in pick mode instead of opening");
+  assert(main.innerHTML.includes("deletePickedParts()"), "and the danger button appears");
+  assert(main.innerHTML.includes("disabled"), "disabled until something is ticked");
+  togglePartPick("P-SN6-001");
+  assert(partPickedIds().length === 1, "ticking one selects one");
+  partPickAll(true);
+  assert(partPickedIds().length === 2, "All ticks what is on screen");
+  partPickAll(false);
+  assert(partPickedIds().length === 0, "None clears");
+  cancelPartPick();
+  assert(!main.innerHTML.includes("togglePartPick("), "cancelling puts the rail back");
+
+  // Leaving the tab drops a half-finished pick on either rail.
+  view = { ...view, partPick: { "P-SN6-001": true }, woPick: { "WO-X": true } };
+  setTab("dashboard");
+  assert(view.partPick === null && view.woPick === null, "setTab clears both pick maps");
+});
+
+await t("re-rendering keeps each rail where it was scrolled", () => {
+  /* The bug: every render() rebuilt <main> with innerHTML, which zeroed the
+     rail's scrollTop, and the scrollIntoView that followed then parked the
+     selected row on the bottom edge. Ticking ten boxes meant scrolling down
+     ten times. The stub below is the shape render() sees: .plist scrollers
+     with an aria-label, inside a root. */
+  const mk = (label, top) => ({ scrollTop: top, getAttribute: k => k === "aria-label" ? label : null });
+  const before = [mk("Parts", 340), mk("Molds and plans", 0)];
+  const kept = rememberRailScroll({ querySelectorAll: () => before });
+  assert(kept.Parts === 340, "a scrolled rail is remembered");
+  assert(!("Molds and plans" in kept), "an unscrolled one is not");
+  const after = [mk("Parts", 0), mk("Molds and plans", 0)];
+  restoreRailScroll({ querySelectorAll: () => after }, kept);
+  assert(after[0].scrollTop === 340, "and restored onto the rebuilt rail");
+  assert(after[1].scrollTop === 0, "without touching the other one");
+  restoreRailScroll({ querySelectorAll: () => after }, rememberRailScroll(null));
+  assert(after[0].scrollTop === 340, "an empty snapshot changes nothing");
+});
+
 await t("the Season tab's work-in-progress banner is gone, and stays gone", () => {
   /* Added in v2.1.1 at Simon's ask while the tab settled, and always meant to
      come off once it did. The tab is settled: it is a read, it has its shape,

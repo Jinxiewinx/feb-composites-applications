@@ -369,6 +369,18 @@ The page is built from the same section cards as a work order: a jump bar with a
 count per section and a warn dot, Progress, the layup stack and the runs open by
 default, and the reference sections folded until asked for.
 
+**Select…** on the Parts rail (leads only, matching the database rule) is the
+same picker Work Orders has: tick as many parts as you like, All or None, then
+Delete them together after one confirm that counts what goes. The Delete button
+on a part's own page is the same path with a list of one. Work orders that
+pointed at a deleted part keep their link field; the run's history matters more
+than a tidy pointer, and the app already tolerates a part that is not there.
+There is no undo, so export a backup first if unsure.
+
+Both rails keep their scroll position across every re-render. Ticking a box
+or opening a row used to throw the list back to the top and then park the
+selected row on the bottom edge (v4.2.1 fixed it, in `render()`).
+
 **Materials (plan)** sits between the stack and the runs: the part's expected
 bill of materials. A line is either free text or picked from inventory, and a
 picked line prices itself live from that record's unit cost (qty × $/unit), so

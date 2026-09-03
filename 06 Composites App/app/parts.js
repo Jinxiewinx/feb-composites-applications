@@ -368,13 +368,50 @@ async function newPart(rnd) {
   if (!p) return;
   view = { ...view, mode: "detail", id: p.id, edit: true }; render();
 }
-function delPart(id) {
-  confirmModal("Delete " + id + " for everyone? Back up first if unsure.", () => {
-    del("parts", id);
-    DB.parts = DB.parts.filter(p => p.id !== id);
-    view = { ...view, mode: "list", id: null }; render();
+/* One delete path that takes a LIST, same shape as woBulkDelete(). The
+   single-record Delete button on the detail page is a list of one. Lead-only
+   because firestore.rules allows a parts delete to leads only, so a member's
+   bulk delete would fail server-side one record at a time, after the confirm.
+   Work orders keep their partId: partForWO() already tolerates a dangling one,
+   and the run's history is worth more than a tidy pointer. */
+async function partBulkDelete(ids) {
+  if (!isLead()) { toast("Only a lead can delete parts.", "error"); return; }
+  const set = new Set(ids || []);
+  const parts = (DB.parts || []).filter(p => set.has(p.id));
+  if (!parts.length) { toast("Nothing selected.", "info"); return; }
+  const what = parts.length === 1 ? parts[0].id : `${parts.length} parts`;
+  confirmModal(`Delete ${what} from the team database for everyone? There is no undo — export a backup first if unsure.`, async () => {
+    try { await fb.delMany(parts.map(p => ({ coll: "parts", id: p.id }))); }
+    catch (e) { toast("Delete failed: " + e.message, "error"); return; }
+    const gone = new Set(parts.map(p => p.id));
+    DB.parts = (DB.parts || []).filter(p => !gone.has(p.id));
+    view = { ...view, partPick: null, mode: "list", id: null };
+    toast(`${parts.length} part${parts.length === 1 ? "" : "s"} deleted.`);
+    render();
   });
 }
+function delPart(id) { partBulkDelete([id]); }
+
+/* ---- picking several off the rail ----
+   Same state machine as the work-order rail: `view.partPick` null means "not
+   picking", a map of ids means picking. The whole row toggles in pick mode
+   because a checkbox is a small target on a tablet. */
+function partPickOn() { return !!view.partPick; }
+function startPartPick() { view = { ...view, partPick: {} }; render(); }
+function cancelPartPick() { view = { ...view, partPick: null }; render(); }
+function togglePartPick(id) {
+  const p = view.partPick; if (!p) return;
+  if (p[id]) delete p[id]; else p[id] = true;
+  render();
+}
+function partPickAll(on) {
+  const p = {};
+  // Only what is on screen: "all" under a filter must not select hidden parts.
+  if (on) partIndexRows().forEach(x => { p[x.id] = true; });
+  view = { ...view, partPick: p }; render();
+}
+function partPickedIds() { return Object.keys(view.partPick || {}); }
+function deletePickedParts() { partBulkDelete(partPickedIds()); }
 
 /* ---------- selection ---------- */
 // Selected == view.mode "detail" with a part that exists. Same condition the
@@ -482,10 +519,16 @@ function partIndexItem(p, mixedRetro) {
   const sel = view.mode === "detail" && view.id === p.id;
   const late = partLate(p);
   const engs = partEngineers(p);
-  return `<div class="pitem ${sel ? "sel" : ""} ${partDone(p) ? "isdone" : ""}" id="pi-${esc(p.id)}"
-      role="option" aria-selected="${sel}" title="${esc(p.id)} · ${esc(p.layupType || "")}"
-      onclick="selectPart('${esc(p.id)}')">
-    <span class="pi-name">${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(isRnd(p))}</span>
+  const picking = partPickOn();
+  const ticked = picking && !!view.partPick[p.id];
+  const box = picking
+    ? `<input type="checkbox" class="wopick" ${ticked ? "checked" : ""} aria-label="Select ${esc(p.id)}"
+        onclick="event.stopPropagation();togglePartPick('${esc(p.id)}')"> `
+    : "";
+  return `<div class="pitem ${sel ? "sel" : ""} ${partDone(p) ? "isdone" : ""} ${ticked ? "picked" : ""}" id="pi-${esc(p.id)}"
+      role="option" aria-selected="${picking ? ticked : sel}" title="${esc(p.id)} · ${esc(p.layupType || "")}"
+      onclick="${picking ? `togglePartPick('${esc(p.id)}')` : `selectPart('${esc(p.id)}')`}">
+    <span class="pi-name">${box}${esc(p.partName || p.id)}${mixedRetro && p.retro ? ' <span class="pill retro tny">retro</span>' : ""}${rndBadge(isRnd(p))}</span>
     <span class="pi-due ${late ? "warn" : ""}">${p.layupDeadline ? shortDate(p.layupDeadline) + (late ? " " + icon("warning", 12) : "") : ""}</span>
     <span class="pi-sub">${stageRail(p)}<span class="tny">${esc(p.subteam || "")}</span></span>
     <span class="pi-who">${engs.map(e => avatar(e.email || e.name, 20)).join("") || ""}</span>
@@ -584,9 +627,17 @@ function renderPartIndex() {
               case, so the reflex gesture is the safe one — and both paths land
               on the detail page in edit mode, where the <h2> badge is the first
               thing on screen. */""}
-        <button class="primary ib"${gx("Sign in to add a part.")} onclick="newPart()">${icon("plus", 15)} New Part</button>
+        ${partPickOn() ? (() => {
+          const n = partPickedIds().length;
+          return `<button class="sm" onclick="partPickAll(true)">All ${rows.length}</button>
+            <button class="sm" onclick="partPickAll(false)">None</button>
+            <span class="muted tny">${n} selected</span>
+            <button class="danger sm" style="margin-left:auto" ${n ? "" : "disabled"} onclick="deletePickedParts()">Delete ${n || ""}</button>
+            <button class="sm ib" onclick="cancelPartPick()">${icon("x", 14)}</button>`;
+        })() : `<button class="primary ib"${gx("Sign in to add a part.")} onclick="newPart()">${icon("plus", 15)} New Part</button>
         <button class="ib" onclick="newPart(true)">${icon("plus", 15)} R&amp;D part</button>
-        <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>
+        ${isLead() ? `<button class="sm" onclick="startPartPick()">Select…</button>` : ""}
+        <span class="muted tny" style="margin-left:auto">${rows.length} of ${D.length} parts</span>`}
       </div>
       <div class="psum">
         ${summaryChip("open", s.open, !view.fLate && !view.fMine && !view.fDone && !view.onlyRnd, "resetPartFilters()")}

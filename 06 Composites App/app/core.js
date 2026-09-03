@@ -27,19 +27,15 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.2.0";
+var APP_VERSION = "4.2.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "A purchase now has two statuses, because it always had two lives. Order says where the goods are (Submitted, Purchased, Arrived); Reimbursement says where the money is (Submitted, Approved, Reimbursed).",
-  "They move independently. A part on the shelf that nobody has been paid back for is finally something the Budget tab can say.",
-  "The over-$50 flag now clears when the reimbursement is Approved, not when somebody marks the goods bought.",
-  "Old purchases need no fixing: Ordered reads as Purchased, and the old Reimbursed reads as arrived and paid.",
-  "New field: Charged to. Leave it blank for our own spend. Name another team's budget and the cost is still tracked and still reimbursed, just kept out of the composites season total and every goal bar.",
-  "The list filters on either track or on whose budget it lands on, and the CSV exports all three columns.",
-];
+  "The Parts and Work Orders rails stay where you scrolled them. Ticking a box or opening a row no longer throws the list back to the top.",
+  "Parts has a Select… button for leads, like Work Orders: tick several, All / None, then Delete them in one go.",
+]
 
 /* ---------- config/release ----------
    { version, notes[], publishedAt }, written by a lead from the ⋯ menu after a
@@ -2401,7 +2397,9 @@ function setTab(id) {
   // and friends are NOT reset here, and a "late only" toggle left on in Parts
   // would otherwise silently filter a different tab's rail.
   view = { ...view, tab: id, mode: "list", id: null, edit: false, q: "", fStatus: "", fSub: "", fReimb: "", fBudget: "", sortKey: null, sortDir: null, tlArchive: false, tlPast: false,
-    woOpen: false, woLate: false, woMine: false, woDone: false, woOnlyRnd: false };
+    woOpen: false, woLate: false, woMine: false, woDone: false, woOnlyRnd: false,
+    // A half-finished Select… on one rail must not be waiting when you come back.
+    woPick: null, partPick: null };
   closeDrawer();
   render(); syncUrl();
 }
@@ -3063,6 +3061,25 @@ async function leaveGuest() {
   view = { ...view, authMode: "in" };
 }
 
+/* Scroll positions of the rails inside <main>, keyed by aria-label. Split
+   from render() so the test suite can call them against a stub element. */
+function rememberRailScroll(root) {
+  const kept = {};
+  if (!root || typeof root.querySelectorAll !== "function") return kept;
+  root.querySelectorAll(".plist").forEach((n, i) => {
+    const k = (n.getAttribute && n.getAttribute("aria-label")) || String(i);
+    if (n.scrollTop > 0) kept[k] = n.scrollTop;
+  });
+  return kept;
+}
+function restoreRailScroll(root, kept) {
+  if (!root || typeof root.querySelectorAll !== "function" || !kept) return;
+  root.querySelectorAll(".plist").forEach((n, i) => {
+    const k = (n.getAttribute && n.getAttribute("aria-label")) || String(i);
+    if (kept[k] != null) n.scrollTop = kept[k];
+  });
+}
+
 function render() {
   /* Stock merged into Molds (2026-08): the `stock` tab id keeps resolving —
      old #/stock links, notification links and BRD-/STK- routing all pass
@@ -3107,7 +3124,16 @@ function render() {
   // Explicit dashboard fallback, kept even now Dashboard is TABS[0] again:
   // the landing behavior should never depend on array order.
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
+  /* innerHTML below throws away every scroller inside <main>, and with it how
+     far each one was scrolled. The rails (.plist on Parts, Work orders, Molds,
+     Tickets) are the ones that hurt: ticking the ninth box in Select mode, or
+     clicking a row forty rows down, re-rendered the rail at the top and then
+     scrollIntoView dragged the row back up to sit on the bottom edge. Keyed by
+     the listbox's aria-label so a rail restores only its own position, and
+     only positions that were non-zero, so a fresh tab still starts at the top. */
+  const kept = rememberRailScroll(el);
   el.innerHTML = guestBanner() + releaseBanner() + tab.render();
+  restoreRailScroll(el, kept);
   maybeShowWhatsNew();
   labelListTables();
   // Release a GL context whose canvas this paint removed. See mvSweep.
