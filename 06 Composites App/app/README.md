@@ -1310,7 +1310,7 @@ choice is remembered. Printing always comes out black-on-white regardless.
 
 **Phones and tablets.** The blue sidebar folds into a slide-in drawer behind the
 ☰ button, and at that width the account and lead actions (Backup, Restore,
-Roster, Sign out) move into a ⋯ menu next to search and the bell. The wide list
+Sign out) move into a ⋯ menu next to search and the bell. The wide list
 tables turn into one card per row.
 
 ## Viewing as a guest
@@ -1370,8 +1370,7 @@ an account create only its own roster entry, only as a member.
 
 There are two roles. A `member` does all day-to-day work across every tab. A
 `lead` can also delete records, restore from a backup file, load the SN5 archive
-and manage the roster: only a lead makes someone a lead, on People or on the
-Roster page.
+and manage the roster: only a lead makes someone a lead, on People.
 
 Your display name is yours to change: **Change name** on your own row in
 People. New buy-offs, assignments and comments carry the new name; old
@@ -1385,7 +1384,7 @@ name, role, trainings and every old signature reattach.
 A lead who would rather not wear the label can tick **show me as member** on
 their own row in People. Only the pill changes: the account menu drops the
 "· lead" suffix and People lists them as a member, while every permission
-stays. The Roster page, which only leads open, still shows the real role.
+stays. Other leads still see the real role in the dropdown on your People row.
 
 When someone leaves the team, remove them from the roster. Since anyone can
 join as a member, removal is a nudge rather than a lock: somebody who should

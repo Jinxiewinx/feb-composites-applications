@@ -3,7 +3,7 @@
    Team directory: everyone on the roster with their photo, role, email, and
    what they're currently on the hook for (parts / projects / work orders),
    pulled live. Leads can bump a role or remove someone from the roster
-   (rosterDel in core.js — same confirmed flow as the topbar Roster screen,
+   (rosterDel in core.js — the Roster screen is gone since v4.4.1,
    and the firestore rules enforce lead-only server-side); you set your own
    photo from the topbar. Trainings are granted and revoked here too — the
    built-in catalog (TRAININGS) lives in workorders.js next to the step

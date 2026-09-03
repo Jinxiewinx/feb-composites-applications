@@ -215,8 +215,9 @@ await t("different prefixes still sort by prefix, and non-ids don't throw", () =
 console.log("shell + sidebar:");
 signInAsLead();
 await t("ready shows sidebar nav + Documents, dashboard default", () => { render(); assert(view.tab === "dashboard"); assert(sidebar.innerHTML.includes("Work Orders") && sidebar.innerHTML.includes("Parts") && sidebar.innerHTML.includes("Schedule") && sidebar.innerHTML.includes("Budget") && sidebar.innerHTML.includes("Documents")); });
-await t("lead topbar has Backup/Restore/Roster + avatar, and no bulk import", () => {
-  assert(topbar.innerHTML.includes("Roster") && topbar.innerHTML.includes("Restore") && topbar.innerHTML.includes("Simon · lead") && topbar.innerHTML.includes("avatar"));
+await t("lead topbar has Backup/Restore + avatar, no Roster page, and no bulk import", () => {
+  assert(!topbar.innerHTML.includes("openRoster") && !/>Roster</.test(topbar.innerHTML), "the Roster page is gone (v4.4.1)");
+  assert(topbar.innerHTML.includes("Restore") && topbar.innerHTML.includes("Simon · lead") && topbar.innerHTML.includes("avatar"));
   // Retired in v1.0.0: a one-click bulk re-import of the SN5 seeds has no
   // business in the topbar of an app holding the season actually being run.
   assert(!topbar.innerHTML.includes("Load SN5 archive"), "no Load SN5 archive, for a lead either");

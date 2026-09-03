@@ -14,7 +14,6 @@ let view = {
   tab: "dashboard", mode: "list", id: null, edit: false,
   q: "", fStatus: "", fSub: "", fReimb: "", fBudget: "", authMode: "in", sortKey: null, sortDir: null,
 };
-let rosterCache = null;
 let pendingRender = false;
 
 /* ---------- the shipped version ----------
@@ -27,7 +26,7 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.4.0";
+var APP_VERSION = "4.4.1";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
@@ -2079,48 +2078,18 @@ function renderPending() {
   </div>`;
 }
 
-/* ---------- roster (lead only; rules enforce it server-side) ---------- */
-async function openRoster() {
-  try { rosterCache = await fb.rosterAll(); }
-  catch (e) { toast("Roster load failed: " + e.message,"error"); return; }
-  view = { ...view, mode: "roster" }; render();
-}
-async function rosterAdd() {
-  const email = document.getElementById("r-email").value.trim().toLowerCase();
-  const name = document.getElementById("r-name").value.trim();
-  const role = document.getElementById("r-role").value;
-  if (!email || !email.includes("@") || !name) { toast("Need an email and a name.","error"); return; }
-  try { await fb.rosterSet(email, name, role); rosterCache = await fb.rosterAll(); render(); }
-  catch (e) { toast("Add failed: " + e.message,"error"); }
-}
+/* ---------- roster ----------
+   The Roster page is gone (v4.4.1, Simon: "I don't think it serves any needs
+   now"). Accounts join the roster themselves, roles change on People, and
+   removal lives there too. This is the one function People still needs. */
 function rosterDel(email) {
   const self = fb.user && email === fb.user.email;
   confirmModal(self
-    ? "That's YOU. Removing yourself locks you (and possibly everyone) out of roster admin. Really remove?"
-    : "Remove " + email + " from the roster? They keep their account but lose all access.", async () => {
-    try { await fb.rosterDelete(email); rosterCache = await fb.rosterAll(); render(); }
+    ? "That's YOU. Removing yourself takes away your own access until you join again as a member. Really remove?"
+    : "Remove " + userHandle(email) + " from the roster? They keep their account and can rejoin as a member; to keep them out, disable the account in the Firebase console too.", async () => {
+    try { await fb.rosterDelete(email); render(); }
     catch (e) { toast("Remove failed: " + e.message, "error"); }
   });
-}
-function renderRoster() {
-  const rows = rosterCache || [];
-  return `
-  <div class="toolbar no-print"><button class="ib" onclick="view={...view,mode:'list'};render()">${icon("chevronLeft",16)} Back</button></div>
-  <div class="card">
-    <h2>Roster</h2>
-    <p class="muted">Who can use this database. Anyone who creates an account joins this list as a member on their own; leads are made here or on People. Removing someone takes their access away until they join again, so for somebody who should stay out, disable the account in the Firebase console too.</p>
-    <table class="sub"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(userHandle(r.email))}</td><td>${esc(r.name)}</td><td>${esc(r.role)}${r.role === "lead" && r.showAs === "member" ? ' <span class="muted tny">(shown as member)</span>' : ""}</td>
-        <td><button class="danger" onclick="rosterDel('${esc(r.email)}')">remove</button></td></tr>`).join("")}
-    </tbody></table>
-    <h3>Add member</h3>
-    <div class="grid" style="max-width:640px">
-      <div class="f"><label>Email</label><input id="r-email" type="email"></div>
-      <div class="f"><label>Name</label><input id="r-name"></div>
-      <div class="f"><label>Role</label><select id="r-role"><option value="member">member</option><option value="lead">lead</option></select></div>
-    </div>
-    <p><button class="primary" onclick="rosterAdd()">Add to roster</button></p>
-  </div>`;
 }
 
 /* ---------- modal system ---------- */
@@ -2617,7 +2586,7 @@ function renderTopbar() {
   const guest = !!(window.fb && fb.guest);
   el.innerHTML = `
     <button class="hamburger no-print" title="Menu" aria-label="Menu" onclick="toggleDrawer()">${icon("menu", 22)}</button>
-    <h1>${esc(view.mode === "roster" ? "Roster" : tabLabel())}</h1>
+    <h1>${esc(tabLabel())}</h1>
     <div class="actions">
       ${/* Next to search, because they answer the same question by different
             means: "find me this thing". On a phone this is the fastest path
@@ -2641,8 +2610,7 @@ function renderTopbar() {
                 a guest nothing they came for. Same for the avatar button, which
                 is a write. */""}
         <button onclick="exportAll()">Backup</button>
-        ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>
-        <button onclick="openRoster()">Roster</button>` : ""}
+        ${isLead() ? `<button onclick="document.getElementById('importfile').click()">Restore</button>` : ""}
         <button class="avatar-btn" title="Change your photo" onclick="setMyAvatar()">${avatar(myEmail(), 30)}</button>
         <span class="muted">${esc(signerName())}${showsAsLead() ? " · lead" : ""}</span>
         <button onclick="fb.signOut()">Sign out</button>`}
@@ -2670,8 +2638,7 @@ function openMoreMenu() {
       ${guest ? `<button class="primary" onclick="closeModal();leaveGuest()">${icon("logout", 18)}Sign in</button>`
       : `<button onclick="closeModal();setMyAvatar()">${icon("edit", 18)}Change photo</button>
       <button onclick="closeModal();exportAll()">${icon("download", 18)}Backup database</button>
-      ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>
-      <button onclick="closeModal();openRoster()">${icon("roster", 18)}Roster</button>` : ""}
+      ${lead ? `<button onclick="closeModal();document.getElementById('importfile').click()">${icon("upload", 18)}Restore from backup</button>` : ""}
       <button class="danger" onclick="closeModal();fb.signOut()">${icon("logout", 18)}Sign out</button>`}
     </div>
     <div class="muted tny" style="margin-top:14px;text-align:center">${versionLinks(false)}</div>`);
@@ -3285,7 +3252,6 @@ function render() {
      "loading" and DB is empty, so there is no record to open yet. It rewrites
      `view` in place, so it must run before the tab is picked below. */
   if (PENDING_LINK && consumePendingLink()) syncUrl();
-  if (view.mode === "roster") { el.innerHTML = renderRoster(); return; }
   // Explicit dashboard fallback, kept even now Dashboard is TABS[0] again:
   // the landing behavior should never depend on array order.
   const tab = TABS.find(t => t.id === view.tab) || TABS.find(t => t.id === "dashboard") || TABS[0];
