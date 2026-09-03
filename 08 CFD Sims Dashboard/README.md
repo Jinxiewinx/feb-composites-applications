@@ -36,6 +36,11 @@ them.
 The address bar carries what you have open, the tab, the plot and the
 overlay. Copy it and send it: the link is the comparison.
 
+**On a phone** the rail is a bottom bar and the Viewer shows one report at
+a time: Pages and Panels only, with a select in the toolbar to pick from
+the library or open a PDF from the phone. Comparing side by side is a
+desktop thing; a two-report link opens its first report.
+
 **Access is open.** No sign-in to read, upload, rename or delete; Simon's
 call (2026-09-02) so nobody has to be added to anything. What the bucket
 still refuses: anything that is not a PDF, anything over 60 MB, and any

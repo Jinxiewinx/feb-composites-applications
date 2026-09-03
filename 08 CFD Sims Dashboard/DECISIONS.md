@@ -89,3 +89,20 @@ chart family commits the design system to something it does not have). The
 CFD app needs trendlines by request, so `chart.js` is a small SVG line chart
 that lives here, styled from the design tokens, and is not added to
 `05 Design System/`. One measure per chart, never two axes.
+
+## 7. The splash leaves by itself (2026-09-03)
+
+The composites app's boot splash is a gate: it waits for a press, by a
+deliberate decision there. This app's splash has the same look and the same
+honest lamps (three real milestones, never a timer) but takes itself down
+once they light, after a 700 ms floor so it never flashes. It turns into a
+gate only when the boot is slow (4 s, Continue anyway) or failed (12 s or a
+library error, Retry). A dashboard people open several times a day should
+not ask to be let in each time; a shop tablet that stays open all day is a
+different case.
+
+## 8. A phone gets one report at a time (2026-09-03)
+
+Under 768 px the Viewer drops its side panel and the two-report views and
+opens one report, picked from a select. Side-by-side comparison on a phone
+screen is not worth building for; opening a report to read a plot is.

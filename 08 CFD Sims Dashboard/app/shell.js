@@ -71,7 +71,7 @@ export function renderTopbar(page, version, extra = "") {
     <div class="actions">
       <span class="muted tny tb-ver">v${esc(version)}</span>
       ${extra}
-      <button class="primary" onclick="cfd.pick()">${icon("upload", 16)} Open PDFs</button>
+      <button class="primary" title="Open PDFs" onclick="cfd.pick()">${icon("upload", 16)}<span class="tb-txt">Open PDFs</span></button>
     </div>`;
 }
 

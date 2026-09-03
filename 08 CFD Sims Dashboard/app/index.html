@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f16">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -23,6 +23,36 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<!-- Boot splash, the composites app's idea with this app's mark: the flow
+     lines draw in over the wing while pdf.js and the library arrive. Three
+     lamps are three real milestones (fonts, library, views); it leaves on its
+     own once they are lit, and only turns into a gate if the connection is
+     slow or fails. core.js owns it. -->
+<div id="splash">
+  <div class="sp-mark">
+    <svg viewBox="0 0 512 512" fill="none" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#00294d"/>
+      <g stroke="#2f6be4" stroke-width="30" stroke-linecap="round">
+        <path class="sp-flow f1" d="M92 168 C 190 168, 230 114, 330 114 C 380 114, 410 126, 430 138"/>
+        <path class="sp-flow f2" d="M92 236 C 200 236, 240 176, 340 176 C 385 176, 412 194, 430 206"/>
+        <path class="sp-flow f3" d="M92 404 C 200 404, 260 372, 350 372 C 390 372, 415 384, 430 396"/>
+      </g>
+      <path class="sp-wing" d="M84 330 C 150 262, 300 246, 440 300 C 330 318, 190 352, 84 330 Z" fill="#fdb515"/>
+    </svg>
+  </div>
+  <div class="sp-word">FEB <span>CFD</span></div>
+  <div class="sp-lights" id="sp-lights" role="progressbar" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-label="Starting up">
+    <span class="sp-lamp"></span><span class="sp-lamp"></span><span class="sp-lamp"></span>
+  </div>
+  <p class="sp-step" id="sp-step" aria-live="polite">Starting up&hellip;</p>
+  <p class="sp-fact" id="sp-fact"></p>
+  <div class="sp-slow">Still connecting. The library is one request away; the reader is a bigger download the first time.</div>
+  <div class="sp-acts">
+    <button type="button" class="sp-go" id="sp-go">Continue anyway</button>
+    <button type="button" class="sp-retry" id="sp-retry">Retry</button>
+  </div>
+</div>
 
 <div id="app">
   <nav class="sidebar" id="sidebar"></nav>

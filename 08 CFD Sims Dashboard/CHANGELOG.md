@@ -7,6 +7,17 @@ relearn navigation, Minor for a new capability, Patch for fixes and copy.
 
 ---
 
+## cfd-v0.3.0 — 2026-09-03
+
+- A boot splash like the composites app's: the mark draws in while pdf.js
+  and the library arrive, three lamps for three real milestones. It leaves
+  on its own once they light, and becomes a gate only when the connection
+  is slow or fails.
+- Works on a phone. Under 768 px the rail is a bottom bar, the Dashboard
+  stacks, and the Viewer opens one report at a time: no side panel, no
+  Overlay or Summary, a select in the toolbar to pick from the library or
+  open a PDF from the phone. A two-report link opens its first report.
+
 ## cfd-v0.2.1 — 2026-09-03
 
 - The sidebar is always the icon rail and the app is always dark; both

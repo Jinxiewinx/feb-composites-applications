@@ -97,6 +97,8 @@ try {
   await page.goto(`http://127.0.0.1:${port}/app/`);
   await page.waitForFunction(() => window.CFD && window.CFD.S.library && window.CFD.S.library.length === 2 && document.querySelector(".rcard"), null, { timeout: 15000 });
   t("Dashboard is the landing page", await page.evaluate(() => window.CFD.S.page) === "dashboard");
+  await page.waitForFunction(() => !document.getElementById("splash"), null, { timeout: 5000 });
+  t("splash lit its lamps and left on its own", true);
   t("sidebar is the icon rail: mark and two icons, no labels, no toggle", await page.evaluate(() => !!document.querySelector(".sb-brand .feb-mark") && document.querySelectorAll(".sb-item").length === 2 && !document.querySelector(".sb-label") && !document.querySelector(".sb-toggle") && document.querySelector("#app > .sidebar").getBoundingClientRect().width === 56));
   t("always dark, no theme toggle", await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" && !document.querySelector(".topbar .icon-btn[title*='theme']")));
   t("four stat tiles, latest DP first", await page.evaluate(() => document.querySelectorAll(".dstats .stat-tile").length === 4 && document.querySelector(".dstats .stat-label").textContent.includes("DP 23")));
@@ -175,6 +177,30 @@ try {
   await page.click(".sb-item:not(.active)");
   await page.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 2, null, { timeout: 5000 });
   t("returning to the viewer keeps its open reports", true);
+
+  /* ---- mobile: one report at a time ---- */
+  const mob = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  mob.on("pageerror", e => errors.push("mobile: " + e));
+  mob.on("dialog", d => d.accept(d.defaultValue() || "x"));
+  await mob.route("**/library.js", r => r.fulfill({ contentType: "text/javascript", body: LIB_STUB }));
+  await mob.goto(`http://127.0.0.1:${port}/app/`);
+  await mob.waitForFunction(() => window.CFD && window.CFD.S.library && document.querySelector(".rcard") && !document.getElementById("splash"), null, { timeout: 15000 });
+  t("mobile: the rail is a bottom bar the width of the screen", await mob.evaluate(() => { const r = document.querySelector("#app > .sidebar").getBoundingClientRect(); return r.width === 390 && r.bottom === 844 && window.CFD.isMobile(); }));
+  t("mobile: stat tiles in two columns, cards in one", await mob.evaluate(() => getComputedStyle(document.querySelector(".dstats")).gridTemplateColumns.split(" ").length === 2 && getComputedStyle(document.querySelector(".rgrid")).gridTemplateColumns.split(" ").length === 1));
+  if (process.env.SHOTS) { await mob.screenshot({ path: process.env.SHOTS + "/mobile-dashboard.png" }); }
+  await mob.click(".rcard .primary");
+  await mob.waitForFunction(() => window.CFD.S.page === "viewer" && window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].index, null, { timeout: 60000 });
+  t("mobile: a card opens one report in the viewer", await mob.evaluate(() => window.CFD.S.docs[0].reportId === "RPT-BBBBBBBB"));
+  t("mobile: no side panel, no Save view, only Pages and Panels", await mob.evaluate(() => getComputedStyle(document.querySelector(".vside")).display === "none" && getComputedStyle(document.querySelector("#saveview")).display === "none" && document.querySelectorAll("#tabs button").length === 2));
+  t("mobile: the toolbar select lists the library with the open one selected", await mob.evaluate(() => { const s = document.querySelector("#mobilepick"); return getComputedStyle(s).display !== "none" && s.value === "RPT-BBBBBBBB" && s.querySelectorAll("option").length === 4; }));
+  await mob.selectOption("#mobilepick", "RPT-AAAAAAAA");
+  await mob.waitForFunction(() => window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].reportId === "RPT-AAAAAAAA" && window.CFD.S.docs[0].index, null, { timeout: 60000 });
+  t("mobile: picking another report replaces the open one", true);
+  if (process.env.SHOTS) { await mob.waitForTimeout(800); await mob.screenshot({ path: process.env.SHOTS + "/mobile-viewer.png" }); }
+  await mob.goto(`http://127.0.0.1:${port}/app/?open=RPT-AAAAAAAA,RPT-BBBBBBBB&tab=overlay`);
+  await mob.waitForFunction(() => window.CFD && window.CFD.S.docs.length === 1 && window.CFD.S.docs[0].index && !document.getElementById("splash"), null, { timeout: 60000 });
+  t("mobile: a two-report link opens only the first, on Pages", await mob.evaluate(() => window.CFD.S.docs[0].reportId === "RPT-AAAAAAAA" && window.CFD.S.tab === "pages"));
+  await mob.close();
 
   t("no page errors", errors.length === 0, errors.join(" | ").slice(0, 400));
 } finally {

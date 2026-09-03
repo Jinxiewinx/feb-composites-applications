@@ -34,7 +34,79 @@ import { $, el, esc, toast, fmtMB, shortDate } from "./util.js";
 export { $, el, esc, toast };
 
 /* Bumped by hand at release time; tags are cfd-vX.Y.Z (see README). */
-export const APP_VERSION = "0.2.1";
+export const APP_VERSION = "0.3.0";
+
+/* ---------- boot splash ----------
+   index.html paints it before this module (and pdf.js behind it) has even
+   downloaded. Three milestones light three lamps; when all three are lit the
+   sheet leaves by itself after a short floor so it never flashes. It becomes
+   a gate only when the connection is slow (4 s: Continue anyway) or has
+   failed (12 s, or the library errored: Retry). */
+const SPLASH_T0 = performance.now();
+const SPLASH = { fonts: 0, library: 0, views: 0 };   // 0 pending, 1 done, -1 failed
+const SPLASH_LABEL = { fonts: "fonts", library: "the library", views: "saved views" };
+let splashDone = false;
+const FACTS = [
+  "Fluent prints lift negative: −487 N in a report is 487 N of downforce.",
+  "The coefficients here are on 1 m² at 20 m/s, so Cl × 245 N is the force.",
+  "Two identical reports difference to exactly 0.00%. That is how the overlay is checked.",
+  "Every named plot is matched across reports by its title, so a renamed view shows as missing, never as the wrong plot.",
+  "Print margins are dropped before pages stack, so a plot across a page break renders as one image.",
+  "The thumbnail on every card is stat-car-0, the same view for every run, so cards compare at a glance.",
+];
+function splashEl() { return document.getElementById("splash"); }
+function splashStep(key, state) {
+  SPLASH[key] = state;
+  const el = splashEl(); if (!el) return;
+  const lit = Object.values(SPLASH).filter(v => v === 1).length;
+  const lamps = el.querySelectorAll(".sp-lamp");
+  lamps.forEach((l, i) => { l.classList.toggle("on", i < lit); });
+  const failed = Object.entries(SPLASH).filter(([, v]) => v === -1).map(([k]) => k);
+  failed.forEach((k, i) => { const l = lamps[lit + i]; if (l) l.classList.add("bad"); });
+  const lights = el.querySelector("#sp-lights"); if (lights) lights.setAttribute("aria-valuenow", lit);
+  const pending = Object.entries(SPLASH).filter(([, v]) => v === 0).map(([k]) => SPLASH_LABEL[k]);
+  const step = el.querySelector("#sp-step");
+  if (step) step.textContent = failed.length ? `Could not reach ${failed.map(k => SPLASH_LABEL[k]).join(" and ")}.` : pending.length ? `Waiting for ${pending.join(", ")}…` : "Ready.";
+  if (failed.length) el.classList.add("failed");
+  if (!pending.length && !failed.length) hideSplash();
+}
+function hideSplash(force) {
+  if (splashDone) return;
+  const el = splashEl(); if (!el) return;
+  const floor = 700 - (performance.now() - SPLASH_T0);
+  if (!force && floor > 0) { setTimeout(() => hideSplash(true), floor); return; }
+  splashDone = true;
+  el.setAttribute("aria-hidden", "true");
+  el.classList.add("gone");
+  const app = document.getElementById("app");
+  app.classList.add("sp-arrive"); setTimeout(() => app.classList.remove("sp-arrive"), 500);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+}
+(function bootSplash() {
+  const el = splashEl(); if (!el) return;
+  const fact = el.querySelector("#sp-fact");
+  if (fact) fact.textContent = FACTS[new Date().getDate() % FACTS.length];
+  try { document.fonts.ready.then(() => splashStep("fonts", 1), () => splashStep("fonts", 1)); }
+  catch (e) { splashStep("fonts", 1); }
+  setTimeout(() => { if (!splashDone) el.classList.add("slow"); }, 4000);
+  setTimeout(() => { if (!splashDone) { for (const k in SPLASH) if (SPLASH[k] === 0) SPLASH[k] = -1; splashStep("library", SPLASH.library); } }, 12000);
+  el.querySelector("#sp-go").onclick = () => hideSplash(true);
+  el.querySelector("#sp-retry").onclick = () => location.reload();
+  el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === "Escape") hideSplash(true); });
+})();
+
+/* ---------- mobile ----------
+   One report at a time under 768px: no side panel, no two-report views, a
+   select in the toolbar to pick from the library. */
+const MQ = matchMedia("(max-width: 767px)");
+export function isMobile() { return MQ.matches; }
+MQ.addEventListener("change", () => {
+  if (isMobile()) {
+    if (!["pages", "panels"].includes(S.tab)) S.tab = "pages";
+    for (const d of S.docs.slice(1)) removeDoc(d.id);
+  }
+  renderPage(); syncUrl();
+});
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.mjs", import.meta.url).href;
 
@@ -185,6 +257,7 @@ async function backfill(doc, rec) {
    one. The upload gets the original bytes; the viewer got a copy, because
    pdf.js detaches what it is handed. */
 async function ingest(files) {
+  if (isMobile()) { files = files.slice(0, 1); for (const d of [...S.docs]) removeDoc(d.id); }
   for (const f of files) {
     const bytes = new Uint8Array(await f.arrayBuffer());
     const [doc] = await addDocs([{ name: f.name, data: bytes.slice() }]);
@@ -216,6 +289,7 @@ async function ingest(files) {
    the record lacks. */
 export async function openReport(rec, opts = {}) {
   if (S.docs.some(d => d.reportId === rec.id)) { if (!opts.quiet) toast(`"${rec.name}" is already open`); return; }
+  if (isMobile()) for (const d of [...S.docs]) removeDoc(d.id);   // one at a time on a phone
   const id = "d" + (seq + 1);
   S.uploads[id] = -1; // -1: downloading, indeterminate
   try {
@@ -367,9 +441,10 @@ async function applyUrl(qs = location.search) {
   if (urlApplied || !S.library) return;
   urlApplied = true;
   const p = new URLSearchParams(qs);
-  const ids = (p.get("open") || "").split(",").filter(Boolean);
+  let ids = (p.get("open") || "").split(",").filter(Boolean);
+  if (isMobile()) ids = ids.slice(0, 1);
   S.page = p.get("p") === "viewer" || ids.length ? "viewer" : "dashboard";
-  const tab = p.get("tab"); if (TABS.some(t => t.id === tab)) S.tab = tab;
+  const tab = p.get("tab"); if (TABS.some(t => t.id === tab) && !(isMobile() && !["pages", "panels"].includes(tab))) S.tab = tab;
   const mode = p.get("mode"); if (["swipe", "blend", "diff"].includes(mode)) S.overlay.mode = mode;
   const a = +p.get("a"), b = +p.get("b");
   renderPage();
@@ -403,6 +478,7 @@ function buildViewer() {
   root.innerHTML = `
     <div class="vtool">
       <div class="tabs" id="tabs"></div>
+      <select id="mobilepick" title="Pick a report from the library"></select>
       <div class="spacer"></div>
       <div class="ctl" id="synccontrols">
         <button id="synctoggle" class="tgl on" title="Lock scrolling together (S)"><span class="ico">⇅</span><span class="lbl">Synced</span></button>
@@ -455,6 +531,12 @@ function buildViewer() {
   // Wiring, once.
   root._empty.querySelector("#openbtn2").onclick = pick;
   root.querySelector("#addbtn").onclick = pick;
+  root.querySelector("#mobilepick").onchange = e => {
+    const v = e.target.value;
+    if (v === "__pick") { pick(); e.target.value = S.docs[0]?.reportId || ""; return; }
+    const rec = (S.library || []).find(r => r.id === v);
+    if (rec) openReport(rec, { quiet: true });
+  };
   root.querySelector("#saveview").onclick = saveView;
   root.querySelector("#addtolib").onchange = e => { S.addToLibrary = e.target.checked; };
   root.querySelector("#libsearch").oninput = e => { S.libQuery = e.target.value; renderChrome(); };
@@ -498,13 +580,21 @@ export function renderChrome() {
   if (!inViewer()) { if (S.page === "dashboard" && S.library) $("#main").innerHTML = renderDashboard(); return; }
   const tabs = $("#tabs");
   tabs.innerHTML = "";
+  const mobile = isMobile();
+  if (mobile && !["pages", "panels"].includes(S.tab)) S.tab = "pages";
   for (const t of TABS) {
+    if (mobile && !["pages", "panels"].includes(t.id)) continue;
     const b = el("button", S.tab === t.id ? "active" : "", t.label);
     b.onclick = () => { S.tab = t.id; render(); renderChrome(); syncUrl(); };
     b.disabled = (t.id === "overlay" || t.id === "summary") && S.docs.length < 2;
     tabs.appendChild(b);
   }
   $("#saveview").disabled = !S.docs.some(d => d.reportId);
+  const mp = $("#mobilepick");
+  const cur = S.docs[0]?.reportId || "";
+  mp.innerHTML = `<option value="" ${cur ? "" : "selected"} disabled>${S.docs.length ? esc(S.docs[0].name) : "Pick a report…"}</option>` +
+    (S.library || []).map(r => `<option value="${esc(r.id)}" ${r.id === cur ? "selected" : ""}>${esc(r.name)}${Number.isInteger(r.dp) ? ` (DP ${r.dp})` : ""}</option>`).join("") +
+    `<option value="__pick">Open a PDF from this phone…</option>`;
 
   // Open reports.
   const list = $("#doclist");
@@ -631,9 +721,11 @@ renderPage();
 lib.watchReports(recs => {
   S.library = recs; S.libError = null;
   if (S.page === "dashboard") renderPage(); else renderChrome();
+  splashStep("library", 1);
   applyUrl();
-}, err => { S.libError = err?.code || err?.message || String(err); if (S.page === "dashboard") renderPage(); else renderChrome(); });
-lib.watchViews(views => { S.views = views; if (S.page === "dashboard") renderPage(); });
+}, err => { S.libError = err?.code || err?.message || String(err); if (S.page === "dashboard") renderPage(); else renderChrome(); splashStep("library", -1); });
+lib.watchViews(views => { S.views = views; if (S.page === "dashboard") renderPage(); splashStep("views", 1); },
+  () => splashStep("views", -1));
 
 // Handy in the console and used by the browser-driven checks.
-window.CFD = { S, addDocs, ingest, openReport, render, renderChrome, renderPage, setTab, panelRows, selectPanel, currentQuery, APP_VERSION };
+window.CFD = { S, addDocs, ingest, openReport, render, renderChrome, renderPage, setTab, panelRows, selectPanel, currentQuery, isMobile, APP_VERSION };
