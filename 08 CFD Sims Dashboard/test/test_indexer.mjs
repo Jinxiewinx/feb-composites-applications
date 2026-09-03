@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { indexDocument, withContentSpace, matchPanels } from "../app/indexer.js";
+import { resultsFrom, dpFrom, metaFrom, headline, reportDefs } from "../app/extract.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SAMPLE = join(root, "test", "fixtures", "DP_22.pdf");
@@ -216,6 +217,52 @@ t("matchPanels rows carry the fields the views read (id, name, section, cells[])
   }
   const orders = rows.map(r => (r.cells.find(Boolean) || {}).order);
   assert(orders.every((o, i) => i === 0 || o >= orders[i - 1]), "rows sorted by order");
+});
+
+/* ---- extract.js: the numbers the dashboard reads ---- */
+console.log("extract:");
+const fullText = ix.text.map(t => t.text).join("  ");
+const R = resultsFrom(fullText);
+t("total lift/drag/cl/cd read verbatim from Report Definitions", () => {
+  assert(R.total, "total block");
+  assert(R.total.lift === -486.6432, "lift " + R.total.lift);
+  assert(R.total.drag === 179.6394, "drag " + R.total.drag);
+  assert(R.total.cl === -1.986299, "cl " + R.total.cl);
+  assert(R.total.cd === 0.733222, "cd " + R.total.cd);
+});
+t("element loads read too, keyed by name not column", () => {
+  assert(R.fwing.cd === 0.08125819, "fwing cd");
+  assert(R.rwing.drag === 62.7296, "rwing drag");
+  assert(R.ut.lift === -192.502, "ut lift");
+});
+t("no -rplot axis numbers leak in as values", () => {
+  assert(!Object.keys(R).some(k => /rplot/.test(k)), Object.keys(R).join(","));
+  const fake = resultsFrom("Report Definitions total-lift -10 N Plots total-lift-rplot 50 100 150 200 total-cd-rplot 0.5 0.7");
+  assert(fake.total.lift === -10 && fake.total.cd === undefined, JSON.stringify(fake));
+});
+t("headline flips lift to positive downforce and derives L/D", () => {
+  const h = headline(R);
+  assert(Math.abs(h.downforce - 486.6432) < 1e-9 && Math.abs(h.drag - 179.6394) < 1e-9, "N");
+  assert(Math.abs(h.ld - 486.6432 / 179.6394) < 1e-9, "L/D");
+  assert(headline({}).downforce === null && headline(null).ld === null, "missing stays null");
+});
+t("design point from the name, else from the PDF, else null", () => {
+  assert(dpFrom("DP_22.pdf", "") === 22, "DP_22");
+  assert(dpFrom("dp 7 baseline", "") === 7, "dp 7");
+  assert(dpFrom("DP-104b", "") === 104, "DP-104b");
+  assert(dpFrom("wing study", fullText) === 22, "from the PDF's first token");
+  assert(dpFrom("wing study", "no dp here") === null, "null");
+});
+t("meta carries analyst, date, cells, iterations, inlet velocity", () => {
+  const m = metaFrom(fullText);
+  assert(m.analyst === "beldon", "analyst " + m.analyst);
+  assert(m.date === "4/27/2026 11:29 AM", "date " + m.date);
+  assert(m.cells === 5304451 && m.iterations === 200, "cells/iterations");
+  assert(m.inletV === "20 m/s", "inletV " + m.inletV);
+});
+t("reportDefs still lists the names", () => {
+  const d = reportDefs(fullText);
+  assert(d.includes("total-lift") && d.includes("ut-cl"), d.join(","));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -12,70 +12,8 @@
 
 import { S, el, esc } from "./core.js";
 
-const FIELDS = [
-  ["Report", [
-    ["Design point", t => cap(t, /^\s*(DP\s*\d+)/)],
-    ["Analyst", t => cap(t, /Analyst\s+(\S+)/)],
-    ["Date", t => cap(t, /Date\s+(\d{1,2}\/\d{1,2}\/\d{4}[^A-Za-z]*[AP]M)/)],
-  ]],
-  ["Mesh", [
-    ["Cells", t => cap(t, /Cells\s+Faces\s+Nodes\s+(\d+)/)],
-    ["Faces", t => cap(t, /Cells\s+Faces\s+Nodes\s+\d+\s+(\d+)/)],
-    ["Nodes", t => cap(t, /Cells\s+Faces\s+Nodes\s+\d+\s+\d+\s+(\d+)/)],
-    ["Min orthogonal quality", t => cap(t, /Min Orthogonal Quality[^\d]*([\d.eE+-]+)/)],
-    ["Max aspect ratio", t => cap(t, /Max Aspect Ratio[^\d]*[\d.eE+-]+\s+([\d.eE+-]+)/)],
-  ]],
-  ["Solver", [
-    ["Version", t => cap(t, /Version\s+([\d.\-]+)/)],
-    // Anchored on "Application <solver> Settings", because the table of
-    // contents also contains the bare word "Settings" and a loose match walks
-    // off and swallows the whole TOC.
-    ["Solver", t => cap(t, /Application\s+(\S+)\s+Settings/)],
-    ["Settings", t => cap(t, /Application\s+\S+\s+Settings\s+(.+?)\s+Version\s/)],
-    ["Viscous model", t => cap(t, /Viscous\s+(.+?)\s+(?:Material Properties|Cell Zone)/)],
-    ["Time", t => cap(t, /Time\s+(Steady|Transient)/)],
-  ]],
-  ["Run", [
-    ["Iterations", t => cap(t, /Iterations:\s*(\d+)/)],
-    /* Freestream velocity is a named expression, not a boundary-condition
-       number: the inlet reads "Velocity Magnitude  inletv". Reading the literal
-       next to "Velocity Magnitude" picks up the gauge pressure instead, so go to
-       the Named Expressions table and take inletv's evaluated value. */
-    ["Inlet velocity", t => {
-      const m = t.match(/\binletv\s+[\d.eE+-]+\s+([\d.eE+-]+)\s*\[\s*m\s*s\^-1\s*\]/);
-      return m ? m[1] + " m/s" : null;
-    }],
-    ["Wheel speed", t => {
-      const m = t.match(/\bwheelspeed\s+.*?\s([\d.eE+-]+)\s*\[\s*s\^-1/);
-      return m ? m[1] + " rad/s" : null;
-    }],
-  ]],
-];
-
-function cap(text, re) {
-  const m = text.match(re);
-  return m ? m[1].trim() : null;
-}
-
-/* Residual convergence: "continuity 0.0156 ..." style rows on Solution Status. */
-function residuals(text) {
-  const out = {};
-  const names = ["continuity", "x-velocity", "y-velocity", "z-velocity", "k", "omega", "epsilon"];
-  for (const n of names) {
-    const m = text.match(new RegExp("\\b" + n + "\\s+([\\d.eE+-]+)"));
-    if (m) out[n] = m[1];
-  }
-  return out;
-}
-
-/* Final value of each convergence plot: the last number Fluent prints under the
-   plot's own name is not reliably parseable, so this reports which report
-   definitions exist rather than inventing values. */
-function reportDefs(text) {
-  const m = text.match(/Report Definitions(.+?)(?:Plots|$)/s);
-  if (!m) return [];
-  return [...new Set(m[1].match(/[a-z]+-[a-z]+(?:-rplot)?/g) || [])].slice(0, 24);
-}
+// Regexes live in extract.js so upload-time extraction and this table agree.
+import { FIELDS, residuals, reportDefs } from "./extract.js";
 
 function docText(d) { return d.index.text.map(t => t.text).join("  "); }
 
