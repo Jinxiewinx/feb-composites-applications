@@ -28,7 +28,13 @@ failed so the mold card links to `dataFile.fusionWebURL`. The app side is
 two stamps in `submitMold`, a Fusion section on the mold card; no rules
 change, since molds create/update is `onRoster()` with no field list. The
 add-in is installed on Simon's Mac and its FEB panel shows on the Utilities
-tab; the end-to-end press of Plan in the palette needs a person. Not done:
+tab. Verified live on 2026-09-04 up to the page taking the mesh (the palette
+loaded v4.5.0, the add-in sent 75,884 bytes, the page answered
+`mold-received`); the palette was left open with the modal loaded, and the
+press of Plan, the records and the drawn bodies still need a signed-in
+person. Fusion's own `response` HTMLEvent did not arrive on the first two
+sends to the https page and did on the third, so the add-in relies on the
+page's explicit `mold-received` and not on that path. Not done:
 the Windows repeat of every spike and of the install (needs a member), and
 the S4 spike add-ins are still installed beside it (`S4PaletteBridge`,
 `S5RestSignin`, delete when no longer wanted). Build-shaping facts not in the
