@@ -272,9 +272,8 @@ The study is done when:
 
 ## Open questions for Simon (not blocking the study)
 
-- **Fusion is not installed on the Mac these sessions run on** (checked
-  2026-09-04: nothing in `/Applications`, no per-user AddIns folder). So no
-  spike can run from a session unattended. Either Fusion gets installed here
-  under Simon's educational licence, or each spike is written here and run by
-  a member on their own machine, who pastes the log back. The study needs one
-  Mac and one Windows volunteer either way.
+- **Fusion is on this Mac after all** (under `~/Applications`, missed by the
+  first check of `/Applications`), and its built-in MCP server is connected;
+  `MCP.md` has the recipe. Spikes S1, S2, S3 and S6 run from a session over
+  the `script` tool. S4 and S5 still need real add-in code, and every spike
+  still needs a Windows repeat by a member with Fusion installed.

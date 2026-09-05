@@ -398,8 +398,10 @@ it should be tightened.
 
 - **Fusion add-in feasibility study**: plan approved 2026-09-04, at
   `10 Fusion Add-in/FEASIBILITY-PLAN.md`. Next is the study itself plus six
-  spikes. Fusion is not on this Mac, so spikes need a member's machine (one
-  Mac, one Windows). Simon's decisions in the plan are settled; do not re-ask.
+  spikes. Fusion's built-in MCP server is connected (`10 Fusion Add-in/MCP.md`:
+  port 27182, `script` tool runs Python in Fusion), so S1/S2/S3/S6 run from a
+  session here; Windows repeats need a member. Decisions are settled; do not
+  re-ask.
 - The dashboard and guest mode — see **Now**, and the plan file it names.
 - Decide the four app-only families (Receiving, Export, Storage map, Search
   results, plus `table.sub`): lift them into `components.css` or drop them from

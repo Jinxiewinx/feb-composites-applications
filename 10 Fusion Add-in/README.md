@@ -12,6 +12,10 @@ produces `FEASIBILITY.md` with a recommendation and a go/no-go, and a `spikes/`
 folder of proof-of-concept scripts that are never product code. Nothing in this
 folder is installed on anyone's machine.
 
+`MCP.md` records Fusion's built-in MCP server and how Claude Code connects
+to it; `tools/find_fusion_mcp.py` finds its port. That is the path the spikes
+run over.
+
 The app-side facts the plan relies on (the stack plan's stored layer blanks in
 millimetres in the mold's CAD frame, the pure-JS slicer, email/password auth
 usable over REST) are documented in `06 Composites App/app/README.md` and
