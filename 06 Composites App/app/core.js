@@ -26,16 +26,14 @@ let pendingRender = false;
    `var`, not `const`: tools/test_app.mjs concatenates these files and reaches
    file-scope declarations through globalThis, which a lexical binding never
    joins. Same reason as WO_NOTES_NEW. */
-var APP_VERSION = "4.4.1";
+var APP_VERSION = "4.5.0";
 /* What this version changed, in the words a team member would use. Rewritten
    every release. ONE SHORT LINE PER ITEM, five items at most: this renders as
    a modal in front of someone who wants to get to work, and a paragraph per
    bullet is how nobody reads any of it (Simon, 2026-08-29). */
 var WHATS_NEW = [
-  "Accounts are self-serve. Sign up with a name, a username and a password and start working as a member; no email and no waiting for a lead. Old email accounts still sign in as before.",
-  "Change your display name any time: Change name on your own row in People. Old signatures keep the name they were made with.",
-  "Leads still decide who is a lead, on People or the Roster page. Removing someone now needs their account disabled in the Firebase console too, since anyone can join.",
-  "Archive instead of delete on parts, work orders and R&D studies, and the rails show this season by default with SN5 one chip away (v4.3).",
+  "Plan a mold's stock from inside Fusion. The FEB toolbar's Plan stock command exports the selected mold body, opens this app in a Fusion palette, and after you press Plan the board layers appear over the mold as see-through bodies for CAM. The add-in and its install steps are in the repo under 10 Fusion Add-in.",
+  "A mold made that way carries a Fusion section on its card: the document, body and version it came from, and a link to the document's Fusion Team page.",
 ];
 
 /* ---------- config/release ----------
@@ -2113,6 +2111,8 @@ function closeModal() {
   // would hang and its caller would never continue.
   const d = window.__confirmDismissCb; window.__confirmDismissCb = null;
   if (d) d();
+  // A mesh handed in by the Fusion add-in must not outlive the modal it opened.
+  if (typeof fusionModalClosed === "function") fusionModalClosed();
 }
 /* ---------- drafts ----------
    Nothing typed into this app was ever saved until you posted it. Escape, a

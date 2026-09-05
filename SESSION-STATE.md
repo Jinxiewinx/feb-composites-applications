@@ -20,24 +20,24 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**Fusion add-in: study done, Stage 3 (the build) is next** (2026-09-04).
-`10 Fusion Add-in/FEASIBILITY.md` recommends architecture A, the real app in
-a Fusion palette, all six spikes passed on macOS (`spikes/README.md`), the
-`fusion360://` deep link failed so the mold card links to
-`dataFile.fusionWebURL`. S4 and S5 are throwaway add-ins installed under
-`~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns/`
-(S4PaletteBridge, S5RestSignin); the `FEB Composites (S4)` palette was left
-open in Fusion for Simon to confirm the app renders there. Stage 3 builds
-`FEBPlanStock/` plus `app/fusion.js`, the `fusion` block on molds and the
-detail-card section; no rules change is expected. Decisions in
-`FEASIBILITY-PLAN.md` are settled; do not re-ask. Build-shaping facts not in
-the code: `STLExportOptions.unitType` reads inches but writes mm at its
-default, so set millimetres explicitly (or mesh through `MeshCalculator`);
+**Fusion add-in built: app v4.5.0 and `10 Fusion Add-in/FEBPlanStock/`**
+(2026-09-04). Study at `FEASIBILITY.md` chose the palette-hosted app; all six
+spikes passed on macOS (`spikes/README.md`), the `fusion360://` deep link
+failed so the mold card links to `dataFile.fusionWebURL`. The app side is
+`app/fusion.js` (two messages each way, contract at the top of the file),
+two stamps in `submitMold`, a Fusion section on the mold card; no rules
+change, since molds create/update is `onRoster()` with no field list. The
+add-in is installed on Simon's Mac and its FEB panel shows on the Utilities
+tab; the end-to-end press of Plan in the palette needs a person. Not done:
+the Windows repeat of every spike and of the install (needs a member), and
+the S4 spike add-ins are still installed beside it (`S4PaletteBridge`,
+`S5RestSignin`, delete when no longer wanted). Build-shaping facts not in the
+code: `STLExportOptions.unitType` reads inches but writes mm at its default,
+so the add-in meshes through `MeshCalculator` in cm and writes mm itself;
 parametric mode needs a base feature for temporary bodies and names are set
 after `finishEdit()`; the `adsk` bridge object appears in the palette page
 about a second after load and a `sendInfoToHTML` before the page has loaded
-is dropped, so the page speaks first. Windows repeats of every spike need a
-member with Fusion installed.
+is dropped, so the page speaks first and the add-in queues the mesh.
 
 **The CFD app is at cfd-v0.3.1** (2026-09-03). Decisions that must not be
 re-asked: open access with no sign-in; shared library in Storage; 07

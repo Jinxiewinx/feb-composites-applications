@@ -1067,6 +1067,9 @@ async function submitMold() {
       if (existing) {
         moldId = existing.id;
         plan.moldId = moldId;
+        // A re-plan from Fusion refreshes the document link (new version, maybe a new body).
+        const fs = typeof fusionStamp === "function" ? fusionStamp() : null;
+        if (fs) { existing.fusion = fs; save("molds", existing, "fusion"); }
         setCurrentPlan(existing, plan.id);
       } else {
         moldId = (await allocId("molds")) || "";
@@ -1077,6 +1080,11 @@ async function submitMold() {
             layers: (plan.thicknessesMm || []).length ? `${plan.thicknessesMm.length} layers` : "",
             createdBy: myEmail(),
           };
+          /* Where the mesh came from, when the Fusion add-in handed it in
+             (fusion.js). Absent for a browser upload, on purpose: an empty
+             block would render an empty section. */
+          const fs = typeof fusionStamp === "function" ? fusionStamp() : null;
+          if (fs) m.fusion = fs;
           (DB.molds = DB.molds || []).push(m);
           save("molds", m);
           plan.moldId = moldId;
@@ -1087,6 +1095,8 @@ async function submitMold() {
     MOLD_REPLAN = "";
     (DB.stackplans = DB.stackplans || []).push(plan);
     save("stackplans", plan);
+    // Hand the layers back to Fusion if that is where the mesh came from.
+    if (typeof fusionPlanSaved === "function") fusionPlanSaved(plan, moldId);
     closeModal();
     view = moldId
       ? { ...view, tab: "molds", mode: "detail", id: moldId }

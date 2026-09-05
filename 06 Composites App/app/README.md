@@ -523,6 +523,20 @@ questions that were previously answered in four places or nowhere: molds with no
 home location, molds past "Designed" with no stack plan on file, plans carrying
 a slicer warning nobody has read, and plans with no mold to be reached through.
 
+**From Fusion.** The FEBPlanStock add-in (`10 Fusion Add-in/FEBPlanStock/`,
+install steps in its README) runs the same modal from inside Fusion: select
+the mold body, press Plan stock on the FEB panel, and the app opens in a
+palette with the mesh already loaded in millimetres. Plan as usual; the app
+writes the same two records, and the layers go back to Fusion, which draws
+one see-through box per blank in a component named after the plan. A mold
+made that way carries a **Fusion** section on its card: document, body,
+version, project, who exported it and when, a Copy name button, and an Open
+in Fusion Team link to the document's page in the hub. There is no deep link
+into the desktop app, because the `fusion360://` scheme did not open a
+document when it was tried; the Fusion Team page has Autodesk's own Open in
+Fusion button. The page side is `fusion.js`, which does nothing unless
+Fusion's bridge object is present.
+
 ### The cut list, on paper
 
 Two documents, one renderer. The batch set is the whole thing; a mold's cut

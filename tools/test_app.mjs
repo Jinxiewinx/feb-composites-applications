@@ -7754,6 +7754,93 @@ await t("the mold detail carries its plan's artifacts, 3D view included", async 
   assert(h.includes("CS-003 §7.2"), "with the review caption that only the plan pane used to carry");
 });
 
+/* ---------- the Fusion add-in's hand-off (fusion.js) ---------- */
+await t("fusion.js is inert without Fusion's bridge object", () => {
+  delete globalThis.adsk;
+  assert(!fusionHost(), "no adsk, no host");
+  assert(fusionSend("plan", {}) === false, "sending goes nowhere and says so");
+  assert(fusionPlanSaved({ id: "STK-x", layers: [] }, "MOLD-x") === false, "a browser plan never tries to reach Fusion");
+  assert(moldFusionSection({ id: "MOLD-x", name: "plain" }) === "", "a mold with no block gets no Fusion section");
+  assert(moldFusionSection({ id: "MOLD-x", fusion: {} }) === "", "and an empty block is the same as none");
+});
+
+await t("a mesh handed in from Fusion plans like any other mold and stamps where it came from", async () => {
+  /* The add-in decodes nothing about the plan itself: it hands a base64 STL
+     and the document identity to fusionHandle("mold"), the member presses
+     Plan in the ordinary modal, and the layers go back through the same
+     bridge. Ids come from allocId like every other mold; the only new data is
+     the `fusion` block on the mold record. */
+  const sent = [];
+  globalThis.adsk = { fusionSendData: (a, d) => { sent.push([a, JSON.parse(d)]); return Promise.resolve("ok"); } };
+  seedStock(); DB.molds = []; DB.stackplans = [];
+  els["ml-src"] = undefined; // a fresh modal, not the last test's values
+  const stl = stlOf(plugTris(200, 80, 0, 100));
+  const identity = {
+    urn: "urn:adsk.wipprod:dm.lineage:TESTLINEAGE", versionId: "urn:adsk.wipprod:fs.file:vf.TESTLINEAGE?version=12",
+    versionNumber: 12, project: "FEB", folder: "clamshell mold (Simon)", document: "Clamshell Mold With Mating Surface",
+    body: "Clamshell Mold Body", webUrl: "https://my1635004.autodesk360.com/g/projects/1/data/x/y", exportedAt: "2026-09-04T19:00:00",
+  };
+  const r = fusionHandle("mold", JSON.stringify({ stl: Buffer.from(stl).toString("base64"), body: "Clamshell Mold Body", fusion: identity }));
+  assert(r === "ok", "the handler answers non-empty (empty means failure to Fusion): " + r);
+  assert(MOLD_BUF && MOLD_BUF.size === stl.byteLength && MOLD_BUF.name === "Clamshell Mold Body.stl", "the mesh landed where a picked file lands");
+  assert(el("ml-src").value === "stl" && el("ml-unit").value === "mm", "STL source, millimetres, set for the member");
+  assert(el("ml-name").value.includes("Clamshell Mold Body"), "named after the document and body until the member renames it");
+  assert(FUSION_CTX && FUSION_CTX.urn === identity.urn, "the context is held for submitMold");
+  // The member's decisions, made in the modal as in a browser.
+  el("ml-density-min").value = "30"; el("ml-density-max").value = ""; el("ml-mode").value = "auto";
+  el("ml-thk").value = ""; el("ml-body").value = "0"; el("ml-bodies").innerHTML = ""; el("ml-file").files = [];
+  await submitMold();
+  assert(DB.molds.length === 1 && DB.stackplans.length === 1, "one mold, one plan: " + lastToast);
+  const m = DB.molds[0], p = DB.stackplans[0];
+  assert(m.fusion && m.fusion.urn === identity.urn && m.fusion.versionNumber === 12 && m.fusion.document === identity.document
+    && m.fusion.body === "Clamshell Mold Body" && m.fusion.webUrl === identity.webUrl, "the mold carries the document identity");
+  assert(m.fusion.by === myEmail(), "stamped by the app user, not the Autodesk one");
+  assert(p.unit === "mm" && p.source === "Clamshell Mold Body.stl", "the plan records the mesh as millimetres from that body");
+  assert(!p.fusion, "the plan itself carries no block; it points at its mold");
+  const plan = sent.find(x => x[0] === "plan");
+  assert(plan, "the layers went back to Fusion: " + JSON.stringify(sent.map(x => x[0])));
+  assert(plan[1].planId === p.id && plan[1].moldId === m.id, "with the allocated ids, so the component is named after the plan");
+  assert(plan[1].layers.length === p.layers.length && plan[1].layers.every((L, i) => L.z0 === p.layers[i].z0 && L.z1 === p.layers[i].z1
+    && L.blanks.length === p.layers[i].blanks.length && "section" in L), "every layer, every blank, z and section");
+  assert(FUSION_CTX === null, "the context is spent once the plan is saved");
+  // The card.
+  view = { ...view, tab: "molds", mode: "detail", id: m.id, edit: false }; render();
+  const h = main.innerHTML;
+  assert(h.includes("<h3>Fusion</h3>") && h.includes("Clamshell Mold With Mating Surface") && h.includes("Clamshell Mold Body"), "the Fusion section names the document and body");
+  assert(h.includes("v12") && h.includes("FEB"), "and the version and project");
+  assert(h.includes("Open in Fusion Team") && h.includes(identity.webUrl), "the link is the Fusion Team page, since the deep link failed (spike S6)");
+  assert(h.includes("fusionCopy("), "the document name can be copied to find it in Fusion");
+});
+
+await t("closing the modal drops a Fusion mesh, so the next hand-made mold is not stamped", async () => {
+  const sent = [];
+  globalThis.adsk = { fusionSendData: (a, d) => { sent.push([a, JSON.parse(d)]); return Promise.resolve("ok"); } };
+  seedStock(); DB.molds = []; DB.stackplans = [];
+  fusionHandle("mold", JSON.stringify({ stl: Buffer.from(stlOf(plugTris(200, 80, 0, 100))).toString("base64"), body: "B", fusion: { urn: "urn:x", document: "Doc" } }));
+  assert(FUSION_CTX, "context set");
+  closeModal();
+  assert(FUSION_CTX === null, "Cancel or Escape clears it");
+  assert(sent.some(x => x[0] === "cancel"), "and Fusion is told there will be no plan");
+  fillMold({ src: "box", box: [300, 200, 100] });
+  await submitMold();
+  assert(DB.molds.length === 1 && !DB.molds[0].fusion, "a mold planned by hand afterwards has no Fusion block");
+  // A re-plan from Fusion of an existing mold refreshes the block rather than minting a mold.
+  fusionHandle("mold", JSON.stringify({ stl: Buffer.from(stlOf(plugTris(200, 80, 0, 100))).toString("base64"), body: "B2", fusion: { urn: "urn:y", document: "Doc2", versionNumber: 3 } }));
+  MOLD_REPLAN = DB.molds[0].id;
+  el("ml-density-min").value = "30"; el("ml-density-max").value = ""; el("ml-mode").value = "auto"; el("ml-thk").value = ""; el("ml-body").value = "0"; el("ml-file").files = [];
+  await submitMold();
+  assert(DB.molds.length === 1 && DB.molds[0].fusion && DB.molds[0].fusion.urn === "urn:y" && DB.molds[0].fusion.body === "B2", "re-plan stamps the existing mold: " + lastToast);
+  delete globalThis.adsk;
+});
+
+await t("the Fusion section only links to https and survives a name with a quote", () => {
+  const h1 = moldFusionSection({ id: "M", fusion: { document: "Nose \"v2\" plug's mold", body: "B", webUrl: "javascript:alert(1)" } });
+  assert(!h1.includes("javascript:") && !h1.includes("Open in Fusion Team"), "a non-https url is not a link");
+  assert(h1.includes("&quot;v2&quot;") && h1.includes("fusionCopy('Nose &quot;v2&quot; plug\\'s mold')"), "escaped for the attribute and the JS string: " + h1);
+  const h2 = moldFusionSection({ id: "M", fusion: { document: "D", webUrl: "https://my.autodesk360.com/x" } });
+  assert(h2.includes('href="https://my.autodesk360.com/x"') && h2.includes('rel="noopener"'), "https links open in a new tab safely");
+});
+
 await t("opening a mold's own plan never invents a Plans-with-no-mold group", async () => {
   /* The clamshell report: select a mold, ask for the 3D view, and the rail
      grew a header reading "Plans with no mold" over the plan you had just

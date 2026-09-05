@@ -3740,6 +3740,7 @@
 <script src="drawings.js"></script>
 <script src="stock.js"></script>
 <script src="shop.js"></script>
+<script src="fusion.js"></script>
 <!-- Installs a BarcodeDetector polyfill (vendored zxing-wasm, lazy) on
      browsers without the native one — iPhones. Before scan.js, which
      feature-detects it. The wasm is NOT fetched at boot; only when a scan
@@ -3758,6 +3759,6 @@
 <script src="labels.js"></script>
 <script src="tracker.js"></script>
 <script type="module" src="fb.js"></script>
-<script>render();</script>
+<script>render(); if (typeof fusionBridgeInit === "function") fusionBridgeInit();</script>
 </body>
 </html>

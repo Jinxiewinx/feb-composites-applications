@@ -27,6 +27,14 @@ to learn**, not about API compatibility:
 
 ---
 
+## v4.5.0 — 2026-09-04
+
+- Molds: Plan stock from inside Fusion. The FEBPlanStock add-in (10 Fusion Add-in/) exports the selected body, hands it to the mold modal in a Fusion palette, and draws the planned blanks over the mold as semi-transparent bodies
+- Molds: a Fusion section on the card names the document, body and version a mold was planned from, with a link to its Fusion Team page
+- No rules change: the block rides on the existing molds create/update rule
+
+---
+
 ## v4.2.0 — 2026-08-29
 
 - Budget: two status tracks, because a purchase always had two lives

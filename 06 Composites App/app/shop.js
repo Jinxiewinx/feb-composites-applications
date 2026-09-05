@@ -732,6 +732,7 @@ function renderShopDetail(tab, opts) {
     <div class="grid">${spec.f.map(f => shopFld(spec, tab, o, f, c)).join("")}</div>
 
     ${tab === "molds" && typeof moldPlanSection === "function" ? moldPlanSection(o) : ""}
+    ${tab === "molds" && typeof moldFusionSection === "function" ? moldFusionSection(o) : ""}
     ${tab === "molds" ? moldUses(o) : ""}
 
     <h3>Notes</h3>
