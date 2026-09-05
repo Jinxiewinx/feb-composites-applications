@@ -20,347 +20,127 @@ git log -p --follow -- SESSION-STATE.md
 
 ## Now
 
-**The CFD app is at cfd-v0.3.1: Dashboard, saved views, composites shell, splash, mobile**
-(2026-09-03). Decisions that must not be re-asked: open access with no
-sign-in; shared library in Storage; 07 untouched; the viewer canvas stays
-dark in both themes (DECISIONS #5); charts are the CFD app's own (#6); the
-thumbnail plot is `stat-car-0` with a first-contour fallback; trend x-axis
-is the design point parsed from the name. Records backfill dp/results/
-meta/thumb on first open, so no migration script exists or is needed. The
-three placeholder collections in `firestore.rules` still wait on Simon's
-talk with the team. The bucket's CORS is applied by gsutil, not by deploy.
-`.claude/launch.json` serves app/ on :8792 for the browser pane, which
-refuses sub-path navigation, so the server root is app/ itself.
+**Fusion add-in: study done, Stage 3 (the build) is next** (2026-09-04).
+`10 Fusion Add-in/FEASIBILITY.md` recommends architecture A, the real app in
+a Fusion palette, all six spikes passed on macOS (`spikes/README.md`), the
+`fusion360://` deep link failed so the mold card links to
+`dataFile.fusionWebURL`. S4 and S5 are throwaway add-ins installed under
+`~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns/`
+(S4PaletteBridge, S5RestSignin); the `FEB Composites (S4)` palette was left
+open in Fusion for Simon to confirm the app renders there. Stage 3 builds
+`FEBPlanStock/` plus `app/fusion.js`, the `fusion` block on molds and the
+detail-card section; no rules change is expected. Decisions in
+`FEASIBILITY-PLAN.md` are settled; do not re-ask. Build-shaping facts not in
+the code: `STLExportOptions.unitType` reads inches but writes mm at its
+default, so set millimetres explicitly (or mesh through `MeshCalculator`);
+parametric mode needs a base feature for temporary bodies and names are set
+after `finishEdit()`; the `adsk` bridge object appears in the palette page
+about a second after load and a `sendInfoToHTML` before the page has loaded
+is dropped, so the page speaks first. Windows repeats of every spike need a
+member with Fusion installed.
 
-**The standards' editing surface is now Google Docs** (2026-08-29, Simon's
+**The CFD app is at cfd-v0.3.1** (2026-09-03). Decisions that must not be
+re-asked: open access with no sign-in; shared library in Storage; 07
+untouched; the viewer canvas stays dark in both themes (DECISIONS #5); charts
+are the CFD app's own (#6); the thumbnail plot is `stat-car-0` with a
+first-contour fallback; trend x-axis is the design point parsed from the
+name. Records backfill dp/results/meta/thumb on first open, so no migration
+script exists or is needed. The three placeholder collections in
+`firestore.rules` still wait on Simon's talk with the team. The bucket's CORS
+is applied by gsutil, not by deploy. `.claude/launch.json` serves app/ on
+:8792 for the browser pane, which refuses sub-path navigation, so the server
+root is app/ itself.
+
+**The standards' editing surface is Google Docs** (2026-08-29, Simon's
 call): folder "CS Standards" at the root of his My Drive, one Doc per
 standard plus INDEX and template, figures embedded. IDs and the sync-back
 rule live in `02 CS Standards/GOOGLE-DOCS.md`: Docs are where edits happen,
 `src/` markdown is still what builds the app copies, so Doc edits get synced
-back with a rev bump and rebuilt. Uploaded via Drive markdown import, which
-fetches and embeds the figure PNGs from the live host; docx-as-base64 does
-not fit through tool calls.
+back with a rev bump and rebuilt. Approval tables still need real signatures.
 
-**The CS standards engineering pass is MERGED to main** (2026-08-28, Simon
-reviewed the branch and asked for the merge). What landed: 13 SVG figures +
-`tools/render_figures.mjs`, the figure pipeline (build_docx.py images,
-gen_docs_manifest.py resource-path + figure copying, documents.js mdToHtml
-image support + mdfig CSS), every standard +1 revision letter with CS-INDEX at
-Rev F, CS-000 defining shall/should/may, CS-007/CS-009 out of outline, and the
-em-dash sweep. No process rule or number changed; the history rows say so.
-Hosting deploy carries the refreshed docs/ copies live. Approval tables still
-need real signatures.
+**Pending presses that are Simon's, not a session's:** `⋯ → Announce this
+release`, standing in the newest build, which gives anyone on an older build
+a reload prompt (never pressed since v3.0.0; one press covers the newest
+only); **Link materials** on the Materials list, signed in, to backfill the
+50 imported containers; the **EH&S import** itself (lead sign-in; the file
+is `~/Downloads/Chemical Export Aug 28 2026.xlsx`), nothing imported into
+production yet.
 
+**R&D bench (`rnd` collection, v4.0.0), the load-bearing parts:**
 
-**v4.0.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the R&D bench and the boot
-gate. Major by the rubric twice over: a new top-level area, and the app no
-longer opens by itself. **`firestore.rules` was deployed separately and first**,
-alone, before hosting; the diff was purely additive (one `match /rnd/{id}`
-block, 24 insertions, no existing collection touched), so an old client under
-the new rules was never at risk. Hosting verified by fetching `core.js` and
-`rnd.js` off the host — `APP_VERSION = "4.0.0"`, zero `SPLASH_FLOOR`, `rnd.js`
-200.
+- **A study is physical and carries a label.** `RDS-SN6-###` a study,
+  `CPN-SN6-###` a coupon, both 11 characters with a QR. `test_qr.mjs` keeps
+  the 15-character form as a counterfactual so the 14-character cliff stays
+  proven.
+- **A cell edit never calls `render()`** (`rdUpd`, `rdVal`): `onchange` fires
+  while Tab already carries focus and a repaint destroys the field mid-hop.
+- **The guest cascade does not reach this grid**; it has no Edit button, so
+  `rdCell` renders `.ro` itself.
+- **A project's sheet rolls its batches up** (`rdSheetRows`).
+- **Do not fuse the two meanings of "R&D".** `parts.rnd` is a real part with
+  a traveler; the `rnd` collection is coupons with none. A test fails if
+  `rnd.js` ever tests `retro`.
+- Not shipped and declined for now, so do not build speculatively: UI to set
+  a study's `defaults`, std-dev/CV in Compare, computed stress, linking a
+  study to a part or mold.
+- **If `DB.rnd` passes ~2,000, take `rnd` out of `COLLECTIONS`** and give the
+  tab a per-study query; it is the twelfth whole-collection listener.
 
-**Nobody has been told, and per Simon that is fine** — he is not posting much in
-`#composites`, so the printed note is his to use or ignore, and this is no
-longer tracked here as an outstanding action. The one thing that still does
-something: `⋯ → Announce this release`, pressed by a lead standing in v4.0.0,
-gives anyone on an older build a reload prompt. Untouched for v3.0.0 through
-v4.0.0; that one press covers the newest only.
+**The boot splash is a gate**, load-bearing bits: `splashAuth()` marks `data`
+as not needed when auth resolves to `signedout` or `pending`, or the gate
+hangs in front of the people who need the sign-in card (there is a test named
+for this); `hideSplash(true)` must keep working, eight visual suites go
+through it; `splashFail()` returns early when nothing is outstanding, because
+the 12s backstop fires on healthy boots. A failed lamp is a hollow amber ring
+by shape, not a filled dot.
 
-**The R&D bench**: a new `rnd` collection, multi-class on `cls` like items and
-lots — `RDS-SN6-###` a study, `CPN-SN6-###` a coupon. Twelfth visible tab, last
-in Build. Shipped: studies (folder / swept test / project-of-batches, all one
-record shape), per-study columns tagged input or result, the grid with
-bulk-create and undo, fill-down paste, and Compare. Round two added, on Simon's
-ask: delete a study (cascade + undo), labels for BOTH studies and coupons,
-photos on studies and coupons, export as CSV / clipboard TSV / printable report,
-and Duplicate-as-template.
+**CS-011 §6 still forbids resin and hardener co-storage on purpose** while
+the app's warning was removed code-only; Simon revises the standard himself
+at Rev D. Do not edit it from a session.
 
-**A STUDY IS PHYSICAL AND CARRIES A LABEL.** The first cut had `labelClass`
-return null for `RDS` on the grounds that a folder is not an object; that was
-wrong about how coupons are stored. A study labels the bag, tray or box. Both
-prefixes are 11 characters and carry a QR — the header of `labels.js` used to
-say a coupon never could, which was a fact about the old `PNL-…-C03` spelling
-and not about coupons. `test_qr.mjs` keeps the 15-character form as a
-counterfactual so the 14-character cliff stays proven.
+**EH&S tags are Data Matrix** (settled 2026-08-29 from a photo), 24
+characters, `CA` + sixteen `0` + six hex in every sample. `invEhsShort`
+shows the twelve edge characters in four-character groups with the last
+group at full weight and the rest at 0.5, chosen against 627 real tags where
+positions 0-18 never vary; the reasoning sits above `invEhsShort`, do not
+re-litigate it. `ehsResolveTyped` accepts those twelve as a lookup, floor of
+12, and an ambiguous tail returns no id. Any new writer of `ehsBarcode`
+calls `ehsNorm`; comparisons go through `ehsKey`. The receiving grid stacks
+to cards below 1320px; do not claw that back by shaving columns.
 
-**NOT shipped**: materials inheritance exists in the model (`rdEff`,
-`RD_INHERITS`, study `defaults`) and is exported and printed on labels, but
-there is still no UI to SET a study's defaults — they can only arrive via a
-fixture or a duplicate. That is the next obvious gap. Also declined by Simon
-for now, so do not build them speculatively: std-dev/CV in Compare, computed
-stress from specimen dimensions, and linking a study to a part or mold.
+**Budget has two status tracks, not one enum** (v4.2.0): `status` is about
+goods, `reimb` about money. Legacy records read through `buyStatus()` /
+`reimbStatus()` and are never rewritten. The $50 gate lives on the money
+track.
 
-Three things here are load-bearing:
+**`.sline` and `.shead` share one declaration of eight fixed grid tracks** on
+the Season blueprint. Do not reach for `columns:` on `.seasongrid` a third
+time.
 
-- **A cell edit NEVER calls `render()`** (`rdUpd`, `rdVal`). Receiving's
-  invariant: `onchange` fires while Tab already carries focus, and a repaint
-  destroys the field mid-hop. Only a column-shape change repaints.
-- **The guest cascade does not reach this grid.** `render()` closes ~130 inputs
-  by clearing `view.edit`, but the grid has no Edit button and is always
-  editing, so `rdCell` renders `.ro` itself. Free everywhere else; not here.
-- **A project's sheet rolls its batches up** (`rdSheetRows`). The first build
-  counted deep in the index and direct in the sheet, so opening a project said
-  "no coupons yet" under a row claiming twelve.
+**Guest mode is on and the app is publicly readable.** Anonymous sign-in with
+`autodeleteAnonymousUsers`. Anyone with the URL reads everything, including
+the team email addresses stamped on records; accepted deliberately. Verified
+against production: every read 200, every write and delete 403, three client
+layers refuse independently. Turning it off is the same Auth switch; the
+rules can stay because `guest()` matches nothing then. Guest read costs
+eleven full-collection snapshots per visitor on Blaze; Simon's call was ship
+and watch the bill, the fix being a lazy per-tab sync, App Check its own
+project. The storage CLI selector is `storage`, not `storage:rules`.
 
-**DO NOT FUSE THE TWO MEANINGS OF "R&D".** `parts.rnd` is a real part with a
-full traveler; the `rnd` collection is coupons with none. New section in
-DESIGN-NOTES, and a test that reads `rnd.js` and fails if it ever tests `retro`.
-The `onlyRnd` chip on the Parts rail is untouched.
+**A dashboard lane cannot ship without an empty state**: `laneShell()`
+requires `emptyFn` and throws without one. **Nothing is scored across
+lanes**; `actScore` tiers sit 50 apart because the bonuses sum to 45, and
+`test_app.mjs` pins that. **`min == max` is asserted byte-identical to the
+pre-range packer** in `test_packer.mjs`; it is the rollback story for density
+ranges.
 
-Written down before it bites: **if `DB.rnd` passes ~2,000, take `rnd` out of
-`COLLECTIONS` and give the tab a per-study query.** It is the twelfth
-whole-collection listener and coupons will be the most numerous record type in
-the app within a month.
+**Adding a method to `fb` means adding it to seven dev shims** (grep
+`window.fb = {`), and the shims must match: `allocIdBlock` once minted from
+the counter key instead of `ID_PREFIX[coll]` and nobody saw it for years.
 
-**The boot splash is a GATE** and no longer takes itself down: five real
-milestones (app code, sign-in, roster, first data, fonts) fill a gold
-start-light gantry, the caption names whatever is outstanding, and the app waits
-behind the sheet until somebody presses Continue. Both floors are gone —
-`SPLASH_FLOOR`, `SPLASH_FLOOR_FIRST` and `splashFloor()` no longer exist —
-because a gate has nothing to budget. Exit is a `clip-path` wipe along the ply
-bias instead of `sp-lift`'s translate, which read as the window minimising.
-
-Three things about it that are load-bearing and easy to undo by accident:
-
-- **`splashAuth()` marks `data` as "not needed" (state 2) when auth resolves to
-  `signedout` or `pending`.** `startSync()` never runs on those paths, so
-  without it the gate hangs forever in front of exactly the people who need the
-  sign-in card. There is a test named for this.
-- **`hideSplash(true)` must keep working.** `tools/lib/browser.mjs` calls it to
-  photograph the app, and eight visual suites go through that one line.
-- **`splashFail()` returns early when nothing is outstanding.** The 12s backstop
-  fires on healthy boots now — waiting at an armed gate is normal — and without
-  the guard it printed "Something is not responding" under five gold lamps.
-
-A failed lamp is a **hollow amber ring, not a filled amber dot**: the first build
-had it filled, and amber against gold at 15px was invisible in a screenshot. It
-differs by shape on purpose.
-
-The two long-standing test failures are now GONE: the `parentId` one was fixed
-by the session that cut v3.2.0, and the four `test_detailui` wasm failures were
-a missing `.wasm` MIME entry in the test server (fixed here). All suites green.
-
-**INVENTORY ROUND 2 IS COMPLETE** (plan: the snoopy-dragon plan file on
-Simon's Mac; approved 2026-08-28 with three review additions). Landed so far:
-grouped lot display (groupLots keyed matKey-else-name; group rows fold via a
-CLASS, not <details> — print must paint; members show EH&S short codes),
-section headers with counts + per-kind accents on the location page, the
-Materials list grouped by default with a Grouped/Flat toggle (flat when
-searching), map cards clickable anywhere (container onclick backstop + the
-buttons stopPropagation — the old "no stopPropagation" test was rewritten
-deliberately), the resin+hardener warning REMOVED code-only (CS-011 §6
-still says otherwise on purpose — Simon revises the standard himself at
-Rev D; do not edit it from a session), and the iOS keyboard zoom fix
-(viewport maximum-scale=1 + 16px coarse-pointer inputs). Landed since: B mass
-delete (Select… on Items/Materials lists, view.shopPick, open to every
-member; firestore.rules items/lots delete moved from isLead()||mine() to
-onRoster() — RULES DEPLOYED; stock keeps the undo shape; occupied BINs are
-never deleted; cure/panel refs keep deleted ids as text on purpose —
-history is not rewritten; budget lines drop deleted lotRefs). Landed:
-C scan-into-field (scanEhsInto on the detail "ehs" field type; rxScanEhs on
-the receiving cell appends sticky-scanned tags; sticky+onUnknown is now a
-supported openScan combination, debounced with a "u:" key) and E the
-materials table (materials.js: MATERIALS aliases→matKey, docs/manifest paths
-test-enforced via materialsTableProblems, ratio/shelf-life ONLY where read
-from a bundled TDS and cited in src — IN2/AT30 100:30 by weight + 12mo,
-WEST-209 3:1, WEST-206 5:1, XCR 12mo ratio-blank; matForName fills blank
-matKey in receiving + EH&S import; matstrip on lot detail; lite ratio/TDS on
-group rows; "Link materials" backfill on the Materials list fills blank
-matKeys and missing expiries from shelf life, stamped "shelf-life table").
-The whole round-2 plan is DONE. Simon still needs to press Link materials
-once, signed in, to backfill the 50 imported containers. A flaky test was
-fixed in passing: the dashboard "part of" assert now matches the chip
-markup, not the phrase — a Team-lore fact contains the words.
-
-**EH&S (RSS Chemicals) barcodes: ALL FOUR PHASES BUILT.** Phases 1–2 (the
-`ehsBarcode` field + one-tag-one-container, the scanner reading UC tags via
-`scanResolve`, the receiving desk's tag column) are live and were verified
-off the host. Phase 3: iPhones camera-scan through `scan-fallback.js`, a
-lazy-loaded BarcodeDetector polyfill over vendored zxing-wasm 3.1.3
-(`app/vendor/zxing/`, 1.0MB wasm fetched only when a scan opens on a
-detector-less browser; load failure is sticky per session and degrades to the
-typed box). Phase 4: **EH&S import** on the Inventory toolbar (lead-only)
-parses the RSS web export — .xlsx read natively via a zip walker +
-DecompressionStream in `ehsimport.js`, CSV fallback — groups by sublocation
-(FEB's ticked by default, per Simon 2026-08-28: import only Formula Electric
-stuff), maps each to one of our BINs (flammable sublocations guess the
-Flammables-cabinet shelf), skips barcodes any record already wears, creates
-the rest (class/role from rxGuessClass, hazard from H22x codes, blank codes
-stay unknown, CON gets count 1, batch-tagged `rxBatch: EHS-<date>-…`,
-importMany + publishPub over 8 records). The Export modal gained an "EH&S
-reconciliation" sheet (`invExportEhs`), attention rows first. Simon's real
-export (628 containers, 17 sublocations) parses clean in Chromium: FEB's 50
-containers → 3 RSN resin, 16 RSN hardener, 31 CON, 15 flammable. **Nothing
-imported into production yet — Simon runs the import himself** (needs a
-lead sign-in; the file is `~/Downloads/Chemical Export Aug 28 2026.xlsx`).
-**Symbology is settled** (2026-08-29, photo of a physical tag): RSS stickers
-are **Data Matrix**, not QR and not linear, and `data_matrix` was already in
-both the native and the zxing format lists, so nothing was broken — the guess
-in `scan.js` was. Serial is 24 chars printed in groups of four, with the last
-twelve repeated up the tag's edge. Across the three samples we hold
-(`…228D47` from the real export, `…243EF0` off the photo, `…243F1C` in the
-tests) the shape is `CA` + sixteen `0` + six hex, and only those six move.
-The linear formats stay until someone walks the shelves — one sheet of tags
-is not a survey.
-
-**Reload banner fixed and live** (2026-09-02, b2217b2): v4.2.0 went out
-before anyone pressed Announce, so config/release still said 4.1.1 and every
-screen showed "v4.1.1 is out, you are running v4.2.0, reload". The banner now
-fires only when the announced version is numerically NEWER than the running
-one (`versionNewer()` in core.js). Not a release cut. **Still Simon's press:
-⋯ → Announce this release, standing in v4.2.0.**
-
-**v4.2.0 IS PUSHED AND LIVE** (2026-08-29) — Budget's two status tracks and
-the Charged to field, on Simon's ask. The one thing not to re-litigate: `status`
-and `reimb` are two fields, not one enum, because "Ordered" was a fact about
-goods and "Reimbursed" a fact about money, and a member routinely has the part
-on the shelf weeks before the treasurer pays them back. Legacy records are read
-through `buyStatus()` / `reimbStatus()` and are never rewritten in place;
-`Ordered → Purchased` and old `Reimbursed → Arrived + Reimbursed`. The $50
-approval gate moved onto the money track (`reimb === "Submitted"`), which is why
-marking goods bought no longer clears it. `chargedTo` is free text, blank or
-"Composites" meaning ours, and off-budget purchases stay in the list, the owed
-list and the $50 rule while leaving the season total and every goal bar.
-
-**v4.1.0 AND v4.1.1 ARE TAGGED, PUSHED AND LIVE** (2026-08-29). v4.1.0 acted on that photo (the two sessions crossed; this half merged on
-top). `invEhsShort` no longer shows the last six: it shows **the twelve
-characters reprinted down the tag's edge, in the label's four-character
-groups**, because a row is read while comparing it against a sticker and
-`…243EF0` is printed nowhere on one. **v4.1.1 then settled the visual half of
-that argument against real data rather than opinion.** Simon's RSS export holds
-**627 real tags, all 24 characters, all distinct — and positions 0-18 are
-identical in every one of them.** Only the last five vary; across FEB's own 50
-containers, only the last THREE. So a flat twelve-character strip is nine dead
-glyphs in front of the ones that matter, which is what shipping it proved. The
-four candidates (edge-12 flat, last-6, edge-12 with the final group emphasised,
-whole-code with it emphasised) were rendered side by side against those 50 real
-codes; the third won and is what ships. **The last group is at full weight, the
-rest dimmed to 0.5** — dimmed rather than dropped, because comparing against the
-sticker needs every printed character and only scanning a column needs the
-anchor. Emphasising the last GROUP, not the last three characters, keeps it a
-property of the label's grammar rather than of this one export. The reasoning
-for all of it sits above `invEhsShort`; do not re-litigate it from first
-principles.
-
-The row assertions in `test_app` now match the dim/bold markup, not a flat
-string. **They used to pass against the tooltip** (`title=` carries the whole
-printed code, so `includes("0000 0024 3EF0")` was green no matter what the row
-showed). Mutation-checked: breaking the split fails exactly one test. New in `core.js`:
-`ehsPrinted`, `ehsTailText`, `ehsShape` (advisory, never a gate) and
-**`ehsResolveTyped`**, which accepts those twelve edge characters as a lookup
-anywhere a code is typed — floor of 12 so the nine-character pre-2024 codes
-keep meaning themselves, and an ambiguous tail returns `{ambiguous:[…]}`
-carrying **no id**, because opening the wrong jug is worse than typing four
-more characters. `ehsConflict` runs through it, so an edge strip typed onto a
-second record is refused like the whole code. The reconciliation sheet gained
-a `printed` column beside the unpunctuated `ehsBarcode`, and flags off-length
-tags.
-The receiving grid stacks to cards below **1320px** (was 1200) — the eighth
-column pushed the table's minimum to ~1300; do not claw it back by shaving
-measured columns. No rules deploy anywhere (lots/items have no field
-whitelist). Any new writer of ehsBarcode must call ehsNorm; comparisons go
-through ehsKey (dash-blind).
-
-**v3.2.0 IS TAGGED, PUSHED AND LIVE** (2026-08-28) — the EH&S/inventory
-release: chemicals under their UC stickers, iPhone scanning, grouped
-containers, the materials table, Select… mass delete, co-storage allowed.
-Minor by the rubric. release.mjs verified the deploy and shot the two
-pictures against the live build; the #composites note and the two PNGs
-(design/release-v3.2.0-*.png) are printed in the release output — **posting
-it and pressing ⋯ → "Announce this release" are Simon's, still pending**, as
-they were for v3.0.0/v3.1.0 (that one press announces the newest version
-only; older ones live in CHANGELOG.md).
-
-**v3.1.0 went out 2026-08-27**, v3.0.0 an hour earlier the same day. Neither was
-ever announced, and the v3.2.0 note above now covers all three — one press
-announces the newest only, and v3.0.0's and v3.1.0's items live in CHANGELOG.md,
-so the #composites note is where they get said out loud.
-
-Durable from that work, and the reason it is kept here rather than dropped with
-the rest: `.sline` and `.shead` share ONE declaration of eight fixed grid tracks
-on the Season blueprint. **Do not reach for `columns:` on `.seasongrid` a third
-time** — it is what made the fields land in a different place on every line.
-
-**GUEST MODE IS ON, AND THE APP IS PUBLICLY READABLE.** Anonymous sign-in is
-enabled on the project and `autodeleteAnonymousUsers` is on, so a visit no
-longer mints a permanent Auth record. Anyone with the URL can press "View as
-guest" and read the whole app — parts, runs, molds, stock, budget, the roster.
-That is the agreed design, not an accident, and it is the one thing in this repo
-that cannot be walked back quietly: anything read in the meantime is read.
-
-Verified against PRODUCTION with a real anonymous token, not against the
-emulator: every collection reads 200, every write and delete is 403, storage
-upload is 403, and the three client layers refuse independently (core.js toasts,
-fb.js throws `guest/read-only`, the rules refuse the transport). All eleven tabs
-render with no console errors and nothing editable.
-
-**Turning it off again is the same switch**, Authentication → Sign-in method →
-Anonymous. The rules can stay as they are: `guest()` matches nothing when the
-provider is disabled, so the predicate is inert rather than wrong.
-
-**The deploy order was load-bearing and stays that way.** Rules alone first,
-then hosting. An old client under new rules is fine; a new client under old
-rules is a guest refused every collection, which looks exactly like the app
-being broken. Note the CLI selector for storage is `storage`, NOT
-`storage:rules` — the latter is parsed as a deploy target and fails with
-"Could not find rules for the following storage targets: rules".
-
-**Guest read costs eleven full-collection snapshots per visitor.** The whole
-database, per person, from a public URL, on Blaze. Simon's call was to ship and
-watch the bill. If it moves, the fix is a lazy per-tab sync for guests rather
-than the boot-time `COLLECTIONS.forEach`; App Check is the real answer and is
-its own project.
-
-**The one thing in the plan that is a rules deploy is guest mode, and it is
-deliberately last.** Rules go alone and first; everything else in this pass is
-hosting only.
-
-**Guest read discloses team email addresses, and no roster rule prevents it.**
-`createdBy` and `updatedBy` are stamped on every record, and every buy-off,
-override and comment carries an `email`. Closing `roster/` would have cost names
-and photos and withheld nothing. Accepted deliberately; the alternative is a
-curated public mirror of every collection, which is the `pub/` pattern at ten
-times the size.
-
-**A dashboard lane cannot ship without an empty state, and that is enforced.**
-`laneShell()` is the only thing that renders a lane and `emptyFn` is a required
-parameter — it throws without one. That is the whole fix for round four's five
-collapsible areas, and weakening the signature to an optional argument brings
-the holes straight back.
-
-**Nothing is scored across lanes, on purpose.** `actScore` runs inside "waiting
-on you" only. Its tiers sit 50 apart because every bonus added together is 45:
-make the bonuses bigger, or the tiers closer, and a low tier quietly outranks
-the one above it. `test_app.mjs` pins that relationship rather than a symptom.
-
-**`min == max` is asserted byte-identical to the pre-range packer.** That test
-in `test_packer.mjs` is the rollback story for the whole density-range feature —
-a mold planned at one grade must pack exactly as it did before ranges existed.
-Do not let it drift.
-
-**Adding a method to `fb` means adding it to seven dev shims too.** `fb.js` is
-the real one, but `tools/serve_populated.mjs`, `tools/lib/browser.mjs`,
-`test_appui`, `test_detailui`, `test_safearea`, `shoot_ui` and `make_mockups`
-each define their own `window.fb`, and a missing method is a TypeError in every
-local run and screenshot while production is fine. Grep `window.fb = {` for the
-list. The shims must also MATCH: `allocIdBlock` minted its ids from the counter
-key rather than `ID_PREFIX[coll]`, which is the same string for every caller
-that passes a `cls` — so it was wrong for years and invisible until the
-blueprint asked for a block of parts and got `parts-SN6-001`.
-
-**`test_safearea` is RED ON PURPOSE — it found a real app bug.** At
-landscape-max (932x430, 59px side insets) two step-action buttons on
-`wo-detail` sit past the safe area, which ends at x=873:
-
-    "Add photos to step 1"      rect 876,389,910,429
-    "Report an issue on step 1" rect 916,389,945,429
-
-The second extends to 945 — beyond the 932px viewport edge entirely. On an
-iPhone held sideways the camera and flag buttons on a work-order step are under
-the rounded corner. The test is correct; the CSS is not. Left failing so it
-stays visible. Fixing it is an app change on the detail screen and needs Simon.
+**`test_safearea` is red on purpose.** At landscape-max two step-action
+buttons on `wo-detail` sit past the safe area (x=873; the second reaches
+945). The test is right, the CSS is not; fixing it needs Simon.
 
 ---
 
@@ -388,49 +168,24 @@ items in `HANDOFF.md`):
   there is no token and no document yet.
 - Paste `Sync.gs` into the spreadsheet's Apps Script and install the trigger.
 
-Nothing else is blocking. The full traveler runs about 3 pages for a complete
-work order, 2 for a blank — that is the cost of generous fill-in space. Say if
-it should be tightened.
-
 ---
 
 ## Next up (not started)
 
-- **Fusion add-in feasibility study, Stage 1 done** (2026-09-04): spikes S1,
-  S2, S3, S6 have results in `10 Fusion Add-in/spikes/README.md`. Next is
-  Stage 2, `FEASIBILITY.md` plus the S4 palette and S5 REST add-ins, then
-  Stage 3 builds `FEBPlanStock/`. Decisions in `FEASIBILITY-PLAN.md` are
-  settled; do not re-ask. Three facts that shape the build and are not in the
-  code: `STLExportOptions.unitType` reads inches but writes mm when left at
-  its default, so the add-in sets millimetres explicitly (or meshes through
-  `MeshCalculator`, which S2 did); parametric mode needs a base feature for
-  temporary bodies and names must be set after `finishEdit()`; the
-  `fusion360://` deep link opens nothing, so the mold card links to
-  `dataFile.fusionWebURL` instead. Windows repeats of every spike still need a
-  member with Fusion installed.
-- The dashboard and guest mode — see **Now**, and the plan file it names.
+- The dashboard and guest mode follow-ups named in **Now**.
 - Decide the four app-only families (Receiving, Export, Storage map, Search
-  results, plus `table.sub`): lift them into `components.css` or drop them from
-  `conventions.md`. 24 classes, roughly 73 selectors, and a real call rather
-  than a chore — the Receiving grid is app plumbing by its own comment, so
-  "lift everything" is not obviously right. `conventions.md` marks them
-  app-only meanwhile, so nothing is misleading while it waits. The Season
-  blueprint's own family joined that list rather than resolving it.
-- Port the traveler to the offline single-file `work-orders.html`, which still
-  has the old print CSS.
-- `reports.js` "Print status board" still calls raw `window.print()`. It is now
-  the only printable in the app that does — the cut list was the other one.
-- `04 Printables/printables.html` is open to redesign. Simon said there is no
-  house style to conform to.
-- Per-record history/audit trail (Phase 5 of the inventory plan), deliberately
-  deferred. Nothing depends on it and an empty array is a valid start.
-- **The one label test that needs the printer in hand.** Everything about the
-  roll path is proven in a browser except whether iOS lets a custom page length
-  through on CONTINUOUS stock, or forces a fixed size. If it forces one, switch
-  the default media to `dk1201` (die-cut, already built) and the label wraps one
-  tier earlier; nothing else changes. Test it from the shop PC first — Chrome
-  plus the Brother driver gives exact custom lengths and isolates the question
-  to iOS.
+  results, plus `table.sub`): lift them into `components.css` or drop them
+  from `conventions.md`. `conventions.md` marks them app-only meanwhile.
+- Port the traveler to the offline single-file `work-orders.html`, which
+  still has the old print CSS.
+- `reports.js` "Print status board" still calls raw `window.print()`, the
+  only printable that does.
+- `04 Printables/printables.html` is open to redesign; no house style.
+- Per-record history/audit trail (Phase 5 of the inventory plan), deferred.
+- **The one label test that needs the printer in hand**: whether iOS lets a
+  custom page length through on continuous stock. If it forces a fixed size,
+  switch the default media to `dk1201` (die-cut, already built). Test from
+  the shop PC first to isolate the question to iOS.
 
 ---
 
@@ -628,43 +383,20 @@ They are built and tested against the emulator.
 
 Five sessions, newest first. Older entries live in `git log`, not here.
 
-**2026-09-03 (latest) — composites app v4.2.1 then v4.3.0:** rails keep
-their scroll across re-renders (the multi-select and select-a-part scroll bugs
-Simon reported); Parts got Select… bulk actions. Then archive-not-delete for
-parts, work orders and R&D studies, season read off ids with a season code in
-Season settings, rails defaulting to this season. Pushed and deployed.
+**2026-09-04 — Fusion add-in study, Stage 1 and 2.** Spikes S1, S2, S3, S6
+through Fusion's built-in MCP server; S4 and S5 as throwaway add-ins.
 
-**2026-09-03 — CFD app through cfd-v0.3.0:** Dashboard, saved views,
-composites shell, then always-dark icon rail (0.2.1), then the boot splash
-and a one-report-at-a-time phone layout (0.3.0), then the splash made a
-Continue gate like the composites app's (0.3.1).
+**2026-09-03 — composites app v4.2.1 to v4.4.1:** rails keep their scroll,
+Parts Select…, archive-not-delete with season codes, self-serve accounts
+with usernames, Roster page removed. CFD app to cfd-v0.3.1: dashboard, saved
+views, shell, splash gate, phone layout.
 
-**2026-09-02 — CFD viewer live, folders renumbered.** The 07 viewer
-is hosted at feb-cfd.web.app with a shared library, tagged cfd-v0.1.0. `03 App/`
-is `06 Composites App/`; every tracked path reference, the parent CLAUDE.md,
-the simon agent and the memory index were rewritten in one pass. Brief,
-decisions, and empty `app/`, `ingest/`, `design/` under
-`08 CFD Sims Dashboard/`. Repo renamed to `feb-engineering-apps`.
+**2026-09-02 — CFD viewer live at feb-cfd.web.app** (cfd-v0.1.0), folders
+renumbered (`03 App/` is `06 Composites App/`), repo renamed to
+`feb-engineering-apps`.
 
-**2026-08-28 — the mold's stage became a stepper.** Simon asked for
-the Parts progress-bubble idiom on molds: the detail card now sets stage on a
-tappable `.pstage` stepper (all six values, Retired dashed and off the track),
-with setPartStage's grading — one step forward instant with the undo bar,
-skips/backs/Retire ask first. The Edit-mode `<select>` and the next-stage
-button are gone for molds only; Materials/Items detail is unchanged, and the
-embedded detail no longer doubles the undo bar. Deployed to hosting,
-unreleased — it can ride in the next version's What's New.
+**2026-08-28 — v4.0.0** (R&D bench, boot gate), mold stage stepper, inventory
+round 2 and EH&S phases complete.
 
-**2026-08-27 — the splash waits, the blueprint became a read, and the
-cut list reached paper.** A floor and a Continue affordance on the boot splash;
-the Season tab's thirteen editable columns became one line per part that opens
-the part; and cut sheets now ride on a mold's drawing set and print as their own
-batch document. The last of those replaced the only printable that bypassed
-`mountSheet`. Nothing deployed.
-
-**2026-08-26 — v2.0.0: the season plan comes into the app.** A
-Season tab replaces the Composites Master Tracker sheet: one editable row per
-part, blueprint-sparse by design, and a row IS a part. The dashboard stopped
-saying things twice — shop status split, T-minus once, issues folded into the
-run they hold up. Details leads on a part in edit mode, and issue photos work
-after creation.
+**2026-08-26/27 — v2.0.0 to v3.2.0:** the Season tab, the splash, the
+blueprint as a read, cut sheets on paper, EH&S tags and iPhone scanning.

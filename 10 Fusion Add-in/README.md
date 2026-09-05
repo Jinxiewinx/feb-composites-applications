@@ -8,10 +8,10 @@ in the app and linked to its Fusion document.
 Nothing here is built yet. `FEASIBILITY-PLAN.md` is the approved plan for the
 feasibility study (2026-09-04): the user story, the two architectures to
 compare, the questions to answer, and six throwaway spikes. `spikes/` holds
-the spike scripts and `spikes/README.md` their results: S1, S2, S3 and S6 ran
-on macOS on 2026-09-04 and passed, except the `fusion360://` deep link, which
-opened nothing. Executing the rest of the plan produces `FEASIBILITY.md` with a
-recommendation and a go/no-go. Nothing in this folder is installed on anyone's
+the spike scripts and `spikes/README.md` their results: all six ran on macOS on
+2026-09-04 and passed, except the `fusion360://` deep link, which opened
+nothing. `FEASIBILITY.md` is the study: go, with the real app in a Fusion
+palette (architecture A), sized at two sessions. Nothing in this folder is installed on anyone's
 machine.
 
 `MCP.md` records Fusion's built-in MCP server and how Claude Code connects

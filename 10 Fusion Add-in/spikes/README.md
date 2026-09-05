@@ -4,8 +4,10 @@ Throwaway scripts that answer the Fusion API questions in
 `../FEASIBILITY-PLAN.md`. None of this is product code and none of it is
 installed anywhere. S1, S2, S3 and S6 ran through Fusion's built-in MCP
 server (`../MCP.md`) against the live design "Clamshell Mold With Mating
-Surface" (inch display units, parametric, 134 timeline items). S4 and S5 need
-a real add-in and are recorded in `../FEASIBILITY.md`.
+Surface" (inch display units, parametric, 134 timeline items). S4 and S5 are
+real add-ins, installed in the per-user AddIns folder and started from a
+session without restarting Fusion (import the module by path, call `run()`,
+keep the module in `sys.modules` so its handlers stay alive).
 
 Every macOS result below is from one machine: Fusion 2702.1.58, bundled
 Python 3.14.0, macOS 26.3 arm64, 2026-09-04. No Windows result exists yet;
@@ -18,6 +20,8 @@ Utilities, Add-Ins, Scripts.
 | S1 | `s1_hello.py` | pass | untested | Versions read, AddIns folder exists |
 | S2 | `s2_mesh_out.py`, `s2_plan_node.mjs` | pass | untested | STL in mm, plan bounds equal the body box |
 | S3 | `s3_boxes_in.py`, `s3_boxes_in.png` | pass | untested | Boxes land on the mold, names and opacity stick |
+| S4 | `S4PaletteBridge/` | pass | untested | Palette runs Chromium 122; 6 MB each way; Firebase reachable |
+| S5 | `S5RestSignin/` | pass | untested | HTTPS on a thread, result back on a CustomEvent, UI free |
 | S6 | `s6_provenance.py` | pass, deep link fail | untested | Identity fields read; `fusion360://` did not open a document |
 
 ## S1: install path and runtime
@@ -169,3 +173,68 @@ the field is already stored to build it from.
 A side note from LaunchServices: it lists Fusion 2705.1.11 while the running
 build is 2702.1.58, so an update is staged on this Mac. Nothing here
 depends on either number.
+
+## S4: the palette bridge
+
+`S4PaletteBridge/` is an add-in (manifest, Python, `probe.html`). It opens
+two palettes: one on the local probe page, one on
+`https://feb-composites.web.app`. The probe page measures the embedded browser
+and round-trips a 6 MB string both ways; everything the Python side learns is
+appended to `s4.log` beside the add-in, because an add-in has no console once
+`run()` returns.
+
+What the palette browser is: user agent `Neutron/2702.1.58`,
+`navigator.userAgentData` says Chromium 122.0.6261.171 (Qt WebEngine; the
+docs say CEF is gone and the `useNewWebBrowser` argument is ignored). Workers
+from a blob URL, IndexedDB, localStorage, WebGL, `crypto.subtle`,
+`structuredClone`, class fields, `??`, `?.`, lookbehind, `Array.at`,
+`Object.hasOwn`, `replaceAll` all present. From the file:// page, a bogus
+`signInWithPassword` to Identity Toolkit came back 400 with a JSON error, and
+an anonymous Firestore REST read of `molds` came back 403 PERMISSION_DENIED,
+so both Firebase endpoints are reachable with CORS and the rules are being
+evaluated. A HEAD to the app host failed from file://, which is the hosting
+having no CORS header, not a palette limit; the real page will be same-origin.
+
+The bridge: `adsk.fusionSendData(action, data)` returns a Promise that
+resolves to whatever Python put in `HTMLEventArgs.returnData`. JS to Python
+carried 6,291,456 characters intact and got 6,291,456 back in 76 to 92 ms.
+Python to JS is `palette.sendInfoToHTML(action, data)`; it returns `''`
+immediately (asynchronous now) and the page's
+`window.fusionJavaScriptHandler.handle(action, data)` return value arrives
+later as an HTMLEvent with action `response`. 1 KB and 6 MB payloads arrived
+intact, the 6 MB one in 0.13 s.
+
+Two things that cost time and would bite the add-in:
+
+- **The `adsk` object is injected about a second after the page runs**
+  (1015 ms measured). A page that checks for it at load sees `undefined`. Poll
+  for it, or register `fusionJavaScriptHandler` and let Python speak first.
+- **A `sendInfoToHTML` before the page has finished loading returns `''` and
+  is dropped.** The first attempt looked like a broken Python-to-JS leg; it
+  was a race with page load. Have the page announce itself (`loaded`) and
+  send only after that. Also a SyntaxError anywhere in the page's script
+  silently produces the same symptoms, since nothing shows a console.
+
+Not verified here: the live app rendering inside the second palette. There
+is no way to read that page's DOM from Python and this session has no screen
+capture permission, so the `FEB Composites (S4)` palette was left open on
+Simon's screen for him to look at. The browser facts above are what the app
+needs, and Stage 3's page on the app's own origin is where it gets proven.
+
+## S5: REST off the main thread
+
+`S5RestSignin/` starts a daemon thread from `run()`, which returns at once.
+The thread sleeps 8 s (so a second script can prove the main thread is
+free), then posts `signInWithPassword` with `urllib` over OpenSSL 3.0.18 and
+GETs `/molds?pageSize=3`, then `fireCustomEvent` with the JSON result. A
+`CustomEventHandler` registered on the main thread logs it.
+
+Result on 2026-09-04: `run()` returned at 19:36:25; a script run at
+19:36:38 read the timeline in 1.1 ms while the worker was mid-request; the
+handler logged the result at 19:36:33: sign-in 400 INVALID_LOGIN_CREDENTIALS
+in 139 ms (no credentials were given this session, so the bogus-account leg
+is what ran; the code path with a real password is the same request), then
+`molds` 403 PERMISSION_DENIED in 246 ms without a token, which is
+`firestore.rules` doing its job. The thread name in the result was
+`feb-s5-worker`, and `threading.enumerate()` from the main thread lists only
+`MainThread` once it is done. Nothing froze.

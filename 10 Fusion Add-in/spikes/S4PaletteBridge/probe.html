@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>S4 probe</title>
+<style>body{font:13px -apple-system,system-ui,sans-serif;padding:12px;color:#222}pre{white-space:pre-wrap;background:#f4f4f4;padding:8px;border-radius:6px}</style>
+</head><body>
+<h3>S4 palette probe</h3>
+<pre id="out">starting…</pre>
+<script>
+const out = document.getElementById('out');
+const R = {};
+const say = (k, v) => { R[k] = v; out.textContent = JSON.stringify(R, null, 1); };
+const send = (action, data) => adsk.fusionSendData(action, typeof data === 'string' ? data : JSON.stringify(data));
+
+// Python -> JS. With the new browser the return value travels back as an
+// HTMLEvent with action "response".
+window.fusionJavaScriptHandler = {
+  handle(action, data) {
+    if (action === 'big-out') {
+      const ok = data.length === 6 * 1024 * 1024 && data[0] === 'm';
+      say('bigOut', { received: data.length, intact: ok });
+      send('big-out-ack', { received: data.length, intact: ok });
+      return 'ack ' + data.length;
+    }
+    if (action === 'ping') { say('ping', data); send('pong', data); return 'pong ' + data; }
+    return 'unhandled ' + action;
+  }
+};
+
+(async () => {
+  // The adsk bridge object is injected by Fusion; measure when it appears.
+  const t0 = performance.now();
+  while (typeof adsk === 'undefined' && performance.now() - t0 < 5000) await new Promise(r => setTimeout(r, 10));
+  await send('loaded', { href: location.href, handler: typeof window.fusionJavaScriptHandler });
+  const p = { ua: navigator.userAgent, bridgeAfterMs: Math.round(performance.now() - t0), bridge: typeof adsk !== 'undefined' && typeof adsk.fusionSendData };
+  try { p.uaData = navigator.userAgentData ? (await navigator.userAgentData.getHighEntropyValues(['fullVersionList'])).fullVersionList : 'none'; } catch (e) { p.uaData = 'fail: ' + e; }
+  // Syntax the app relies on. eval so a parse error is a value, not a dead page.
+  const feats = { nullish: 'null ?? 1', optChain: '({}).a?.b', classFields: 'class A { x = 1; static y = 2 }', regexLookbehind: '/(?<=a)b/.test("ab")', topLevelAwaitInModule: 'true', structuredClone: 'typeof structuredClone === "function"', bigint: '1n + 1n', at: '[1,2].at(-1)', hasOwn: 'Object.hasOwn({a:1}, "a")', replaceAll: '"aa".replaceAll("a","b")' };
+  p.es = {}; for (const [k, src] of Object.entries(feats)) { try { p.es[k] = String((0, eval)(src)); } catch (e) { p.es[k] = 'FAIL ' + e.message; } }
+  p.moduleScript = 'noModule' in document.createElement('script');
+  try { const w = new Worker(URL.createObjectURL(new Blob(['postMessage(21*2)'], { type: 'text/javascript' }))); p.worker = await new Promise((res, rej) => { w.onmessage = e => res(e.data === 42); w.onerror = e => rej(e.message); setTimeout(() => rej('timeout'), 3000); }); } catch (e) { p.worker = 'fail: ' + e; }
+  try { p.indexedDB = await new Promise((res, rej) => { const r = indexedDB.open('s4probe', 1); r.onsuccess = () => { r.result.close(); res(true); }; r.onerror = () => rej(String(r.error)); }); } catch (e) { p.indexedDB = 'fail: ' + e; }
+  try { localStorage.setItem('s4', '1'); p.localStorage = localStorage.getItem('s4') === '1'; } catch (e) { p.localStorage = 'fail: ' + e; }
+  try { const c = document.createElement('canvas'); p.webgl = !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { p.webgl = 'fail: ' + e; }
+  p.crypto = typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+  p.fetchKeepalive = 'fetch' in window;
+  // What the app does on boot, minus credentials: identity toolkit and
+  // Firestore REST must be reachable and answer with JSON. A bogus sign-in
+  // returns 400 with an error body; an anonymous read of molds returns 403.
+  const KEY = 'AIzaSyDQgUkUQhueh-nFJcTF8OxIq_J2XQi6DWU';
+  try { const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + KEY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 's4-probe@example.invalid', password: 'x', returnSecureToken: true }) }); const j = await r.json(); p.identityToolkit = { status: r.status, error: j.error && j.error.message }; } catch (e) { p.identityToolkit = 'fail: ' + e; }
+  try { const r = await fetch('https://firestore.googleapis.com/v1/projects/feb-composites/databases/(default)/documents/molds?pageSize=1'); const j = await r.json(); p.firestoreAnon = { status: r.status, error: j.error && j.error.status }; } catch (e) { p.firestoreAnon = 'fail: ' + e; }
+  try { const r = await fetch('https://feb-composites.web.app/core.js', { method: 'HEAD' }); p.appHost = r.status; } catch (e) { p.appHost = 'fail: ' + e; }
+  say('probe', p);
+  await send('probe', p);
+  // JS -> Python, 6 MB, and read what Python hands back.
+  const big = 'abc' + 'k'.repeat(6 * 1024 * 1024 - 6) + 'xyz';
+  const t1 = performance.now();
+  let back = '';
+  try { back = await send('big-in', big); } catch (e) { back = 'fail: ' + e; }
+  const res = { sent: big.length, backLength: typeof back === 'string' ? back.length : typeof back, backIntact: typeof back === 'string' && back.length === 6 * 1024 * 1024 && back[0] === 'q', ms: Math.round(performance.now() - t1) };
+  say('bigIn', res);
+  await send('big-in-echo', res);
+})();
+</script></body></html>

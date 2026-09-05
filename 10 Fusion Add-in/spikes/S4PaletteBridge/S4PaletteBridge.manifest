@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "feb-s4-palette-bridge",
+  "author": "FEB composites",
+  "description": { "": "Spike S4: palette loads a page, round-trips a 6 MB string both ways, probes the embedded browser. Not product code." },
+  "version": "0.0.1",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "feb-s5-rest-signin",
+  "author": "FEB composites",
+  "description": { "": "Spike S5: HTTPS to Firebase from a worker thread, results back on a custom event. Not product code." },
+  "version": "0.0.1",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
