@@ -183,6 +183,16 @@ class PaletteIncoming(adsk.core.HTMLEventHandler):
             elif action == "cancel":
                 _state["pending"] = None
                 a.returnData = "ok"
+            elif action == "mold-received":
+                log("page took the mesh:", data[:200])
+                a.returnData = "ok"
+            elif action == "mold-failed":
+                log("page refused the mesh:", data[:300])
+                a.returnData = "ok"
+                _ui.messageBox("The app could not take the mesh:\n" + data[:300], "FEB Plan stock")
+            elif action == "pong":
+                log("pong:", data[:100])
+                a.returnData = "ok"
             elif action == "response":
                 # The page's answer to a sendInfoToHTML: "ok" means the mold
                 # modal opened with the mesh; anything else names the problem.

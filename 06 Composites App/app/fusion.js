@@ -63,10 +63,17 @@ function fusionBridgeInit() {
    string is how Fusion signals failure. */
 function fusionHandle(action, data) {
   try {
-    if (action === "mold") { fusionOpenMold(JSON.parse(data || "{}")); return "ok"; }
-    if (action === "ping") return "pong";
+    if (action === "mold") {
+      fusionOpenMold(JSON.parse(data || "{}"));
+      // Say so explicitly as well as through the return value: the add-in
+      // shows the member an error if neither arrives.
+      fusionSend("mold-received", { bytes: MOLD_BUF ? MOLD_BUF.size : 0, name: MOLD_BUF ? MOLD_BUF.name : "" });
+      return "ok";
+    }
+    if (action === "ping") { fusionSend("pong", { data }); return "pong"; }
   } catch (e) {
     toast(`Fusion handed over something this app could not read: ${e.message}`, "error");
+    fusionSend("mold-failed", { error: e.message });
     return "error " + e.message;
   }
   return "unhandled " + action;

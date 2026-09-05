@@ -7797,6 +7797,7 @@ await t("a mesh handed in from Fusion plans like any other mold and stamps where
   assert(m.fusion.by === myEmail(), "stamped by the app user, not the Autodesk one");
   assert(p.unit === "mm" && p.source === "Clamshell Mold Body.stl", "the plan records the mesh as millimetres from that body");
   assert(!p.fusion, "the plan itself carries no block; it points at its mold");
+  assert(sent.some(x => x[0] === "mold-received" && x[1].bytes === stl.byteLength), "the page acknowledges the mesh on its own, not only through Fusion's return path");
   const plan = sent.find(x => x[0] === "plan");
   assert(plan, "the layers went back to Fusion: " + JSON.stringify(sent.map(x => x[0])));
   assert(plan[1].planId === p.id && plan[1].moldId === m.id, "with the allocated ids, so the component is named after the plan");
