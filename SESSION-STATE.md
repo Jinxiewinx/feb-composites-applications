@@ -396,12 +396,18 @@ it should be tightened.
 
 ## Next up (not started)
 
-- **Fusion add-in feasibility study**: plan approved 2026-09-04, at
-  `10 Fusion Add-in/FEASIBILITY-PLAN.md`. Next is the study itself plus six
-  spikes. Fusion's built-in MCP server is connected (`10 Fusion Add-in/MCP.md`:
-  port 27182, `script` tool runs Python in Fusion), so S1/S2/S3/S6 run from a
-  session here; Windows repeats need a member. Decisions are settled; do not
-  re-ask.
+- **Fusion add-in feasibility study, Stage 1 done** (2026-09-04): spikes S1,
+  S2, S3, S6 have results in `10 Fusion Add-in/spikes/README.md`. Next is
+  Stage 2, `FEASIBILITY.md` plus the S4 palette and S5 REST add-ins, then
+  Stage 3 builds `FEBPlanStock/`. Decisions in `FEASIBILITY-PLAN.md` are
+  settled; do not re-ask. Three facts that shape the build and are not in the
+  code: `STLExportOptions.unitType` reads inches but writes mm when left at
+  its default, so the add-in sets millimetres explicitly (or meshes through
+  `MeshCalculator`, which S2 did); parametric mode needs a base feature for
+  temporary bodies and names must be set after `finishEdit()`; the
+  `fusion360://` deep link opens nothing, so the mold card links to
+  `dataFile.fusionWebURL` instead. Windows repeats of every spike still need a
+  member with Fusion installed.
 - The dashboard and guest mode — see **Now**, and the plan file it names.
 - Decide the four app-only families (Receiving, Export, Storage map, Search
   results, plus `table.sub`): lift them into `components.css` or drop them from
